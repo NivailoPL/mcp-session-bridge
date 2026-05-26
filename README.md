@@ -4,8 +4,11 @@ Auth-first spike for testing Claude.ai and ChatGPT remote MCP connectors over HT
 
 Endpoint: `https://mcp.panchmurka.wtf/mcp`
 
-This spike intentionally stores only probe values. Do not use it for sensitive session
-content until both clients have passed OAuth and tool-call testing.
+This MVP stores OAuth records, diagnostic probes, session metadata, and full
+saved session exchanges. Use `magic-smoke` before adding sensitive context.
+
+Session context packs live outside this repository in `/root/ww-context-packs`.
+The first safe smoke-test pack is `magic-smoke`.
 
 After `mcp.panchmurka.wtf` resolves to `89.167.57.190`, activate the Caddy route:
 

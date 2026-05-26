@@ -56,6 +56,26 @@ class TokenRecord:
     revoked_at: int | None
 
 
+@dataclass(frozen=True)
+class SessionRecord:
+    session_id: str
+    title: str
+    context_pack_id: str
+    context_pack_version: str | None
+    created_at: int
+    updated_at: int
+
+
+@dataclass(frozen=True)
+class ExchangeRecord:
+    exchange_id: int
+    session_id: str
+    model_name: str
+    user_message: str
+    assistant_response: str
+    created_at: int
+
+
 class Store:
     def __init__(self, db_path: Path):
         self.db_path = db_path
@@ -135,9 +155,32 @@ class Store:
                     updated_by TEXT NOT NULL,
                     updated_at INTEGER NOT NULL
                 );
+
+                CREATE TABLE IF NOT EXISTS sessions (
+                    session_id TEXT PRIMARY KEY,
+                    title TEXT NOT NULL,
+                    context_pack_id TEXT NOT NULL,
+                    context_pack_version TEXT,
+                    created_at INTEGER NOT NULL,
+                    updated_at INTEGER NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS exchanges (
+                    exchange_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    session_id TEXT NOT NULL,
+                    model_name TEXT NOT NULL,
+                    user_message TEXT NOT NULL,
+                    assistant_response TEXT NOT NULL,
+                    created_at INTEGER NOT NULL,
+                    FOREIGN KEY(session_id) REFERENCES sessions(session_id) ON DELETE CASCADE
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_exchanges_session_created
+                    ON exchanges(session_id, created_at, exchange_id);
                 """
             )
             self._ensure_column(conn, "refresh_tokens", "resource", "TEXT")
+            self._ensure_column(conn, "sessions", "context_pack_version", "TEXT")
 
     @staticmethod
     def _ensure_column(conn: sqlite3.Connection, table: str, column: str, definition: str) -> None:
@@ -365,3 +408,132 @@ class Store:
             "updated_by": row["updated_by"],
             "updated_at": row["updated_at"],
         }
+
+    def create_session(
+        self,
+        session_id: str,
+        title: str,
+        context_pack_id: str,
+        context_pack_version: str | None = None,
+    ) -> SessionRecord:
+        now = int(time.time())
+        with self._lock, self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO sessions (
+                    session_id, title, context_pack_id, context_pack_version,
+                    created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (session_id, title, context_pack_id, context_pack_version, now, now),
+            )
+        return SessionRecord(
+            session_id=session_id,
+            title=title,
+            context_pack_id=context_pack_id,
+            context_pack_version=context_pack_version,
+            created_at=now,
+            updated_at=now,
+        )
+
+    def get_session(self, session_id: str) -> SessionRecord | None:
+        with self._lock, self._connect() as conn:
+            row = conn.execute("SELECT * FROM sessions WHERE session_id = ?", (session_id,)).fetchone()
+        if not row:
+            return None
+        return _session_from_row(row)
+
+    def list_sessions(self) -> list[dict[str, Any]]:
+        with self._lock, self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT
+                    s.session_id,
+                    s.title,
+                    s.context_pack_id,
+                    s.context_pack_version,
+                    s.created_at,
+                    s.updated_at,
+                    COUNT(e.exchange_id) AS exchange_count
+                FROM sessions s
+                LEFT JOIN exchanges e ON e.session_id = s.session_id
+                GROUP BY s.session_id
+                ORDER BY s.updated_at DESC, s.created_at DESC
+                """
+            ).fetchall()
+        return [
+            {
+                "session_id": row["session_id"],
+                "title": row["title"],
+                "context_pack_id": row["context_pack_id"],
+                "context_pack_version": row["context_pack_version"],
+                "created_at": row["created_at"],
+                "updated_at": row["updated_at"],
+                "exchange_count": row["exchange_count"],
+            }
+            for row in rows
+        ]
+
+    def save_exchange(
+        self,
+        session_id: str,
+        model_name: str,
+        user_message: str,
+        assistant_response: str,
+    ) -> ExchangeRecord:
+        now = int(time.time())
+        with self._lock, self._connect() as conn:
+            row = conn.execute("SELECT session_id FROM sessions WHERE session_id = ?", (session_id,)).fetchone()
+            if not row:
+                raise ValueError(f"Unknown session_id: {session_id}")
+            cursor = conn.execute(
+                """
+                INSERT INTO exchanges (
+                    session_id, model_name, user_message, assistant_response, created_at
+                ) VALUES (?, ?, ?, ?, ?)
+                """,
+                (session_id, model_name, user_message, assistant_response, now),
+            )
+            conn.execute("UPDATE sessions SET updated_at = ? WHERE session_id = ?", (now, session_id))
+            exchange_id = int(cursor.lastrowid)
+        return ExchangeRecord(
+            exchange_id=exchange_id,
+            session_id=session_id,
+            model_name=model_name,
+            user_message=user_message,
+            assistant_response=assistant_response,
+            created_at=now,
+        )
+
+    def list_exchanges(self, session_id: str) -> list[ExchangeRecord]:
+        with self._lock, self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT * FROM exchanges
+                WHERE session_id = ?
+                ORDER BY created_at ASC, exchange_id ASC
+                """,
+                (session_id,),
+            ).fetchall()
+        return [
+            ExchangeRecord(
+                exchange_id=row["exchange_id"],
+                session_id=row["session_id"],
+                model_name=row["model_name"],
+                user_message=row["user_message"],
+                assistant_response=row["assistant_response"],
+                created_at=row["created_at"],
+            )
+            for row in rows
+        ]
+
+
+def _session_from_row(row: sqlite3.Row) -> SessionRecord:
+    return SessionRecord(
+        session_id=row["session_id"],
+        title=row["title"],
+        context_pack_id=row["context_pack_id"],
+        context_pack_version=row["context_pack_version"],
+        created_at=row["created_at"],
+        updated_at=row["updated_at"],
+    )

@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import re
+import secrets
 import time
+from datetime import UTC, datetime
 from typing import Any
 
 from mcp.server.auth.middleware.auth_context import get_access_token
@@ -11,13 +14,16 @@ from mcp.server.transport_security import TransportSecuritySettings
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
+from app.context_packs import ContextPackStore
 from app.oauth import OAuthHandlers
 from app.security import hash_secret
+from app.session_package import render_session_package
 from app.settings import load_settings
 from app.storage import Store
 
 settings = load_settings()
 store = Store(settings.db_path)
+context_packs = ContextPackStore(settings.context_packs_dir)
 
 
 class BridgeTokenVerifier(TokenVerifier):
@@ -147,6 +153,97 @@ def read_probe(key: str) -> dict[str, Any]:
     if value is None:
         return {"found": False, "key": key}
     return {"found": True, **value}
+
+
+@mcp.tool()
+def list_context_packs() -> dict[str, Any]:
+    """List available context packs stored on the VPS."""
+    return {"ok": True, "context_packs": context_packs.list_packs()}
+
+
+@mcp.tool()
+def create_session(title: str, context_pack_id: str) -> dict[str, Any]:
+    """Create a new brainstorming session bound to a context pack."""
+    context_pack = context_packs.load_pack(context_pack_id)
+    session_id = _new_session_id(title)
+    session = store.create_session(
+        session_id=session_id,
+        title=title.strip() or "Untitled session",
+        context_pack_id=context_pack.pack_id,
+    )
+    return {
+        "ok": True,
+        "session_id": session.session_id,
+        "title": session.title,
+        "context_pack_id": session.context_pack_id,
+        "context_pack_name": context_pack.name,
+        "created_at": session.created_at,
+    }
+
+
+@mcp.tool()
+def list_sessions() -> dict[str, Any]:
+    """List saved brainstorming sessions."""
+    return {"ok": True, "sessions": store.list_sessions()}
+
+
+@mcp.tool()
+def get_session_package(session_id: str) -> dict[str, Any]:
+    """Return the full context pack and transcript for a session as one Markdown package."""
+    session = store.get_session(session_id)
+    if session is None:
+        return {"ok": False, "error": f"Unknown session_id: {session_id}"}
+    context_pack = context_packs.load_pack(session.context_pack_id)
+    exchanges = store.list_exchanges(session.session_id)
+    return {"ok": True, **render_session_package(session, context_pack, exchanges)}
+
+
+@mcp.tool()
+def save_exchange(
+    session_id: str,
+    model_name: str,
+    user_message: str,
+    assistant_response: str,
+) -> dict[str, Any]:
+    """Save one full Wojtek/model exchange in the shared session transcript."""
+    exchange = store.save_exchange(
+        session_id=session_id,
+        model_name=model_name.strip() or "Unknown model",
+        user_message=user_message.strip(),
+        assistant_response=assistant_response.strip(),
+    )
+    return {
+        "ok": True,
+        "exchange_id": exchange.exchange_id,
+        "session_id": exchange.session_id,
+        "model_name": exchange.model_name,
+        "user_message_chars": len(exchange.user_message),
+        "assistant_response_chars": len(exchange.assistant_response),
+        "created_at": exchange.created_at,
+    }
+
+
+@mcp.tool()
+def export_session_markdown(session_id: str) -> dict[str, Any]:
+    """Export the current full session package as Markdown."""
+    package = get_session_package(session_id)
+    if not package.get("ok"):
+        return package
+    return {
+        "ok": True,
+        "session_id": package["session_id"],
+        "char_count": package["char_count"],
+        "sha256": package["sha256"],
+        "markdown": package["package_markdown"],
+    }
+
+
+def _new_session_id(title: str) -> str:
+    stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
+    slug = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")[:36]
+    if not slug:
+        slug = "session"
+    return f"{stamp}-{slug}-{secrets.token_hex(3)}"
 
 
 app = mcp.streamable_http_app()

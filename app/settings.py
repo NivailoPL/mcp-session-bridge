@@ -15,6 +15,7 @@ class Settings:
     public_base_url: str
     resource_path: str
     db_path: Path
+    context_packs_dir: Path
     owner_username: str
     owner_password_hash: str
     secret_key: str
@@ -56,6 +57,7 @@ def load_settings() -> Settings:
         public_base_url=public_base_url,
         resource_path=resource_path,
         db_path=Path(os.getenv("BRIDGE_DB_PATH", str(ROOT / "data" / "bridge.sqlite3"))),
+        context_packs_dir=Path(os.getenv("BRIDGE_CONTEXT_PACKS_DIR", "/root/ww-context-packs")),
         owner_username=os.getenv("BRIDGE_OWNER_USERNAME", "wojtek"),
         owner_password_hash=_required("BRIDGE_OWNER_PASSWORD_HASH"),
         secret_key=_required("BRIDGE_SECRET_KEY"),
