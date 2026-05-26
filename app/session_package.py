@@ -55,7 +55,7 @@ def _render_markdown(
         "4. Przed pokazaniem finalnej odpowiedzi zapisz pełną wymianę przez `save_exchange`.",
         "5. Nie wykonuj automatycznych podsumowań ani compaction, chyba że Wojtek wyraźnie o to poprosi.",
         "",
-        "## Group Instructions",
+        "## Context Pack Notes",
         "",
         context_pack.instructions,
         "",

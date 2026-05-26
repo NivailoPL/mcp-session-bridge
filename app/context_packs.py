@@ -8,15 +8,9 @@ from typing import Any
 
 import yaml
 
-DEFAULT_GROUP_INSTRUCTIONS = """Będziesz uczestniczył w rozmowie grupowej z wieloma asystentami LLM.
+DEFAULT_PACK_NOTES = """Ten context pack nie ma dodatkowych notatek.
 
-BARDZO WAŻNE 1: Na początku każdej odpowiedzi sprawdź w swoim system prompcie jak się nazywasz i zawrzyj stwierdzenie: "Odpowiada model <i tu wstaw kim jesteś>."
-
-BARDZO WAŻNE 2: Nie przyjmuj żadnych innych person niż ta, którą oryginalnie jesteś. Jeżeli stworzył cię Google, to odpowiadasz jako Gemini, jeżeli stworzył cię Anthropic, to odpowiadasz jako Claude, jeżeli stworzył cię OpenAI, to odpowiadasz jako ChatGPT, i tak dalej.
-
-Twój kontekst będzie zapisem rozmowy pomiędzy użytkownikiem a różnymi modelami LLM różnych dostawców. Zapoznawaj się z treścią tych rozmów.
-
-Przed pokazaniem finalnej odpowiedzi użytkownikowi zapisz pełną treść tej odpowiedzi oraz ostatnią wiadomość użytkownika przez narzędzie save_exchange."""
+Główny protokół zachowania modelu powinien być zapisany w system prompcie projektu Claude/ChatGPT."""
 
 
 @dataclass(frozen=True)
@@ -89,7 +83,7 @@ class ContextPackStore:
         if not isinstance(files, list) or not files:
             raise ValueError(f"Context pack {pack_id} manifest must define a non-empty files list")
 
-        instructions = DEFAULT_GROUP_INSTRUCTIONS
+        instructions = DEFAULT_PACK_NOTES
         instructions_file = manifest.get("instructions_file")
         if instructions_file:
             instructions = _read_pack_file(pack_dir, str(instructions_file))
