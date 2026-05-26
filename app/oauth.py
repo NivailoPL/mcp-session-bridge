@@ -16,6 +16,7 @@ from app.storage import ChallengeRecord, ClientRecord, CodeRecord, Store, TokenR
 ALLOWED_AUTH_METHODS = {"none", "client_secret_post", "client_secret_basic"}
 DEFAULT_GRANT_TYPES = ["authorization_code", "refresh_token"]
 DEFAULT_RESPONSE_TYPES = ["code"]
+OPTIONAL_SCOPES = {"offline_access"}
 
 
 class OAuthHandlers:
@@ -37,7 +38,7 @@ class OAuthHandlers:
                     "grant_types_supported": DEFAULT_GRANT_TYPES,
                     "code_challenge_methods_supported": ["S256"],
                     "token_endpoint_auth_methods_supported": sorted(ALLOWED_AUTH_METHODS),
-                    "scopes_supported": [self.settings.scope],
+                    "scopes_supported": [self.settings.scope, *sorted(OPTIONAL_SCOPES)],
                 },
                 headers=self._no_store_headers(),
             )
@@ -322,7 +323,10 @@ class OAuthHandlers:
         if not scope_value:
             return [self.settings.scope]
         scopes = str(scope_value).split()
-        if not scopes or any(scope != self.settings.scope for scope in scopes):
+        allowed = {self.settings.scope, *OPTIONAL_SCOPES}
+        if not scopes or any(scope not in allowed for scope in scopes):
+            return None
+        if self.settings.scope not in scopes:
             return None
         return scopes
 
