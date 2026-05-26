@@ -42,6 +42,7 @@ def _render_markdown(
         f"- context_pack_id: `{session.context_pack_id}`",
         f"- context_pack_name: {context_pack.name}",
         f"- context_pack_sha256: `{context_pack.content_hash}`",
+        f"- title_is_auto: {str(session.title_is_auto).lower()}",
         f"- session_created_at: {_format_ts(session.created_at)}",
         f"- session_updated_at: {_format_ts(session.updated_at)}",
         f"- context_file_count: {len(context_pack.files)}",

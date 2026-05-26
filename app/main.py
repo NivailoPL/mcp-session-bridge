@@ -162,14 +162,20 @@ def list_context_packs() -> dict[str, Any]:
 
 
 @mcp.tool()
-def create_session(title: str, context_pack_id: str) -> dict[str, Any]:
-    """Create a new brainstorming session bound to a context pack."""
-    context_pack = context_packs.load_pack(context_pack_id)
-    session_id = _new_session_id(title)
+def create_session(context_pack_id: str = "", title: str = "") -> dict[str, Any]:
+    """Create a new brainstorming session. Title is optional and may be inferred after the first exchange."""
+    resolved_context_pack_id = context_pack_id.strip() or settings.default_context_pack_id
+    context_pack = context_packs.load_pack(resolved_context_pack_id)
+    resolved_title = title.strip()
+    title_is_auto = not resolved_title
+    if title_is_auto:
+        resolved_title = _auto_title()
+    session_id = _new_session_id(resolved_title, title_is_auto=title_is_auto)
     session = store.create_session(
         session_id=session_id,
-        title=title.strip() or "Untitled session",
+        title=resolved_title,
         context_pack_id=context_pack.pack_id,
+        title_is_auto=title_is_auto,
     )
     return {
         "ok": True,
@@ -177,6 +183,7 @@ def create_session(title: str, context_pack_id: str) -> dict[str, Any]:
         "title": session.title,
         "context_pack_id": session.context_pack_id,
         "context_pack_name": context_pack.name,
+        "title_is_auto": session.title_is_auto,
         "created_at": session.created_at,
     }
 
@@ -238,12 +245,17 @@ def export_session_markdown(session_id: str) -> dict[str, Any]:
     }
 
 
-def _new_session_id(title: str) -> str:
+def _new_session_id(title: str, title_is_auto: bool = False) -> str:
     stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
-    slug = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")[:36]
+    slug_source = "session" if title_is_auto else title
+    slug = re.sub(r"[^a-z0-9]+", "-", slug_source.lower()).strip("-")[:36]
     if not slug:
         slug = "session"
     return f"{stamp}-{slug}-{secrets.token_hex(3)}"
+
+
+def _auto_title() -> str:
+    return "Sesja " + datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")
 
 
 app = mcp.streamable_http_app()

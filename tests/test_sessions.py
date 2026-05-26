@@ -24,6 +24,24 @@ def test_store_saves_session_and_exchange(tmp_path) -> None:
     assert exchanges[0].assistant_response.startswith("Odpowiada model Claude")
 
 
+def test_store_renames_auto_titled_session_from_first_exchange(tmp_path) -> None:
+    store = Store(tmp_path / "bridge.sqlite3")
+    store.create_session("s1", "Sesja 2026-05-26 18:00 UTC", "magic-smoke", title_is_auto=True)
+
+    store.save_exchange(
+        session_id="s1",
+        model_name="ChatGPT",
+        user_message="Chcę porozmawiać o tym, jak opowiedzieć historię pracy bez korpojęzyka.",
+        assistant_response="Odpowiada model ChatGPT. Jasne.",
+    )
+
+    session = store.get_session("s1")
+
+    assert session is not None
+    assert not session.title_is_auto
+    assert session.title == "Chcę porozmawiać o tym, jak opowiedzieć historię pracy bez korpojęzyka"
+
+
 def test_session_package_contains_context_and_transcript(tmp_path) -> None:
     pack_dir = tmp_path / "magic-smoke"
     pack_dir.mkdir()

@@ -62,6 +62,7 @@ class SessionRecord:
     title: str
     context_pack_id: str
     context_pack_version: str | None
+    title_is_auto: bool
     created_at: int
     updated_at: int
 
@@ -161,6 +162,7 @@ class Store:
                     title TEXT NOT NULL,
                     context_pack_id TEXT NOT NULL,
                     context_pack_version TEXT,
+                    title_is_auto INTEGER NOT NULL DEFAULT 0,
                     created_at INTEGER NOT NULL,
                     updated_at INTEGER NOT NULL
                 );
@@ -181,6 +183,7 @@ class Store:
             )
             self._ensure_column(conn, "refresh_tokens", "resource", "TEXT")
             self._ensure_column(conn, "sessions", "context_pack_version", "TEXT")
+            self._ensure_column(conn, "sessions", "title_is_auto", "INTEGER NOT NULL DEFAULT 0")
 
     @staticmethod
     def _ensure_column(conn: sqlite3.Connection, table: str, column: str, definition: str) -> None:
@@ -415,6 +418,7 @@ class Store:
         title: str,
         context_pack_id: str,
         context_pack_version: str | None = None,
+        title_is_auto: bool = False,
     ) -> SessionRecord:
         now = int(time.time())
         with self._lock, self._connect() as conn:
@@ -422,16 +426,17 @@ class Store:
                 """
                 INSERT INTO sessions (
                     session_id, title, context_pack_id, context_pack_version,
-                    created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?)
+                    title_is_auto, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
-                (session_id, title, context_pack_id, context_pack_version, now, now),
+                (session_id, title, context_pack_id, context_pack_version, int(title_is_auto), now, now),
             )
         return SessionRecord(
             session_id=session_id,
             title=title,
             context_pack_id=context_pack_id,
             context_pack_version=context_pack_version,
+            title_is_auto=title_is_auto,
             created_at=now,
             updated_at=now,
         )
@@ -452,6 +457,7 @@ class Store:
                     s.title,
                     s.context_pack_id,
                     s.context_pack_version,
+                    s.title_is_auto,
                     s.created_at,
                     s.updated_at,
                     COUNT(e.exchange_id) AS exchange_count
@@ -467,6 +473,7 @@ class Store:
                 "title": row["title"],
                 "context_pack_id": row["context_pack_id"],
                 "context_pack_version": row["context_pack_version"],
+                "title_is_auto": bool(row["title_is_auto"]),
                 "created_at": row["created_at"],
                 "updated_at": row["updated_at"],
                 "exchange_count": row["exchange_count"],
@@ -483,7 +490,7 @@ class Store:
     ) -> ExchangeRecord:
         now = int(time.time())
         with self._lock, self._connect() as conn:
-            row = conn.execute("SELECT session_id FROM sessions WHERE session_id = ?", (session_id,)).fetchone()
+            row = conn.execute("SELECT * FROM sessions WHERE session_id = ?", (session_id,)).fetchone()
             if not row:
                 raise ValueError(f"Unknown session_id: {session_id}")
             cursor = conn.execute(
@@ -494,7 +501,13 @@ class Store:
                 """,
                 (session_id, model_name, user_message, assistant_response, now),
             )
-            conn.execute("UPDATE sessions SET updated_at = ? WHERE session_id = ?", (now, session_id))
+            if row["title_is_auto"] and self._exchange_count(conn, session_id) == 1:
+                conn.execute(
+                    "UPDATE sessions SET title = ?, title_is_auto = 0, updated_at = ? WHERE session_id = ?",
+                    (_derive_title(user_message), now, session_id),
+                )
+            else:
+                conn.execute("UPDATE sessions SET updated_at = ? WHERE session_id = ?", (now, session_id))
             exchange_id = int(cursor.lastrowid)
         return ExchangeRecord(
             exchange_id=exchange_id,
@@ -527,6 +540,11 @@ class Store:
             for row in rows
         ]
 
+    @staticmethod
+    def _exchange_count(conn: sqlite3.Connection, session_id: str) -> int:
+        row = conn.execute("SELECT COUNT(*) AS count FROM exchanges WHERE session_id = ?", (session_id,)).fetchone()
+        return int(row["count"])
+
 
 def _session_from_row(row: sqlite3.Row) -> SessionRecord:
     return SessionRecord(
@@ -534,6 +552,17 @@ def _session_from_row(row: sqlite3.Row) -> SessionRecord:
         title=row["title"],
         context_pack_id=row["context_pack_id"],
         context_pack_version=row["context_pack_version"],
+        title_is_auto=bool(row["title_is_auto"]),
         created_at=row["created_at"],
         updated_at=row["updated_at"],
     )
+
+
+def _derive_title(user_message: str) -> str:
+    text = " ".join(line.strip() for line in user_message.splitlines() if line.strip())
+    text = " ".join(text.split())
+    if not text:
+        return "Sesja bez tytulu"
+    if len(text) <= 72:
+        return text.rstrip(".!?")
+    return text[:72].rsplit(" ", 1)[0].rstrip(".,;:!?") + "..."
