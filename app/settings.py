@@ -26,7 +26,7 @@ class Settings:
 
     @property
     def issuer_url(self) -> str:
-        return self.public_base_url
+        return f"{self.public_base_url}/"
 
     @property
     def resource_url(self) -> str:
