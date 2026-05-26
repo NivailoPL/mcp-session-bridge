@@ -1,7 +1,7 @@
 import json
 
 from app.context_packs import ContextPackStore
-from app.session_package import render_session_package
+from app.session_package import render_session_package, render_session_transcript
 from app.storage import Store
 
 
@@ -62,3 +62,29 @@ def test_session_package_contains_context_and_transcript(tmp_path) -> None:
     assert "FIOLETOWA LATARNIA" in package["package_markdown"]
     assert package["exchange_count"] == 1
     assert len(package["sha256"]) == 64
+
+
+def test_session_transcript_renders_simple_audit_view(tmp_path) -> None:
+    store = Store(tmp_path / "bridge.sqlite3")
+    session = store.create_session("s1", "Audit test", "magic-smoke")
+    store.save_exchange(
+        "s1",
+        "ChatGPT",
+        "Pierwsza wiadomość.",
+        "Odpowiada model ChatGPT. Pierwsza odpowiedź.",
+    )
+    store.save_exchange(
+        "s1",
+        "Claude",
+        "Druga wiadomość.",
+        "Odpowiada model Claude. Druga odpowiedź.",
+    )
+
+    transcript = render_session_transcript(session, store.list_exchanges("s1"))
+
+    assert transcript["turn_sequence"] == ["USER", "ChatGPT", "USER", "Claude"]
+    assert transcript["exchange_count"] == 2
+    assert transcript["turn_count"] == 4
+    assert "## Turn Sequence\n\nUSER\nChatGPT\nUSER\nClaude" in transcript["transcript_markdown"]
+    assert "Pierwsza wiadomość." in transcript["transcript_markdown"]
+    assert "Odpowiada model Claude" in transcript["transcript_markdown"]

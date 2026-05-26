@@ -17,7 +17,7 @@ from starlette.responses import JSONResponse, Response
 from app.context_packs import ContextPackStore
 from app.oauth import OAuthHandlers
 from app.security import hash_secret
-from app.session_package import render_session_package
+from app.session_package import render_session_package, render_session_transcript
 from app.settings import load_settings
 from app.storage import Store
 
@@ -203,6 +203,16 @@ def get_session_package(session_id: str) -> dict[str, Any]:
     context_pack = context_packs.load_pack(session.context_pack_id)
     exchanges = store.list_exchanges(session.session_id)
     return {"ok": True, **render_session_package(session, context_pack, exchanges)}
+
+
+@mcp.tool()
+def get_session_transcript(session_id: str) -> dict[str, Any]:
+    """Return only the saved conversation transcript for audit, without context pack files."""
+    session = store.get_session(session_id)
+    if session is None:
+        return {"ok": False, "error": f"Unknown session_id: {session_id}"}
+    exchanges = store.list_exchanges(session.session_id)
+    return {"ok": True, **render_session_transcript(session, exchanges)}
 
 
 @mcp.tool()

@@ -27,6 +27,26 @@ def render_session_package(
     }
 
 
+def render_session_transcript(
+    session: SessionRecord,
+    exchanges: list[ExchangeRecord],
+) -> dict[str, Any]:
+    turns = _transcript_turns(exchanges)
+    markdown = _render_transcript_markdown(session, exchanges, turns)
+    return {
+        "session_id": session.session_id,
+        "title": session.title,
+        "context_pack_id": session.context_pack_id,
+        "exchange_count": len(exchanges),
+        "turn_count": len(turns),
+        "char_count": len(markdown),
+        "sha256": hashlib.sha256(markdown.encode("utf-8")).hexdigest(),
+        "turn_sequence": [turn["speaker"] for turn in turns],
+        "turns": turns,
+        "transcript_markdown": markdown,
+    }
+
+
 def _render_markdown(
     session: SessionRecord,
     context_pack: ContextPack,
@@ -101,6 +121,79 @@ def _render_markdown(
                     f"#### {exchange.model_name}",
                     "",
                     exchange.assistant_response,
+                    "",
+                ]
+            )
+
+    return "\n".join(parts).strip() + "\n"
+
+
+def _transcript_turns(exchanges: list[ExchangeRecord]) -> list[dict[str, Any]]:
+    turns: list[dict[str, Any]] = []
+    for exchange in exchanges:
+        created_at = _format_ts(exchange.created_at)
+        turns.append(
+            {
+                "turn": len(turns) + 1,
+                "speaker": "USER",
+                "exchange_id": exchange.exchange_id,
+                "created_at": created_at,
+                "chars": len(exchange.user_message),
+                "content": exchange.user_message,
+            }
+        )
+        turns.append(
+            {
+                "turn": len(turns) + 1,
+                "speaker": exchange.model_name,
+                "exchange_id": exchange.exchange_id,
+                "created_at": created_at,
+                "chars": len(exchange.assistant_response),
+                "content": exchange.assistant_response,
+            }
+        )
+    return turns
+
+
+def _render_transcript_markdown(
+    session: SessionRecord,
+    exchanges: list[ExchangeRecord],
+    turns: list[dict[str, Any]],
+) -> str:
+    parts = [
+        "# WW-MCP Session Transcript",
+        "",
+        "## Metadata",
+        "",
+        f"- session_id: `{session.session_id}`",
+        f"- title: {session.title}",
+        f"- context_pack_id: `{session.context_pack_id}`",
+        f"- exchange_count: {len(exchanges)}",
+        f"- turn_count: {len(turns)}",
+        f"- session_created_at: {_format_ts(session.created_at)}",
+        f"- session_updated_at: {_format_ts(session.updated_at)}",
+        "",
+        "## Turn Sequence",
+        "",
+    ]
+
+    if turns:
+        parts.extend(turn["speaker"] for turn in turns)
+    else:
+        parts.append("No turns saved yet.")
+
+    parts.extend(["", "## Transcript", ""])
+    if not turns:
+        parts.extend(["No exchanges saved yet.", ""])
+    else:
+        for turn in turns:
+            parts.extend(
+                [
+                    f"### {turn['speaker']}",
+                    "",
+                    f"<!-- turn={turn['turn']} exchange_id={turn['exchange_id']} created_at={turn['created_at']} chars={turn['chars']} -->",
+                    "",
+                    turn["content"],
                     "",
                 ]
             )
