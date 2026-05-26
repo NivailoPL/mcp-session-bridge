@@ -1,0 +1,19 @@
+[Unit]
+Description=MCP Session Bridge
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/root/mcp-session-bridge
+EnvironmentFile=/root/mcp-session-bridge/.env
+ExecStart=/root/mcp-session-bridge/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8787 --no-access-log
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ReadWritePaths=/root/mcp-session-bridge
+
+[Install]
+WantedBy=multi-user.target
