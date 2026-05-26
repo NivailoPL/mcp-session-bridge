@@ -7,6 +7,7 @@ from mcp.server.auth.middleware.auth_context import get_access_token
 from mcp.server.auth.provider import AccessToken, TokenVerifier
 from mcp.server.auth.settings import AuthSettings
 from mcp.server.fastmcp import FastMCP
+from mcp.server.transport_security import TransportSecuritySettings
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
@@ -50,6 +51,21 @@ mcp = FastMCP(
     streamable_http_path=settings.resource_path,
     json_response=True,
     stateless_http=True,
+    transport_security=TransportSecuritySettings(
+        enable_dns_rebinding_protection=True,
+        allowed_hosts=[
+            "mcp.panchmurka.wtf",
+            "mcp.panchmurka.wtf:443",
+            "127.0.0.1:8787",
+            "localhost:8787",
+        ],
+        allowed_origins=[
+            "https://mcp.panchmurka.wtf",
+            "https://claude.ai",
+            "https://chatgpt.com",
+            "https://chat.openai.com",
+        ],
+    ),
 )
 
 oauth = OAuthHandlers(settings, store)
