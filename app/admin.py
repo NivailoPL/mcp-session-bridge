@@ -1,0 +1,395 @@
+from __future__ import annotations
+
+import base64
+import hashlib
+import hmac
+import html
+import json
+import time
+from pathlib import Path
+from typing import Any
+
+from starlette.requests import Request
+from starlette.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
+
+from app.security import token_urlsafe, verify_password
+from app.settings import Settings
+from app.storage import ExchangeRecord, SessionRecord, Store
+from app.time_format import format_response_timestamp, format_timestamp_iso
+
+ADMIN_COOKIE = "mcp_bridge_admin"
+ADMIN_SESSION_SECONDS = 12 * 60 * 60
+
+
+class AdminHandlers:
+    def __init__(self, settings: Settings, store: Store, html_path: Path):
+        self.settings = settings
+        self.store = store
+        self.html_path = html_path
+
+    async def index(self, request: Request) -> Response:
+        return RedirectResponse("/admin/sessions", status_code=303)
+
+    async def sessions_page(self, request: Request) -> Response:
+        session, error = self._require_admin(request)
+        if error:
+            return error
+        try:
+            body = self.html_path.read_text(encoding="utf-8")
+        except OSError:
+            return HTMLResponse("Admin viewer is not installed.", status_code=500, headers=self._no_store_headers())
+        return HTMLResponse(body, headers=self._admin_headers())
+
+    async def login_get(self, request: Request) -> Response:
+        next_path = _safe_next(request.query_params.get("next"))
+        return self._login_form(next_path)
+
+    async def login_post(self, request: Request) -> Response:
+        form = await request.form()
+        username = str(form.get("username", ""))
+        password = str(form.get("password", ""))
+        next_path = _safe_next(str(form.get("next", "")))
+
+        if username != self.settings.owner_username or not verify_password(password, self.settings.owner_password_hash):
+            return self._login_form(next_path, "Nieprawidłowy login albo hasło.", status_code=401)
+
+        cookie = self._make_cookie(username)
+        response = RedirectResponse(next_path, status_code=303)
+        response.set_cookie(
+            ADMIN_COOKIE,
+            cookie,
+            max_age=ADMIN_SESSION_SECONDS,
+            httponly=True,
+            secure=_request_is_secure(request),
+            samesite="strict",
+            path="/admin",
+        )
+        return response
+
+    async def logout(self, request: Request) -> Response:
+        response = RedirectResponse("/admin/login", status_code=303)
+        response.delete_cookie(ADMIN_COOKIE, path="/admin")
+        return response
+
+    async def api_me(self, request: Request) -> Response:
+        session, error = self._require_admin(request)
+        if error:
+            return error
+        return JSONResponse(
+            {
+                "ok": True,
+                "username": session["username"],
+                "csrf_token": session["csrf"],
+                "expires_at": session["exp"],
+            },
+            headers=self._no_store_headers(),
+        )
+
+    async def api_sessions(self, request: Request) -> Response:
+        _, error = self._require_admin(request)
+        if error:
+            return error
+        return JSONResponse(
+            {
+                "ok": True,
+                "sessions": self.store.list_sessions(),
+            },
+            headers=self._no_store_headers(),
+        )
+
+    async def api_session(self, request: Request) -> Response:
+        _, error = self._require_admin(request)
+        if error:
+            return error
+
+        session_id = request.path_params["session_id"]
+        session = self.store.get_session(session_id)
+        if session is None:
+            return self._json_error(f"Unknown session_id: {session_id}", status_code=404)
+
+        exchanges = self.store.list_exchanges(session.session_id, include_deleted=True)
+        return JSONResponse(
+            {
+                "ok": True,
+                "session": _session_payload(session),
+                "exchanges": [_exchange_payload(exchange) for exchange in exchanges],
+            },
+            headers=self._no_store_headers(),
+        )
+
+    async def api_update_exchange(self, request: Request) -> Response:
+        session, error = self._require_admin_mutation(request)
+        if error:
+            return error
+        exchange_id, error_response = _path_exchange_id(request)
+        if error_response:
+            return error_response
+
+        payload, parse_error = await _json_body(request)
+        if parse_error:
+            return parse_error
+
+        fields = {
+            key: payload[key]
+            for key in ("model_name", "user_message", "assistant_response")
+            if key in payload
+        }
+        if not fields:
+            return self._json_error("No editable fields provided.", status_code=400)
+
+        try:
+            exchange = self.store.update_exchange(exchange_id, actor=session["username"], **fields)
+        except ValueError as exc:
+            return self._value_error(exc)
+        return JSONResponse({"ok": True, "exchange": _exchange_payload(exchange)}, headers=self._no_store_headers())
+
+    async def api_delete_exchange(self, request: Request) -> Response:
+        session, error = self._require_admin_mutation(request)
+        if error:
+            return error
+        exchange_id, error_response = _path_exchange_id(request)
+        if error_response:
+            return error_response
+
+        payload, parse_error = await _json_body(request, allow_empty=True)
+        if parse_error:
+            return parse_error
+        reason = str(payload.get("reason", "")) if payload else ""
+
+        try:
+            exchange = self.store.delete_exchange(exchange_id, reason=reason, actor=session["username"])
+        except ValueError as exc:
+            return self._value_error(exc)
+        return JSONResponse({"ok": True, "exchange": _exchange_payload(exchange)}, headers=self._no_store_headers())
+
+    async def api_restore_exchange(self, request: Request) -> Response:
+        session, error = self._require_admin_mutation(request)
+        if error:
+            return error
+        exchange_id, error_response = _path_exchange_id(request)
+        if error_response:
+            return error_response
+
+        try:
+            exchange = self.store.restore_exchange(exchange_id, actor=session["username"])
+        except ValueError as exc:
+            return self._value_error(exc)
+        return JSONResponse({"ok": True, "exchange": _exchange_payload(exchange)}, headers=self._no_store_headers())
+
+    def _require_admin(self, request: Request) -> tuple[dict[str, Any], Response | None]:
+        session = self._read_cookie(request)
+        if session:
+            return session, None
+        if request.url.path.startswith("/admin/api/"):
+            return {}, self._json_error("Admin login required.", status_code=401)
+        next_path = _safe_next(request.url.path)
+        return {}, RedirectResponse(f"/admin/login?next={next_path}", status_code=303)
+
+    def _require_admin_mutation(self, request: Request) -> tuple[dict[str, Any], Response | None]:
+        session, error = self._require_admin(request)
+        if error:
+            return session, error
+        if request.headers.get("x-csrf-token") != session["csrf"]:
+            return session, self._json_error("Invalid CSRF token.", status_code=403)
+        return session, None
+
+    def _make_cookie(self, username: str) -> str:
+        payload = {
+            "username": username,
+            "csrf": token_urlsafe(24),
+            "exp": int(time.time()) + ADMIN_SESSION_SECONDS,
+        }
+        data = base64.urlsafe_b64encode(
+            json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+        ).decode("ascii").rstrip("=")
+        signature = self._signature(data)
+        return f"{data}.{signature}"
+
+    def _read_cookie(self, request: Request) -> dict[str, Any] | None:
+        cookie = request.cookies.get(ADMIN_COOKIE)
+        if not cookie or "." not in cookie:
+            return None
+        data, signature = cookie.rsplit(".", 1)
+        if not hmac.compare_digest(signature, self._signature(data)):
+            return None
+        try:
+            payload = json.loads(_b64decode(data).decode("utf-8"))
+        except (ValueError, json.JSONDecodeError):
+            return None
+        if not isinstance(payload, dict) or int(payload.get("exp", 0)) < time.time():
+            return None
+        if not isinstance(payload.get("username"), str) or not isinstance(payload.get("csrf"), str):
+            return None
+        return payload
+
+    def _signature(self, data: str) -> str:
+        return hmac.new(self.settings.secret_key.encode("utf-8"), data.encode("utf-8"), hashlib.sha256).hexdigest()
+
+    def _login_form(self, next_path: str, error: str | None = None, status_code: int = 200) -> HTMLResponse:
+        error_html = f'<p class="error">{html.escape(error)}</p>' if error else ""
+        escaped_next = html.escape(next_path, quote=True)
+        body = f"""<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MCP Session Bridge Admin</title>
+  <style>
+    :root {{
+      color-scheme: light;
+      --bg: #f7f7f4;
+      --text: #1f2933;
+      --muted: #68727d;
+      --border: #d8ddd5;
+      --accent: #176b5b;
+      --danger: #a33a32;
+    }}
+    * {{ box-sizing: border-box; }}
+    body {{
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }}
+    main {{
+      width: min(92vw, 28rem);
+      padding: 2rem;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: #fff;
+      box-shadow: 0 18px 40px rgb(31 41 51 / 10%);
+    }}
+    h1 {{ margin: 0 0 .35rem; font-size: 1.45rem; }}
+    p {{ margin: 0 0 1.25rem; color: var(--muted); }}
+    label {{ display: block; margin-top: 1rem; font-weight: 650; }}
+    input {{
+      width: 100%;
+      margin-top: .4rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: .7rem .75rem;
+      font: inherit;
+    }}
+    button {{
+      width: 100%;
+      margin-top: 1.25rem;
+      border: 0;
+      border-radius: 6px;
+      background: var(--accent);
+      color: #fff;
+      padding: .75rem 1rem;
+      font: inherit;
+      font-weight: 700;
+      cursor: pointer;
+    }}
+    .error {{ color: var(--danger); font-weight: 650; }}
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Panel admina</h1>
+    <p>MCP Session Bridge</p>
+    {error_html}
+    <form method="post" action="/admin/login">
+      <input type="hidden" name="next" value="{escaped_next}">
+      <label>Login <input name="username" autocomplete="username" required></label>
+      <label>Hasło <input name="password" type="password" autocomplete="current-password" required></label>
+      <button type="submit">Zaloguj</button>
+    </form>
+  </main>
+</body>
+</html>"""
+        return HTMLResponse(body, status_code=status_code, headers=self._admin_headers())
+
+    def _value_error(self, exc: ValueError) -> JSONResponse:
+        message = str(exc)
+        status_code = 404 if message.startswith("Unknown ") else 400
+        return self._json_error(message, status_code=status_code)
+
+    @staticmethod
+    def _json_error(message: str, status_code: int) -> JSONResponse:
+        return JSONResponse({"ok": False, "error": message}, status_code=status_code, headers=AdminHandlers._no_store_headers())
+
+    @staticmethod
+    def _admin_headers() -> dict[str, str]:
+        return {
+            **AdminHandlers._no_store_headers(),
+            "X-Frame-Options": "DENY",
+            "Referrer-Policy": "same-origin",
+        }
+
+    @staticmethod
+    def _no_store_headers() -> dict[str, str]:
+        return {"Cache-Control": "no-store", "Pragma": "no-cache"}
+
+
+def _session_payload(session: SessionRecord) -> dict[str, Any]:
+    return {
+        "session_id": session.session_id,
+        "title": session.title,
+        "context_pack_id": session.context_pack_id,
+        "context_pack_version": session.context_pack_version,
+        "title_is_auto": session.title_is_auto,
+        "created_at": session.created_at,
+        "created_at_iso": format_timestamp_iso(session.created_at),
+        "updated_at": session.updated_at,
+        "updated_at_iso": format_timestamp_iso(session.updated_at),
+    }
+
+
+def _exchange_payload(exchange: ExchangeRecord) -> dict[str, Any]:
+    return {
+        "exchange_id": exchange.exchange_id,
+        "session_id": exchange.session_id,
+        "model_name": exchange.model_name,
+        "user_message": exchange.user_message,
+        "assistant_response": exchange.assistant_response,
+        "assistant_created_at": exchange.assistant_created_at,
+        "assistant_created_at_iso": format_timestamp_iso(exchange.assistant_created_at),
+        "assistant_created_at_display": format_response_timestamp(exchange.assistant_created_at),
+        "created_at": exchange.created_at,
+        "created_at_iso": format_timestamp_iso(exchange.created_at),
+        "deleted_at": exchange.deleted_at,
+        "deleted_at_iso": format_timestamp_iso(exchange.deleted_at) if exchange.deleted_at else None,
+        "deleted_reason": exchange.deleted_reason,
+        "edited_at": exchange.edited_at,
+        "edited_at_iso": format_timestamp_iso(exchange.edited_at) if exchange.edited_at else None,
+        "is_deleted": exchange.deleted_at is not None,
+    }
+
+
+async def _json_body(request: Request, allow_empty: bool = False) -> tuple[dict[str, Any], JSONResponse | None]:
+    try:
+        payload = await request.json()
+    except Exception:
+        if allow_empty:
+            return {}, None
+        return {}, AdminHandlers._json_error("Request body must be JSON.", status_code=400)
+    if not isinstance(payload, dict):
+        return {}, AdminHandlers._json_error("Request body must be a JSON object.", status_code=400)
+    return payload, None
+
+
+def _path_exchange_id(request: Request) -> tuple[int, JSONResponse | None]:
+    try:
+        return int(request.path_params["exchange_id"]), None
+    except (KeyError, TypeError, ValueError):
+        return 0, AdminHandlers._json_error("Invalid exchange_id.", status_code=400)
+
+
+def _safe_next(value: str | None) -> str:
+    if value and value.startswith("/admin/") and not value.startswith("//"):
+        return value
+    return "/admin/sessions"
+
+
+def _request_is_secure(request: Request) -> bool:
+    return request.url.scheme == "https" or request.headers.get("x-forwarded-proto", "").lower() == "https"
+
+
+def _b64decode(value: str) -> bytes:
+    padding = "=" * (-len(value) % 4)
+    return base64.urlsafe_b64decode(value + padding)

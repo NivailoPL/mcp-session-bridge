@@ -7,5 +7,7 @@ __pycache__/
 *.pyc
 data/*.sqlite3
 data/*.sqlite3-*
+data/session-summaries/
+session-viewer-data*.json
 secrets/*
 !secrets/.gitkeep

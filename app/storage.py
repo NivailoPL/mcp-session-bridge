@@ -74,7 +74,11 @@ class ExchangeRecord:
     model_name: str
     user_message: str
     assistant_response: str
+    assistant_created_at: int
     created_at: int
+    deleted_at: int | None = None
+    deleted_reason: str | None = None
+    edited_at: int | None = None
 
 
 class Store:
@@ -173,17 +177,43 @@ class Store:
                     model_name TEXT NOT NULL,
                     user_message TEXT NOT NULL,
                     assistant_response TEXT NOT NULL,
+                    assistant_created_at INTEGER NOT NULL,
                     created_at INTEGER NOT NULL,
+                    deleted_at INTEGER,
+                    deleted_reason TEXT,
+                    edited_at INTEGER,
                     FOREIGN KEY(session_id) REFERENCES sessions(session_id) ON DELETE CASCADE
                 );
 
                 CREATE INDEX IF NOT EXISTS idx_exchanges_session_created
                     ON exchanges(session_id, created_at, exchange_id);
+
+                CREATE TABLE IF NOT EXISTS exchange_admin_events (
+                    event_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    exchange_id INTEGER NOT NULL,
+                    session_id TEXT NOT NULL,
+                    action TEXT NOT NULL,
+                    actor TEXT NOT NULL,
+                    before_json TEXT,
+                    after_json TEXT,
+                    created_at INTEGER NOT NULL
+                );
                 """
             )
             self._ensure_column(conn, "refresh_tokens", "resource", "TEXT")
             self._ensure_column(conn, "sessions", "context_pack_version", "TEXT")
             self._ensure_column(conn, "sessions", "title_is_auto", "INTEGER NOT NULL DEFAULT 0")
+            self._ensure_column(conn, "exchanges", "assistant_created_at", "INTEGER")
+            self._ensure_column(conn, "exchanges", "deleted_at", "INTEGER")
+            self._ensure_column(conn, "exchanges", "deleted_reason", "TEXT")
+            self._ensure_column(conn, "exchanges", "edited_at", "INTEGER")
+            conn.execute(
+                """
+                UPDATE exchanges
+                SET assistant_created_at = created_at
+                WHERE assistant_created_at IS NULL
+                """
+            )
 
     @staticmethod
     def _ensure_column(conn: sqlite3.Connection, table: str, column: str, definition: str) -> None:
@@ -460,7 +490,8 @@ class Store:
                     s.title_is_auto,
                     s.created_at,
                     s.updated_at,
-                    COUNT(e.exchange_id) AS exchange_count
+                    SUM(CASE WHEN e.exchange_id IS NOT NULL AND e.deleted_at IS NULL THEN 1 ELSE 0 END) AS exchange_count,
+                    SUM(CASE WHEN e.deleted_at IS NOT NULL THEN 1 ELSE 0 END) AS deleted_exchange_count
                 FROM sessions s
                 LEFT JOIN exchanges e ON e.session_id = s.session_id
                 GROUP BY s.session_id
@@ -476,7 +507,8 @@ class Store:
                 "title_is_auto": bool(row["title_is_auto"]),
                 "created_at": row["created_at"],
                 "updated_at": row["updated_at"],
-                "exchange_count": row["exchange_count"],
+                "exchange_count": row["exchange_count"] or 0,
+                "deleted_exchange_count": row["deleted_exchange_count"] or 0,
             }
             for row in rows
         ]
@@ -487,8 +519,10 @@ class Store:
         model_name: str,
         user_message: str,
         assistant_response: str,
+        assistant_created_at: int | None = None,
     ) -> ExchangeRecord:
         now = int(time.time())
+        response_created_at = assistant_created_at or now
         with self._lock, self._connect() as conn:
             row = conn.execute("SELECT * FROM sessions WHERE session_id = ?", (session_id,)).fetchone()
             if not row:
@@ -496,12 +530,13 @@ class Store:
             cursor = conn.execute(
                 """
                 INSERT INTO exchanges (
-                    session_id, model_name, user_message, assistant_response, created_at
-                ) VALUES (?, ?, ?, ?, ?)
+                    session_id, model_name, user_message, assistant_response,
+                    assistant_created_at, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?)
                 """,
-                (session_id, model_name, user_message, assistant_response, now),
+                (session_id, model_name, user_message, assistant_response, response_created_at, now),
             )
-            if row["title_is_auto"] and self._exchange_count(conn, session_id) == 1:
+            if row["title_is_auto"] and self._exchange_count(conn, session_id, include_deleted=False) == 1:
                 conn.execute(
                     "UPDATE sessions SET title = ?, title_is_auto = 0, updated_at = ? WHERE session_id = ?",
                     (_derive_title(user_message), now, session_id),
@@ -515,35 +550,177 @@ class Store:
             model_name=model_name,
             user_message=user_message,
             assistant_response=assistant_response,
+            assistant_created_at=response_created_at,
             created_at=now,
         )
 
-    def list_exchanges(self, session_id: str) -> list[ExchangeRecord]:
+    def get_exchange(self, exchange_id: int, include_deleted: bool = True) -> ExchangeRecord | None:
         with self._lock, self._connect() as conn:
+            where = "exchange_id = ?" if include_deleted else "exchange_id = ? AND deleted_at IS NULL"
+            row = conn.execute(f"SELECT * FROM exchanges WHERE {where}", (exchange_id,)).fetchone()
+        return _exchange_from_row(row) if row else None
+
+    def list_exchanges(self, session_id: str, include_deleted: bool = False) -> list[ExchangeRecord]:
+        with self._lock, self._connect() as conn:
+            deleted_clause = "" if include_deleted else "AND deleted_at IS NULL"
             rows = conn.execute(
-                """
+                f"""
                 SELECT * FROM exchanges
                 WHERE session_id = ?
+                {deleted_clause}
                 ORDER BY created_at ASC, exchange_id ASC
                 """,
                 (session_id,),
             ).fetchall()
+        return [_exchange_from_row(row) for row in rows]
+
+    def update_exchange(
+        self,
+        exchange_id: int,
+        *,
+        model_name: str | None = None,
+        user_message: str | None = None,
+        assistant_response: str | None = None,
+        actor: str = "admin",
+    ) -> ExchangeRecord:
+        updates: dict[str, str] = {}
+        if model_name is not None:
+            value = model_name.strip()
+            if not value:
+                raise ValueError("model_name must not be empty")
+            updates["model_name"] = value
+        if user_message is not None:
+            value = user_message.strip()
+            if not value:
+                raise ValueError("user_message must not be empty")
+            updates["user_message"] = value
+        if assistant_response is not None:
+            value = assistant_response.strip()
+            if not value:
+                raise ValueError("assistant_response must not be empty")
+            updates["assistant_response"] = value
+
+        now = int(time.time())
+        with self._lock, self._connect() as conn:
+            before = conn.execute("SELECT * FROM exchanges WHERE exchange_id = ?", (exchange_id,)).fetchone()
+            if before is None:
+                raise ValueError(f"Unknown exchange_id: {exchange_id}")
+            if updates:
+                assignments = [f"{column} = ?" for column in updates]
+                values: list[Any] = list(updates.values())
+                assignments.append("edited_at = ?")
+                values.append(now)
+                values.append(exchange_id)
+                conn.execute(
+                    f"UPDATE exchanges SET {', '.join(assignments)} WHERE exchange_id = ?",
+                    values,
+                )
+                conn.execute("UPDATE sessions SET updated_at = ? WHERE session_id = ?", (now, before["session_id"]))
+            after = conn.execute("SELECT * FROM exchanges WHERE exchange_id = ?", (exchange_id,)).fetchone()
+            self._record_exchange_event(conn, "edit", actor, before, after)
+        return _exchange_from_row(after)
+
+    def delete_exchange(self, exchange_id: int, *, reason: str = "", actor: str = "admin") -> ExchangeRecord:
+        now = int(time.time())
+        resolved_reason = reason.strip() or "manual admin correction"
+        with self._lock, self._connect() as conn:
+            before = conn.execute("SELECT * FROM exchanges WHERE exchange_id = ?", (exchange_id,)).fetchone()
+            if before is None:
+                raise ValueError(f"Unknown exchange_id: {exchange_id}")
+            if before["deleted_at"] is None:
+                conn.execute(
+                    """
+                    UPDATE exchanges
+                    SET deleted_at = ?, deleted_reason = ?, edited_at = ?
+                    WHERE exchange_id = ?
+                    """,
+                    (now, resolved_reason, now, exchange_id),
+                )
+                conn.execute("UPDATE sessions SET updated_at = ? WHERE session_id = ?", (now, before["session_id"]))
+            after = conn.execute("SELECT * FROM exchanges WHERE exchange_id = ?", (exchange_id,)).fetchone()
+            self._record_exchange_event(conn, "delete", actor, before, after)
+        return _exchange_from_row(after)
+
+    def restore_exchange(self, exchange_id: int, *, actor: str = "admin") -> ExchangeRecord:
+        now = int(time.time())
+        with self._lock, self._connect() as conn:
+            before = conn.execute("SELECT * FROM exchanges WHERE exchange_id = ?", (exchange_id,)).fetchone()
+            if before is None:
+                raise ValueError(f"Unknown exchange_id: {exchange_id}")
+            if before["deleted_at"] is not None:
+                conn.execute(
+                    """
+                    UPDATE exchanges
+                    SET deleted_at = NULL, deleted_reason = NULL, edited_at = ?
+                    WHERE exchange_id = ?
+                    """,
+                    (now, exchange_id),
+                )
+                conn.execute("UPDATE sessions SET updated_at = ? WHERE session_id = ?", (now, before["session_id"]))
+            after = conn.execute("SELECT * FROM exchanges WHERE exchange_id = ?", (exchange_id,)).fetchone()
+            self._record_exchange_event(conn, "restore", actor, before, after)
+        return _exchange_from_row(after)
+
+    def list_exchange_events(self, exchange_id: int) -> list[dict[str, Any]]:
+        with self._lock, self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT * FROM exchange_admin_events
+                WHERE exchange_id = ?
+                ORDER BY created_at ASC, event_id ASC
+                """,
+                (exchange_id,),
+            ).fetchall()
         return [
-            ExchangeRecord(
-                exchange_id=row["exchange_id"],
-                session_id=row["session_id"],
-                model_name=row["model_name"],
-                user_message=row["user_message"],
-                assistant_response=row["assistant_response"],
-                created_at=row["created_at"],
-            )
+            {
+                "event_id": row["event_id"],
+                "exchange_id": row["exchange_id"],
+                "session_id": row["session_id"],
+                "action": row["action"],
+                "actor": row["actor"],
+                "before": json.loads(row["before_json"]) if row["before_json"] else None,
+                "after": json.loads(row["after_json"]) if row["after_json"] else None,
+                "created_at": row["created_at"],
+            }
             for row in rows
         ]
 
     @staticmethod
-    def _exchange_count(conn: sqlite3.Connection, session_id: str) -> int:
-        row = conn.execute("SELECT COUNT(*) AS count FROM exchanges WHERE session_id = ?", (session_id,)).fetchone()
+    def _exchange_count(conn: sqlite3.Connection, session_id: str, include_deleted: bool = False) -> int:
+        deleted_clause = "" if include_deleted else "AND deleted_at IS NULL"
+        row = conn.execute(
+            f"SELECT COUNT(*) AS count FROM exchanges WHERE session_id = ? {deleted_clause}",
+            (session_id,),
+        ).fetchone()
         return int(row["count"])
+
+    @staticmethod
+    def _record_exchange_event(
+        conn: sqlite3.Connection,
+        action: str,
+        actor: str,
+        before: sqlite3.Row | None,
+        after: sqlite3.Row | None,
+    ) -> None:
+        source = after or before
+        if source is None:
+            return
+        conn.execute(
+            """
+            INSERT INTO exchange_admin_events (
+                exchange_id, session_id, action, actor, before_json, after_json, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                source["exchange_id"],
+                source["session_id"],
+                action,
+                actor,
+                json.dumps(_exchange_row_dict(before), ensure_ascii=False) if before else None,
+                json.dumps(_exchange_row_dict(after), ensure_ascii=False) if after else None,
+                int(time.time()),
+            ),
+        )
 
 
 def _session_from_row(row: sqlite3.Row) -> SessionRecord:
@@ -556,6 +733,38 @@ def _session_from_row(row: sqlite3.Row) -> SessionRecord:
         created_at=row["created_at"],
         updated_at=row["updated_at"],
     )
+
+
+def _exchange_from_row(row: sqlite3.Row) -> ExchangeRecord:
+    return ExchangeRecord(
+        exchange_id=row["exchange_id"],
+        session_id=row["session_id"],
+        model_name=row["model_name"],
+        user_message=row["user_message"],
+        assistant_response=row["assistant_response"],
+        assistant_created_at=row["assistant_created_at"] or row["created_at"],
+        created_at=row["created_at"],
+        deleted_at=row["deleted_at"],
+        deleted_reason=row["deleted_reason"],
+        edited_at=row["edited_at"],
+    )
+
+
+def _exchange_row_dict(row: sqlite3.Row | None) -> dict[str, Any] | None:
+    if row is None:
+        return None
+    return {
+        "exchange_id": row["exchange_id"],
+        "session_id": row["session_id"],
+        "model_name": row["model_name"],
+        "user_message": row["user_message"],
+        "assistant_response": row["assistant_response"],
+        "assistant_created_at": row["assistant_created_at"] or row["created_at"],
+        "created_at": row["created_at"],
+        "deleted_at": row["deleted_at"],
+        "deleted_reason": row["deleted_reason"],
+        "edited_at": row["edited_at"],
+    }
 
 
 def _derive_title(user_message: str) -> str:

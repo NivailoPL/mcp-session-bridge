@@ -17,6 +17,9 @@ class Settings:
     db_path: Path
     context_packs_dir: Path
     default_context_pack_id: str
+    summaries_dir: Path
+    transcript_chunk_max_lines: int
+    transcript_chunk_max_chars: int
     owner_username: str
     owner_password_hash: str
     secret_key: str
@@ -60,6 +63,9 @@ def load_settings() -> Settings:
         db_path=Path(os.getenv("BRIDGE_DB_PATH", str(ROOT / "data" / "bridge.sqlite3"))),
         context_packs_dir=Path(os.getenv("BRIDGE_CONTEXT_PACKS_DIR", "/root/ww-context-packs")),
         default_context_pack_id=os.getenv("BRIDGE_DEFAULT_CONTEXT_PACK_ID", "magic-smoke"),
+        summaries_dir=Path(os.getenv("BRIDGE_SUMMARIES_DIR", str(ROOT / "data" / "session-summaries"))),
+        transcript_chunk_max_lines=int(os.getenv("BRIDGE_TRANSCRIPT_CHUNK_MAX_LINES", "180")),
+        transcript_chunk_max_chars=int(os.getenv("BRIDGE_TRANSCRIPT_CHUNK_MAX_CHARS", "12000")),
         owner_username=os.getenv("BRIDGE_OWNER_USERNAME", "wojtek"),
         owner_password_hash=_required("BRIDGE_OWNER_PASSWORD_HASH"),
         secret_key=_required("BRIDGE_SECRET_KEY"),

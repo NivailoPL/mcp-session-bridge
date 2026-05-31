@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
+from datetime import UTC, datetime
 from dataclasses import dataclass
 from pathlib import Path
+from threading import Lock
 from typing import Any
 
 import yaml
@@ -49,6 +52,7 @@ class ContextPack:
 class ContextPackStore:
     def __init__(self, root: Path):
         self.root = root
+        self._lock = Lock()
         self.root.mkdir(parents=True, exist_ok=True)
 
     def list_packs(self) -> list[dict[str, Any]]:
@@ -71,12 +75,7 @@ class ContextPackStore:
         return packs
 
     def load_pack(self, pack_id: str) -> ContextPack:
-        if not _is_safe_id(pack_id):
-            raise ValueError("context_pack_id may only contain letters, numbers, dots, dashes, and underscores")
-
-        pack_dir = (self.root / pack_id).resolve()
-        if not _is_relative_to(pack_dir, self.root.resolve()) or not pack_dir.is_dir():
-            raise FileNotFoundError(f"Context pack not found: {pack_id}")
+        pack_dir = self._resolve_pack_dir(pack_id)
 
         manifest = _read_manifest(pack_dir)
         files = manifest.get("files")
@@ -119,24 +118,92 @@ class ContextPackStore:
             root=pack_dir,
         )
 
+    def save_context_summary(
+        self,
+        pack_id: str,
+        session_id: str,
+        model_name: str,
+        summary_markdown: str,
+        title: str = "",
+    ) -> dict[str, Any]:
+        content = summary_markdown.strip()
+        if not content:
+            raise ValueError("summary_markdown must not be empty")
+
+        with self._lock:
+            pack_dir = self._resolve_pack_dir(pack_id)
+            manifest_path, manifest = _read_manifest_with_path(pack_dir)
+            files = manifest.get("files")
+            if not isinstance(files, list) or not files:
+                raise ValueError(f"Context pack {pack_id} manifest must define a non-empty files list")
+
+            summary_title = title.strip() or _default_summary_title(model_name)
+            rel_path = _new_summary_path(len(files) + 1, session_id)
+            file_path = (pack_dir / rel_path).resolve()
+            if not _is_relative_to(file_path, pack_dir.resolve()):
+                raise ValueError(f"Context summary path escapes pack directory: {rel_path}")
+
+            suffix = 2
+            while file_path.exists():
+                rel_path = _new_summary_path(len(files) + 1, session_id, suffix=suffix)
+                file_path = (pack_dir / rel_path).resolve()
+                suffix += 1
+
+            _write_text_atomic(file_path, content + "\n")
+            try:
+                files.append({"path": rel_path, "title": summary_title})
+                _write_manifest_atomic(manifest_path, manifest)
+            except Exception:
+                try:
+                    file_path.unlink()
+                except OSError:
+                    pass
+                raise
+
+            return {
+                "path": rel_path,
+                "title": summary_title,
+                "chars": len(content),
+                "sha256": hashlib.sha256(content.encode("utf-8")).hexdigest(),
+                "context_file_count": len(files),
+                "manifest_updated": True,
+            }
+
+    def _resolve_pack_dir(self, pack_id: str) -> Path:
+        if not _is_safe_id(pack_id):
+            raise ValueError("context_pack_id may only contain letters, numbers, dots, dashes, and underscores")
+
+        pack_dir = (self.root / pack_id).resolve()
+        if not _is_relative_to(pack_dir, self.root.resolve()) or not pack_dir.is_dir():
+            raise FileNotFoundError(f"Context pack not found: {pack_id}")
+        return pack_dir
+
 
 def _read_manifest(pack_dir: Path) -> dict[str, Any]:
+    _, manifest = _read_manifest_with_path(pack_dir)
+    return manifest
+
+
+def _read_manifest_with_path(pack_dir: Path) -> tuple[Path, dict[str, Any]]:
     json_path = pack_dir / "manifest.json"
     yaml_path = pack_dir / "manifest.yml"
     yml_path = pack_dir / "manifest.yaml"
 
     if json_path.exists():
+        path = json_path
         data = json.loads(json_path.read_text(encoding="utf-8"))
     elif yaml_path.exists():
+        path = yaml_path
         data = yaml.safe_load(yaml_path.read_text(encoding="utf-8"))
     elif yml_path.exists():
+        path = yml_path
         data = yaml.safe_load(yml_path.read_text(encoding="utf-8"))
     else:
         raise FileNotFoundError(f"Missing manifest in {pack_dir}")
 
     if not isinstance(data, dict):
         raise ValueError(f"Manifest must be an object in {pack_dir}")
-    return data
+    return path, data
 
 
 def _read_pack_file(pack_dir: Path, rel_path: str) -> str:
@@ -148,6 +215,37 @@ def _read_pack_file(pack_dir: Path, rel_path: str) -> str:
     if not path.is_file():
         raise FileNotFoundError(f"Context file not found: {rel_path}")
     return path.read_text(encoding="utf-8").strip()
+
+
+def _write_manifest_atomic(path: Path, manifest: dict[str, Any]) -> None:
+    if path.suffix == ".json":
+        content = json.dumps(manifest, ensure_ascii=False, indent=2) + "\n"
+    else:
+        content = yaml.safe_dump(manifest, allow_unicode=True, sort_keys=False)
+    _write_text_atomic(path, content)
+
+
+def _write_text_atomic(path: Path, content: str) -> None:
+    temporary_path = path.with_name(f".{path.name}.tmp")
+    temporary_path.write_text(content, encoding="utf-8")
+    temporary_path.replace(path)
+
+
+def _new_summary_path(index: int, session_id: str, suffix: int | None = None) -> str:
+    stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
+    slug = _slugify(session_id)
+    collision_suffix = f"-{suffix}" if suffix else ""
+    return f"{index:02d}-podsumowanie-kontekstowe-{stamp}-{slug}{collision_suffix}.md"
+
+
+def _default_summary_title(model_name: str) -> str:
+    resolved_model = model_name.strip() or "model"
+    return f"Podsumowanie kontekstowe - {resolved_model}"
+
+
+def _slugify(value: str) -> str:
+    slug = re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")[:48]
+    return slug.strip("-") or "session"
 
 
 def _is_safe_id(value: str) -> bool:

@@ -1,0 +1,890 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MCP Session Bridge Admin</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f6f7f4;
+      --panel: #ffffff;
+      --text: #1f2933;
+      --muted: #68727d;
+      --soft: #eef1ed;
+      --border: #d7ddd5;
+      --accent: #176b5b;
+      --accent-strong: #0f4e42;
+      --danger: #a33a32;
+      --danger-soft: #f7e5e2;
+      --warning: #8a621b;
+      --warning-soft: #fbefd4;
+      --focus: #2563eb;
+      --shadow: 0 10px 28px rgb(31 41 51 / 8%);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.45;
+    }
+
+    button,
+    input,
+    textarea {
+      font: inherit;
+    }
+
+    button {
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--panel);
+      color: var(--text);
+      cursor: pointer;
+      font-weight: 700;
+      min-height: 2.35rem;
+      padding: .55rem .75rem;
+    }
+
+    button:hover {
+      border-color: #aeb8ae;
+      background: #f8faf7;
+    }
+
+    button.primary {
+      border-color: var(--accent);
+      background: var(--accent);
+      color: #fff;
+    }
+
+    button.primary:hover {
+      border-color: var(--accent-strong);
+      background: var(--accent-strong);
+    }
+
+    button.danger {
+      border-color: #d9aaa4;
+      color: var(--danger);
+    }
+
+    button.danger:hover {
+      background: var(--danger-soft);
+    }
+
+    button:disabled {
+      cursor: wait;
+      opacity: .55;
+    }
+
+    input,
+    textarea {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: #fff;
+      color: var(--text);
+      padding: .65rem .75rem;
+    }
+
+    textarea {
+      min-height: 11rem;
+      resize: vertical;
+      white-space: pre-wrap;
+    }
+
+    input:focus,
+    textarea:focus,
+    button:focus-visible {
+      outline: 3px solid rgb(37 99 235 / 22%);
+      outline-offset: 1px;
+      border-color: var(--focus);
+    }
+
+    .shell {
+      display: grid;
+      grid-template-columns: minmax(18rem, 24rem) minmax(0, 1fr);
+      min-height: 100vh;
+    }
+
+    .sidebar {
+      border-right: 1px solid var(--border);
+      background: #fbfcfa;
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+    }
+
+    .brand,
+    .toolbar,
+    .session-list,
+    .content {
+      padding: 1rem;
+    }
+
+    .brand {
+      border-bottom: 1px solid var(--border);
+    }
+
+    .brand-row,
+    .topbar,
+    .exchange-meta,
+    .exchange-actions,
+    .edit-actions {
+      display: flex;
+      align-items: center;
+      gap: .6rem;
+    }
+
+    .brand-row,
+    .topbar,
+    .exchange-meta {
+      justify-content: space-between;
+    }
+
+    h1,
+    h2,
+    h3,
+    p {
+      margin: 0;
+    }
+
+    h1 {
+      font-size: 1.1rem;
+    }
+
+    h2 {
+      font-size: 1.35rem;
+      line-height: 1.2;
+    }
+
+    h3 {
+      font-size: .95rem;
+      line-height: 1.25;
+    }
+
+    .muted,
+    .meta {
+      color: var(--muted);
+      font-size: .88rem;
+    }
+
+    .toolbar {
+      display: grid;
+      gap: .75rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .toggle {
+      display: flex;
+      align-items: center;
+      gap: .5rem;
+      color: var(--muted);
+      font-size: .9rem;
+      user-select: none;
+    }
+
+    .toggle input {
+      width: auto;
+    }
+
+    .session-list {
+      display: grid;
+      align-content: start;
+      gap: .55rem;
+      overflow: auto;
+    }
+
+    .session-button {
+      display: grid;
+      gap: .25rem;
+      width: 100%;
+      min-height: 4.25rem;
+      text-align: left;
+    }
+
+    .session-button.is-active {
+      border-color: var(--accent);
+      box-shadow: inset 3px 0 0 var(--accent);
+    }
+
+    .session-title {
+      overflow-wrap: anywhere;
+    }
+
+    .main {
+      display: flex;
+      min-width: 0;
+      flex-direction: column;
+    }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      border-bottom: 1px solid var(--border);
+      background: rgb(246 247 244 / 96%);
+      backdrop-filter: blur(12px);
+      padding: 1rem 1.25rem;
+    }
+
+    .topbar-title {
+      min-width: 0;
+      display: grid;
+      gap: .25rem;
+    }
+
+    .topbar-title h2,
+    .topbar-title .meta {
+      overflow-wrap: anywhere;
+    }
+
+    .top-actions {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: .5rem;
+      flex: 0 0 auto;
+    }
+
+    .content {
+      display: grid;
+      gap: .9rem;
+      max-width: 78rem;
+      width: 100%;
+    }
+
+    .status {
+      min-height: 1.35rem;
+      color: var(--accent);
+      font-size: .9rem;
+    }
+
+    .status.is-error {
+      color: var(--danger);
+    }
+
+    .status.is-warn {
+      color: var(--warning);
+    }
+
+    .exchange {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .exchange.is-deleted {
+      border-color: #e4c6a4;
+      background: #fffaf0;
+    }
+
+    .exchange-head {
+      display: grid;
+      gap: .65rem;
+      padding: .8rem .9rem;
+      border-bottom: 1px solid var(--border);
+      background: #fbfcfa;
+    }
+
+    .exchange.is-deleted .exchange-head {
+      background: var(--warning-soft);
+    }
+
+    .exchange-meta {
+      align-items: flex-start;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      min-height: 1.65rem;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: #fff;
+      color: var(--muted);
+      font-size: .78rem;
+      font-weight: 800;
+      padding: .2rem .55rem;
+      white-space: nowrap;
+    }
+
+    .pill.deleted {
+      border-color: #d7b26f;
+      color: var(--warning);
+    }
+
+    .exchange-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 1px;
+      background: var(--border);
+    }
+
+    .turn {
+      min-width: 0;
+      background: #fff;
+      padding: .9rem;
+    }
+
+    .turn-label {
+      margin-bottom: .5rem;
+      color: var(--muted);
+      font-size: .78rem;
+      font-weight: 850;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+    }
+
+    .turn-content {
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+
+    .edit-form {
+      display: none;
+      gap: .8rem;
+      padding: .9rem;
+      border-top: 1px solid var(--border);
+      background: #fbfcfa;
+    }
+
+    .exchange.is-editing .edit-form {
+      display: grid;
+    }
+
+    .exchange.is-editing .exchange-grid {
+      display: none;
+    }
+
+    .field-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: .8rem;
+    }
+
+    label.field {
+      display: grid;
+      gap: .35rem;
+      color: var(--muted);
+      font-size: .82rem;
+      font-weight: 800;
+    }
+
+    .empty {
+      border: 1px dashed var(--border);
+      border-radius: 8px;
+      padding: 2rem;
+      color: var(--muted);
+      text-align: center;
+      background: #fff;
+    }
+
+    @media (max-width: 900px) {
+      .shell {
+        grid-template-columns: 1fr;
+      }
+
+      .sidebar {
+        min-height: auto;
+        border-right: 0;
+        border-bottom: 1px solid var(--border);
+      }
+
+      .session-list {
+        max-height: 18rem;
+      }
+
+      .topbar,
+      .exchange-meta {
+        align-items: stretch;
+        flex-direction: column;
+      }
+
+      .top-actions,
+      .exchange-actions,
+      .edit-actions {
+        justify-content: flex-start;
+      }
+
+      .exchange-grid,
+      .field-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <aside class="sidebar">
+      <section class="brand">
+        <div class="brand-row">
+          <div>
+            <h1>MCP Admin</h1>
+            <p id="identity" class="muted">Ładowanie...</p>
+          </div>
+          <form method="post" action="/admin/logout">
+            <button type="submit">Wyloguj</button>
+          </form>
+        </div>
+      </section>
+
+      <section class="toolbar">
+        <input id="searchInput" type="search" placeholder="Szukaj sesji">
+        <label class="toggle">
+          <input id="showDeletedToggle" type="checkbox" checked>
+          <span>Pokazuj usunięte wymiany</span>
+        </label>
+        <p id="datasetSummary" class="muted">Brak danych.</p>
+      </section>
+
+      <nav id="sessionList" class="session-list" aria-label="Sesje"></nav>
+    </aside>
+
+    <section class="main" aria-label="Korekta sesji">
+      <header class="topbar">
+        <div class="topbar-title">
+          <h2 id="sessionTitle">Wybierz sesję</h2>
+          <div id="sessionMeta" class="meta">Panel korekty historii rozmów.</div>
+        </div>
+        <div class="top-actions">
+          <button id="refreshButton" type="button">Odśwież</button>
+        </div>
+      </header>
+
+      <section class="content">
+        <p id="status" class="status" role="status"></p>
+        <div id="exchangeList" aria-live="polite"></div>
+      </section>
+    </section>
+  </main>
+
+  <script>
+    (() => {
+      const state = {
+        csrfToken: "",
+        sessions: [],
+        selectedSessionId: localStorage.getItem("mcp-admin:selected") || "",
+        selectedSession: null,
+        exchanges: [],
+        query: "",
+        showDeleted: true,
+        editingExchangeId: null,
+        busy: false,
+      };
+
+      const dom = {
+        datasetSummary: document.getElementById("datasetSummary"),
+        exchangeList: document.getElementById("exchangeList"),
+        identity: document.getElementById("identity"),
+        refreshButton: document.getElementById("refreshButton"),
+        searchInput: document.getElementById("searchInput"),
+        sessionList: document.getElementById("sessionList"),
+        sessionMeta: document.getElementById("sessionMeta"),
+        sessionTitle: document.getElementById("sessionTitle"),
+        showDeletedToggle: document.getElementById("showDeletedToggle"),
+        status: document.getElementById("status"),
+      };
+
+      dom.refreshButton.addEventListener("click", () => refreshAll());
+      dom.searchInput.addEventListener("input", () => {
+        state.query = dom.searchInput.value.trim().toLowerCase();
+        renderSessions();
+      });
+      dom.showDeletedToggle.addEventListener("change", () => {
+        state.showDeleted = dom.showDeletedToggle.checked;
+        renderExchanges();
+      });
+
+      init();
+
+      async function init() {
+        try {
+          const me = await api("/admin/api/me");
+          state.csrfToken = me.csrf_token;
+          dom.identity.textContent = me.username;
+          await refreshAll();
+        } catch (error) {
+          if (error.status === 401) {
+            window.location.assign("/admin/login?next=/admin/sessions");
+            return;
+          }
+          setStatus(error.message, "error");
+        }
+      }
+
+      async function refreshAll() {
+        await loadSessions();
+        if (state.selectedSessionId) {
+          await loadSession(state.selectedSessionId);
+        } else {
+          renderExchanges();
+        }
+      }
+
+      async function loadSessions() {
+        setBusy(true);
+        try {
+          const payload = await api("/admin/api/sessions");
+          state.sessions = payload.sessions || [];
+          const stillExists = state.sessions.some((session) => session.session_id === state.selectedSessionId);
+          if (!stillExists) {
+            state.selectedSessionId = state.sessions[0] ? state.sessions[0].session_id : "";
+          }
+          renderSessions();
+          renderSummary();
+        } finally {
+          setBusy(false);
+        }
+      }
+
+      async function loadSession(sessionId) {
+        if (!sessionId) {
+          state.selectedSession = null;
+          state.exchanges = [];
+          renderExchanges();
+          return;
+        }
+        setBusy(true);
+        try {
+          const payload = await api(`/admin/api/sessions/${encodeURIComponent(sessionId)}`);
+          state.selectedSessionId = sessionId;
+          state.selectedSession = payload.session;
+          state.exchanges = payload.exchanges || [];
+          localStorage.setItem("mcp-admin:selected", sessionId);
+          renderSessions();
+          renderExchanges();
+          setStatus(`Wybrano ${sessionId}.`, "ok");
+        } finally {
+          setBusy(false);
+        }
+      }
+
+      function renderSummary() {
+        const active = state.sessions.reduce((sum, session) => sum + Number(session.exchange_count || 0), 0);
+        const deleted = state.sessions.reduce((sum, session) => sum + Number(session.deleted_exchange_count || 0), 0);
+        dom.datasetSummary.textContent = `${state.sessions.length} sesji, ${active} aktywnych wymian, ${deleted} usuniętych.`;
+      }
+
+      function renderSessions() {
+        dom.sessionList.replaceChildren();
+        const visible = state.sessions.filter((session) => {
+          if (!state.query) {
+            return true;
+          }
+          return [
+            session.session_id,
+            session.title,
+            session.context_pack_id,
+          ].filter(Boolean).join(" ").toLowerCase().includes(state.query);
+        });
+
+        if (!visible.length) {
+          dom.sessionList.append(div("empty", "Brak pasujących sesji."));
+          return;
+        }
+
+        for (const session of visible) {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = "session-button";
+          if (session.session_id === state.selectedSessionId) {
+            button.classList.add("is-active");
+          }
+          button.addEventListener("click", () => loadSession(session.session_id));
+          button.append(
+            div("session-title", session.title || "Bez tytułu"),
+            div("muted", session.session_id),
+            div("muted", `${session.exchange_count || 0} aktywnych · ${session.deleted_exchange_count || 0} usuniętych`)
+          );
+          dom.sessionList.append(button);
+        }
+      }
+
+      function renderExchanges() {
+        dom.exchangeList.replaceChildren();
+
+        if (!state.selectedSession) {
+          dom.sessionTitle.textContent = "Wybierz sesję";
+          dom.sessionMeta.textContent = "Panel korekty historii rozmów.";
+          dom.exchangeList.append(div("empty", "Brak wybranej sesji."));
+          return;
+        }
+
+        const activeCount = state.exchanges.filter((exchange) => !exchange.is_deleted).length;
+        const deletedCount = state.exchanges.length - activeCount;
+        dom.sessionTitle.textContent = state.selectedSession.title || state.selectedSession.session_id;
+        dom.sessionMeta.textContent = [
+          state.selectedSession.session_id,
+          `${activeCount} aktywnych wymian`,
+          `${deletedCount} usuniętych`,
+          `update ${formatDate(state.selectedSession.updated_at_iso)}`,
+        ].join(" · ");
+
+        const visible = state.showDeleted ? state.exchanges : state.exchanges.filter((exchange) => !exchange.is_deleted);
+        if (!visible.length) {
+          dom.exchangeList.append(div("empty", "Brak wymian do wyświetlenia."));
+          return;
+        }
+
+        for (const exchange of visible) {
+          dom.exchangeList.append(renderExchange(exchange));
+        }
+      }
+
+      function renderExchange(exchange) {
+        const article = document.createElement("article");
+        article.className = `exchange${exchange.is_deleted ? " is-deleted" : ""}`;
+        if (state.editingExchangeId === exchange.exchange_id) {
+          article.classList.add("is-editing");
+        }
+
+        const head = div("exchange-head");
+        const meta = div("exchange-meta");
+        const metaText = div("");
+        metaText.append(
+          h3(`#${exchange.exchange_id} · ${exchange.model_name || "Unknown model"}`),
+          div("muted", [
+            exchange.assistant_created_at_display || formatDate(exchange.assistant_created_at_iso),
+            exchange.edited_at_iso ? `edytowano ${formatDate(exchange.edited_at_iso)}` : "",
+            exchange.is_deleted ? `usunięto ${formatDate(exchange.deleted_at_iso)}` : "",
+          ].filter(Boolean).join(" · "))
+        );
+        meta.append(metaText, span(`pill${exchange.is_deleted ? " deleted" : ""}`, exchange.is_deleted ? "USUNIĘTE" : "AKTYWNE"));
+
+        const actions = div("exchange-actions");
+        const editButton = button("Edytuj", () => {
+          state.editingExchangeId = state.editingExchangeId === exchange.exchange_id ? null : exchange.exchange_id;
+          renderExchanges();
+        });
+        actions.append(editButton);
+        if (exchange.is_deleted) {
+          actions.append(button("Przywróć", () => restoreExchange(exchange.exchange_id), "primary"));
+        } else {
+          actions.append(button("Usuń", () => deleteExchange(exchange.exchange_id), "danger"));
+        }
+        head.append(meta, actions);
+
+        if (exchange.deleted_reason) {
+          head.append(div("muted", `Powód: ${exchange.deleted_reason}`));
+        }
+
+        const grid = div("exchange-grid");
+        grid.append(
+          renderTurn("USER", exchange.user_message),
+          renderTurn(exchange.model_name || "MODEL", exchange.assistant_response)
+        );
+
+        const form = renderEditForm(exchange);
+        article.append(head, grid, form);
+        return article;
+      }
+
+      function renderTurn(label, content) {
+        const node = div("turn");
+        node.append(div("turn-label", label), div("turn-content", content || ""));
+        return node;
+      }
+
+      function renderEditForm(exchange) {
+        const form = document.createElement("form");
+        form.className = "edit-form";
+        form.addEventListener("submit", async (event) => {
+          event.preventDefault();
+          await saveExchange(exchange.exchange_id, form);
+        });
+
+        const modelField = label("field", "Model");
+        const modelInput = document.createElement("input");
+        modelInput.name = "model_name";
+        modelInput.value = exchange.model_name || "";
+        modelField.append(modelInput);
+
+        const grid = div("field-grid");
+        const userField = label("field", "Wiadomość użytkownika");
+        const userInput = document.createElement("textarea");
+        userInput.name = "user_message";
+        userInput.value = exchange.user_message || "";
+        userField.append(userInput);
+
+        const assistantField = label("field", "Odpowiedź modelu");
+        const assistantInput = document.createElement("textarea");
+        assistantInput.name = "assistant_response";
+        assistantInput.value = exchange.assistant_response || "";
+        assistantField.append(assistantInput);
+        grid.append(userField, assistantField);
+
+        const actions = div("edit-actions");
+        actions.append(
+          button("Zapisz", null, "primary", "submit"),
+          button("Anuluj", () => {
+            state.editingExchangeId = null;
+            renderExchanges();
+          }, "", "button")
+        );
+        form.append(modelField, grid, actions);
+        return form;
+      }
+
+      async function saveExchange(exchangeId, form) {
+        const payload = {
+          model_name: form.elements.model_name.value,
+          user_message: form.elements.user_message.value,
+          assistant_response: form.elements.assistant_response.value,
+        };
+        await mutate(`/admin/api/exchanges/${exchangeId}`, {
+          method: "PATCH",
+          body: JSON.stringify(payload),
+        }, "Wymiana zapisana.");
+      }
+
+      async function deleteExchange(exchangeId) {
+        const reason = window.prompt("Powód usunięcia", "duplikat po ponownym wygenerowaniu odpowiedzi");
+        if (reason === null) {
+          return;
+        }
+        if (!window.confirm(`Usunąć wymianę #${exchangeId} z aktywnego transcriptu?`)) {
+          return;
+        }
+        await mutate(`/admin/api/exchanges/${exchangeId}`, {
+          method: "DELETE",
+          body: JSON.stringify({ reason }),
+        }, "Wymiana usunięta z aktywnego transcriptu.");
+      }
+
+      async function restoreExchange(exchangeId) {
+        if (!window.confirm(`Przywrócić wymianę #${exchangeId}?`)) {
+          return;
+        }
+        await mutate(`/admin/api/exchanges/${exchangeId}/restore`, { method: "POST" }, "Wymiana przywrócona.");
+      }
+
+      async function mutate(path, options, successMessage) {
+        setBusy(true);
+        try {
+          await api(path, options);
+          state.editingExchangeId = null;
+          await loadSession(state.selectedSessionId);
+          await loadSessions();
+          setStatus(successMessage, "ok");
+        } catch (error) {
+          setStatus(error.message, "error");
+        } finally {
+          setBusy(false);
+        }
+      }
+
+      async function api(path, options = {}) {
+        const headers = new Headers(options.headers || {});
+        if (options.body && !headers.has("content-type")) {
+          headers.set("content-type", "application/json");
+        }
+        if (options.method && options.method !== "GET") {
+          headers.set("x-csrf-token", state.csrfToken);
+        }
+        const response = await fetch(path, {
+          ...options,
+          headers,
+          credentials: "same-origin",
+          cache: "no-store",
+        });
+        let payload = null;
+        try {
+          payload = await response.json();
+        } catch (_) {
+          payload = null;
+        }
+        if (!response.ok || (payload && payload.ok === false)) {
+          const error = new Error((payload && payload.error) || `HTTP ${response.status}`);
+          error.status = response.status;
+          throw error;
+        }
+        return payload || { ok: true };
+      }
+
+      function setBusy(value) {
+        state.busy = value;
+        for (const node of document.querySelectorAll("button")) {
+          node.disabled = value;
+        }
+      }
+
+      function setStatus(message, tone) {
+        dom.status.textContent = message || "";
+        dom.status.classList.toggle("is-error", tone === "error");
+        dom.status.classList.toggle("is-warn", tone === "warn");
+      }
+
+      function formatDate(value) {
+        if (!value) {
+          return "";
+        }
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) {
+          return String(value);
+        }
+        return new Intl.DateTimeFormat("pl-PL", {
+          dateStyle: "medium",
+          timeStyle: "short",
+        }).format(date);
+      }
+
+      function button(text, onClick, className = "", type = "button") {
+        const node = document.createElement("button");
+        node.type = type;
+        node.textContent = text;
+        if (className) {
+          node.className = className;
+        }
+        if (onClick) {
+          node.addEventListener("click", onClick);
+        }
+        return node;
+      }
+
+      function div(className, text) {
+        const node = document.createElement("div");
+        if (className) {
+          node.className = className;
+        }
+        if (text !== undefined) {
+          node.textContent = text;
+        }
+        return node;
+      }
+
+      function h3(text) {
+        const node = document.createElement("h3");
+        node.textContent = text;
+        return node;
+      }
+
+      function label(className, text) {
+        const node = document.createElement("label");
+        if (className) {
+          node.className = className;
+        }
+        node.append(document.createTextNode(text));
+        return node;
+      }
+
+      function span(className, text) {
+        const node = document.createElement("span");
+        if (className) {
+          node.className = className;
+        }
+        node.textContent = text;
+        return node;
+      }
+    })();
+  </script>
+</body>
+</html>

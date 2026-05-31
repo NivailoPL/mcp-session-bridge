@@ -1,0 +1,869 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MCP Session Viewer</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --page: #f6f7f4;
+      --panel: #ffffff;
+      --ink: #1f2421;
+      --muted: #66716b;
+      --line: #d8ded8;
+      --line-strong: #aeb8af;
+      --accent: #0f766e;
+      --accent-strong: #0a524e;
+      --danger: #b4233a;
+      --gold: #b7791f;
+      --shadow: 0 20px 60px rgba(31, 36, 33, 0.10);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      min-height: 100%;
+      margin: 0;
+    }
+
+    body {
+      background: var(--page);
+      color: var(--ink);
+    }
+
+    button,
+    input {
+      font: inherit;
+    }
+
+    button {
+      min-height: 38px;
+      border: 1px solid var(--line-strong);
+      border-radius: 8px;
+      background: var(--panel);
+      color: var(--ink);
+      cursor: pointer;
+      transition: border-color 140ms ease, background 140ms ease, transform 140ms ease;
+    }
+
+    button:hover {
+      border-color: var(--accent);
+      background: #f2fbf8;
+    }
+
+    button:active {
+      transform: translateY(1px);
+    }
+
+    .app {
+      display: grid;
+      grid-template-columns: minmax(280px, 390px) minmax(0, 1fr);
+      min-height: 100vh;
+    }
+
+    .sidebar {
+      display: flex;
+      min-height: 100vh;
+      flex-direction: column;
+      border-right: 1px solid var(--line);
+      background: #fbfcfa;
+    }
+
+    .brand {
+      padding: 24px 22px 18px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .brand h1 {
+      margin: 0;
+      font-size: 22px;
+      line-height: 1.15;
+      font-weight: 740;
+    }
+
+    .brand p {
+      margin: 8px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .controls {
+      display: grid;
+      gap: 10px;
+      padding: 16px 18px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .session-form {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 8px;
+    }
+
+    .input {
+      min-width: 0;
+      min-height: 38px;
+      width: 100%;
+      border: 1px solid var(--line-strong);
+      border-radius: 8px;
+      background: var(--panel);
+      color: var(--ink);
+      padding: 0 12px;
+      outline: none;
+    }
+
+    .input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.16);
+    }
+
+    .actions {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .file-button {
+      display: inline-grid;
+      min-height: 38px;
+      place-items: center;
+      border: 1px solid var(--line-strong);
+      border-radius: 8px;
+      background: var(--panel);
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .file-button:hover {
+      border-color: var(--accent);
+      background: #f2fbf8;
+    }
+
+    .file-button input {
+      display: none;
+    }
+
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .toggle-row input {
+      accent-color: var(--accent);
+    }
+
+    .status {
+      min-height: 20px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+      overflow-wrap: anywhere;
+    }
+
+    .status.is-warn {
+      color: var(--gold);
+    }
+
+    .status.is-error {
+      color: var(--danger);
+    }
+
+    .session-list {
+      display: grid;
+      gap: 8px;
+      overflow: auto;
+      padding: 14px 12px 22px;
+    }
+
+    .session-button {
+      display: grid;
+      gap: 5px;
+      width: 100%;
+      min-height: 84px;
+      padding: 12px;
+      text-align: left;
+      border-color: transparent;
+      background: transparent;
+    }
+
+    .session-button:hover,
+    .session-button.is-active {
+      border-color: var(--line-strong);
+      background: var(--panel);
+      box-shadow: 0 10px 22px rgba(31, 36, 33, 0.06);
+    }
+
+    .session-title {
+      font-size: 14px;
+      font-weight: 720;
+      line-height: 1.3;
+      overflow-wrap: anywhere;
+    }
+
+    .session-id,
+    .session-meta {
+      color: var(--muted);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      font-size: 11px;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+    }
+
+    .main {
+      display: grid;
+      min-width: 0;
+      grid-template-rows: auto minmax(0, 1fr);
+      min-height: 100vh;
+    }
+
+    .topbar {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 14px;
+      align-items: center;
+      padding: 20px 26px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.76);
+      backdrop-filter: blur(12px);
+    }
+
+    .topbar h2 {
+      margin: 0;
+      font-size: 20px;
+      line-height: 1.25;
+      overflow-wrap: anywhere;
+    }
+
+    .meta-line {
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.4;
+      overflow-wrap: anywhere;
+    }
+
+    .top-actions {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+
+    .top-actions button {
+      padding: 0 12px;
+    }
+
+    .copy-button {
+      border-color: var(--accent);
+      background: var(--accent);
+      color: #ffffff;
+    }
+
+    .copy-button:hover {
+      border-color: var(--accent-strong);
+      background: var(--accent-strong);
+    }
+
+    .conversation-wrap {
+      min-height: 0;
+      overflow: auto;
+      padding: 26px;
+    }
+
+    .empty {
+      max-width: 680px;
+      margin: 12vh auto 0;
+      padding: 28px;
+      border: 1px dashed var(--line-strong);
+      border-radius: 8px;
+      background: var(--panel);
+      color: var(--muted);
+      text-align: center;
+      line-height: 1.55;
+      box-shadow: var(--shadow);
+    }
+
+    .chat {
+      display: grid;
+      max-width: 980px;
+      margin: 0 auto;
+      gap: 18px;
+    }
+
+    .message {
+      display: grid;
+      gap: 7px;
+      max-width: min(820px, 86%);
+    }
+
+    .message.is-user {
+      justify-self: end;
+    }
+
+    .message.is-model {
+      justify-self: start;
+    }
+
+    .message-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: baseline;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    .message.is-user .message-meta {
+      justify-content: flex-end;
+    }
+
+    .speaker {
+      color: var(--ink);
+      font-weight: 760;
+    }
+
+    .bubble {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      box-shadow: 0 12px 34px rgba(31, 36, 33, 0.08);
+    }
+
+    .message.is-user .bubble {
+      border-color: var(--accent);
+      background: var(--accent);
+      color: #ffffff;
+      box-shadow: 0 14px 34px rgba(15, 118, 110, 0.18);
+    }
+
+    .message.is-model .bubble {
+      border-left: 4px solid var(--speaker-color, var(--accent));
+    }
+
+    .message-content {
+      padding: 14px 16px;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+      font-size: 14px;
+      line-height: 1.58;
+    }
+
+    .raw {
+      display: none;
+      max-width: 980px;
+      margin: 0 auto;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+    }
+
+    .raw pre {
+      margin: 0;
+      padding: 18px;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      font-size: 12px;
+      line-height: 1.55;
+    }
+
+    .show-raw .chat {
+      display: none;
+    }
+
+    .show-raw .raw {
+      display: block;
+    }
+
+    @media (max-width: 900px) {
+      .app {
+        grid-template-columns: 1fr;
+      }
+
+      .sidebar {
+        min-height: auto;
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .session-list {
+        max-height: 320px;
+      }
+
+      .topbar {
+        grid-template-columns: 1fr;
+        padding: 18px;
+      }
+
+      .top-actions {
+        justify-content: flex-start;
+      }
+
+      .conversation-wrap {
+        padding: 18px;
+      }
+
+      .message {
+        max-width: 94%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <aside class="sidebar" aria-label="Sesje">
+      <section class="brand">
+        <h1>MCP Session Viewer</h1>
+        <p id="datasetSummary">Offline podgląd rozmów zapisanych w bridge SQLite.</p>
+      </section>
+
+      <section class="controls" aria-label="Kontrolki">
+        <form id="sessionForm" class="session-form">
+          <input id="sessionInput" class="input" list="sessionOptions" autocomplete="off" placeholder="Wpisz albo wybierz session_id">
+          <datalist id="sessionOptions"></datalist>
+          <button type="submit">Pokaż</button>
+        </form>
+
+        <input id="searchInput" class="input" type="search" autocomplete="off" placeholder="Filtruj po tytule, modelu albo ID">
+
+        <div class="actions">
+          <button id="refreshButton" type="button">Odśwież</button>
+          <label class="file-button">
+            Wczytaj JSON
+            <input id="fileInput" type="file" accept="application/json,.json">
+          </label>
+        </div>
+
+        <label class="toggle-row">
+          <input id="autoRefreshToggle" type="checkbox">
+          <span>Auto odświeżanie co 5 sekund</span>
+        </label>
+
+        <p id="status" class="status" role="status"></p>
+      </section>
+
+      <nav id="sessionList" class="session-list" aria-label="Lista sesji"></nav>
+    </aside>
+
+    <section class="main" aria-label="Transcript">
+      <header class="topbar">
+        <div>
+          <h2 id="sessionTitle">Wybierz sesję</h2>
+          <div id="sessionMeta" class="meta-line">Brak danych do wyświetlenia.</div>
+        </div>
+        <div class="top-actions">
+          <button id="rawToggleButton" type="button">Markdown</button>
+          <button id="copyButton" class="copy-button" type="button">Kopiuj transcript</button>
+        </div>
+      </header>
+
+      <div id="conversationWrap" class="conversation-wrap">
+        <div id="emptyState" class="empty">
+          Wczytaj <strong>session-viewer-data.json</strong> albo uruchom lokalny eksport obok tego pliku HTML.
+        </div>
+        <section id="chat" class="chat" aria-live="polite"></section>
+        <section id="raw" class="raw" aria-label="Markdown transcript"><pre id="rawText"></pre></section>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    (() => {
+      const DATA_URL = "session-viewer-data.json";
+      const AUTO_REFRESH_MS = 5000;
+      const speakerPalette = ["#0f766e", "#8b5cf6", "#b7791f", "#b4233a", "#2563eb", "#4d7c0f"];
+
+      const state = {
+        payload: null,
+        selectedSessionId: localStorage.getItem("mcp-session-viewer:selected") || "",
+        source: "auto",
+        file: null,
+        autoTimer: null,
+        query: "",
+        rawVisible: false,
+      };
+
+      const dom = {
+        autoRefreshToggle: document.getElementById("autoRefreshToggle"),
+        chat: document.getElementById("chat"),
+        conversationWrap: document.getElementById("conversationWrap"),
+        copyButton: document.getElementById("copyButton"),
+        datasetSummary: document.getElementById("datasetSummary"),
+        emptyState: document.getElementById("emptyState"),
+        fileInput: document.getElementById("fileInput"),
+        raw: document.getElementById("raw"),
+        rawText: document.getElementById("rawText"),
+        rawToggleButton: document.getElementById("rawToggleButton"),
+        refreshButton: document.getElementById("refreshButton"),
+        searchInput: document.getElementById("searchInput"),
+        sessionForm: document.getElementById("sessionForm"),
+        sessionInput: document.getElementById("sessionInput"),
+        sessionList: document.getElementById("sessionList"),
+        sessionMeta: document.getElementById("sessionMeta"),
+        sessionOptions: document.getElementById("sessionOptions"),
+        sessionTitle: document.getElementById("sessionTitle"),
+        status: document.getElementById("status"),
+      };
+
+      dom.sessionForm.addEventListener("submit", (event) => {
+        event.preventDefault();
+        selectSession(dom.sessionInput.value.trim());
+      });
+
+      dom.searchInput.addEventListener("input", () => {
+        state.query = dom.searchInput.value.trim().toLowerCase();
+        renderSessionList();
+      });
+
+      dom.refreshButton.addEventListener("click", () => {
+        refreshData({ silent: false });
+      });
+
+      dom.fileInput.addEventListener("change", () => {
+        const file = dom.fileInput.files && dom.fileInput.files[0];
+        if (file) {
+          state.file = file;
+          loadFile(file);
+        }
+      });
+
+      dom.autoRefreshToggle.addEventListener("change", () => {
+        configureAutoRefresh();
+      });
+
+      dom.rawToggleButton.addEventListener("click", () => {
+        state.rawVisible = !state.rawVisible;
+        dom.conversationWrap.classList.toggle("show-raw", state.rawVisible);
+        dom.rawToggleButton.textContent = state.rawVisible ? "Czat" : "Markdown";
+      });
+
+      dom.copyButton.addEventListener("click", async () => {
+        const transcript = currentTranscript();
+        if (!transcript) {
+          setStatus("Nie ma transcriptu do skopiowania.", "warn");
+          return;
+        }
+
+        try {
+          await navigator.clipboard.writeText(transcript.transcript_markdown || renderPlainText(transcript.turns || []));
+          setStatus("Transcript skopiowany do schowka.", "ok");
+        } catch (error) {
+          setStatus(`Nie udało się skopiować: ${error.message}`, "error");
+        }
+      });
+
+      refreshData({ silent: false });
+
+      async function refreshData({ silent }) {
+        if (state.source === "file" && state.file) {
+          await loadFile(state.file);
+          return;
+        }
+        await loadFromFetch({ silent });
+      }
+
+      async function loadFromFetch({ silent }) {
+        if (window.location.protocol === "file:") {
+          if (!silent) {
+            setStatus("Otworzone jako plik lokalny. Wczytaj JSON ręcznie albo uruchom lokalny serwer statyczny.", "warn");
+          }
+          renderAll();
+          return;
+        }
+
+        try {
+          const response = await fetch(`${DATA_URL}?t=${Date.now()}`, { cache: "no-store" });
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+          }
+          const payload = await response.json();
+          setPayload(payload, "auto", null);
+          if (!silent) {
+            setStatus(`Załadowano ${DATA_URL}.`, "ok");
+          }
+        } catch (error) {
+          if (!silent) {
+            setStatus(`Nie mogę załadować ${DATA_URL}: ${error.message}. Możesz wczytać JSON ręcznie.`, "warn");
+          }
+          renderAll();
+        }
+      }
+
+      function loadFile(file) {
+        return new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onload = () => {
+            try {
+              const payload = JSON.parse(String(reader.result || ""));
+              setPayload(payload, "file", file);
+              setStatus(`Wczytano ${file.name}.`, "ok");
+            } catch (error) {
+              setStatus(`Nieprawidłowy JSON: ${error.message}`, "error");
+            }
+            resolve();
+          };
+          reader.onerror = () => {
+            setStatus(`Nie udało się odczytać pliku: ${reader.error && reader.error.message}`, "error");
+            resolve();
+          };
+          reader.readAsText(file, "utf-8");
+        });
+      }
+
+      function setPayload(payload, source, file) {
+        if (!payload || payload.ok !== true || !Array.isArray(payload.sessions) || typeof payload.transcripts !== "object") {
+          throw new Error("Plik nie wygląda jak eksport session viewer v1.");
+        }
+
+        state.payload = payload;
+        state.source = source;
+        state.file = file;
+
+        const sessions = sortedSessions();
+        const hasPrevious = state.selectedSessionId && payload.transcripts[state.selectedSessionId];
+        if (!hasPrevious && sessions.length > 0) {
+          state.selectedSessionId = sessions[0].session_id;
+        }
+        if (state.selectedSessionId) {
+          localStorage.setItem("mcp-session-viewer:selected", state.selectedSessionId);
+        }
+
+        renderAll();
+      }
+
+      function configureAutoRefresh() {
+        if (state.autoTimer) {
+          window.clearInterval(state.autoTimer);
+          state.autoTimer = null;
+        }
+
+        if (dom.autoRefreshToggle.checked) {
+          state.autoTimer = window.setInterval(() => refreshData({ silent: true }), AUTO_REFRESH_MS);
+          refreshData({ silent: true });
+        }
+      }
+
+      function renderAll() {
+        renderDatasetSummary();
+        renderSessionList();
+        renderTranscript();
+      }
+
+      function renderDatasetSummary() {
+        if (!state.payload) {
+          dom.datasetSummary.textContent = "Offline podgląd rozmów zapisanych w bridge SQLite.";
+          return;
+        }
+
+        const source = state.source === "file" && state.file ? state.file.name : DATA_URL;
+        const generated = state.payload.generated_at_iso ? formatDate(state.payload.generated_at_iso) : "brak daty";
+        dom.datasetSummary.textContent = `${state.payload.session_count || 0} sesji, ${state.payload.turn_count || 0} tur. Źródło: ${source}. Aktualizacja: ${generated}.`;
+      }
+
+      function renderSessionList() {
+        dom.sessionOptions.replaceChildren();
+        dom.sessionList.replaceChildren();
+
+        const sessions = sortedSessions();
+        for (const session of sessions) {
+          const option = document.createElement("option");
+          option.value = session.session_id;
+          option.label = `${session.title || "Bez tytułu"} (${session.exchange_count || 0})`;
+          dom.sessionOptions.append(option);
+        }
+
+        const visibleSessions = sessions.filter(matchesQuery);
+        if (visibleSessions.length === 0) {
+          const empty = div("empty", state.payload ? "Brak pasujących sesji." : "Brak danych sesji.");
+          dom.sessionList.append(empty);
+          return;
+        }
+
+        for (const session of visibleSessions) {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = "session-button";
+          if (session.session_id === state.selectedSessionId) {
+            button.classList.add("is-active");
+          }
+          button.addEventListener("click", () => selectSession(session.session_id));
+
+          button.append(
+            div("session-title", session.title || "Bez tytułu"),
+            div("session-id", session.session_id),
+            div("session-meta", `${session.exchange_count || 0} wymian · update ${formatEpoch(session.updated_at)}`)
+          );
+          dom.sessionList.append(button);
+        }
+      }
+
+      function renderTranscript() {
+        const transcript = currentTranscript();
+        dom.chat.replaceChildren();
+        dom.rawText.textContent = "";
+
+        if (!transcript) {
+          dom.emptyState.style.display = "block";
+          dom.sessionTitle.textContent = "Wybierz sesję";
+          dom.sessionMeta.textContent = state.payload ? "Wpisz session_id albo wybierz sesję z listy." : "Brak danych do wyświetlenia.";
+          dom.sessionInput.value = state.selectedSessionId || "";
+          return;
+        }
+
+        const session = sessionById(transcript.session_id);
+        dom.emptyState.style.display = "none";
+        dom.sessionInput.value = transcript.session_id;
+        dom.sessionTitle.textContent = transcript.title || (session && session.title) || transcript.session_id;
+        dom.sessionMeta.textContent = [
+          transcript.session_id,
+          `${transcript.exchange_count || 0} wymian`,
+          `${transcript.turn_count || 0} tur`,
+          `context: ${transcript.context_pack_id || "brak"}`,
+          session ? `update ${formatEpoch(session.updated_at)}` : "",
+        ].filter(Boolean).join(" · ");
+
+        for (const turn of transcript.turns || []) {
+          dom.chat.append(renderTurn(turn));
+        }
+        dom.rawText.textContent = transcript.transcript_markdown || renderPlainText(transcript.turns || []);
+      }
+
+      function renderTurn(turn) {
+        const isUser = turn.speaker === "USER";
+        const article = document.createElement("article");
+        article.className = `message ${isUser ? "is-user" : "is-model"}`;
+        article.style.setProperty("--speaker-color", speakerColor(turn.speaker));
+
+        const meta = div("message-meta");
+        meta.append(
+          span("speaker", turn.speaker || "Unknown"),
+          span("", turn.created_at_display || formatDate(turn.created_at) || `turn ${turn.turn}`)
+        );
+
+        const bubble = div("bubble");
+        bubble.append(div("message-content", turn.content || ""));
+        article.append(meta, bubble);
+        return article;
+      }
+
+      function selectSession(sessionId) {
+        if (!sessionId) {
+          setStatus("Podaj session_id albo wybierz sesję z listy.", "warn");
+          return;
+        }
+        if (!state.payload || !state.payload.transcripts[sessionId]) {
+          setStatus(`Nie znam session_id: ${sessionId}`, "error");
+          return;
+        }
+
+        state.selectedSessionId = sessionId;
+        localStorage.setItem("mcp-session-viewer:selected", sessionId);
+        setStatus(`Wybrano ${sessionId}.`, "ok");
+        renderAll();
+      }
+
+      function currentTranscript() {
+        if (!state.payload || !state.selectedSessionId) {
+          return null;
+        }
+        return state.payload.transcripts[state.selectedSessionId] || null;
+      }
+
+      function sessionById(sessionId) {
+        return sortedSessions().find((session) => session.session_id === sessionId) || null;
+      }
+
+      function sortedSessions() {
+        return state.payload && Array.isArray(state.payload.sessions) ? state.payload.sessions : [];
+      }
+
+      function matchesQuery(session) {
+        if (!state.query) {
+          return true;
+        }
+        const transcript = state.payload && state.payload.transcripts[session.session_id];
+        const speakers = transcript ? (transcript.turn_sequence || []).join(" ") : "";
+        const haystack = [
+          session.session_id,
+          session.title,
+          session.context_pack_id,
+          speakers,
+        ].filter(Boolean).join(" ").toLowerCase();
+        return haystack.includes(state.query);
+      }
+
+      function renderPlainText(turns) {
+        return turns.map((turn) => `${turn.speaker}\n${turn.content || ""}`).join("\n\n");
+      }
+
+      function speakerColor(speaker) {
+        let hash = 0;
+        const value = speaker || "";
+        for (let index = 0; index < value.length; index += 1) {
+          hash = ((hash << 5) - hash + value.charCodeAt(index)) | 0;
+        }
+        return speakerPalette[Math.abs(hash) % speakerPalette.length];
+      }
+
+      function formatEpoch(value) {
+        if (!value) {
+          return "brak daty";
+        }
+        return formatDate(new Date(Number(value) * 1000).toISOString());
+      }
+
+      function formatDate(value) {
+        if (!value) {
+          return "";
+        }
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) {
+          return String(value);
+        }
+        return new Intl.DateTimeFormat("pl-PL", {
+          dateStyle: "medium",
+          timeStyle: "short",
+        }).format(date);
+      }
+
+      function setStatus(message, tone) {
+        dom.status.textContent = message;
+        dom.status.classList.toggle("is-warn", tone === "warn");
+        dom.status.classList.toggle("is-error", tone === "error");
+      }
+
+      function div(className, text) {
+        const node = document.createElement("div");
+        if (className) {
+          node.className = className;
+        }
+        if (text !== undefined) {
+          node.textContent = text;
+        }
+        return node;
+      }
+
+      function span(className, text) {
+        const node = document.createElement("span");
+        if (className) {
+          node.className = className;
+        }
+        node.textContent = text;
+        return node;
+      }
+    })();
+  </script>
+</body>
+</html>

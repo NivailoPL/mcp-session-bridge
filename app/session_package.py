@@ -1,29 +1,95 @@
 from __future__ import annotations
 
 import hashlib
-from datetime import UTC, datetime
+from dataclasses import dataclass
 from typing import Any
 
-from app.context_packs import ContextPack
 from app.storage import ExchangeRecord, SessionRecord
+from app.time_format import DISPLAY_TIMEZONE_NAME, format_response_timestamp, format_timestamp_iso
 
 
-def render_session_package(
+@dataclass(frozen=True)
+class TextChunk:
+    index: int
+    text: str
+    start_line: int
+    end_line: int
+    start_char: int
+    end_char: int
+
+    @property
+    def line_count(self) -> int:
+        if not self.text:
+            return 0
+        return self.text.count("\n") + (0 if self.text.endswith("\n") else 1)
+
+    @property
+    def char_count(self) -> int:
+        return len(self.text)
+
+
+def render_session_overview(
     session: SessionRecord,
-    context_pack: ContextPack,
     exchanges: list[ExchangeRecord],
+    max_lines: int,
+    max_chars: int,
 ) -> dict[str, Any]:
-    markdown = _render_markdown(session, context_pack, exchanges)
+    transcript = render_session_transcript(session, exchanges)
+    chunks = chunk_text(transcript["transcript_markdown"], max_lines=max_lines, max_chars=max_chars)
     return {
         "session_id": session.session_id,
         "title": session.title,
-        "context_pack_id": session.context_pack_id,
-        "context_pack_name": context_pack.name,
-        "context_file_count": len(context_pack.files),
-        "exchange_count": len(exchanges),
-        "char_count": len(markdown),
-        "sha256": hashlib.sha256(markdown.encode("utf-8")).hexdigest(),
-        "package_markdown": markdown,
+        "title_is_auto": session.title_is_auto,
+        "session_created_at": _format_ts(session.created_at),
+        "session_updated_at": _format_ts(session.updated_at),
+        "response_display_timezone": DISPLAY_TIMEZONE_NAME,
+        "response_display_format": "HH:MM (dzień tygodnia, D miesiąca YYYY)",
+        "exchange_count": transcript["exchange_count"],
+        "turn_count": transcript["turn_count"],
+        "transcript_char_count": transcript["char_count"],
+        "transcript_line_count": _line_count(transcript["transcript_markdown"]),
+        "transcript_sha256": transcript["sha256"],
+        "transcript_chunk_count": len(chunks),
+        "chunk_max_lines": max_lines,
+        "chunk_max_chars": max_chars,
+    }
+
+
+def render_session_transcript_chunk(
+    session: SessionRecord,
+    exchanges: list[ExchangeRecord],
+    chunk_index: int,
+    max_lines: int,
+    max_chars: int,
+) -> dict[str, Any]:
+    transcript = render_session_transcript(session, exchanges)
+    chunks = chunk_text(transcript["transcript_markdown"], max_lines=max_lines, max_chars=max_chars)
+    if chunk_index < 1 or chunk_index > len(chunks):
+        raise ValueError(f"chunk_index must be between 1 and {len(chunks)}")
+
+    chunk = chunks[chunk_index - 1]
+    next_chunk_index = chunk_index + 1 if chunk_index < len(chunks) else None
+    return {
+        "session_id": session.session_id,
+        "title": session.title,
+        "exchange_count": transcript["exchange_count"],
+        "turn_count": transcript["turn_count"],
+        "transcript_sha256": transcript["sha256"],
+        "transcript_char_count": transcript["char_count"],
+        "transcript_line_count": _line_count(transcript["transcript_markdown"]),
+        "chunk_index": chunk_index,
+        "chunk_count": len(chunks),
+        "has_more": next_chunk_index is not None,
+        "next_chunk_index": next_chunk_index,
+        "chunk_max_lines": max_lines,
+        "chunk_max_chars": max_chars,
+        "chunk_start_line": chunk.start_line,
+        "chunk_end_line": chunk.end_line,
+        "chunk_start_char": chunk.start_char,
+        "chunk_end_char": chunk.end_char,
+        "chunk_line_count": chunk.line_count,
+        "chunk_char_count": chunk.char_count,
+        "transcript_markdown": chunk.text,
     }
 
 
@@ -36,7 +102,6 @@ def render_session_transcript(
     return {
         "session_id": session.session_id,
         "title": session.title,
-        "context_pack_id": session.context_pack_id,
         "exchange_count": len(exchanges),
         "turn_count": len(turns),
         "char_count": len(markdown),
@@ -47,97 +112,87 @@ def render_session_transcript(
     }
 
 
-def _render_markdown(
-    session: SessionRecord,
-    context_pack: ContextPack,
-    exchanges: list[ExchangeRecord],
-) -> str:
-    parts = [
-        "# WW-MCP Session Package",
-        "",
-        "## Package Metadata",
-        "",
-        f"- session_id: `{session.session_id}`",
-        f"- title: {session.title}",
-        f"- context_pack_id: `{session.context_pack_id}`",
-        f"- context_pack_name: {context_pack.name}",
-        f"- context_pack_sha256: `{context_pack.content_hash}`",
-        f"- title_is_auto: {str(session.title_is_auto).lower()}",
-        f"- session_created_at: {_format_ts(session.created_at)}",
-        f"- session_updated_at: {_format_ts(session.updated_at)}",
-        f"- context_file_count: {len(context_pack.files)}",
-        f"- exchange_count: {len(exchanges)}",
-        "",
-        "## Model Protocol",
-        "",
-        "1. Przeczytaj cały pakiet przed odpowiedzią.",
-        "2. Zacznij odpowiedź od formuły: `Odpowiada model <nazwa modelu>`.",
-        "3. Odnoś się do wypowiedzi Wojtka i innych modeli po ich nazwach.",
-        "4. Przed pokazaniem finalnej odpowiedzi zapisz pełną wymianę przez `save_exchange`.",
-        "5. Nie wykonuj automatycznych podsumowań ani compaction, chyba że Wojtek wyraźnie o to poprosi.",
-        "",
-        "## Context Pack Notes",
-        "",
-        context_pack.instructions,
-        "",
-        "## Context Pack Files",
-        "",
-    ]
+def chunk_text(text: str, max_lines: int, max_chars: int) -> list[TextChunk]:
+    if max_lines < 1:
+        raise ValueError("max_lines must be at least 1")
+    if max_chars < 1:
+        raise ValueError("max_chars must be at least 1")
 
-    for index, file in enumerate(context_pack.files, start=1):
-        parts.extend(
-            [
-                f"### Context File {index}: {file.title}",
-                "",
-                f"- path: `{file.path}`",
-                f"- chars: {file.chars}",
-                f"- sha256: `{file.sha256}`",
-                "",
-                f"<!-- BEGIN CONTEXT FILE: {file.path} -->",
-                "",
-                file.content,
-                "",
-                f"<!-- END CONTEXT FILE: {file.path} -->",
-                "",
-            ]
-        )
+    segments = _split_lines_for_chunking(text, max_chars=max_chars)
+    if not segments:
+        return [TextChunk(index=1, text="", start_line=1, end_line=1, start_char=0, end_char=0)]
 
-    parts.extend(["## Conversation Transcript", ""])
-    if not exchanges:
-        parts.extend(["No exchanges saved yet.", ""])
-    else:
-        for index, exchange in enumerate(exchanges, start=1):
-            parts.extend(
-                [
-                    f"### Exchange {index}: {exchange.model_name}",
-                    "",
-                    f"- exchange_id: {exchange.exchange_id}",
-                    f"- created_at: {_format_ts(exchange.created_at)}",
-                    "",
-                    "#### Wojtek",
-                    "",
-                    exchange.user_message,
-                    "",
-                    f"#### {exchange.model_name}",
-                    "",
-                    exchange.assistant_response,
-                    "",
-                ]
+    chunks: list[TextChunk] = []
+    current: list[dict[str, Any]] = []
+    current_chars = 0
+
+    def flush() -> None:
+        nonlocal current, current_chars
+        if not current:
+            return
+        text_value = "".join(segment["text"] for segment in current)
+        chunks.append(
+            TextChunk(
+                index=len(chunks) + 1,
+                text=text_value,
+                start_line=current[0]["line"],
+                end_line=current[-1]["line"],
+                start_char=current[0]["start_char"],
+                end_char=current[-1]["end_char"],
             )
+        )
+        current = []
+        current_chars = 0
 
-    return "\n".join(parts).strip() + "\n"
+    for segment in segments:
+        segment_chars = len(segment["text"])
+        if current and (len(current) >= max_lines or current_chars + segment_chars > max_chars):
+            flush()
+        current.append(segment)
+        current_chars += segment_chars
+
+    flush()
+    return chunks
+
+
+def _split_lines_for_chunking(text: str, max_chars: int) -> list[dict[str, Any]]:
+    segments: list[dict[str, Any]] = []
+    char_cursor = 0
+    line_number = 1
+    for line in text.splitlines(keepends=True):
+        if not line:
+            continue
+        offset = 0
+        while offset < len(line):
+            part = line[offset : offset + max_chars]
+            start_char = char_cursor + offset
+            segments.append(
+                {
+                    "text": part,
+                    "line": line_number,
+                    "start_char": start_char,
+                    "end_char": start_char + len(part),
+                }
+            )
+            offset += len(part)
+        char_cursor += len(line)
+        line_number += 1
+    return segments
 
 
 def _transcript_turns(exchanges: list[ExchangeRecord]) -> list[dict[str, Any]]:
     turns: list[dict[str, Any]] = []
     for exchange in exchanges:
         created_at = _format_ts(exchange.created_at)
+        assistant_created_at = _format_ts(exchange.assistant_created_at)
+        assistant_created_at_display = format_response_timestamp(exchange.assistant_created_at)
         turns.append(
             {
                 "turn": len(turns) + 1,
                 "speaker": "USER",
                 "exchange_id": exchange.exchange_id,
                 "created_at": created_at,
+                "created_at_display": None,
                 "chars": len(exchange.user_message),
                 "content": exchange.user_message,
             }
@@ -147,7 +202,8 @@ def _transcript_turns(exchanges: list[ExchangeRecord]) -> list[dict[str, Any]]:
                 "turn": len(turns) + 1,
                 "speaker": exchange.model_name,
                 "exchange_id": exchange.exchange_id,
-                "created_at": created_at,
+                "created_at": assistant_created_at,
+                "created_at_display": assistant_created_at_display,
                 "chars": len(exchange.assistant_response),
                 "content": exchange.assistant_response,
             }
@@ -167,11 +223,12 @@ def _render_transcript_markdown(
         "",
         f"- session_id: `{session.session_id}`",
         f"- title: {session.title}",
-        f"- context_pack_id: `{session.context_pack_id}`",
         f"- exchange_count: {len(exchanges)}",
         f"- turn_count: {len(turns)}",
         f"- session_created_at: {_format_ts(session.created_at)}",
         f"- session_updated_at: {_format_ts(session.updated_at)}",
+        f"- response_display_timezone: {DISPLAY_TIMEZONE_NAME}",
+        "- response_display_format: HH:MM (dzień tygodnia, D miesiąca YYYY)",
         "",
         "## Turn Sequence",
         "",
@@ -187,11 +244,15 @@ def _render_transcript_markdown(
         parts.extend(["No exchanges saved yet.", ""])
     else:
         for turn in turns:
+            created_at_display = turn["created_at_display"]
+            heading = f"### {turn['speaker']} - {created_at_display}" if created_at_display else f"### {turn['speaker']}"
+            display_line = f"<!-- created_at_display={created_at_display} -->" if created_at_display else ""
             parts.extend(
                 [
-                    f"### {turn['speaker']}",
+                    heading,
                     "",
                     f"<!-- turn={turn['turn']} exchange_id={turn['exchange_id']} created_at={turn['created_at']} chars={turn['chars']} -->",
+                    display_line,
                     "",
                     turn["content"],
                     "",
@@ -201,5 +262,11 @@ def _render_transcript_markdown(
     return "\n".join(parts).strip() + "\n"
 
 
+def _line_count(text: str) -> int:
+    if not text:
+        return 0
+    return len(text.splitlines())
+
+
 def _format_ts(timestamp: int) -> str:
-    return datetime.fromtimestamp(timestamp, tz=UTC).isoformat()
+    return format_timestamp_iso(timestamp)

@@ -14,16 +14,20 @@ from mcp.server.transport_security import TransportSecuritySettings
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
-from app.context_packs import ContextPackStore
+from app.admin import AdminHandlers
 from app.oauth import OAuthHandlers
 from app.security import hash_secret
-from app.session_package import render_session_package, render_session_transcript
-from app.settings import load_settings
+from app.session_package import render_session_overview, render_session_transcript_chunk
+from app.session_summaries import SessionSummaryStore
+from app.settings import ROOT, load_settings
 from app.storage import Store
+from app.time_format import DISPLAY_TIMEZONE_NAME, format_response_timestamp
+
+MANUAL_CONTEXT_ID = "manual-context"
 
 settings = load_settings()
 store = Store(settings.db_path)
-context_packs = ContextPackStore(settings.context_packs_dir)
+summary_store = SessionSummaryStore(settings.summaries_dir)
 
 
 class BridgeTokenVerifier(TokenVerifier):
@@ -47,7 +51,7 @@ class BridgeTokenVerifier(TokenVerifier):
 
 mcp = FastMCP(
     name="MCP Session Bridge",
-    instructions="Auth-first spike for testing Claude and ChatGPT remote MCP connectors. Do not store sensitive session content yet.",
+    instructions="Shared conversation transcript bridge for Claude and ChatGPT remote MCP connectors. User context files are supplied manually outside MCP.",
     token_verifier=BridgeTokenVerifier(),
     auth=AuthSettings(
         issuer_url=settings.issuer_url,
@@ -75,6 +79,7 @@ mcp = FastMCP(
 )
 
 oauth = OAuthHandlers(settings, store)
+admin = AdminHandlers(settings, store, ROOT / "admin-viewer.html")
 
 
 @mcp.custom_route("/healthz", methods=["GET"])
@@ -117,6 +122,61 @@ async def oauth_token(request: Request) -> Response:
     return await oauth.token(request)
 
 
+@mcp.custom_route("/admin", methods=["GET"])
+async def admin_index(request: Request) -> Response:
+    return await admin.index(request)
+
+
+@mcp.custom_route("/admin/sessions", methods=["GET"])
+async def admin_sessions_page(request: Request) -> Response:
+    return await admin.sessions_page(request)
+
+
+@mcp.custom_route("/admin/login", methods=["GET"])
+async def admin_login_get(request: Request) -> Response:
+    return await admin.login_get(request)
+
+
+@mcp.custom_route("/admin/login", methods=["POST"])
+async def admin_login_post(request: Request) -> Response:
+    return await admin.login_post(request)
+
+
+@mcp.custom_route("/admin/logout", methods=["POST"])
+async def admin_logout(request: Request) -> Response:
+    return await admin.logout(request)
+
+
+@mcp.custom_route("/admin/api/me", methods=["GET"])
+async def admin_api_me(request: Request) -> Response:
+    return await admin.api_me(request)
+
+
+@mcp.custom_route("/admin/api/sessions", methods=["GET"])
+async def admin_api_sessions(request: Request) -> Response:
+    return await admin.api_sessions(request)
+
+
+@mcp.custom_route("/admin/api/sessions/{session_id}", methods=["GET"])
+async def admin_api_session(request: Request) -> Response:
+    return await admin.api_session(request)
+
+
+@mcp.custom_route("/admin/api/exchanges/{exchange_id}", methods=["PATCH"])
+async def admin_api_update_exchange(request: Request) -> Response:
+    return await admin.api_update_exchange(request)
+
+
+@mcp.custom_route("/admin/api/exchanges/{exchange_id}", methods=["DELETE"])
+async def admin_api_delete_exchange(request: Request) -> Response:
+    return await admin.api_delete_exchange(request)
+
+
+@mcp.custom_route("/admin/api/exchanges/{exchange_id}/restore", methods=["POST"])
+async def admin_api_restore_exchange(request: Request) -> Response:
+    return await admin.api_restore_exchange(request)
+
+
 @mcp.tool()
 def bridge_ping() -> dict[str, Any]:
     """Return a minimal health response proving the authenticated MCP tool path works."""
@@ -156,16 +216,8 @@ def read_probe(key: str) -> dict[str, Any]:
 
 
 @mcp.tool()
-def list_context_packs() -> dict[str, Any]:
-    """List available context packs stored on the VPS."""
-    return {"ok": True, "context_packs": context_packs.list_packs()}
-
-
-@mcp.tool()
-def create_session(context_pack_id: str = "", title: str = "") -> dict[str, Any]:
-    """Create a new brainstorming session. Title is optional and may be inferred after the first exchange."""
-    resolved_context_pack_id = context_pack_id.strip() or settings.default_context_pack_id
-    context_pack = context_packs.load_pack(resolved_context_pack_id)
+def create_session(title: str = "") -> dict[str, Any]:
+    """Create a new model-to-model conversation session. Title is optional and may be inferred later."""
     resolved_title = title.strip()
     title_is_auto = not resolved_title
     if title_is_auto:
@@ -174,15 +226,14 @@ def create_session(context_pack_id: str = "", title: str = "") -> dict[str, Any]
     session = store.create_session(
         session_id=session_id,
         title=resolved_title,
-        context_pack_id=context_pack.pack_id,
+        context_pack_id=MANUAL_CONTEXT_ID,
         title_is_auto=title_is_auto,
     )
     return {
         "ok": True,
         "session_id": session.session_id,
         "title": session.title,
-        "context_pack_id": session.context_pack_id,
-        "context_pack_name": context_pack.name,
+        "context_source": "manual",
         "title_is_auto": session.title_is_auto,
         "created_at": session.created_at,
     }
@@ -191,28 +242,60 @@ def create_session(context_pack_id: str = "", title: str = "") -> dict[str, Any]
 @mcp.tool()
 def list_sessions() -> dict[str, Any]:
     """List saved brainstorming sessions."""
-    return {"ok": True, "sessions": store.list_sessions()}
+    sessions = []
+    for session in store.list_sessions():
+        sessions.append(
+            {
+                "session_id": session["session_id"],
+                "title": session["title"],
+                "title_is_auto": session["title_is_auto"],
+                "created_at": session["created_at"],
+                "updated_at": session["updated_at"],
+                "exchange_count": session["exchange_count"],
+            }
+        )
+    return {"ok": True, "sessions": sessions}
 
 
 @mcp.tool()
-def get_session_package(session_id: str) -> dict[str, Any]:
-    """Return the full context pack and transcript for a session as one Markdown package."""
+def get_session_overview(session_id: str) -> dict[str, Any]:
+    """Return lightweight session metadata and transcript chunking information, without transcript content."""
     session = store.get_session(session_id)
     if session is None:
         return {"ok": False, "error": f"Unknown session_id: {session_id}"}
-    context_pack = context_packs.load_pack(session.context_pack_id)
     exchanges = store.list_exchanges(session.session_id)
-    return {"ok": True, **render_session_package(session, context_pack, exchanges)}
+    summaries = summary_store.list_summaries(session.session_id)
+    return {
+        "ok": True,
+        "context_source": "manual",
+        "summary_count": len(summaries),
+        **render_session_overview(
+            session,
+            exchanges,
+            max_lines=settings.transcript_chunk_max_lines,
+            max_chars=settings.transcript_chunk_max_chars,
+        ),
+    }
 
 
 @mcp.tool()
-def get_session_transcript(session_id: str) -> dict[str, Any]:
-    """Return only the saved conversation transcript for audit, without context pack files."""
+def get_session_transcript_chunk(session_id: str, chunk_index: int = 1) -> dict[str, Any]:
+    """Return one bounded chunk of the saved conversation transcript."""
     session = store.get_session(session_id)
     if session is None:
         return {"ok": False, "error": f"Unknown session_id: {session_id}"}
     exchanges = store.list_exchanges(session.session_id)
-    return {"ok": True, **render_session_transcript(session, exchanges)}
+    try:
+        chunk = render_session_transcript_chunk(
+            session,
+            exchanges,
+            chunk_index=chunk_index,
+            max_lines=settings.transcript_chunk_max_lines,
+            max_chars=settings.transcript_chunk_max_chars,
+        )
+    except ValueError as exc:
+        return {"ok": False, "error": str(exc)}
+    return {"ok": True, **chunk}
 
 
 @mcp.tool()
@@ -236,23 +319,70 @@ def save_exchange(
         "model_name": exchange.model_name,
         "user_message_chars": len(exchange.user_message),
         "assistant_response_chars": len(exchange.assistant_response),
+        "assistant_created_at": exchange.assistant_created_at,
+        "assistant_created_at_display": format_response_timestamp(exchange.assistant_created_at),
+        "assistant_created_at_timezone": DISPLAY_TIMEZONE_NAME,
         "created_at": exchange.created_at,
     }
 
 
 @mcp.tool()
-def export_session_markdown(session_id: str) -> dict[str, Any]:
-    """Export the current full session package as Markdown."""
-    package = get_session_package(session_id)
-    if not package.get("ok"):
-        return package
+def save_session_summary(
+    session_id: str,
+    model_name: str,
+    summary_markdown: str,
+    title: str = "",
+) -> dict[str, Any]:
+    """Save a Markdown summary file for the current conversation session."""
+    resolved_session_id = session_id.strip()
+    if not resolved_session_id:
+        return {"ok": False, "error": "session_id must not be empty"}
+
+    content = summary_markdown.strip()
+    if not content:
+        return {"ok": False, "error": "summary_markdown must not be empty"}
+
+    session = store.get_session(resolved_session_id)
+    if session is None:
+        return {"ok": False, "error": f"Unknown session_id: {resolved_session_id}"}
+
+    try:
+        saved = summary_store.save_summary(
+            session_id=session.session_id,
+            model_name=model_name.strip() or "Unknown model",
+            summary_markdown=content,
+            title=title,
+        )
+    except (OSError, ValueError) as exc:
+        return {"ok": False, "error": str(exc)}
+
     return {
         "ok": True,
-        "session_id": package["session_id"],
-        "char_count": package["char_count"],
-        "sha256": package["sha256"],
-        "markdown": package["package_markdown"],
+        "session_id": saved.session_id,
+        "title": saved.title,
+        "model_name": saved.model_name,
+        "path": saved.path,
+        "file_path": saved.file_path,
+        "chars": saved.chars,
+        "sha256": saved.sha256,
+        "created_at": saved.created_at,
     }
+
+
+@mcp.tool()
+def list_session_summaries(session_id: str) -> dict[str, Any]:
+    """List Markdown summaries saved for a conversation session."""
+    resolved_session_id = session_id.strip()
+    if not resolved_session_id:
+        return {"ok": False, "error": "session_id must not be empty"}
+    session = store.get_session(resolved_session_id)
+    if session is None:
+        return {"ok": False, "error": f"Unknown session_id: {resolved_session_id}"}
+    try:
+        summaries = summary_store.list_summaries(session.session_id)
+    except ValueError as exc:
+        return {"ok": False, "error": str(exc)}
+    return {"ok": True, "session_id": session.session_id, "summary_count": len(summaries), "summaries": summaries}
 
 
 def _new_session_id(title: str, title_is_auto: bool = False) -> str:
