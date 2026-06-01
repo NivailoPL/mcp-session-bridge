@@ -3,422 +3,601 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>MCP Session Bridge Admin</title>
+  <title>MCP Session Bridge · Admin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
   <style>
     :root {
-      color-scheme: light;
-      --bg: #f6f7f4;
-      --panel: #ffffff;
-      --text: #1f2933;
-      --muted: #68727d;
-      --soft: #eef1ed;
-      --border: #d7ddd5;
-      --accent: #176b5b;
-      --accent-strong: #0f4e42;
-      --danger: #a33a32;
-      --danger-soft: #f7e5e2;
-      --warning: #8a621b;
-      --warning-soft: #fbefd4;
-      --focus: #2563eb;
-      --shadow: 0 10px 28px rgb(31 41 51 / 8%);
+      color-scheme: dark;
+
+      --bg-base: #07080c;
+      --text: #eceef5;
+      --muted: #9aa1b4;
+      --faint: #69708423;
+      --faint-ink: #6b7286;
+
+      --glass: rgba(255, 255, 255, .035);
+      --glass-2: rgba(255, 255, 255, .055);
+      --glass-3: rgba(255, 255, 255, .08);
+      --stroke: rgba(255, 255, 255, .09);
+      --stroke-soft: rgba(255, 255, 255, .055);
+      --stroke-strong: rgba(255, 255, 255, .16);
+
+      --accent: #6366f1;
+      --accent-2: #8b8ff8;
+      --accent-ink: #c5c7ff;
+      --accent-soft: rgba(99, 102, 241, .16);
+      --accent-glow: rgba(99, 102, 241, .45);
+
+      --danger: #fb7185;
+      --danger-soft: rgba(251, 113, 133, .14);
+      --warn: #fbbf24;
+      --warn-soft: rgba(251, 191, 36, .12);
+      --ok: #34d399;
+
+      --r-card: 18px;
+      --r-ctrl: 11px;
+      --r-pill: 999px;
+
+      --shadow-card: 0 1px 0 rgba(255, 255, 255, .05) inset, 0 24px 60px -28px rgba(0, 0, 0, .85);
+      --shadow-pop: 0 24px 64px -20px rgba(0, 0, 0, .8);
+
+      font-family: Geist, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
     }
 
-    * {
-      box-sizing: border-box;
-    }
+    * { box-sizing: border-box; }
+
+    html, body { min-height: 100%; margin: 0; }
 
     body {
-      margin: 0;
       min-height: 100vh;
-      background: var(--bg);
       color: var(--text);
-      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      line-height: 1.45;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+      background:
+        radial-gradient(1200px 760px at 8% -10%, rgba(99, 102, 241, .20), transparent 58%),
+        radial-gradient(1000px 680px at 104% 112%, rgba(139, 92, 246, .16), transparent 56%),
+        radial-gradient(700px 520px at 92% -6%, rgba(20, 184, 166, .08), transparent 60%),
+        var(--bg-base);
+      background-attachment: fixed;
     }
 
-    button,
-    input,
-    textarea {
-      font: inherit;
+    /* faint engineering grid overlay */
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 0;
+      background-image:
+        linear-gradient(rgba(255, 255, 255, .025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, .025) 1px, transparent 1px);
+      background-size: 46px 46px;
+      mask-image: radial-gradient(1200px 800px at 30% 0%, #000 35%, transparent 78%);
     }
 
+    button, input, textarea { font: inherit; color: inherit; }
+
+    ::selection { background: rgba(99, 102, 241, .4); color: #fff; }
+
+    /* ---------- scrollbars ---------- */
+    ::-webkit-scrollbar { width: 11px; height: 11px; }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, .1);
+      border: 3px solid transparent;
+      background-clip: padding-box;
+      border-radius: 999px;
+    }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, .2); background-clip: padding-box; }
+
+    /* ---------- buttons ---------- */
     button {
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      background: var(--panel);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: .45rem;
+      min-height: 2.4rem;
+      padding: .5rem .85rem;
+      border: 1px solid var(--stroke);
+      border-radius: var(--r-ctrl);
+      background: var(--glass-2);
       color: var(--text);
+      font-weight: 600;
+      font-size: .86rem;
+      letter-spacing: .01em;
       cursor: pointer;
-      font-weight: 700;
-      min-height: 2.35rem;
-      padding: .55rem .75rem;
+      transition: border-color .16s ease, background .16s ease, transform .12s ease, box-shadow .16s ease;
+      -webkit-backdrop-filter: blur(8px);
+      backdrop-filter: blur(8px);
     }
-
-    button:hover {
-      border-color: #aeb8ae;
-      background: #f8faf7;
-    }
+    button:hover { border-color: var(--stroke-strong); background: var(--glass-3); }
+    button:active { transform: translateY(1px); }
 
     button.primary {
-      border-color: var(--accent);
-      background: var(--accent);
-      color: #fff;
+      border-color: transparent;
+      background: linear-gradient(180deg, var(--accent-2), var(--accent));
+      color: #0a0a12;
+      box-shadow: 0 10px 26px -10px var(--accent-glow), 0 1px 0 rgba(255, 255, 255, .35) inset;
+    }
+    button.primary:hover { box-shadow: 0 14px 32px -10px var(--accent-glow), 0 1px 0 rgba(255, 255, 255, .45) inset; }
+
+    button.danger { border-color: rgba(251, 113, 133, .35); color: var(--danger); background: var(--danger-soft); }
+    button.danger:hover { border-color: rgba(251, 113, 133, .6); background: rgba(251, 113, 133, .2); }
+
+    button.ghost { background: transparent; border-color: var(--stroke-soft); }
+    button.ghost:hover { background: var(--glass); border-color: var(--stroke); }
+
+    button:disabled { cursor: progress; opacity: .5; }
+
+    button:focus-visible,
+    input:focus-visible,
+    textarea:focus-visible {
+      outline: 2px solid var(--accent-2);
+      outline-offset: 2px;
     }
 
-    button.primary:hover {
-      border-color: var(--accent-strong);
-      background: var(--accent-strong);
-    }
-
-    button.danger {
-      border-color: #d9aaa4;
-      color: var(--danger);
-    }
-
-    button.danger:hover {
-      background: var(--danger-soft);
-    }
-
-    button:disabled {
-      cursor: wait;
-      opacity: .55;
-    }
-
-    input,
-    textarea {
+    /* ---------- inputs ---------- */
+    input, textarea {
       width: 100%;
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      background: #fff;
-      color: var(--text);
-      padding: .65rem .75rem;
+      border: 1px solid var(--stroke);
+      border-radius: var(--r-ctrl);
+      background: rgba(0, 0, 0, .28);
+      padding: .62rem .8rem;
+      transition: border-color .16s ease, box-shadow .16s ease, background .16s ease;
     }
-
+    input::placeholder, textarea::placeholder { color: var(--faint-ink); }
+    input:focus, textarea:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-soft);
+      background: rgba(0, 0, 0, .4);
+    }
     textarea {
-      min-height: 11rem;
+      min-height: 9.5rem;
       resize: vertical;
       white-space: pre-wrap;
+      line-height: 1.6;
+      font-size: .9rem;
     }
 
-    input:focus,
-    textarea:focus,
-    button:focus-visible {
-      outline: 3px solid rgb(37 99 235 / 22%);
-      outline-offset: 1px;
-      border-color: var(--focus);
+    .mono {
+      font-family: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-feature-settings: "ss01";
     }
 
+    /* ---------- shell ---------- */
     .shell {
+      position: relative;
+      z-index: 1;
       display: grid;
-      grid-template-columns: minmax(18rem, 24rem) minmax(0, 1fr);
+      grid-template-columns: minmax(19rem, 23rem) minmax(0, 1fr);
       min-height: 100vh;
     }
 
+    /* ---------- sidebar ---------- */
     .sidebar {
-      border-right: 1px solid var(--border);
-      background: #fbfcfa;
+      position: sticky;
+      top: 0;
+      align-self: start;
+      height: 100vh;
       display: flex;
       flex-direction: column;
-      min-height: 100vh;
-    }
-
-    .brand,
-    .toolbar,
-    .session-list,
-    .content {
-      padding: 1rem;
+      border-right: 1px solid var(--stroke-soft);
+      background: linear-gradient(180deg, rgba(255, 255, 255, .04), rgba(255, 255, 255, .012));
+      -webkit-backdrop-filter: blur(20px) saturate(135%);
+      backdrop-filter: blur(20px) saturate(135%);
+      min-width: 0;
     }
 
     .brand {
-      border-bottom: 1px solid var(--border);
-    }
-
-    .brand-row,
-    .topbar,
-    .exchange-meta,
-    .exchange-actions,
-    .edit-actions {
       display: flex;
       align-items: center;
-      gap: .6rem;
+      gap: .8rem;
+      padding: 1.15rem 1.2rem;
+      border-bottom: 1px solid var(--stroke-soft);
     }
-
-    .brand-row,
-    .topbar,
-    .exchange-meta {
-      justify-content: space-between;
-    }
-
-    h1,
-    h2,
-    h3,
-    p {
-      margin: 0;
-    }
-
-    h1 {
-      font-size: 1.1rem;
-    }
-
-    h2 {
-      font-size: 1.35rem;
-      line-height: 1.2;
-    }
-
-    h3 {
-      font-size: .95rem;
-      line-height: 1.25;
-    }
-
-    .muted,
-    .meta {
-      color: var(--muted);
-      font-size: .88rem;
-    }
-
-    .toolbar {
+    .brand-mark {
+      flex: 0 0 auto;
+      width: 40px;
+      height: 40px;
+      border-radius: 12px;
       display: grid;
-      gap: .75rem;
-      border-bottom: 1px solid var(--border);
+      place-items: center;
+      background: linear-gradient(150deg, var(--accent-2), var(--accent) 55%, #4f46e5);
+      box-shadow: 0 10px 26px -10px var(--accent-glow), 0 1px 0 rgba(255, 255, 255, .4) inset;
     }
+    .brand-mark svg { width: 22px; height: 22px; display: block; }
+    .brand-text { min-width: 0; }
+    .brand-text h1 {
+      margin: 0;
+      font-family: "Space Grotesk", sans-serif;
+      font-size: 1.02rem;
+      font-weight: 600;
+      letter-spacing: -.01em;
+      line-height: 1.1;
+    }
+    .brand-text .tag {
+      display: inline-flex;
+      align-items: center;
+      gap: .35rem;
+      margin-top: .2rem;
+      font-size: .72rem;
+      color: var(--muted);
+    }
+    .tag-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 8px var(--ok); }
+
+    .identity-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: .6rem;
+      padding: .85rem 1.2rem;
+      border-bottom: 1px solid var(--stroke-soft);
+    }
+    .identity-row .who { display: flex; align-items: center; gap: .6rem; min-width: 0; }
+    .identity-row .who-label { font-size: .68rem; text-transform: uppercase; letter-spacing: .14em; color: var(--faint-ink); }
+    .identity-row .who-name { font-size: .86rem; font-weight: 600; overflow-wrap: anywhere; }
+    .identity-row form { margin: 0; }
+    .identity-row button { min-height: 2.1rem; padding: .35rem .7rem; font-size: .78rem; }
+
+    .toolbar { display: grid; gap: .7rem; padding: 1rem 1.2rem; border-bottom: 1px solid var(--stroke-soft); }
+    .search-wrap { position: relative; }
+    .search-wrap svg {
+      position: absolute; left: .72rem; top: 50%; transform: translateY(-50%);
+      width: 16px; height: 16px; color: var(--faint-ink); pointer-events: none;
+    }
+    .search-wrap input { padding-left: 2.2rem; }
 
     .toggle {
-      display: flex;
-      align-items: center;
-      gap: .5rem;
-      color: var(--muted);
-      font-size: .9rem;
-      user-select: none;
+      display: flex; align-items: center; gap: .55rem;
+      font-size: .82rem; color: var(--muted); cursor: pointer; user-select: none;
     }
+    .toggle input { width: auto; accent-color: var(--accent); }
 
-    .toggle input {
-      width: auto;
+    .summary {
+      display: flex; flex-wrap: wrap; gap: .4rem;
+    }
+    .stat {
+      display: inline-flex; align-items: baseline; gap: .35rem;
+      padding: .32rem .6rem;
+      border: 1px solid var(--stroke-soft);
+      border-radius: var(--r-pill);
+      background: var(--glass);
+      font-size: .74rem; color: var(--muted);
+    }
+    .stat b { font-family: "Space Grotesk", sans-serif; font-size: .86rem; font-weight: 600; color: var(--text); }
+    .stat.is-deleted b { color: var(--warn); }
+
+    .list-head {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: .9rem 1.2rem .4rem;
+      font-size: .68rem; text-transform: uppercase; letter-spacing: .14em; color: var(--faint-ink);
     }
 
     .session-list {
-      display: grid;
-      align-content: start;
-      gap: .55rem;
-      overflow: auto;
+      display: grid; align-content: start; gap: .4rem;
+      padding: .2rem .7rem 1.2rem;
+      overflow: auto; min-height: 0; flex: 1;
     }
 
     .session-button {
-      display: grid;
-      gap: .25rem;
+      position: relative;
+      display: grid; gap: .45rem;
       width: 100%;
-      min-height: 4.25rem;
+      min-height: auto;
+      padding: .8rem .85rem .85rem 1rem;
       text-align: left;
+      border: 1px solid transparent;
+      border-radius: 14px;
+      background: transparent;
+      -webkit-backdrop-filter: none; backdrop-filter: none;
     }
-
+    .session-button:hover { background: var(--glass); border-color: var(--stroke-soft); }
     .session-button.is-active {
-      border-color: var(--accent);
-      box-shadow: inset 3px 0 0 var(--accent);
+      background: linear-gradient(180deg, rgba(99, 102, 241, .16), rgba(99, 102, 241, .06));
+      border-color: rgba(99, 102, 241, .4);
+      box-shadow: 0 8px 24px -14px var(--accent-glow);
     }
+    .session-button.is-active::before {
+      content: ""; position: absolute; left: 0; top: 12%; bottom: 12%; width: 3px;
+      border-radius: 999px; background: linear-gradient(var(--accent-2), var(--accent));
+      box-shadow: 0 0 12px var(--accent-glow);
+    }
+    .session-button { gap: .4rem; }
+    .session-title { font-weight: 600; font-size: .9rem; line-height: 1.3; overflow-wrap: anywhere; }
+    .session-sub { font-size: .7rem; color: var(--faint-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .session-foot { display: flex; flex-wrap: wrap; gap: .3rem; margin-top: .1rem; }
+    .mini-chip {
+      display: inline-flex; align-items: center; gap: .25rem;
+      font-size: .68rem; color: var(--muted);
+      padding: .12rem .42rem; border-radius: 999px;
+      border: 1px solid var(--stroke-soft); background: rgba(0, 0, 0, .25);
+    }
+    .mini-chip.warn { color: var(--warn); border-color: rgba(251, 191, 36, .3); }
+    .mini-chip .d { width: 5px; height: 5px; border-radius: 50%; background: currentColor; opacity: .8; }
 
-    .session-title {
-      overflow-wrap: anywhere;
-    }
-
-    .main {
-      display: flex;
-      min-width: 0;
-      flex-direction: column;
-    }
+    /* ---------- main ---------- */
+    .main { display: flex; flex-direction: column; min-width: 0; }
 
     .topbar {
-      position: sticky;
-      top: 0;
-      z-index: 5;
-      border-bottom: 1px solid var(--border);
-      background: rgb(246 247 244 / 96%);
-      backdrop-filter: blur(12px);
-      padding: 1rem 1.25rem;
+      position: sticky; top: 0; z-index: 6;
+      display: flex; flex-direction: column; align-items: stretch; gap: .85rem;
+      padding: 1rem 1.5rem;
+      border-bottom: 1px solid var(--stroke-soft);
+      background: rgba(9, 10, 15, .6);
+      -webkit-backdrop-filter: blur(20px) saturate(135%);
+      backdrop-filter: blur(20px) saturate(135%);
     }
-
-    .topbar-title {
-      min-width: 0;
-      display: grid;
-      gap: .25rem;
-    }
-
-    .topbar-title h2,
-    .topbar-title .meta {
+    .topbar-title { min-width: 0; display: grid; gap: .3rem; }
+    .topbar-title h2 {
+      margin: 0; font-family: "Space Grotesk", sans-serif;
+      font-size: 1.4rem; font-weight: 600; letter-spacing: -.015em; line-height: 1.15;
       overflow-wrap: anywhere;
     }
-
-    .top-actions {
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: flex-end;
-      gap: .5rem;
-      flex: 0 0 auto;
-    }
-
-    .content {
-      display: grid;
-      gap: .9rem;
-      max-width: 78rem;
-      width: 100%;
-    }
+    .meta { display: flex; flex-wrap: wrap; align-items: center; gap: .45rem; color: var(--muted); font-size: .8rem; }
+    .meta .sep { width: 3px; height: 3px; border-radius: 50%; background: var(--faint-ink); }
+    .top-actions { display: flex; flex-wrap: wrap; gap: .5rem; justify-content: flex-start; align-items: center; }
+    .content { display: grid; gap: 1rem; width: 100%; max-width: 80rem; padding: 1.4rem 1.5rem 3rem; }
 
     .status {
-      min-height: 1.35rem;
-      color: var(--accent);
-      font-size: .9rem;
+      min-height: 0;
+      display: none;
+      align-items: center; gap: .5rem;
+      padding: .65rem .85rem;
+      border-radius: var(--r-ctrl);
+      border: 1px solid rgba(52, 211, 153, .3);
+      background: rgba(52, 211, 153, .1);
+      color: var(--ok);
+      font-size: .84rem; font-weight: 500;
     }
+    .status.show { display: flex; }
+    .status::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; box-shadow: 0 0 8px currentColor; flex: 0 0 auto; }
+    .status.is-error { border-color: rgba(251, 113, 133, .35); background: var(--danger-soft); color: var(--danger); }
+    .status.is-warn { border-color: rgba(251, 191, 36, .35); background: var(--warn-soft); color: var(--warn); }
 
-    .status.is-error {
-      color: var(--danger);
+    .demo-banner {
+      display: none;
+      align-items: center; gap: .6rem;
+      padding: .6rem .85rem;
+      border-radius: var(--r-ctrl);
+      border: 1px dashed rgba(139, 143, 248, .4);
+      background: rgba(99, 102, 241, .08);
+      color: var(--accent-ink);
+      font-size: .8rem;
     }
+    .demo-banner.show { display: flex; }
+    .demo-banner b { color: #fff; font-weight: 600; }
 
-    .status.is-warn {
-      color: var(--warning);
-    }
-
+    /* ---------- exchange card ---------- */
     .exchange {
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      background: var(--panel);
-      box-shadow: var(--shadow);
+      border: 1px solid var(--stroke);
+      border-radius: var(--r-card);
+      background: var(--glass);
+      box-shadow: var(--shadow-card);
       overflow: hidden;
+      -webkit-backdrop-filter: blur(16px) saturate(130%);
+      backdrop-filter: blur(16px) saturate(130%);
+      transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
     }
-
-    .exchange.is-deleted {
-      border-color: #e4c6a4;
-      background: #fffaf0;
-    }
+    .exchange:hover { border-color: var(--stroke-strong); }
+    .exchange.is-deleted { opacity: .86; border-color: rgba(251, 191, 36, .28); background: rgba(251, 191, 36, .035); }
+    .exchange.is-editing { border-color: rgba(99, 102, 241, .45); box-shadow: 0 0 0 1px rgba(99, 102, 241, .25), var(--shadow-pop); }
 
     .exchange-head {
-      display: grid;
-      gap: .65rem;
-      padding: .8rem .9rem;
-      border-bottom: 1px solid var(--border);
-      background: #fbfcfa;
+      display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem;
+      padding: .9rem 1.05rem;
+      border-bottom: 1px solid var(--stroke-soft);
+      background: linear-gradient(180deg, rgba(255, 255, 255, .03), transparent);
     }
+    .head-id { display: flex; align-items: center; gap: .7rem; min-width: 0; }
+    .ex-num {
+      font-family: "Geist Mono", monospace; font-size: .72rem; color: var(--faint-ink);
+      padding: .2rem .45rem; border: 1px solid var(--stroke-soft); border-radius: 7px; background: rgba(0, 0, 0, .3);
+      flex: 0 0 auto;
+    }
+    .head-model { min-width: 0; display: grid; gap: .1rem; }
+    .head-model .name { font-family: "Space Grotesk", sans-serif; font-weight: 600; font-size: .96rem; overflow-wrap: anywhere; }
+    .head-model .stamps { font-size: .72rem; color: var(--faint-ink); display: flex; flex-wrap: wrap; gap: .35rem; align-items: center; }
+    .head-model .stamps .sep { width: 3px; height: 3px; border-radius: 50%; background: var(--faint-ink); }
 
-    .exchange.is-deleted .exchange-head {
-      background: var(--warning-soft);
-    }
-
-    .exchange-meta {
-      align-items: flex-start;
-    }
+    .head-right { display: flex; align-items: center; gap: .55rem; flex: 0 0 auto; }
 
     .pill {
-      display: inline-flex;
-      align-items: center;
-      min-height: 1.65rem;
-      border-radius: 999px;
-      border: 1px solid var(--border);
-      background: #fff;
-      color: var(--muted);
-      font-size: .78rem;
-      font-weight: 800;
-      padding: .2rem .55rem;
+      display: inline-flex; align-items: center; gap: .35rem;
+      padding: .26rem .55rem;
+      border-radius: var(--r-pill);
+      border: 1px solid rgba(52, 211, 153, .3);
+      background: rgba(52, 211, 153, .1);
+      color: var(--ok);
+      font-size: .68rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
       white-space: nowrap;
     }
+    .pill::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; box-shadow: 0 0 7px currentColor; }
+    .pill.deleted { border-color: rgba(251, 191, 36, .35); background: var(--warn-soft); color: var(--warn); }
 
-    .pill.deleted {
-      border-color: #d7b26f;
-      color: var(--warning);
+    .exchange-actions { display: flex; gap: .4rem; }
+    .exchange-actions button { min-height: 2.05rem; padding: .35rem .7rem; font-size: .78rem; }
+
+    .reason {
+      margin: 0; padding: .55rem 1.05rem;
+      font-size: .78rem; color: var(--warn);
+      background: var(--warn-soft);
+      border-bottom: 1px solid var(--stroke-soft);
     }
+    .reason b { color: #fff; font-weight: 600; }
 
-    .exchange-grid {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-      gap: 1px;
-      background: var(--border);
+    /* avatar */
+    .avatar {
+      flex: 0 0 auto;
+      width: 38px; height: 38px;
+      border-radius: 12px;
+      display: grid; place-items: center;
+      font-family: "Space Grotesk", sans-serif;
+      font-weight: 600; font-size: .95rem;
+      color: var(--m);
+      background: color-mix(in oklab, var(--m) 18%, transparent);
+      border: 1px solid color-mix(in oklab, var(--m) 50%, transparent);
+      box-shadow: 0 6px 20px -8px color-mix(in oklab, var(--m) 80%, transparent), 0 1px 0 rgba(255, 255, 255, .06) inset;
     }
+    .avatar.sm { width: 28px; height: 28px; border-radius: 9px; font-size: .76rem; }
 
+    /* exchange body — the conversation pair */
+    .exchange-grid { display: grid; grid-template-columns: 1fr 1fr; }
     .turn {
-      min-width: 0;
-      background: #fff;
-      padding: .9rem;
+      min-width: 0; padding: 1rem 1.05rem;
+      display: grid; gap: .6rem; align-content: start;
     }
-
+    .turn + .turn { border-left: 1px solid var(--stroke-soft); }
+    .turn.model { background: color-mix(in oklab, var(--m) 5%, transparent); }
+    .turn-head { display: flex; align-items: center; gap: .55rem; }
     .turn-label {
-      margin-bottom: .5rem;
-      color: var(--muted);
-      font-size: .78rem;
-      font-weight: 850;
-      letter-spacing: .04em;
-      text-transform: uppercase;
+      font-size: .68rem; letter-spacing: .12em; text-transform: uppercase; font-weight: 700;
+      color: var(--faint-ink);
     }
+    .turn.model .turn-label { color: var(--m); }
+    .turn-content { overflow-wrap: anywhere; font-size: .9rem; line-height: 1.62; color: #d9dce6; }
+    .turn.user .turn-content { color: #eceef5; }
 
-    .turn-content {
-      white-space: pre-wrap;
-      overflow-wrap: anywhere;
-    }
+    /* edit form */
+    .edit-form { display: none; gap: .9rem; padding: 1.05rem; }
+    .exchange.is-editing .edit-form { display: grid; }
+    .exchange.is-editing .exchange-grid { display: none; }
+    .field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .9rem; }
+    label.field { display: grid; gap: .4rem; font-size: .72rem; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--faint-ink); }
+    .edit-actions { display: flex; gap: .5rem; }
 
-    .edit-form {
-      display: none;
-      gap: .8rem;
-      padding: .9rem;
-      border-top: 1px solid var(--border);
-      background: #fbfcfa;
-    }
-
-    .exchange.is-editing .edit-form {
-      display: grid;
-    }
-
-    .exchange.is-editing .exchange-grid {
-      display: none;
-    }
-
-    .field-grid {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-      gap: .8rem;
-    }
-
-    label.field {
-      display: grid;
-      gap: .35rem;
-      color: var(--muted);
-      font-size: .82rem;
-      font-weight: 800;
-    }
-
+    /* empty state */
     .empty {
-      border: 1px dashed var(--border);
-      border-radius: 8px;
-      padding: 2rem;
+      display: grid; gap: .5rem; justify-items: center; text-align: center;
+      padding: 3.5rem 2rem;
+      border: 1px dashed var(--stroke);
+      border-radius: var(--r-card);
+      background: var(--glass);
       color: var(--muted);
-      text-align: center;
-      background: #fff;
+    }
+    .empty .ico {
+      width: 52px; height: 52px; border-radius: 16px; display: grid; place-items: center;
+      background: var(--accent-soft); border: 1px solid rgba(99, 102, 241, .3); color: var(--accent-ink); margin-bottom: .3rem;
+    }
+    .empty h3 { font-family: "Space Grotesk", sans-serif; font-size: 1.05rem; color: var(--text); font-weight: 600; }
+    .empty p { margin: 0; font-size: .86rem; max-width: 28rem; }
+
+    .skeleton {
+      border: 1px solid var(--stroke-soft); border-radius: var(--r-card);
+      background: var(--glass); height: 8.5rem; overflow: hidden; position: relative;
+    }
+    .skeleton::after {
+      content: ""; position: absolute; inset: 0;
+      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .05), transparent);
+      transform: translateX(-100%); animation: shimmer 1.4s infinite;
+    }
+    @keyframes shimmer { to { transform: translateX(100%); } }
+
+    /* ---------- toolbar: segmented control ---------- */
+    .seg { display: inline-flex; padding: 3px; gap: 2px; border: 1px solid var(--stroke); border-radius: var(--r-ctrl); background: rgba(0, 0, 0, .3); }
+    .seg button {
+      min-height: 1.95rem; padding: .3rem .6rem; border: 0; border-radius: 8px; background: transparent;
+      color: var(--muted); font-size: .78rem; font-weight: 600; -webkit-backdrop-filter: none; backdrop-filter: none;
+    }
+    .seg button svg { width: 14px; height: 14px; }
+    .seg button:hover { background: var(--glass); color: var(--text); }
+    .seg button.is-active { background: var(--glass-3); color: var(--text); box-shadow: 0 1px 0 rgba(255, 255, 255, .08) inset; }
+
+    .avatar.xs { width: 22px; height: 22px; border-radius: 7px; font-size: .62rem; }
+
+    /* ---------- alternate read layouts (bąble / wątek) ---------- */
+    .chat { display: grid; max-width: 62rem; margin: 0 auto; }
+    .msg-meta { display: flex; align-items: baseline; gap: .5rem; font-size: .76rem; color: var(--faint-ink); }
+    .msg-speaker { font-weight: 600; font-family: "Space Grotesk", sans-serif; }
+    .msg-content { overflow-wrap: anywhere; word-break: break-word; font-size: .92rem; line-height: 1.64; color: #d9dce6; }
+    .markdown-body > :first-child { margin-top: 0; }
+    .markdown-body > :last-child { margin-bottom: 0; }
+    .markdown-body p { margin: 0 0 .85rem; }
+    .markdown-body h1, .markdown-body h2, .markdown-body h3, .markdown-body h4 {
+      margin: 1rem 0 .45rem; font-family: "Space Grotesk", sans-serif; line-height: 1.2; color: currentColor;
+    }
+    .markdown-body h1 { font-size: 1.22em; }
+    .markdown-body h2 { font-size: 1.14em; }
+    .markdown-body h3 { font-size: 1.06em; }
+    .markdown-body h4 { font-size: 1em; }
+    .markdown-body ul, .markdown-body ol { margin: .3rem 0 .9rem; padding-left: 1.35rem; }
+    .markdown-body li { margin: .18rem 0; }
+    .markdown-body blockquote {
+      margin: .8rem 0; padding: .15rem 0 .15rem .85rem; border-left: 2px solid color-mix(in oklab, var(--m, var(--accent)) 45%, transparent);
+      color: color-mix(in oklab, currentColor 82%, transparent);
+    }
+    .markdown-body pre {
+      margin: .85rem 0; padding: .75rem .85rem; border: 1px solid var(--stroke-soft); border-radius: 8px;
+      background: rgba(0, 0, 0, .35); overflow-x: auto; white-space: pre; font-family: "Geist Mono", ui-monospace, monospace; font-size: .82em; line-height: 1.55;
+    }
+    .markdown-body code {
+      font-family: "Geist Mono", ui-monospace, monospace; font-size: .88em; border-radius: 5px; padding: .1rem .28rem;
+      background: rgba(255, 255, 255, .08);
+    }
+    .markdown-body pre code { display: block; padding: 0; background: transparent; border-radius: 0; font-size: 1em; }
+    .markdown-body a { color: color-mix(in oklab, var(--m, var(--accent)) 72%, #fff); text-decoration: underline; text-underline-offset: .16em; }
+    .chat.bubbles .message.is-user .markdown-body,
+    .chat.bubbles .message.is-user .markdown-body a { color: #fff; }
+    .chat.bubbles .message.is-user .markdown-body code { background: rgba(255, 255, 255, .18); }
+    .chat.bubbles .message.is-user .markdown-body pre { background: rgba(0, 0, 0, .18); border-color: rgba(255, 255, 255, .16); }
+
+    .ex-group { display: grid; gap: .55rem; }
+    .ex-group.is-deleted { opacity: .82; }
+    .ex-actions { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+    .ex-actions button { min-height: 1.9rem; padding: .3rem .65rem; font-size: .76rem; }
+    .ex-actions .reason-inline { font-size: .74rem; color: var(--warn); }
+    .ex-actions .reason-inline b { color: #fff; font-weight: 600; }
+
+    .chat.bubbles { gap: 1.3rem; }
+    .chat.bubbles .ex-group { padding-bottom: .25rem; }
+    .chat.bubbles .message { display: grid; gap: .4rem; max-width: min(42rem, 84%); }
+    .chat.bubbles .message.is-user { justify-self: end; }
+    .chat.bubbles .message.is-model { justify-self: start; }
+    .chat.bubbles .row { display: flex; gap: .6rem; align-items: flex-end; }
+    .chat.bubbles .message.is-user .row { flex-direction: row-reverse; }
+    .chat.bubbles .message.is-user .msg-meta { justify-content: flex-end; padding-right: .2rem; }
+    .chat.bubbles .message.is-model .msg-meta { padding-left: 3rem; }
+    .chat.bubbles .message.is-model .msg-speaker { color: var(--m); }
+    .chat.bubbles .bubble { padding: .8rem 1rem; border-radius: 16px; border: 1px solid var(--stroke); background: var(--glass-2); box-shadow: var(--shadow-card); }
+    .chat.bubbles .message.is-model .bubble { border-top-left-radius: 5px; border-left: 2px solid color-mix(in oklab, var(--m) 70%, transparent); background: color-mix(in oklab, var(--m) 7%, var(--glass-2)); }
+    .chat.bubbles .message.is-user .bubble { border-top-right-radius: 5px; border-color: transparent; color: #fff; background: linear-gradient(180deg, var(--accent-2), var(--accent)); box-shadow: 0 16px 40px -16px var(--accent-glow); }
+    .chat.bubbles .message.is-user .avatar { display: none; }
+    .chat.bubbles .ex-actions { padding-left: 3rem; }
+
+    .chat.thread { gap: 0; max-width: 58rem; }
+    .chat.thread .ex-group { padding: 1.05rem 0; border-bottom: 1px solid var(--stroke-soft); gap: .7rem; }
+    .chat.thread .ex-group:last-child { border-bottom: 0; }
+    .chat.thread .message { display: grid; grid-template-columns: 36px minmax(0, 1fr); gap: .85rem; }
+    .chat.thread .message.is-model .msg-speaker { color: var(--m); }
+    .chat.thread .body { display: grid; gap: .4rem; min-width: 0; }
+    .chat.thread .bubble { padding: 0; border: 0; background: none; }
+    .chat.thread .message.is-model .msg-content { border-left: 2px solid color-mix(in oklab, var(--m) 35%, transparent); padding-left: .85rem; }
+    .chat.thread .message.is-user .msg-content { padding-left: .85rem; border-left: 2px solid var(--accent-soft); }
+    .chat.thread .ex-actions { padding-left: calc(36px + .85rem); }
+
+    /* ---------- markdown view ---------- */
+    .raw { max-width: 62rem; margin: 0 auto; border: 1px solid var(--stroke); border-radius: var(--r-card); background: rgba(0, 0, 0, .35); box-shadow: var(--shadow-card); }
+    .raw pre { margin: 0; padding: 1.25rem 1.4rem; white-space: pre-wrap; overflow-wrap: anywhere; font-family: "Geist Mono", ui-monospace, monospace; font-size: .8rem; line-height: 1.7; color: #c9cdda; }
+
+    /* ---------- responsive ---------- */
+    @media (max-width: 920px) {
+      .shell { grid-template-columns: 1fr; }
+      .sidebar { position: static; height: auto; border-right: 0; border-bottom: 1px solid var(--stroke-soft); }
+      .session-list { max-height: 19rem; }
+      .topbar { flex-direction: column; align-items: stretch; }
+      .top-actions { justify-content: flex-start; }
+      .exchange-grid, .field-grid { grid-template-columns: 1fr; }
+      .turn + .turn { border-left: 0; border-top: 1px solid var(--stroke-soft); }
+      .chat.bubbles .message { max-width: 92%; }
+    }
+    @media (max-width: 520px) {
+      .exchange-head { flex-direction: column; }
+      .head-right { width: 100%; justify-content: space-between; }
     }
 
-    @media (max-width: 900px) {
-      .shell {
-        grid-template-columns: 1fr;
-      }
-
-      .sidebar {
-        min-height: auto;
-        border-right: 0;
-        border-bottom: 1px solid var(--border);
-      }
-
-      .session-list {
-        max-height: 18rem;
-      }
-
-      .topbar,
-      .exchange-meta {
-        align-items: stretch;
-        flex-direction: column;
-      }
-
-      .top-actions,
-      .exchange-actions,
-      .edit-actions {
-        justify-content: flex-start;
-      }
-
-      .exchange-grid,
-      .field-grid {
-        grid-template-columns: 1fr;
-      }
+    @media (prefers-reduced-motion: reduce) {
+      * { animation-duration: .01ms !important; transition-duration: .01ms !important; }
     }
   </style>
 </head>
@@ -426,49 +605,120 @@
   <main class="shell">
     <aside class="sidebar">
       <section class="brand">
-        <div class="brand-row">
-          <div>
-            <h1>MCP Admin</h1>
-            <p id="identity" class="muted">Loading...</p>
-          </div>
-          <form method="post" action="/admin/logout">
-            <button type="submit">Log out</button>
-          </form>
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#0a0a12" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 8c0-2 1.4-3.5 4-3.5S12 6 12 8s1.4 3.5 4 3.5S20 10 20 8"></path>
+            <path d="M4 16c0 2 1.4 3.5 4 3.5S12 18 12 16s1.4-3.5 4-3.5S20 14 20 16"></path>
+          </svg>
+        </span>
+        <div class="brand-text">
+          <h1>MCP&nbsp;Bridge <span style="color:var(--accent-ink);font-weight:500">Admin</span></h1>
+          <span class="tag"><span class="tag-dot"></span> Korekta transkrypcji</span>
         </div>
       </section>
+
+      <div class="identity-row">
+        <div class="who">
+          <div>
+            <div class="who-label">Zalogowano</div>
+            <div id="identity" class="who-name">Ładowanie…</div>
+          </div>
+        </div>
+        <form method="post" action="/admin/logout">
+          <button type="submit" class="ghost">Wyloguj</button>
+        </form>
+      </div>
 
       <section class="toolbar">
-        <input id="searchInput" type="search" placeholder="Search sessions">
+        <div class="search-wrap">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+          <input id="searchInput" type="search" placeholder="Szukaj sesji…">
+        </div>
         <label class="toggle">
           <input id="showDeletedToggle" type="checkbox" checked>
-          <span>Show deleted exchanges</span>
+          <span>Pokaż usunięte wymiany</span>
         </label>
-        <p id="datasetSummary" class="muted">No data.</p>
+        <div id="datasetSummary" class="summary"></div>
       </section>
 
-      <nav id="sessionList" class="session-list" aria-label="Sessions"></nav>
+      <div class="list-head"><span>Sesje</span></div>
+      <nav id="sessionList" class="session-list" aria-label="Sesje"></nav>
     </aside>
 
-    <section class="main" aria-label="Session correction">
+    <section class="main" aria-label="Korekta sesji">
       <header class="topbar">
         <div class="topbar-title">
-          <h2 id="sessionTitle">Choose a session</h2>
-          <div id="sessionMeta" class="meta">Conversation history correction panel.</div>
+          <h2 id="sessionTitle">Wybierz sesję</h2>
+          <div id="sessionMeta" class="meta">Panel korekty historii rozmów.</div>
         </div>
         <div class="top-actions">
-          <button id="refreshButton" type="button">Refresh</button>
+          <div id="layoutSeg" class="seg" role="tablist" aria-label="Układ wymian">
+            <button type="button" data-layout="pairs" class="is-active" title="Pary — wymiany USER ↔ MODEL (edycja)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="8" height="16" rx="1.5"></rect><rect x="13" y="4" width="8" height="16" rx="1.5"></rect></svg>
+              Pary
+            </button>
+            <button type="button" data-layout="bubbles" title="Bąble — jak w czacie">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-11.9 7.6L3 21l1.9-6.1A8.4 8.4 0 1 1 21 11.5z"></path></svg>
+              Bąble
+            </button>
+            <button type="button" data-layout="thread" title="Wątek — lista z awatarami">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="7" x2="20" y2="7"></line><line x1="8" y1="12" x2="20" y2="12"></line><line x1="8" y1="17" x2="16" y2="17"></line><circle cx="4" cy="7" r="1"></circle><circle cx="4" cy="12" r="1"></circle><circle cx="4" cy="17" r="1"></circle></svg>
+              Wątek
+            </button>
+          </div>
+          <button id="rawToggleButton" type="button" class="ghost">Markdown</button>
+          <button id="copyButton" type="button" class="ghost">Kopiuj transkrypcję</button>
+          <button id="refreshButton" type="button" class="ghost">
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.6-6.4"></path><path d="M21 4v5h-5"></path></svg>
+            Odśwież
+          </button>
         </div>
       </header>
 
       <section class="content">
+        <p id="demoBanner" class="demo-banner"></p>
         <p id="status" class="status" role="status"></p>
         <div id="exchangeList" aria-live="polite"></div>
       </section>
     </section>
   </main>
 
+  <script type="application/json" id="demo-data">{"ok":true,"schema":"mcp-session-bridge.viewer.v1","generated_at":1780321400,"generated_at_iso":"2026-06-01T13:43:20.000Z","session_count":4,"turn_count":22,"sessions":[{"session_id":"demo-2026-06-01-empty-followup","title":"Short follow-up session","title_is_auto":false,"context_pack_id":"manual-context","created_at":1780316600,"updated_at":1780317350,"exchange_count":1,"deleted_exchange_count":0},{"session_id":"demo-2026-06-01-incident-debugging","title":"Debugging a virtual environment issue","title_is_auto":false,"context_pack_id":"local-development","created_at":1780311200,"updated_at":1780313270,"exchange_count":3,"deleted_exchange_count":0},{"session_id":"demo-2026-06-01-ui-review","title":"Admin viewer UI review","title_is_auto":false,"context_pack_id":"viewer-design-refresh","created_at":1780305600,"updated_at":1780308330,"exchange_count":4,"deleted_exchange_count":1},{"session_id":"demo-2026-06-01-product-planning","title":"Product planning with Claude and GPT","title_is_auto":false,"context_pack_id":"public-release-notes","created_at":1780301400,"updated_at":1780303470,"exchange_count":3,"deleted_exchange_count":0}],"transcripts":{"demo-2026-06-01-product-planning":{"session_id":"demo-2026-06-01-product-planning","title":"Product planning with Claude and GPT","exchange_count":3,"turn_count":6,"char_count":2104,"sha256":"synthetic-preview-only","context_pack_id":"public-release-notes","turn_sequence":["USER","Claude","USER","GPT-5","USER","Claude"],"turns":[{"turn":1,"speaker":"USER","exchange_id":100,"created_at":"2026-06-01T08:10:00.000Z","created_at_display":null,"chars":103,"content":"We are preparing MCP Session Bridge for a public v0.1 release. What should the README make clear first?"},{"turn":2,"speaker":"Claude","exchange_id":100,"created_at":"2026-06-01T08:11:30.000Z","created_at_display":"Monday June 1, 2026 at 08:11","chars":226,"content":"Lead with the core promise: this is a small remote MCP server for shared, multi-model conversation memory. The README should show the quickest useful path, then explain tools, security assumptions, and the current limitations."},{"turn":3,"speaker":"USER","exchange_id":101,"created_at":"2026-06-01T08:21:00.000Z","created_at_display":null,"chars":50,"content":"Can you turn that into a concise launch checklist?"},{"turn":4,"speaker":"GPT-5","exchange_id":101,"created_at":"2026-06-01T08:22:30.000Z","created_at_display":"Monday June 1, 2026 at 08:22","chars":191,"content":"Yes. Suggested checklist: README quickstart, .env.example, MIT license, security policy, contributing notes, changelog, demo script, examples, and a CI workflow that runs tests plus the demo."},{"turn":5,"speaker":"USER","exchange_id":102,"created_at":"2026-06-01T08:32:00.000Z","created_at_display":null,"chars":80,"content":"The docs feel a little dense. What would make them easier for a new contributor?"},{"turn":6,"speaker":"Claude","exchange_id":102,"created_at":"2026-06-01T08:33:30.000Z","created_at_display":"Monday June 1, 2026 at 08:33","chars":199,"content":"Split the mental model from the operational steps. A first-time reader should find installation, client setup, model instructions, deployment, security, limitations, and operations as separate paths."}]},"demo-2026-06-01-ui-review":{"session_id":"demo-2026-06-01-ui-review","title":"Admin viewer UI review","exchange_count":4,"turn_count":8,"char_count":2480,"sha256":"synthetic-preview-only","context_pack_id":"viewer-design-refresh","turn_sequence":["USER","USER","USER","Claude","USER","GPT-5","USER","Claude"],"turns":[{"turn":1,"speaker":"USER","exchange_id":103,"created_at":"2026-06-01T09:20:00.000Z","created_at_display":null,"chars":113,"content":"The current admin panel works, but it feels a bit plain. I want it to stay practical while looking more polished."},{"turn":2,"speaker":"USER","exchange_id":103,"created_at":"2026-06-01T09:21:30.000Z","created_at_display":"Monday June 1, 2026 at 09:21","chars":196,"content":"The best direction is a calmer operational dashboard: stronger spacing rhythm, clearer active selection, better exchange cards, and more deliberate typography. Keep it dense enough for repeat use."},{"turn":3,"speaker":"USER","exchange_id":104,"created_at":"2026-06-01T09:31:00.000Z","created_at_display":null,"chars":66,"content":"Should the redesign use a big hero or decorative visual treatment?"},{"turn":4,"speaker":"Claude","exchange_id":104,"created_at":"2026-06-01T09:32:30.000Z","created_at_display":"Monday June 1, 2026 at 09:32","chars":150,"content":"No. This is an admin tool, so the first screen should be the working surface itself: session list, summary, transcript corrections, and clear actions."},{"turn":5,"speaker":"USER","exchange_id":105,"created_at":"2026-06-01T09:42:00.000Z","created_at_display":null,"chars":44,"content":"What UI states should the redesign preserve?"},{"turn":6,"speaker":"GPT-5","exchange_id":105,"created_at":"2026-06-01T09:43:30.000Z","created_at_display":"Monday June 1, 2026 at 09:43","chars":157,"content":"Keep loading, empty, selected, editing, deleted, error, and success states. Also preserve responsive behavior for narrow screens and long transcript content."},{"turn":7,"speaker":"USER","exchange_id":106,"created_at":"2026-06-01T09:53:00.000Z","created_at_display":null,"chars":74,"content":"The delete and restore actions need better affordance. Any recommendation?"},{"turn":8,"speaker":"Claude","exchange_id":106,"created_at":"2026-06-01T09:54:30.000Z","created_at_display":"Monday June 1, 2026 at 09:54","chars":166,"content":"Use restrained destructive styling for delete, a clear restored/saved status message, and make deleted exchanges visually distinct without making the text unreadable."}]},"demo-2026-06-01-incident-debugging":{"session_id":"demo-2026-06-01-incident-debugging","title":"Debugging a virtual environment issue","exchange_count":3,"turn_count":6,"char_count":1920,"sha256":"synthetic-preview-only","context_pack_id":"local-development","turn_sequence":["USER","USER","USER","GPT-5","USER","Claude"],"turns":[{"turn":1,"speaker":"USER","exchange_id":107,"created_at":"2026-06-01T10:53:20.000Z","created_at_display":null,"chars":70,"content":"uv run sometimes hangs on my mounted workspace. Is the project broken?"},{"turn":2,"speaker":"USER","exchange_id":107,"created_at":"2026-06-01T10:54:50.000Z","created_at_display":"Monday June 1, 2026 at 10:54","chars":192,"content":"The project is likely fine. The symptom points to the mounted filesystem and virtual environment metadata rather than app logic. Rebuilding .venv on the host where tests run is the safer path."},{"turn":3,"speaker":"USER","exchange_id":108,"created_at":"2026-06-01T11:04:20.000Z","created_at_display":null,"chars":41,"content":"What should we document for contributors?"},{"turn":4,"speaker":"GPT-5","exchange_id":108,"created_at":"2026-06-01T11:05:50.000Z","created_at_display":"Monday June 1, 2026 at 11:05","chars":171,"content":"Tell contributors to run uv sync locally on their own machine, avoid committing .venv, and rebuild the environment if packages look inconsistent after moving the checkout."},{"turn":5,"speaker":"USER","exchange_id":109,"created_at":"2026-06-01T11:15:20.000Z","created_at_display":null,"chars":33,"content":"Could this affect GitHub Actions?"},{"turn":6,"speaker":"Claude","exchange_id":109,"created_at":"2026-06-01T11:16:50.000Z","created_at_display":"Monday June 1, 2026 at 11:16","chars":160,"content":"No, GitHub Actions creates a fresh checkout and a fresh Python environment. That makes CI a useful independent signal for whether the project itself is healthy."}]},"demo-2026-06-01-empty-followup":{"session_id":"demo-2026-06-01-empty-followup","title":"Short follow-up session","exchange_count":1,"turn_count":2,"char_count":937,"sha256":"synthetic-preview-only","context_pack_id":"manual-context","turn_sequence":["USER","USER"],"turns":[{"turn":1,"speaker":"USER","exchange_id":110,"created_at":"2026-06-01T12:23:20.000Z","created_at_display":null,"chars":59,"content":"Give me a tiny explanation of what MCP Session Bridge does."},{"turn":2,"speaker":"USER","exchange_id":110,"created_at":"2026-06-01T12:24:50.000Z","created_at_display":"Monday June 1, 2026 at 12:24","chars":209,"content":"It gives multiple model clients one shared transcript store, so Claude, ChatGPT, Codex, or another MCP client can pick up the same conversation history through tools instead of relying on a single chat window."}]}}}</script>
   <script>
     (() => {
+      // ---------- model identity (original color + monogram, no brand logos) ----------
+      function modelIdentity(name) {
+        const raw = (name == null ? "" : String(name)).trim();
+        const key = raw.toLowerCase();
+        const make = (color, mono, label) => ({ color, mono, label: label || raw || "Model" });
+        if (!raw) return make("#8b8ff8", "·", "Model");
+        if (key === "user" || key === "użytkownik" || key === "uzytkownik") return make("#6366f1", "U", "USER");
+        if (key.includes("claude")) return make("#f59e0b", "C", raw);
+        if (key.includes("gpt") || key.includes("chatgpt") || key.includes("openai") || /\bo[134]\b/.test(key)) return make("#10b981", "G", raw);
+        if (key.includes("codex")) return make("#a78bfa", "<>", raw);
+        if (key.includes("gemini") || key.includes("bard")) return make("#38bdf8", "✦", raw);
+        if (key.includes("llama") || key.includes("meta")) return make("#60a5fa", "L", raw);
+        if (key.includes("mistral") || key.includes("mixtral")) return make("#fb923c", "M", raw);
+        if (key.includes("grok")) return make("#e879f9", "x", raw);
+        if (key.includes("deepseek")) return make("#2dd4bf", "D", raw);
+        if (key.includes("qwen")) return make("#c084fc", "Q", raw);
+        const palette = ["#f472b6", "#facc15", "#34d399", "#22d3ee", "#c084fc", "#fb923c", "#a3e635", "#5eead4"];
+        let h = 0;
+        for (let i = 0; i < raw.length; i += 1) h = ((h << 5) - h + raw.charCodeAt(i)) | 0;
+        return make(palette[Math.abs(h) % palette.length], raw[0].toUpperCase(), raw);
+      }
+
+      function avatar(name, small) {
+        const id = modelIdentity(name);
+        const node = document.createElement("span");
+        node.className = "avatar" + (small ? " sm" : "");
+        node.style.setProperty("--m", id.color);
+        node.textContent = id.mono;
+        node.title = id.label;
+        node.setAttribute("aria-hidden", "true");
+        return node;
+      }
+
       const state = {
         csrfToken: "",
         sessions: [],
@@ -479,12 +729,19 @@
         showDeleted: true,
         editingExchangeId: null,
         busy: false,
+        layout: localStorage.getItem("mcp-admin:layout") || "pairs",
+        rawVisible: false,
+        userDisplayName: "USER",
       };
 
       const dom = {
+        copyButton: document.getElementById("copyButton"),
         datasetSummary: document.getElementById("datasetSummary"),
+        demoBanner: document.getElementById("demoBanner"),
         exchangeList: document.getElementById("exchangeList"),
         identity: document.getElementById("identity"),
+        layoutSeg: document.getElementById("layoutSeg"),
+        rawToggleButton: document.getElementById("rawToggleButton"),
         refreshButton: document.getElementById("refreshButton"),
         searchInput: document.getElementById("searchInput"),
         sessionList: document.getElementById("sessionList"),
@@ -503,6 +760,29 @@
         state.showDeleted = dom.showDeletedToggle.checked;
         renderExchanges();
       });
+      dom.layoutSeg.addEventListener("click", (event) => {
+        const btn = event.target.closest("button[data-layout]");
+        if (btn) setLayout(btn.dataset.layout);
+      });
+      dom.rawToggleButton.addEventListener("click", () => {
+        state.rawVisible = !state.rawVisible;
+        dom.rawToggleButton.textContent = state.rawVisible ? "Wymiany" : "Markdown";
+        renderExchanges();
+      });
+      dom.copyButton.addEventListener("click", async () => {
+        const md = buildMarkdown();
+        if (!md) { setStatus("Brak transkrypcji do skopiowania.", "warn"); return; }
+        try {
+          await navigator.clipboard.writeText(md);
+          setStatus("Skopiowano transkrypcję do schowka.", "ok");
+        } catch (error) {
+          setStatus(`Nie udało się skopiować: ${error.message}`, "error");
+        }
+      });
+      applyLayoutButtons();
+
+      // offline demo store (declared before init so api() can reference it)
+      const demo = { enabled: false, sessions: [], store: {} };
 
       init();
 
@@ -510,14 +790,17 @@
         try {
           const me = await api("/admin/api/me");
           state.csrfToken = me.csrf_token;
-          dom.identity.textContent = me.username;
+          state.userDisplayName = me.username || "USER";
+          dom.identity.textContent = state.userDisplayName;
           await refreshAll();
         } catch (error) {
           if (error.status === 401) {
             window.location.assign("/admin/login?next=/admin/sessions");
             return;
           }
-          setStatus(error.message, "error");
+          // No live backend → fall back to an offline demo dataset so the UI is reviewable.
+          const ok = await enableDemo();
+          if (!ok) setStatus(error.message, "error");
         }
       }
 
@@ -562,33 +845,41 @@
           localStorage.setItem("mcp-admin:selected", sessionId);
           renderSessions();
           renderExchanges();
-          setStatus(`Selected ${sessionId}.`, "ok");
+          setStatus(`Wybrano ${sessionId}.`, "ok");
         } finally {
           setBusy(false);
         }
       }
 
       function renderSummary() {
-        const active = state.sessions.reduce((sum, session) => sum + Number(session.exchange_count || 0), 0);
-        const deleted = state.sessions.reduce((sum, session) => sum + Number(session.deleted_exchange_count || 0), 0);
-        dom.datasetSummary.textContent = `${state.sessions.length} sessions, ${active} active exchanges, ${deleted} deleted.`;
+        const active = state.sessions.reduce((sum, s) => sum + Number(s.exchange_count || 0), 0);
+        const deleted = state.sessions.reduce((sum, s) => sum + Number(s.deleted_exchange_count || 0), 0);
+        dom.datasetSummary.replaceChildren(
+          stat(state.sessions.length, "sesji"),
+          stat(active, "wymian"),
+          stat(deleted, "usuniętych", deleted > 0)
+        );
+      }
+
+      function stat(value, label, warn) {
+        const node = document.createElement("span");
+        node.className = "stat" + (warn ? " is-deleted" : "");
+        const b = document.createElement("b");
+        b.textContent = String(value);
+        node.append(b, document.createTextNode(label));
+        return node;
       }
 
       function renderSessions() {
         dom.sessionList.replaceChildren();
         const visible = state.sessions.filter((session) => {
-          if (!state.query) {
-            return true;
-          }
-          return [
-            session.session_id,
-            session.title,
-            session.context_pack_id,
-          ].filter(Boolean).join(" ").toLowerCase().includes(state.query);
+          if (!state.query) return true;
+          return [session.session_id, session.title, session.context_pack_id]
+            .filter(Boolean).join(" ").toLowerCase().includes(state.query);
         });
 
         if (!visible.length) {
-          dom.sessionList.append(div("empty", "No matching sessions."));
+          dom.sessionList.append(emptyRow("Brak pasujących sesji."));
           return;
         }
 
@@ -596,101 +887,259 @@
           const button = document.createElement("button");
           button.type = "button";
           button.className = "session-button";
-          if (session.session_id === state.selectedSessionId) {
-            button.classList.add("is-active");
-          }
+          if (session.session_id === state.selectedSessionId) button.classList.add("is-active");
           button.addEventListener("click", () => loadSession(session.session_id));
+
+          const foot = div("session-foot");
+          foot.append(chip(`${session.exchange_count || 0} wymian`));
+          if (Number(session.deleted_exchange_count || 0) > 0) {
+            foot.append(chip(`${session.deleted_exchange_count} usuniętych`, true));
+          }
+
           button.append(
-            div("session-title", session.title || "Untitled"),
-            div("muted", session.session_id),
-            div("muted", `${session.exchange_count || 0} active · ${session.deleted_exchange_count || 0} deleted`)
+            div("session-title", session.title || "Bez tytułu"),
+            spanCls("session-sub mono", session.session_id),
+            foot
           );
           dom.sessionList.append(button);
         }
+      }
+
+      function chip(text, warn) {
+        const node = document.createElement("span");
+        node.className = "mini-chip" + (warn ? " warn" : "");
+        const d = document.createElement("span");
+        d.className = "d";
+        node.append(d, document.createTextNode(text));
+        return node;
       }
 
       function renderExchanges() {
         dom.exchangeList.replaceChildren();
 
         if (!state.selectedSession) {
-          dom.sessionTitle.textContent = "Choose a session";
-          dom.sessionMeta.textContent = "Conversation history correction panel.";
-          dom.exchangeList.append(div("empty", "No session selected."));
+          dom.sessionTitle.textContent = "Wybierz sesję";
+          dom.sessionMeta.textContent = "Panel korekty historii rozmów.";
+          dom.exchangeList.append(emptyState("Nie wybrano sesji", "Wybierz sesję z listy po lewej, aby przeglądać i korygować jej wymiany."));
           return;
         }
 
-        const activeCount = state.exchanges.filter((exchange) => !exchange.is_deleted).length;
+        const activeCount = state.exchanges.filter((e) => !e.is_deleted).length;
         const deletedCount = state.exchanges.length - activeCount;
         dom.sessionTitle.textContent = state.selectedSession.title || state.selectedSession.session_id;
-        dom.sessionMeta.textContent = [
-          state.selectedSession.session_id,
-          `${activeCount} active exchanges`,
-          `${deletedCount} deleted`,
-          `updated ${formatDate(state.selectedSession.updated_at_iso)}`,
-        ].join(" · ");
+        renderMeta([
+          { mono: true, text: state.selectedSession.session_id },
+          { text: `${activeCount} aktywnych wymian` },
+          { text: `${deletedCount} usuniętych` },
+          { text: `aktualizacja ${formatDate(state.selectedSession.updated_at_iso)}` },
+        ]);
 
-        const visible = state.showDeleted ? state.exchanges : state.exchanges.filter((exchange) => !exchange.is_deleted);
+        const visible = state.showDeleted ? state.exchanges : state.exchanges.filter((e) => !e.is_deleted);
         if (!visible.length) {
-          dom.exchangeList.append(div("empty", "No exchanges to display."));
+          dom.exchangeList.append(emptyState("Brak wymian", "Ta sesja nie ma wymian do wyświetlenia przy obecnych filtrach."));
           return;
         }
 
-        for (const exchange of visible) {
-          dom.exchangeList.append(renderExchange(exchange));
+        if (state.rawVisible) { renderMarkdownView(); return; }
+        if (state.layout === "pairs") {
+          for (const exchange of visible) dom.exchangeList.append(renderExchange(exchange));
+        } else {
+          const chat = div("chat " + state.layout);
+          for (const exchange of visible) chat.append(renderExGroup(exchange));
+          dom.exchangeList.append(chat);
         }
+      }
+
+      function setLayout(layout) {
+        if (!layout) return;
+        state.layout = layout;
+        state.rawVisible = false;
+        dom.rawToggleButton.textContent = "Markdown";
+        localStorage.setItem("mcp-admin:layout", layout);
+        applyLayoutButtons();
+        renderExchanges();
+      }
+
+      function applyLayoutButtons() {
+        for (const btn of dom.layoutSeg.querySelectorAll("button[data-layout]")) {
+          btn.classList.toggle("is-active", btn.dataset.layout === state.layout);
+        }
+      }
+
+      function statusPill(exchange) {
+        return spanCls(`pill${exchange.is_deleted ? " deleted" : ""}`, exchange.is_deleted ? "Usunięta" : "Aktywna");
+      }
+
+      // bubbles / thread: each exchange becomes a USER + MODEL message pair plus an action row
+      function renderExGroup(exchange) {
+        const group = div("ex-group" + (exchange.is_deleted ? " is-deleted" : ""));
+        group.style.setProperty("--m", modelIdentity(exchange.model_name).color);
+        const modelTime = exchange.assistant_created_at_display || formatDate(exchange.assistant_created_at_iso);
+        group.append(
+          renderMsg("USER", exchange.user_message, false, ""),
+          renderMsg(exchange.model_name || "Model", exchange.assistant_response, true, modelTime),
+          renderExActions(exchange)
+        );
+        return group;
+      }
+
+      function renderMsg(speakerName, content, isModel, timeText) {
+        const speaker = isModel ? (speakerName || "Model") : userDisplayName();
+        const article = document.createElement("article");
+        article.className = "message " + (isModel ? "is-model" : "is-user");
+        article.style.setProperty("--m", modelIdentity(isModel ? speakerName : "USER").color);
+
+        if (state.layout === "thread") {
+          const body = div("body");
+          const meta = div("msg-meta");
+          meta.append(spanCls("msg-speaker", speaker));
+          if (timeText) meta.append(spanCls("", timeText));
+          const bubble = div("bubble");
+          bubble.append(markdownContent("msg-content", content || "—"));
+          body.append(meta, bubble);
+          article.append(avatar(isModel ? speakerName : "USER"), body);
+          return article;
+        }
+
+        const meta = div("msg-meta");
+        meta.append(spanCls("msg-speaker", speaker));
+        if (timeText) meta.append(spanCls("", timeText));
+        const row = div("row");
+        row.append(avatar(isModel ? speakerName : "USER"));
+        const bubble = div("bubble");
+        bubble.append(markdownContent("msg-content", content || "—"));
+        row.append(bubble);
+        article.append(meta, row);
+        return article;
+      }
+
+      function renderExActions(exchange) {
+        const row = div("ex-actions");
+        row.append(spanCls("ex-num", `#${exchange.exchange_id}`), statusPill(exchange));
+        row.append(button("Edytuj", () => {
+          state.editingExchangeId = exchange.exchange_id;
+          if (state.layout !== "pairs") setLayout("pairs");
+          else renderExchanges();
+        }, "ghost"));
+        if (exchange.is_deleted) {
+          row.append(button("Przywróć", () => restoreExchange(exchange.exchange_id), "primary"));
+          if (exchange.deleted_reason) {
+            const r = document.createElement("span");
+            r.className = "reason-inline";
+            const b = document.createElement("b");
+            b.textContent = "Powód: ";
+            r.append(b, document.createTextNode(exchange.deleted_reason));
+            row.append(r);
+          }
+        } else {
+          row.append(button("Usuń", () => deleteExchange(exchange.exchange_id), "danger"));
+        }
+        return row;
+      }
+
+      function renderMarkdownView() {
+        const raw = div("raw");
+        const pre = document.createElement("pre");
+        pre.textContent = buildMarkdown();
+        raw.append(pre);
+        dom.exchangeList.append(raw);
+      }
+
+      function buildMarkdown() {
+        if (!state.selectedSession) return "";
+        const s = state.selectedSession;
+        const visible = state.showDeleted ? state.exchanges : state.exchanges.filter((e) => !e.is_deleted);
+        const lines = [`# ${s.title || s.session_id}`, "", `- session_id: \`${s.session_id}\``, `- wymian: ${visible.length}`, "", "## Transkrypcja", ""];
+        for (const ex of visible) {
+          lines.push("### USER", "", ex.user_message || "", "");
+          const model = ex.model_name || "Model";
+          const t = ex.assistant_created_at_display ? ` — ${ex.assistant_created_at_display}` : "";
+          lines.push(`### ${model}${t}${ex.is_deleted ? " (usunięta)" : ""}`, "", ex.assistant_response || "", "");
+        }
+        return lines.join("\n");
+      }
+
+      function renderMeta(parts) {
+        dom.sessionMeta.replaceChildren();
+        parts.filter((p) => p.text).forEach((p, i) => {
+          if (i > 0) { const s = document.createElement("span"); s.className = "sep"; dom.sessionMeta.append(s); }
+          const node = document.createElement("span");
+          if (p.mono) node.className = "mono";
+          node.textContent = p.text;
+          dom.sessionMeta.append(node);
+        });
       }
 
       function renderExchange(exchange) {
         const article = document.createElement("article");
         article.className = `exchange${exchange.is_deleted ? " is-deleted" : ""}`;
-        if (state.editingExchangeId === exchange.exchange_id) {
-          article.classList.add("is-editing");
-        }
+        if (state.editingExchangeId === exchange.exchange_id) article.classList.add("is-editing");
 
+        // head
         const head = div("exchange-head");
-        const meta = div("exchange-meta");
-        const metaText = div("");
-        metaText.append(
-          h3(`#${exchange.exchange_id} · ${exchange.model_name || "Unknown model"}`),
-          div("muted", [
-            exchange.assistant_created_at_display || formatDate(exchange.assistant_created_at_iso),
-            exchange.edited_at_iso ? `edited ${formatDate(exchange.edited_at_iso)}` : "",
-            exchange.is_deleted ? `deleted ${formatDate(exchange.deleted_at_iso)}` : "",
-          ].filter(Boolean).join(" · "))
-        );
-        meta.append(metaText, span(`pill${exchange.is_deleted ? " deleted" : ""}`, exchange.is_deleted ? "DELETED" : "ACTIVE"));
+        const headId = div("head-id");
+        const num = spanCls("ex-num", `#${exchange.exchange_id}`);
+        const av = avatar(exchange.model_name);
+        const model = div("head-model");
+        model.append(div("name", exchange.model_name || "Nieznany model"));
+        const stamps = div("stamps");
+        const stampParts = [
+          exchange.assistant_created_at_display || formatDate(exchange.assistant_created_at_iso),
+          exchange.edited_at_iso ? `edytowano ${formatDate(exchange.edited_at_iso)}` : "",
+          exchange.is_deleted ? `usunięto ${formatDate(exchange.deleted_at_iso)}` : "",
+        ].filter(Boolean);
+        stampParts.forEach((t, i) => {
+          if (i > 0) { const s = document.createElement("span"); s.className = "sep"; stamps.append(s); }
+          stamps.append(document.createTextNode(t));
+        });
+        model.append(stamps);
+        headId.append(num, av, model);
 
+        const right = div("head-right");
+        const pill = spanCls(`pill${exchange.is_deleted ? " deleted" : ""}`, exchange.is_deleted ? "Usunięta" : "Aktywna");
         const actions = div("exchange-actions");
-        const editButton = button("Edit", () => {
+        const editButton = button(state.editingExchangeId === exchange.exchange_id ? "Zamknij" : "Edytuj", () => {
           state.editingExchangeId = state.editingExchangeId === exchange.exchange_id ? null : exchange.exchange_id;
           renderExchanges();
-        });
+        }, "ghost");
         actions.append(editButton);
         if (exchange.is_deleted) {
-          actions.append(button("Restore", () => restoreExchange(exchange.exchange_id), "primary"));
+          actions.append(button("Przywróć", () => restoreExchange(exchange.exchange_id), "primary"));
         } else {
-          actions.append(button("Delete", () => deleteExchange(exchange.exchange_id), "danger"));
+          actions.append(button("Usuń", () => deleteExchange(exchange.exchange_id), "danger"));
         }
-        head.append(meta, actions);
+        right.append(pill, actions);
+        head.append(headId, right);
+
+        article.append(head);
 
         if (exchange.deleted_reason) {
-          head.append(div("muted", `Reason: ${exchange.deleted_reason}`));
+          const reason = document.createElement("p");
+          reason.className = "reason";
+          const b = document.createElement("b");
+          b.textContent = "Powód: ";
+          reason.append(b, document.createTextNode(exchange.deleted_reason));
+          article.append(reason);
         }
 
+        // body grid
         const grid = div("exchange-grid");
         grid.append(
-          renderTurn("USER", exchange.user_message),
-          renderTurn(exchange.model_name || "MODEL", exchange.assistant_response)
+          renderTurn("USER", userDisplayName(), exchange.user_message),
+          renderTurn(exchange.model_name || "MODEL", exchange.model_name || "Model", exchange.assistant_response, true)
         );
+        article.append(grid);
 
-        const form = renderEditForm(exchange);
-        article.append(head, grid, form);
+        article.append(renderEditForm(exchange));
         return article;
       }
 
-      function renderTurn(label, content) {
-        const node = div("turn");
-        node.append(div("turn-label", label), div("turn-content", content || ""));
+      function renderTurn(identityName, label, content, isModel) {
+        const node = div("turn " + (isModel ? "model" : "user"));
+        if (isModel) node.style.setProperty("--m", modelIdentity(identityName).color);
+        const headRow = div("turn-head");
+        headRow.append(avatar(identityName, true), spanCls("turn-label", label));
+        node.append(headRow, markdownContent("turn-content", content || "—"));
         return node;
       }
 
@@ -709,13 +1158,13 @@
         modelField.append(modelInput);
 
         const grid = div("field-grid");
-        const userField = label("field", "User message");
+        const userField = label("field", "Wiadomość użytkownika");
         const userInput = document.createElement("textarea");
         userInput.name = "user_message";
         userInput.value = exchange.user_message || "";
         userField.append(userInput);
 
-        const assistantField = label("field", "Model response");
+        const assistantField = label("field", "Odpowiedź modelu");
         const assistantInput = document.createElement("textarea");
         assistantInput.name = "assistant_response";
         assistantInput.value = exchange.assistant_response || "";
@@ -724,11 +1173,8 @@
 
         const actions = div("edit-actions");
         actions.append(
-          button("Save", null, "primary", "submit"),
-          button("Cancel", () => {
-            state.editingExchangeId = null;
-            renderExchanges();
-          }, "", "button")
+          button("Zapisz zmiany", null, "primary", "submit"),
+          button("Anuluj", () => { state.editingExchangeId = null; renderExchanges(); }, "ghost", "button")
         );
         form.append(modelField, grid, actions);
         return form;
@@ -740,31 +1186,19 @@
           user_message: form.elements.user_message.value,
           assistant_response: form.elements.assistant_response.value,
         };
-        await mutate(`/admin/api/exchanges/${exchangeId}`, {
-          method: "PATCH",
-          body: JSON.stringify(payload),
-        }, "Exchange saved.");
+        await mutate(`/admin/api/exchanges/${exchangeId}`, { method: "PATCH", body: JSON.stringify(payload) }, "Wymiana zapisana.");
       }
 
       async function deleteExchange(exchangeId) {
-        const reason = window.prompt("Deletion reason", "duplicate after regenerated response");
-        if (reason === null) {
-          return;
-        }
-        if (!window.confirm(`Delete exchange #${exchangeId} from the active transcript?`)) {
-          return;
-        }
-        await mutate(`/admin/api/exchanges/${exchangeId}`, {
-          method: "DELETE",
-          body: JSON.stringify({ reason }),
-        }, "Exchange removed from the active transcript.");
+        const reason = window.prompt("Powód usunięcia", "duplikat po wygenerowaniu odpowiedzi");
+        if (reason === null) return;
+        if (!window.confirm(`Usunąć wymianę #${exchangeId} z aktywnej transkrypcji?`)) return;
+        await mutate(`/admin/api/exchanges/${exchangeId}`, { method: "DELETE", body: JSON.stringify({ reason }) }, "Wymiana usunięta z aktywnej transkrypcji.");
       }
 
       async function restoreExchange(exchangeId) {
-        if (!window.confirm(`Restore exchange #${exchangeId}?`)) {
-          return;
-        }
-        await mutate(`/admin/api/exchanges/${exchangeId}/restore`, { method: "POST" }, "Exchange restored.");
+        if (!window.confirm(`Przywrócić wymianę #${exchangeId}?`)) return;
+        await mutate(`/admin/api/exchanges/${exchangeId}/restore`, { method: "POST" }, "Wymiana przywrócona.");
       }
 
       async function mutate(path, options, successMessage) {
@@ -782,26 +1216,16 @@
         }
       }
 
+      // ---------- API (with offline demo fallback) ----------
       async function api(path, options = {}) {
+        if (demo.enabled) return demoApi(path, options);
+
         const headers = new Headers(options.headers || {});
-        if (options.body && !headers.has("content-type")) {
-          headers.set("content-type", "application/json");
-        }
-        if (options.method && options.method !== "GET") {
-          headers.set("x-csrf-token", state.csrfToken);
-        }
-        const response = await fetch(path, {
-          ...options,
-          headers,
-          credentials: "same-origin",
-          cache: "no-store",
-        });
+        if (options.body && !headers.has("content-type")) headers.set("content-type", "application/json");
+        if (options.method && options.method !== "GET") headers.set("x-csrf-token", state.csrfToken);
+        const response = await fetch(path, { ...options, headers, credentials: "same-origin", cache: "no-store" });
         let payload = null;
-        try {
-          payload = await response.json();
-        } catch (_) {
-          payload = null;
-        }
+        try { payload = await response.json(); } catch (_) { payload = null; }
         if (!response.ok || (payload && payload.ok === false)) {
           const error = new Error((payload && payload.error) || `HTTP ${response.status}`);
           error.status = response.status;
@@ -810,78 +1234,280 @@
         return payload || { ok: true };
       }
 
+      async function enableDemo() {
+        try {
+          const data = readInlineDemo() || await fetchDemo();
+          if (!data) throw new Error("no demo data");
+          buildDemoStore(data);
+          demo.enabled = true;
+          state.csrfToken = "demo";
+          dom.identity.textContent = "owner";
+          state.userDisplayName = "owner";
+          dom.demoBanner.classList.add("show");
+          dom.demoBanner.replaceChildren(
+            (() => { const b = document.createElement("b"); b.textContent = "Tryb demo"; return b; })(),
+            document.createTextNode(" — brak backendu. Dane przykładowe, edycje działają lokalnie (nie są zapisywane).")
+          );
+          if (!state.selectedSessionId || !demo.store[state.selectedSessionId]) {
+            // prefer a session that actually has distinct model speakers
+            let best = null, bestScore = -1;
+            for (const s of demo.sessions) {
+              const ex = (demo.store[s.session_id] || {}).exchanges || [];
+              const models = new Set(ex.filter((e) => e.model_name !== "Model").map((e) => e.model_name));
+              if (models.size > bestScore) { bestScore = models.size; best = s.session_id; }
+            }
+            if (best) state.selectedSessionId = best;
+          }
+          await refreshAll();
+          return true;
+        } catch (err) {
+          console.warn("demo fallback failed:", err && err.message);
+          return false;
+        }
+      }
+
+      function readInlineDemo() {
+        const el = document.getElementById("demo-data");
+        if (!el || !el.textContent.trim() || el.textContent.indexOf("__DEMO") === 0) return null;
+        try { return JSON.parse(el.textContent); } catch (_) { return null; }
+      }
+
+      async function fetchDemo() {
+        try {
+          const res = await fetch(`session-viewer-data.json?t=${Date.now()}`, { cache: "no-store" });
+          return res.ok ? await res.json() : null;
+        } catch (_) { return null; }
+      }
+
+      function buildDemoStore(data) {
+        const sessions = Array.isArray(data.sessions) ? data.sessions : [];
+        demo.sessions = sessions.map((s) => ({
+          session_id: s.session_id,
+          title: s.title,
+          context_pack_id: s.context_pack_id,
+          exchange_count: s.exchange_count || 0,
+          deleted_exchange_count: s.deleted_exchange_count || 0,
+          updated_at_iso: s.updated_at ? new Date(Number(s.updated_at) * 1000).toISOString() : null,
+        }));
+        demo.store = {};
+        const transcripts = data.transcripts || {};
+        for (const id of Object.keys(transcripts)) {
+          const turns = transcripts[id].turns || [];
+          const order = [];
+          const byExchange = new Map();
+          for (const turn of turns) {
+            const key = turn.exchange_id;
+            if (!byExchange.has(key)) { byExchange.set(key, []); order.push(key); }
+            byExchange.get(key).push(turn);
+          }
+          const exchanges = order.map((key) => {
+            const group = byExchange.get(key);
+            const userTurn = group.find((t) => t.speaker === "USER") || group[0];
+            // The assistant turn is the first non-USER turn; if data mislabels it,
+            // fall back to a later turn so the pair still reads correctly.
+            const modelTurn = group.find((t) => t.speaker !== "USER")
+              || (group.length > 1 ? group[group.length - 1] : null);
+            return {
+              exchange_id: key,
+              is_deleted: false,
+              model_name: modelTurn && modelTurn.speaker !== "USER" ? modelTurn.speaker : "Model",
+              user_message: userTurn ? userTurn.content : "",
+              assistant_response: modelTurn ? modelTurn.content : "",
+              assistant_created_at_iso: modelTurn ? modelTurn.created_at : null,
+              assistant_created_at_display: modelTurn ? modelTurn.created_at_display : null,
+            };
+          });
+          demo.store[id] = {
+            session: demo.sessions.find((s) => s.session_id === id) || { session_id: id, title: transcripts[id].title },
+            exchanges,
+          };
+        }
+      }
+
+      function demoApi(path, options = {}) {
+        const method = (options.method || "GET").toUpperCase();
+        const body = options.body ? JSON.parse(options.body) : {};
+        if (path === "/admin/api/me") return Promise.resolve({ ok: true, csrf_token: "demo", username: "owner" });
+        if (path === "/admin/api/sessions") return Promise.resolve({ ok: true, sessions: demo.sessions });
+
+        const single = path.match(/^\/admin\/api\/sessions\/(.+)$/);
+        if (single && method === "GET") {
+          const entry = demo.store[decodeURIComponent(single[1])];
+          if (!entry) return Promise.reject(Object.assign(new Error("Nieznana sesja"), { status: 404 }));
+          return Promise.resolve({ ok: true, session: entry.session, exchanges: entry.exchanges });
+        }
+
+        const find = (id) => {
+          for (const key of Object.keys(demo.store)) {
+            const ex = demo.store[key].exchanges.find((e) => String(e.exchange_id) === String(id));
+            if (ex) return { ex, sessionId: key };
+          }
+          return null;
+        };
+        const restore = path.match(/^\/admin\/api\/exchanges\/(\d+)\/restore$/);
+        if (restore) {
+          const hit = find(restore[1]);
+          if (hit) { hit.ex.is_deleted = false; hit.ex.deleted_reason = ""; recountDemo(hit.sessionId); }
+          return Promise.resolve({ ok: true });
+        }
+        const exMatch = path.match(/^\/admin\/api\/exchanges\/(\d+)$/);
+        if (exMatch) {
+          const hit = find(exMatch[1]);
+          if (hit && method === "PATCH") Object.assign(hit.ex, body);
+          if (hit && method === "DELETE") { hit.ex.is_deleted = true; hit.ex.deleted_reason = body.reason || ""; hit.ex.deleted_at_iso = new Date().toISOString(); recountDemo(hit.sessionId); }
+          return Promise.resolve({ ok: true });
+        }
+        return Promise.resolve({ ok: true });
+      }
+
+      function recountDemo(sessionId) {
+        const entry = demo.store[sessionId];
+        if (!entry) return;
+        const session = demo.sessions.find((s) => s.session_id === sessionId);
+        if (!session) return;
+        session.exchange_count = entry.exchanges.filter((e) => !e.is_deleted).length;
+        session.deleted_exchange_count = entry.exchanges.filter((e) => e.is_deleted).length;
+      }
+
       function setBusy(value) {
         state.busy = value;
-        for (const node of document.querySelectorAll("button")) {
-          node.disabled = value;
-        }
+        for (const node of document.querySelectorAll("button")) node.disabled = value;
       }
 
       function setStatus(message, tone) {
         dom.status.textContent = message || "";
+        dom.status.classList.toggle("show", Boolean(message));
         dom.status.classList.toggle("is-error", tone === "error");
         dom.status.classList.toggle("is-warn", tone === "warn");
       }
 
       function formatDate(value) {
-        if (!value) {
-          return "";
-        }
+        if (!value) return "";
         const date = new Date(value);
-        if (Number.isNaN(date.getTime())) {
-          return String(value);
-        }
-        return new Intl.DateTimeFormat("pl-PL", {
-          dateStyle: "medium",
-          timeStyle: "short",
-        }).format(date);
+        if (Number.isNaN(date.getTime())) return String(value);
+        return new Intl.DateTimeFormat("pl-PL", { dateStyle: "medium", timeStyle: "short" }).format(date);
       }
 
+      function userDisplayName() {
+        return state.userDisplayName || dom.identity.textContent.trim() || "USER";
+      }
+
+      function markdownContent(className, text) {
+        const node = div(`${className} markdown-body`);
+        node.innerHTML = renderMarkdown(text || "—");
+        return node;
+      }
+
+      function renderMarkdown(markdown) {
+        const lines = String(markdown).replace(/\r\n?/g, "\n").split("\n");
+        const html = [];
+        let i = 0;
+        while (i < lines.length) {
+          const line = lines[i];
+          if (!line.trim()) { i += 1; continue; }
+
+          const fence = line.match(/^```([\w-]+)?\s*$/);
+          if (fence) {
+            const code = [];
+            i += 1;
+            while (i < lines.length && !/^```\s*$/.test(lines[i])) code.push(lines[i++]);
+            if (i < lines.length) i += 1;
+            html.push(`<pre><code>${escapeHtml(code.join("\n"))}</code></pre>`);
+            continue;
+          }
+
+          const heading = line.match(/^(#{1,4})\s+(.+)$/);
+          if (heading) {
+            const level = heading[1].length;
+            html.push(`<h${level}>${renderInline(heading[2])}</h${level}>`);
+            i += 1;
+            continue;
+          }
+
+          if (/^>\s?/.test(line)) {
+            const quote = [];
+            while (i < lines.length && /^>\s?/.test(lines[i])) quote.push(lines[i++].replace(/^>\s?/, ""));
+            html.push(`<blockquote>${renderMarkdown(quote.join("\n"))}</blockquote>`);
+            continue;
+          }
+
+          if (/^\s*(?:[-*+]|\d+[.)])\s+/.test(line)) {
+            const ordered = /^\s*\d+[.)]\s+/.test(line);
+            const tag = ordered ? "ol" : "ul";
+            const items = [];
+            while (i < lines.length && (ordered ? /^\s*\d+[.)]\s+/.test(lines[i]) : /^\s*[-*+]\s+/.test(lines[i]))) {
+              items.push(lines[i++].replace(/^\s*(?:[-*+]|\d+[.)])\s+/, ""));
+            }
+            html.push(`<${tag}>${items.map((item) => `<li>${renderInline(item)}</li>`).join("")}</${tag}>`);
+            continue;
+          }
+
+          const paragraph = [line];
+          i += 1;
+          while (i < lines.length && lines[i].trim() && !isMarkdownBlockStart(lines[i])) paragraph.push(lines[i++]);
+          html.push(`<p>${paragraph.map(renderInline).join("<br>")}</p>`);
+        }
+        return html.join("");
+      }
+
+      function isMarkdownBlockStart(line) {
+        return /^```/.test(line) || /^(#{1,4})\s+/.test(line) || /^>\s?/.test(line) || /^\s*(?:[-*+]|\d+[.)])\s+/.test(line);
+      }
+
+      function renderInline(text) {
+        let value = escapeHtml(text);
+        value = value.replace(/`([^`]+)`/g, "<code>$1</code>");
+        value = value.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (match, label, href) => safeHref(href) ? `<a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">${label}</a>` : label);
+        value = value.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+        value = value.replace(/(^|[^\w])\*([^*\n]+?)\*(?=[^\w]|$)/g, "$1<em>$2</em>");
+        return value;
+      }
+
+      function safeHref(href) {
+        return /^(https?:|mailto:|#|\/(?!\/))/i.test(href);
+      }
+
+      function escapeHtml(value) {
+        return String(value).replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
+      }
+
+      // ---------- tiny DOM helpers ----------
       function button(text, onClick, className = "", type = "button") {
         const node = document.createElement("button");
         node.type = type;
         node.textContent = text;
-        if (className) {
-          node.className = className;
-        }
-        if (onClick) {
-          node.addEventListener("click", onClick);
-        }
+        if (className) node.className = className;
+        if (onClick) node.addEventListener("click", onClick);
         return node;
       }
-
       function div(className, text) {
         const node = document.createElement("div");
-        if (className) {
-          node.className = className;
-        }
-        if (text !== undefined) {
-          node.textContent = text;
-        }
+        if (className) node.className = className;
+        if (text !== undefined) node.textContent = text;
         return node;
       }
-
-      function h3(text) {
-        const node = document.createElement("h3");
-        node.textContent = text;
+      function spanCls(className, text) {
+        const node = document.createElement("span");
+        if (className) node.className = className;
+        if (text !== undefined) node.textContent = text;
         return node;
       }
-
       function label(className, text) {
         const node = document.createElement("label");
-        if (className) {
-          node.className = className;
-        }
+        if (className) node.className = className;
         node.append(document.createTextNode(text));
         return node;
       }
-
-      function span(className, text) {
-        const node = document.createElement("span");
-        if (className) {
-          node.className = className;
-        }
-        node.textContent = text;
+      function emptyRow(text) { return div("empty", text); }
+      function emptyState(title, body) {
+        const node = div("empty");
+        const ico = div("ico");
+        ico.innerHTML = '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>';
+        const h = document.createElement("h3");
+        h.textContent = title;
+        const p = document.createElement("p");
+        p.textContent = body;
+        node.append(ico, h, p);
         return node;
       }
     })();

@@ -14,6 +14,8 @@ It is intentionally narrow. The bridge stores conversation history; it does not 
 - Includes an offline transcript viewer and an authenticated admin correction UI.
 - Ships a local demo script for understanding the core workflow without setting up a remote MCP client.
 
+![Generated image 1](/Users/wojciechwasiak/Desktop/Generated image 1.png)
+
 ## Quickstart
 
 Requirements:
