@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="pl">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -338,7 +338,7 @@
 </head>
 <body>
   <main class="app">
-    <aside class="sidebar" aria-label="Sesje">
+    <aside class="sidebar" aria-label="Sessions">
       <section class="brand">
         <span class="brand-mark" aria-hidden="true">
           <svg viewBox="0 0 24 24" fill="none" stroke="#0a0a12" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">
@@ -348,80 +348,80 @@
         </span>
         <div class="brand-text">
           <h1>MCP Session Viewer</h1>
-          <p id="datasetSummary">Przeglądarka transkrypcji zapisanych w bridge SQLite.</p>
+          <p id="datasetSummary">Transcript viewer for conversations stored in bridge SQLite.</p>
         </div>
       </section>
 
-      <section class="controls" aria-label="Sterowanie">
+      <section class="controls" aria-label="Controls">
         <form id="sessionForm" class="session-form">
-          <input id="sessionInput" class="input" list="sessionOptions" autocomplete="off" placeholder="Wpisz lub wybierz session_id">
+          <input id="sessionInput" class="input" list="sessionOptions" autocomplete="off" placeholder="Enter or select session_id">
           <datalist id="sessionOptions"></datalist>
-          <button type="submit" class="primary">Pokaż</button>
+          <button type="submit" class="primary">Show</button>
         </form>
 
         <div class="search-wrap">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
-          <input id="searchInput" class="input" type="search" autocomplete="off" placeholder="Filtruj: tytuł, model, ID">
+          <input id="searchInput" class="input" type="search" autocomplete="off" placeholder="Filter: title, model, ID">
         </div>
 
         <div class="actions">
           <button id="refreshButton" type="button" class="ghost">
             <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.6-6.4"></path><path d="M21 4v5h-5"></path></svg>
-            Odśwież
+            Refresh
           </button>
           <label class="file-button">
             <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3v5h5"></path><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path></svg>
-            Wczytaj JSON
+            Load JSON
             <input id="fileInput" type="file" accept="application/json,.json">
           </label>
         </div>
 
         <label class="toggle-row">
           <input id="autoRefreshToggle" type="checkbox">
-          <span>Auto-odświeżanie co 5 sekund</span>
+          <span>Auto-refresh every 5 seconds</span>
         </label>
 
         <p id="status" class="status" role="status"></p>
       </section>
 
-      <div class="list-head">Sesje</div>
-      <nav id="sessionList" class="session-list" aria-label="Lista sesji"></nav>
+      <div class="list-head">Sessions</div>
+      <nav id="sessionList" class="session-list" aria-label="Session list"></nav>
     </aside>
 
-    <section class="main" aria-label="Transkrypcja">
+    <section class="main" aria-label="Transcript">
       <header class="topbar">
         <div class="topbar-title">
-          <h2 id="sessionTitle">Wybierz sesję</h2>
-          <div id="sessionMeta" class="meta">Brak danych do wyświetlenia.</div>
+          <h2 id="sessionTitle">Select a session</h2>
+          <div id="sessionMeta" class="meta">No data to display.</div>
         </div>
         <div class="top-actions">
-          <div id="layoutSeg" class="seg" role="tablist" aria-label="Układ tur">
-            <button type="button" data-layout="bubbles" class="is-active" title="Bąble — jak w czacie">
+          <div id="layoutSeg" class="seg" role="tablist" aria-label="Turn layout">
+            <button type="button" data-layout="bubbles" class="is-active" title="Bubbles - chat-style view">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-11.9 7.6L3 21l1.9-6.1A8.4 8.4 0 1 1 21 11.5z"></path></svg>
-              Bąble
+              Bubbles
             </button>
-            <button type="button" data-layout="thread" title="Wątek — lista z awatarami">
+            <button type="button" data-layout="thread" title="Thread - list with avatars">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="7" x2="20" y2="7"></line><line x1="8" y1="12" x2="20" y2="12"></line><line x1="8" y1="17" x2="16" y2="17"></line><circle cx="4" cy="7" r="1"></circle><circle cx="4" cy="12" r="1"></circle><circle cx="4" cy="17" r="1"></circle></svg>
-              Wątek
+              Thread
             </button>
-            <button type="button" data-layout="pairs" title="Pary — wymiany USER ↔ MODEL">
+            <button type="button" data-layout="pairs" title="Pairs - USER to MODEL exchanges">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="8" height="16" rx="1.5"></rect><rect x="13" y="4" width="8" height="16" rx="1.5"></rect></svg>
-              Pary
+              Pairs
             </button>
           </div>
           <button id="rawToggleButton" type="button" class="ghost">Markdown</button>
-          <button id="copyButton" class="primary" type="button">Kopiuj transkrypcję</button>
+          <button id="copyButton" class="primary" type="button">Copy transcript</button>
         </div>
       </header>
 
       <div id="conversationWrap" class="conversation-wrap">
         <div id="emptyState" class="empty">
           <span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg></span>
-          <h3>Brak wczytanej sesji</h3>
-          <p>Wczytaj <strong>session-viewer-data.json</strong> albo uruchom lokalny eksport obok tego pliku HTML.</p>
+          <h3>No session loaded</h3>
+          <p>Load <strong>session-viewer-data.json</strong> or run a local export next to this HTML file.</p>
         </div>
         <section id="chat" class="chat bubbles" aria-live="polite"></section>
-        <section id="raw" class="raw" aria-label="Transkrypcja Markdown"><pre id="rawText"></pre></section>
+        <section id="raw" class="raw" aria-label="Markdown transcript"><pre id="rawText"></pre></section>
       </div>
     </section>
   </main>
@@ -437,7 +437,7 @@
         const key = raw.toLowerCase();
         const make = (color, mono, label) => ({ color, mono, label: label || raw || "Model" });
         if (!raw) return make("#8b8ff8", "·", "Model");
-        if (key === "user" || key === "użytkownik" || key === "uzytkownik") return make("#6366f1", "U", "USER");
+        if (key === "user") return make("#6366f1", "U", "USER");
         if (key.includes("claude")) return make("#f59e0b", "C", raw);
         if (key.includes("gpt") || key.includes("chatgpt") || key.includes("openai") || /\bo[134]\b/.test(key)) return make("#10b981", "G", raw);
         if (key.includes("codex")) return make("#a78bfa", "<>", raw);
@@ -509,7 +509,7 @@
       dom.rawToggleButton.addEventListener("click", () => {
         state.rawVisible = !state.rawVisible;
         dom.conversationWrap.classList.toggle("show-raw", state.rawVisible);
-        dom.rawToggleButton.textContent = state.rawVisible ? "Czat" : "Markdown";
+        dom.rawToggleButton.textContent = state.rawVisible ? "Chat" : "Markdown";
       });
       dom.layoutSeg.addEventListener("click", (event) => {
         const btn = event.target.closest("button[data-layout]");
@@ -518,12 +518,12 @@
       });
       dom.copyButton.addEventListener("click", async () => {
         const transcript = currentTranscript();
-        if (!transcript) { setStatus("Brak transkrypcji do skopiowania.", "warn"); return; }
+        if (!transcript) { setStatus("No transcript to copy.", "warn"); return; }
         try {
           await navigator.clipboard.writeText(transcript.transcript_markdown || renderPlainText(transcript.turns || []));
-          setStatus("Skopiowano transkrypcję do schowka.", "ok");
+          setStatus("Transcript copied to clipboard.", "ok");
         } catch (error) {
-          setStatus(`Nie udało się skopiować: ${error.message}`, "error");
+          setStatus(`Could not copy: ${error.message}`, "error");
         }
       });
 
@@ -554,7 +554,7 @@
             const response = await fetch(`${DATA_URL}?t=${Date.now()}`, { cache: "no-store" });
             if (response.ok) {
               setPayload(await response.json(), "auto", null);
-              if (!silent) setStatus(`Załadowano ${DATA_URL}.`, "ok");
+              if (!silent) setStatus(`Loaded ${DATA_URL}.`, "ok");
               return;
             }
           }
@@ -563,10 +563,10 @@
           const inline = readInlineDemo();
           if (inline) {
             setPayload(inline, "demo", null);
-            if (!silent) setStatus("Załadowano wbudowane dane demo.", "ok");
+            if (!silent) setStatus("Loaded built-in demo data.", "ok");
             return;
           }
-          if (!silent) setStatus(`Nie udało się załadować ${DATA_URL}. Wczytaj JSON ręcznie.`, "warn");
+          if (!silent) setStatus(`Could not load ${DATA_URL}. Load JSON manually.`, "warn");
           renderAll();
         }
       }
@@ -584,20 +584,20 @@
             try {
               const payload = JSON.parse(String(reader.result || ""));
               setPayload(payload, "file", file);
-              setStatus(`Wczytano ${file.name}.`, "ok");
+              setStatus(`Loaded ${file.name}.`, "ok");
             } catch (error) {
-              setStatus(`Nieprawidłowy JSON: ${error.message}`, "error");
+              setStatus(`Invalid JSON: ${error.message}`, "error");
             }
             resolve();
           };
-          reader.onerror = () => { setStatus(`Nie udało się odczytać pliku: ${reader.error && reader.error.message}`, "error"); resolve(); };
+          reader.onerror = () => { setStatus(`Could not read file: ${reader.error && reader.error.message}`, "error"); resolve(); };
           reader.readAsText(file, "utf-8");
         });
       }
 
       function setPayload(payload, source, file) {
         if (!payload || payload.ok !== true || !Array.isArray(payload.sessions) || typeof payload.transcripts !== "object") {
-          throw new Error("Plik nie wygląda jak eksport viewer v1.");
+          throw new Error("The file does not look like a viewer v1 export.");
         }
         state.payload = payload;
         state.source = source;
@@ -620,9 +620,9 @@
       function renderAll() { renderDatasetSummary(); renderSessionList(); renderTranscript(); }
 
       function renderDatasetSummary() {
-        if (!state.payload) { dom.datasetSummary.textContent = "Przeglądarka transkrypcji zapisanych w bridge SQLite."; return; }
+        if (!state.payload) { dom.datasetSummary.textContent = "Transcript viewer for conversations stored in bridge SQLite."; return; }
         const source = state.source === "file" && state.file ? state.file.name : (state.source === "demo" ? "demo" : DATA_URL);
-        dom.datasetSummary.textContent = `${state.payload.session_count || 0} sesji · ${state.payload.turn_count || 0} tur · ${source}`;
+        dom.datasetSummary.textContent = `${state.payload.session_count || 0} sessions · ${state.payload.turn_count || 0} turns · ${source}`;
       }
 
       function speakersOf(session) {
@@ -640,13 +640,13 @@
         for (const session of sessions) {
           const option = document.createElement("option");
           option.value = session.session_id;
-          option.label = `${session.title || "Bez tytułu"} (${session.exchange_count || 0})`;
+          option.label = `${session.title || "Untitled"} (${session.exchange_count || 0})`;
           dom.sessionOptions.append(option);
         }
 
         const visible = sessions.filter(matchesQuery);
         if (visible.length === 0) {
-          dom.sessionList.append(div("empty", state.payload ? "Brak pasujących sesji." : "Brak danych sesji."));
+          dom.sessionList.append(div("empty", state.payload ? "No matching sessions." : "No session data."));
           return;
         }
 
@@ -664,10 +664,10 @@
             models.slice(0, 4).forEach((m) => stack.append(avatar(m, "xs")));
             foot.append(stack);
           }
-          foot.append(chip(`${session.exchange_count || 0} wymian`));
+          foot.append(chip(`${session.exchange_count || 0} exchanges`));
 
           button.append(
-            div("session-title", session.title || "Bez tytułu"),
+            div("session-title", session.title || "Untitled"),
             spanCls("session-id mono", session.session_id),
             foot
           );
@@ -690,8 +690,8 @@
 
         if (!transcript) {
           dom.emptyState.style.display = "grid";
-          dom.sessionTitle.textContent = "Wybierz sesję";
-          dom.sessionMeta.textContent = state.payload ? "Wpisz session_id lub wybierz sesję z listy." : "Brak danych do wyświetlenia.";
+          dom.sessionTitle.textContent = "Select a session";
+          dom.sessionMeta.textContent = state.payload ? "Enter session_id or select a session from the list." : "No data to display.";
           dom.sessionInput.value = state.selectedSessionId || "";
           return;
         }
@@ -702,10 +702,10 @@
         dom.sessionTitle.textContent = transcript.title || (session && session.title) || transcript.session_id;
         renderMeta([
           { mono: true, text: transcript.session_id },
-          { text: `${transcript.exchange_count || 0} wymian` },
-          { text: `${transcript.turn_count || 0} tur` },
-          { text: `kontekst: ${transcript.context_pack_id || "brak"}` },
-          { text: session ? `aktualizacja ${formatEpoch(session.updated_at)}` : "" },
+          { text: `${transcript.exchange_count || 0} exchanges` },
+          { text: `${transcript.turn_count || 0} turns` },
+          { text: `context: ${transcript.context_pack_id || "none"}` },
+          { text: session ? `updated ${formatEpoch(session.updated_at)}` : "" },
         ]);
 
         const turns = transcript.turns || [];
@@ -729,12 +729,12 @@
       // bubbles + thread share this per-turn renderer (CSS differentiates)
       function renderMessage(turn) {
         const isUser = isUserSpeaker(turn.speaker);
-        const speaker = isUser ? "Ty" : (turn.speaker || "Model");
+        const speaker = isUser ? "You" : (turn.speaker || "Model");
         const article = document.createElement("article");
         article.className = `message ${isUser ? "is-user" : "is-model"}`;
         article.style.setProperty("--m", modelIdentity(turn.speaker).color);
 
-        const timeText = turn.created_at_display || formatDate(turn.created_at) || `tura ${turn.turn}`;
+        const timeText = turn.created_at_display || formatDate(turn.created_at) || `turn ${turn.turn}`;
 
         if (state.layout === "thread") {
           const av = avatar(isUser ? "USER" : turn.speaker);
@@ -801,11 +801,11 @@
       }
 
       function selectSession(sessionId) {
-        if (!sessionId) { setStatus("Wpisz session_id lub wybierz sesję z listy.", "warn"); return; }
-        if (!state.payload || !state.payload.transcripts[sessionId]) { setStatus(`Nieznany session_id: ${sessionId}`, "error"); return; }
+        if (!sessionId) { setStatus("Enter session_id or select a session from the list.", "warn"); return; }
+        if (!state.payload || !state.payload.transcripts[sessionId]) { setStatus(`Unknown session_id: ${sessionId}`, "error"); return; }
         state.selectedSessionId = sessionId;
         localStorage.setItem("mcp-session-viewer:selected", sessionId);
-        setStatus(`Wybrano ${sessionId}.`, "ok");
+        setStatus(`Selected ${sessionId}.`, "ok");
         renderAll();
       }
 
@@ -904,12 +904,12 @@
         return String(value).replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
       }
 
-      function formatEpoch(value) { if (!value) return "brak daty"; return formatDate(new Date(Number(value) * 1000).toISOString()); }
+      function formatEpoch(value) { if (!value) return "no date"; return formatDate(new Date(Number(value) * 1000).toISOString()); }
       function formatDate(value) {
         if (!value) return "";
         const date = new Date(value);
         if (Number.isNaN(date.getTime())) return String(value);
-        return new Intl.DateTimeFormat("pl-PL", { dateStyle: "medium", timeStyle: "short" }).format(date);
+        return new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" }).format(date);
       }
 
       function setStatus(message, tone) {

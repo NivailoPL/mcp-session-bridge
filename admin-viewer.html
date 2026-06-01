@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="pl">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -506,7 +506,7 @@
 
     .avatar.xs { width: 22px; height: 22px; border-radius: 7px; font-size: .62rem; }
 
-    /* ---------- alternate read layouts (bąble / wątek) ---------- */
+    /* ---------- alternate read layouts (bubbles / thread) ---------- */
     .chat { display: grid; max-width: 62rem; margin: 0 auto; }
     .msg-meta { display: flex; align-items: baseline; gap: .5rem; font-size: .76rem; color: var(--faint-ink); }
     .msg-speaker { font-weight: 600; font-family: "Space Grotesk", sans-serif; }
@@ -613,64 +613,64 @@
         </span>
         <div class="brand-text">
           <h1>MCP&nbsp;Bridge <span style="color:var(--accent-ink);font-weight:500">Admin</span></h1>
-          <span class="tag"><span class="tag-dot"></span> Korekta transkrypcji</span>
+          <span class="tag"><span class="tag-dot"></span> Transcript corrections</span>
         </div>
       </section>
 
       <div class="identity-row">
         <div class="who">
           <div>
-            <div class="who-label">Zalogowano</div>
-            <div id="identity" class="who-name">Ładowanie…</div>
+            <div class="who-label">Signed in</div>
+            <div id="identity" class="who-name">Loading...</div>
           </div>
         </div>
         <form method="post" action="/admin/logout">
-          <button type="submit" class="ghost">Wyloguj</button>
+          <button type="submit" class="ghost">Sign out</button>
         </form>
       </div>
 
       <section class="toolbar">
         <div class="search-wrap">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
-          <input id="searchInput" type="search" placeholder="Szukaj sesji…">
+          <input id="searchInput" type="search" placeholder="Search sessions...">
         </div>
         <label class="toggle">
           <input id="showDeletedToggle" type="checkbox" checked>
-          <span>Pokaż usunięte wymiany</span>
+          <span>Show deleted exchanges</span>
         </label>
         <div id="datasetSummary" class="summary"></div>
       </section>
 
-      <div class="list-head"><span>Sesje</span></div>
-      <nav id="sessionList" class="session-list" aria-label="Sesje"></nav>
+      <div class="list-head"><span>Sessions</span></div>
+      <nav id="sessionList" class="session-list" aria-label="Sessions"></nav>
     </aside>
 
-    <section class="main" aria-label="Korekta sesji">
+    <section class="main" aria-label="Session corrections">
       <header class="topbar">
         <div class="topbar-title">
-          <h2 id="sessionTitle">Wybierz sesję</h2>
-          <div id="sessionMeta" class="meta">Panel korekty historii rozmów.</div>
+          <h2 id="sessionTitle">Select a session</h2>
+          <div id="sessionMeta" class="meta">Conversation history correction panel.</div>
         </div>
         <div class="top-actions">
-          <div id="layoutSeg" class="seg" role="tablist" aria-label="Układ wymian">
-            <button type="button" data-layout="pairs" class="is-active" title="Pary — wymiany USER ↔ MODEL (edycja)">
+          <div id="layoutSeg" class="seg" role="tablist" aria-label="Exchange layout">
+            <button type="button" data-layout="pairs" class="is-active" title="Pairs - USER to MODEL exchanges (editing)">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="8" height="16" rx="1.5"></rect><rect x="13" y="4" width="8" height="16" rx="1.5"></rect></svg>
-              Pary
+              Pairs
             </button>
-            <button type="button" data-layout="bubbles" title="Bąble — jak w czacie">
+            <button type="button" data-layout="bubbles" title="Bubbles - chat-style view">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-11.9 7.6L3 21l1.9-6.1A8.4 8.4 0 1 1 21 11.5z"></path></svg>
-              Bąble
+              Bubbles
             </button>
-            <button type="button" data-layout="thread" title="Wątek — lista z awatarami">
+            <button type="button" data-layout="thread" title="Thread - list with avatars">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="7" x2="20" y2="7"></line><line x1="8" y1="12" x2="20" y2="12"></line><line x1="8" y1="17" x2="16" y2="17"></line><circle cx="4" cy="7" r="1"></circle><circle cx="4" cy="12" r="1"></circle><circle cx="4" cy="17" r="1"></circle></svg>
-              Wątek
+              Thread
             </button>
           </div>
           <button id="rawToggleButton" type="button" class="ghost">Markdown</button>
-          <button id="copyButton" type="button" class="ghost">Kopiuj transkrypcję</button>
+          <button id="copyButton" type="button" class="ghost">Copy transcript</button>
           <button id="refreshButton" type="button" class="ghost">
             <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.6-6.4"></path><path d="M21 4v5h-5"></path></svg>
-            Odśwież
+            Refresh
           </button>
         </div>
       </header>
@@ -692,7 +692,7 @@
         const key = raw.toLowerCase();
         const make = (color, mono, label) => ({ color, mono, label: label || raw || "Model" });
         if (!raw) return make("#8b8ff8", "·", "Model");
-        if (key === "user" || key === "użytkownik" || key === "uzytkownik") return make("#6366f1", "U", "USER");
+        if (key === "user") return make("#6366f1", "U", "USER");
         if (key.includes("claude")) return make("#f59e0b", "C", raw);
         if (key.includes("gpt") || key.includes("chatgpt") || key.includes("openai") || /\bo[134]\b/.test(key)) return make("#10b981", "G", raw);
         if (key.includes("codex")) return make("#a78bfa", "<>", raw);
@@ -766,17 +766,17 @@
       });
       dom.rawToggleButton.addEventListener("click", () => {
         state.rawVisible = !state.rawVisible;
-        dom.rawToggleButton.textContent = state.rawVisible ? "Wymiany" : "Markdown";
+        dom.rawToggleButton.textContent = state.rawVisible ? "Exchanges" : "Markdown";
         renderExchanges();
       });
       dom.copyButton.addEventListener("click", async () => {
         const md = buildMarkdown();
-        if (!md) { setStatus("Brak transkrypcji do skopiowania.", "warn"); return; }
+        if (!md) { setStatus("No transcript to copy.", "warn"); return; }
         try {
           await navigator.clipboard.writeText(md);
-          setStatus("Skopiowano transkrypcję do schowka.", "ok");
+          setStatus("Transcript copied to clipboard.", "ok");
         } catch (error) {
-          setStatus(`Nie udało się skopiować: ${error.message}`, "error");
+          setStatus(`Could not copy: ${error.message}`, "error");
         }
       });
       applyLayoutButtons();
@@ -845,7 +845,7 @@
           localStorage.setItem("mcp-admin:selected", sessionId);
           renderSessions();
           renderExchanges();
-          setStatus(`Wybrano ${sessionId}.`, "ok");
+          setStatus(`Selected ${sessionId}.`, "ok");
         } finally {
           setBusy(false);
         }
@@ -855,9 +855,9 @@
         const active = state.sessions.reduce((sum, s) => sum + Number(s.exchange_count || 0), 0);
         const deleted = state.sessions.reduce((sum, s) => sum + Number(s.deleted_exchange_count || 0), 0);
         dom.datasetSummary.replaceChildren(
-          stat(state.sessions.length, "sesji"),
-          stat(active, "wymian"),
-          stat(deleted, "usuniętych", deleted > 0)
+          stat(state.sessions.length, "sessions"),
+          stat(active, "exchanges"),
+          stat(deleted, "deleted", deleted > 0)
         );
       }
 
@@ -879,7 +879,7 @@
         });
 
         if (!visible.length) {
-          dom.sessionList.append(emptyRow("Brak pasujących sesji."));
+          dom.sessionList.append(emptyRow("No matching sessions."));
           return;
         }
 
@@ -891,13 +891,13 @@
           button.addEventListener("click", () => loadSession(session.session_id));
 
           const foot = div("session-foot");
-          foot.append(chip(`${session.exchange_count || 0} wymian`));
+          foot.append(chip(`${session.exchange_count || 0} exchanges`));
           if (Number(session.deleted_exchange_count || 0) > 0) {
-            foot.append(chip(`${session.deleted_exchange_count} usuniętych`, true));
+            foot.append(chip(`${session.deleted_exchange_count} deleted`, true));
           }
 
           button.append(
-            div("session-title", session.title || "Bez tytułu"),
+            div("session-title", session.title || "Untitled"),
             spanCls("session-sub mono", session.session_id),
             foot
           );
@@ -918,9 +918,9 @@
         dom.exchangeList.replaceChildren();
 
         if (!state.selectedSession) {
-          dom.sessionTitle.textContent = "Wybierz sesję";
-          dom.sessionMeta.textContent = "Panel korekty historii rozmów.";
-          dom.exchangeList.append(emptyState("Nie wybrano sesji", "Wybierz sesję z listy po lewej, aby przeglądać i korygować jej wymiany."));
+          dom.sessionTitle.textContent = "Select a session";
+          dom.sessionMeta.textContent = "Conversation history correction panel.";
+          dom.exchangeList.append(emptyState("No session selected", "Select a session from the list on the left to review and correct its exchanges."));
           return;
         }
 
@@ -929,14 +929,14 @@
         dom.sessionTitle.textContent = state.selectedSession.title || state.selectedSession.session_id;
         renderMeta([
           { mono: true, text: state.selectedSession.session_id },
-          { text: `${activeCount} aktywnych wymian` },
-          { text: `${deletedCount} usuniętych` },
-          { text: `aktualizacja ${formatDate(state.selectedSession.updated_at_iso)}` },
+          { text: `${activeCount} active exchanges` },
+          { text: `${deletedCount} deleted` },
+          { text: `updated ${formatDate(state.selectedSession.updated_at_iso)}` },
         ]);
 
         const visible = state.showDeleted ? state.exchanges : state.exchanges.filter((e) => !e.is_deleted);
         if (!visible.length) {
-          dom.exchangeList.append(emptyState("Brak wymian", "Ta sesja nie ma wymian do wyświetlenia przy obecnych filtrach."));
+          dom.exchangeList.append(emptyState("No exchanges", "This session has no exchanges to show with the current filters."));
           return;
         }
 
@@ -967,7 +967,7 @@
       }
 
       function statusPill(exchange) {
-        return spanCls(`pill${exchange.is_deleted ? " deleted" : ""}`, exchange.is_deleted ? "Usunięta" : "Aktywna");
+        return spanCls(`pill${exchange.is_deleted ? " deleted" : ""}`, exchange.is_deleted ? "Deleted" : "Active");
       }
 
       // bubbles / thread: each exchange becomes a USER + MODEL message pair plus an action row
@@ -1016,23 +1016,23 @@
       function renderExActions(exchange) {
         const row = div("ex-actions");
         row.append(spanCls("ex-num", `#${exchange.exchange_id}`), statusPill(exchange));
-        row.append(button("Edytuj", () => {
+        row.append(button("Edit", () => {
           state.editingExchangeId = exchange.exchange_id;
           if (state.layout !== "pairs") setLayout("pairs");
           else renderExchanges();
         }, "ghost"));
         if (exchange.is_deleted) {
-          row.append(button("Przywróć", () => restoreExchange(exchange.exchange_id), "primary"));
+          row.append(button("Restore", () => restoreExchange(exchange.exchange_id), "primary"));
           if (exchange.deleted_reason) {
             const r = document.createElement("span");
             r.className = "reason-inline";
             const b = document.createElement("b");
-            b.textContent = "Powód: ";
+            b.textContent = "Reason: ";
             r.append(b, document.createTextNode(exchange.deleted_reason));
             row.append(r);
           }
         } else {
-          row.append(button("Usuń", () => deleteExchange(exchange.exchange_id), "danger"));
+          row.append(button("Delete", () => deleteExchange(exchange.exchange_id), "danger"));
         }
         return row;
       }
@@ -1049,12 +1049,12 @@
         if (!state.selectedSession) return "";
         const s = state.selectedSession;
         const visible = state.showDeleted ? state.exchanges : state.exchanges.filter((e) => !e.is_deleted);
-        const lines = [`# ${s.title || s.session_id}`, "", `- session_id: \`${s.session_id}\``, `- wymian: ${visible.length}`, "", "## Transkrypcja", ""];
+        const lines = [`# ${s.title || s.session_id}`, "", `- session_id: \`${s.session_id}\``, `- exchanges: ${visible.length}`, "", "## Transcript", ""];
         for (const ex of visible) {
           lines.push("### USER", "", ex.user_message || "", "");
           const model = ex.model_name || "Model";
           const t = ex.assistant_created_at_display ? ` — ${ex.assistant_created_at_display}` : "";
-          lines.push(`### ${model}${t}${ex.is_deleted ? " (usunięta)" : ""}`, "", ex.assistant_response || "", "");
+          lines.push(`### ${model}${t}${ex.is_deleted ? " (deleted)" : ""}`, "", ex.assistant_response || "", "");
         }
         return lines.join("\n");
       }
@@ -1081,12 +1081,12 @@
         const num = spanCls("ex-num", `#${exchange.exchange_id}`);
         const av = avatar(exchange.model_name);
         const model = div("head-model");
-        model.append(div("name", exchange.model_name || "Nieznany model"));
+        model.append(div("name", exchange.model_name || "Unknown model"));
         const stamps = div("stamps");
         const stampParts = [
           exchange.assistant_created_at_display || formatDate(exchange.assistant_created_at_iso),
-          exchange.edited_at_iso ? `edytowano ${formatDate(exchange.edited_at_iso)}` : "",
-          exchange.is_deleted ? `usunięto ${formatDate(exchange.deleted_at_iso)}` : "",
+          exchange.edited_at_iso ? `edited ${formatDate(exchange.edited_at_iso)}` : "",
+          exchange.is_deleted ? `deleted ${formatDate(exchange.deleted_at_iso)}` : "",
         ].filter(Boolean);
         stampParts.forEach((t, i) => {
           if (i > 0) { const s = document.createElement("span"); s.className = "sep"; stamps.append(s); }
@@ -1096,17 +1096,17 @@
         headId.append(num, av, model);
 
         const right = div("head-right");
-        const pill = spanCls(`pill${exchange.is_deleted ? " deleted" : ""}`, exchange.is_deleted ? "Usunięta" : "Aktywna");
+        const pill = spanCls(`pill${exchange.is_deleted ? " deleted" : ""}`, exchange.is_deleted ? "Deleted" : "Active");
         const actions = div("exchange-actions");
-        const editButton = button(state.editingExchangeId === exchange.exchange_id ? "Zamknij" : "Edytuj", () => {
+        const editButton = button(state.editingExchangeId === exchange.exchange_id ? "Close" : "Edit", () => {
           state.editingExchangeId = state.editingExchangeId === exchange.exchange_id ? null : exchange.exchange_id;
           renderExchanges();
         }, "ghost");
         actions.append(editButton);
         if (exchange.is_deleted) {
-          actions.append(button("Przywróć", () => restoreExchange(exchange.exchange_id), "primary"));
+          actions.append(button("Restore", () => restoreExchange(exchange.exchange_id), "primary"));
         } else {
-          actions.append(button("Usuń", () => deleteExchange(exchange.exchange_id), "danger"));
+          actions.append(button("Delete", () => deleteExchange(exchange.exchange_id), "danger"));
         }
         right.append(pill, actions);
         head.append(headId, right);
@@ -1117,7 +1117,7 @@
           const reason = document.createElement("p");
           reason.className = "reason";
           const b = document.createElement("b");
-          b.textContent = "Powód: ";
+          b.textContent = "Reason: ";
           reason.append(b, document.createTextNode(exchange.deleted_reason));
           article.append(reason);
         }
@@ -1158,13 +1158,13 @@
         modelField.append(modelInput);
 
         const grid = div("field-grid");
-        const userField = label("field", "Wiadomość użytkownika");
+        const userField = label("field", "User message");
         const userInput = document.createElement("textarea");
         userInput.name = "user_message";
         userInput.value = exchange.user_message || "";
         userField.append(userInput);
 
-        const assistantField = label("field", "Odpowiedź modelu");
+        const assistantField = label("field", "Model response");
         const assistantInput = document.createElement("textarea");
         assistantInput.name = "assistant_response";
         assistantInput.value = exchange.assistant_response || "";
@@ -1173,8 +1173,8 @@
 
         const actions = div("edit-actions");
         actions.append(
-          button("Zapisz zmiany", null, "primary", "submit"),
-          button("Anuluj", () => { state.editingExchangeId = null; renderExchanges(); }, "ghost", "button")
+          button("Save changes", null, "primary", "submit"),
+          button("Cancel", () => { state.editingExchangeId = null; renderExchanges(); }, "ghost", "button")
         );
         form.append(modelField, grid, actions);
         return form;
@@ -1186,19 +1186,19 @@
           user_message: form.elements.user_message.value,
           assistant_response: form.elements.assistant_response.value,
         };
-        await mutate(`/admin/api/exchanges/${exchangeId}`, { method: "PATCH", body: JSON.stringify(payload) }, "Wymiana zapisana.");
+        await mutate(`/admin/api/exchanges/${exchangeId}`, { method: "PATCH", body: JSON.stringify(payload) }, "Exchange saved.");
       }
 
       async function deleteExchange(exchangeId) {
-        const reason = window.prompt("Powód usunięcia", "duplikat po wygenerowaniu odpowiedzi");
+        const reason = window.prompt("Deletion reason", "duplicate after response generation");
         if (reason === null) return;
-        if (!window.confirm(`Usunąć wymianę #${exchangeId} z aktywnej transkrypcji?`)) return;
-        await mutate(`/admin/api/exchanges/${exchangeId}`, { method: "DELETE", body: JSON.stringify({ reason }) }, "Wymiana usunięta z aktywnej transkrypcji.");
+        if (!window.confirm(`Delete exchange #${exchangeId} from the active transcript?`)) return;
+        await mutate(`/admin/api/exchanges/${exchangeId}`, { method: "DELETE", body: JSON.stringify({ reason }) }, "Exchange removed from the active transcript.");
       }
 
       async function restoreExchange(exchangeId) {
-        if (!window.confirm(`Przywrócić wymianę #${exchangeId}?`)) return;
-        await mutate(`/admin/api/exchanges/${exchangeId}/restore`, { method: "POST" }, "Wymiana przywrócona.");
+        if (!window.confirm(`Restore exchange #${exchangeId}?`)) return;
+        await mutate(`/admin/api/exchanges/${exchangeId}/restore`, { method: "POST" }, "Exchange restored.");
       }
 
       async function mutate(path, options, successMessage) {
@@ -1245,8 +1245,8 @@
           state.userDisplayName = "owner";
           dom.demoBanner.classList.add("show");
           dom.demoBanner.replaceChildren(
-            (() => { const b = document.createElement("b"); b.textContent = "Tryb demo"; return b; })(),
-            document.createTextNode(" — brak backendu. Dane przykładowe, edycje działają lokalnie (nie są zapisywane).")
+            (() => { const b = document.createElement("b"); b.textContent = "Demo mode"; return b; })(),
+            document.createTextNode(" - no backend. Sample data is shown; edits work locally and are not saved.")
           );
           if (!state.selectedSessionId || !demo.store[state.selectedSessionId]) {
             // prefer a session that actually has distinct model speakers
@@ -1333,7 +1333,7 @@
         const single = path.match(/^\/admin\/api\/sessions\/(.+)$/);
         if (single && method === "GET") {
           const entry = demo.store[decodeURIComponent(single[1])];
-          if (!entry) return Promise.reject(Object.assign(new Error("Nieznana sesja"), { status: 404 }));
+          if (!entry) return Promise.reject(Object.assign(new Error("Unknown session"), { status: 404 }));
           return Promise.resolve({ ok: true, session: entry.session, exchanges: entry.exchanges });
         }
 
@@ -1385,7 +1385,7 @@
         if (!value) return "";
         const date = new Date(value);
         if (Number.isNaN(date.getTime())) return String(value);
-        return new Intl.DateTimeFormat("pl-PL", { dateStyle: "medium", timeStyle: "short" }).format(date);
+        return new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" }).format(date);
       }
 
       function userDisplayName() {
