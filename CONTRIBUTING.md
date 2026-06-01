@@ -7,7 +7,7 @@ This project is early, so small, focused contributions are the easiest to review
 ## Development Setup
 
 ```bash
-git clone https://github.com/<owner>/mcp-session-bridge.git
+git clone https://github.com/NivailoPL/mcp-session-bridge.git
 cd mcp-session-bridge
 cp .env.example .env
 uv sync

@@ -14,7 +14,7 @@ It is intentionally narrow. The bridge stores conversation history; it does not 
 - Includes an offline transcript viewer and an authenticated admin correction UI.
 - Ships a local demo script for understanding the core workflow without setting up a remote MCP client.
 
-![Generated image 1](/Users/wojciechwasiak/Desktop/Generated image 1.png)
+![Turn system diagram](docs/assets/turn-system.png)
 
 ## Quickstart
 
@@ -24,7 +24,7 @@ Requirements:
 - [uv](https://docs.astral.sh/uv/)
 
 ```bash
-git clone https://github.com/<owner>/mcp-session-bridge.git
+git clone https://github.com/NivailoPL/mcp-session-bridge.git
 cd mcp-session-bridge
 cp .env.example .env
 uv sync

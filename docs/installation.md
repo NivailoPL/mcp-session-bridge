@@ -13,7 +13,7 @@ Install `uv` using the official instructions: https://docs.astral.sh/uv/
 ## Clone And Install
 
 ```bash
-git clone https://github.com/<owner>/mcp-session-bridge.git
+git clone https://github.com/NivailoPL/mcp-session-bridge.git
 cd mcp-session-bridge
 cp .env.example .env
 uv sync
