@@ -51,7 +51,7 @@ class AdminHandlers:
         next_path = _safe_next(str(form.get("next", "")))
 
         if username != self.settings.owner_username or not verify_password(password, self.settings.owner_password_hash):
-            return self._login_form(next_path, "Nieprawidłowy login albo hasło.", status_code=401)
+            return self._login_form(next_path, "Invalid username or password.", status_code=401)
 
         cookie = self._make_cookie(username)
         response = RedirectResponse(next_path, status_code=303)
@@ -290,14 +290,14 @@ class AdminHandlers:
 </head>
 <body>
   <main>
-    <h1>Panel admina</h1>
+    <h1>Admin panel</h1>
     <p>MCP Session Bridge</p>
     {error_html}
     <form method="post" action="/admin/login">
       <input type="hidden" name="next" value="{escaped_next}">
       <label>Login <input name="username" autocomplete="username" required></label>
-      <label>Hasło <input name="password" type="password" autocomplete="current-password" required></label>
-      <button type="submit">Zaloguj</button>
+      <label>Password <input name="password" type="password" autocomplete="current-password" required></label>
+      <button type="submit">Log in</button>
     </form>
   </main>
 </body>

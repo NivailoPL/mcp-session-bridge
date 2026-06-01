@@ -24,6 +24,14 @@ from app.storage import Store
 from app.time_format import DISPLAY_TIMEZONE_NAME, format_response_timestamp
 
 MANUAL_CONTEXT_ID = "manual-context"
+SERVER_INSTRUCTIONS = (
+    "MCP Session Bridge is a shared transcript bridge for multi-model conversations. "
+    "User context files are supplied manually outside MCP. If a session_id is known, "
+    "call get_session_overview, then fetch every get_session_transcript_chunk before "
+    "answering. Before showing a final answer for an active session, call save_exchange "
+    "with the full user message and full assistant response. Use create_session/list_sessions "
+    "only to establish the right session."
+)
 
 settings = load_settings()
 store = Store(settings.db_path)
@@ -51,7 +59,7 @@ class BridgeTokenVerifier(TokenVerifier):
 
 mcp = FastMCP(
     name="MCP Session Bridge",
-    instructions="Shared conversation transcript bridge for Claude and ChatGPT remote MCP connectors. User context files are supplied manually outside MCP.",
+    instructions=SERVER_INSTRUCTIONS,
     token_verifier=BridgeTokenVerifier(),
     auth=AuthSettings(
         issuer_url=settings.issuer_url,
@@ -63,18 +71,8 @@ mcp = FastMCP(
     stateless_http=True,
     transport_security=TransportSecuritySettings(
         enable_dns_rebinding_protection=True,
-        allowed_hosts=[
-            "mcp.panchmurka.wtf",
-            "mcp.panchmurka.wtf:443",
-            "127.0.0.1:8787",
-            "localhost:8787",
-        ],
-        allowed_origins=[
-            "https://mcp.panchmurka.wtf",
-            "https://claude.ai",
-            "https://chatgpt.com",
-            "https://chat.openai.com",
-        ],
+        allowed_hosts=settings.transport_allowed_hosts,
+        allowed_origins=settings.transport_allowed_origins,
     ),
 )
 
@@ -305,7 +303,7 @@ def save_exchange(
     user_message: str,
     assistant_response: str,
 ) -> dict[str, Any]:
-    """Save one full Wojtek/model exchange in the shared session transcript."""
+    """Save one full user/model exchange in the shared session transcript."""
     exchange = store.save_exchange(
         session_id=session_id,
         model_name=model_name.strip() or "Unknown model",
@@ -395,7 +393,7 @@ def _new_session_id(title: str, title_is_auto: bool = False) -> str:
 
 
 def _auto_title() -> str:
-    return "Sesja " + datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")
+    return "Session " + datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")
 
 
 app = mcp.streamable_http_app()

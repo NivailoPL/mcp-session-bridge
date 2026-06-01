@@ -429,34 +429,34 @@
         <div class="brand-row">
           <div>
             <h1>MCP Admin</h1>
-            <p id="identity" class="muted">Ładowanie...</p>
+            <p id="identity" class="muted">Loading...</p>
           </div>
           <form method="post" action="/admin/logout">
-            <button type="submit">Wyloguj</button>
+            <button type="submit">Log out</button>
           </form>
         </div>
       </section>
 
       <section class="toolbar">
-        <input id="searchInput" type="search" placeholder="Szukaj sesji">
+        <input id="searchInput" type="search" placeholder="Search sessions">
         <label class="toggle">
           <input id="showDeletedToggle" type="checkbox" checked>
-          <span>Pokazuj usunięte wymiany</span>
+          <span>Show deleted exchanges</span>
         </label>
-        <p id="datasetSummary" class="muted">Brak danych.</p>
+        <p id="datasetSummary" class="muted">No data.</p>
       </section>
 
-      <nav id="sessionList" class="session-list" aria-label="Sesje"></nav>
+      <nav id="sessionList" class="session-list" aria-label="Sessions"></nav>
     </aside>
 
-    <section class="main" aria-label="Korekta sesji">
+    <section class="main" aria-label="Session correction">
       <header class="topbar">
         <div class="topbar-title">
-          <h2 id="sessionTitle">Wybierz sesję</h2>
-          <div id="sessionMeta" class="meta">Panel korekty historii rozmów.</div>
+          <h2 id="sessionTitle">Choose a session</h2>
+          <div id="sessionMeta" class="meta">Conversation history correction panel.</div>
         </div>
         <div class="top-actions">
-          <button id="refreshButton" type="button">Odśwież</button>
+          <button id="refreshButton" type="button">Refresh</button>
         </div>
       </header>
 
@@ -562,7 +562,7 @@
           localStorage.setItem("mcp-admin:selected", sessionId);
           renderSessions();
           renderExchanges();
-          setStatus(`Wybrano ${sessionId}.`, "ok");
+          setStatus(`Selected ${sessionId}.`, "ok");
         } finally {
           setBusy(false);
         }
@@ -571,7 +571,7 @@
       function renderSummary() {
         const active = state.sessions.reduce((sum, session) => sum + Number(session.exchange_count || 0), 0);
         const deleted = state.sessions.reduce((sum, session) => sum + Number(session.deleted_exchange_count || 0), 0);
-        dom.datasetSummary.textContent = `${state.sessions.length} sesji, ${active} aktywnych wymian, ${deleted} usuniętych.`;
+        dom.datasetSummary.textContent = `${state.sessions.length} sessions, ${active} active exchanges, ${deleted} deleted.`;
       }
 
       function renderSessions() {
@@ -588,7 +588,7 @@
         });
 
         if (!visible.length) {
-          dom.sessionList.append(div("empty", "Brak pasujących sesji."));
+          dom.sessionList.append(div("empty", "No matching sessions."));
           return;
         }
 
@@ -601,9 +601,9 @@
           }
           button.addEventListener("click", () => loadSession(session.session_id));
           button.append(
-            div("session-title", session.title || "Bez tytułu"),
+            div("session-title", session.title || "Untitled"),
             div("muted", session.session_id),
-            div("muted", `${session.exchange_count || 0} aktywnych · ${session.deleted_exchange_count || 0} usuniętych`)
+            div("muted", `${session.exchange_count || 0} active · ${session.deleted_exchange_count || 0} deleted`)
           );
           dom.sessionList.append(button);
         }
@@ -613,9 +613,9 @@
         dom.exchangeList.replaceChildren();
 
         if (!state.selectedSession) {
-          dom.sessionTitle.textContent = "Wybierz sesję";
-          dom.sessionMeta.textContent = "Panel korekty historii rozmów.";
-          dom.exchangeList.append(div("empty", "Brak wybranej sesji."));
+          dom.sessionTitle.textContent = "Choose a session";
+          dom.sessionMeta.textContent = "Conversation history correction panel.";
+          dom.exchangeList.append(div("empty", "No session selected."));
           return;
         }
 
@@ -624,14 +624,14 @@
         dom.sessionTitle.textContent = state.selectedSession.title || state.selectedSession.session_id;
         dom.sessionMeta.textContent = [
           state.selectedSession.session_id,
-          `${activeCount} aktywnych wymian`,
-          `${deletedCount} usuniętych`,
-          `update ${formatDate(state.selectedSession.updated_at_iso)}`,
+          `${activeCount} active exchanges`,
+          `${deletedCount} deleted`,
+          `updated ${formatDate(state.selectedSession.updated_at_iso)}`,
         ].join(" · ");
 
         const visible = state.showDeleted ? state.exchanges : state.exchanges.filter((exchange) => !exchange.is_deleted);
         if (!visible.length) {
-          dom.exchangeList.append(div("empty", "Brak wymian do wyświetlenia."));
+          dom.exchangeList.append(div("empty", "No exchanges to display."));
           return;
         }
 
@@ -654,27 +654,27 @@
           h3(`#${exchange.exchange_id} · ${exchange.model_name || "Unknown model"}`),
           div("muted", [
             exchange.assistant_created_at_display || formatDate(exchange.assistant_created_at_iso),
-            exchange.edited_at_iso ? `edytowano ${formatDate(exchange.edited_at_iso)}` : "",
-            exchange.is_deleted ? `usunięto ${formatDate(exchange.deleted_at_iso)}` : "",
+            exchange.edited_at_iso ? `edited ${formatDate(exchange.edited_at_iso)}` : "",
+            exchange.is_deleted ? `deleted ${formatDate(exchange.deleted_at_iso)}` : "",
           ].filter(Boolean).join(" · "))
         );
-        meta.append(metaText, span(`pill${exchange.is_deleted ? " deleted" : ""}`, exchange.is_deleted ? "USUNIĘTE" : "AKTYWNE"));
+        meta.append(metaText, span(`pill${exchange.is_deleted ? " deleted" : ""}`, exchange.is_deleted ? "DELETED" : "ACTIVE"));
 
         const actions = div("exchange-actions");
-        const editButton = button("Edytuj", () => {
+        const editButton = button("Edit", () => {
           state.editingExchangeId = state.editingExchangeId === exchange.exchange_id ? null : exchange.exchange_id;
           renderExchanges();
         });
         actions.append(editButton);
         if (exchange.is_deleted) {
-          actions.append(button("Przywróć", () => restoreExchange(exchange.exchange_id), "primary"));
+          actions.append(button("Restore", () => restoreExchange(exchange.exchange_id), "primary"));
         } else {
-          actions.append(button("Usuń", () => deleteExchange(exchange.exchange_id), "danger"));
+          actions.append(button("Delete", () => deleteExchange(exchange.exchange_id), "danger"));
         }
         head.append(meta, actions);
 
         if (exchange.deleted_reason) {
-          head.append(div("muted", `Powód: ${exchange.deleted_reason}`));
+          head.append(div("muted", `Reason: ${exchange.deleted_reason}`));
         }
 
         const grid = div("exchange-grid");
@@ -709,13 +709,13 @@
         modelField.append(modelInput);
 
         const grid = div("field-grid");
-        const userField = label("field", "Wiadomość użytkownika");
+        const userField = label("field", "User message");
         const userInput = document.createElement("textarea");
         userInput.name = "user_message";
         userInput.value = exchange.user_message || "";
         userField.append(userInput);
 
-        const assistantField = label("field", "Odpowiedź modelu");
+        const assistantField = label("field", "Model response");
         const assistantInput = document.createElement("textarea");
         assistantInput.name = "assistant_response";
         assistantInput.value = exchange.assistant_response || "";
@@ -724,8 +724,8 @@
 
         const actions = div("edit-actions");
         actions.append(
-          button("Zapisz", null, "primary", "submit"),
-          button("Anuluj", () => {
+          button("Save", null, "primary", "submit"),
+          button("Cancel", () => {
             state.editingExchangeId = null;
             renderExchanges();
           }, "", "button")
@@ -743,28 +743,28 @@
         await mutate(`/admin/api/exchanges/${exchangeId}`, {
           method: "PATCH",
           body: JSON.stringify(payload),
-        }, "Wymiana zapisana.");
+        }, "Exchange saved.");
       }
 
       async function deleteExchange(exchangeId) {
-        const reason = window.prompt("Powód usunięcia", "duplikat po ponownym wygenerowaniu odpowiedzi");
+        const reason = window.prompt("Deletion reason", "duplicate after regenerated response");
         if (reason === null) {
           return;
         }
-        if (!window.confirm(`Usunąć wymianę #${exchangeId} z aktywnego transcriptu?`)) {
+        if (!window.confirm(`Delete exchange #${exchangeId} from the active transcript?`)) {
           return;
         }
         await mutate(`/admin/api/exchanges/${exchangeId}`, {
           method: "DELETE",
           body: JSON.stringify({ reason }),
-        }, "Wymiana usunięta z aktywnego transcriptu.");
+        }, "Exchange removed from the active transcript.");
       }
 
       async function restoreExchange(exchangeId) {
-        if (!window.confirm(`Przywrócić wymianę #${exchangeId}?`)) {
+        if (!window.confirm(`Restore exchange #${exchangeId}?`)) {
           return;
         }
-        await mutate(`/admin/api/exchanges/${exchangeId}/restore`, { method: "POST" }, "Wymiana przywrócona.");
+        await mutate(`/admin/api/exchanges/${exchangeId}/restore`, { method: "POST" }, "Exchange restored.");
       }
 
       async function mutate(path, options, successMessage) {

@@ -17,7 +17,7 @@ from app.storage import Store  # noqa: E402
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Inspect WW-MCP saved sessions.")
+    parser = argparse.ArgumentParser(description="Inspect MCP Session Bridge saved sessions.")
     parser.add_argument("--db-path", help="Override BRIDGE_DB_PATH from .env.")
     subparsers = parser.add_subparsers(dest="command", required=True)
 

@@ -423,55 +423,55 @@
 </head>
 <body>
   <main class="app">
-    <aside class="sidebar" aria-label="Sesje">
+    <aside class="sidebar" aria-label="Sessions">
       <section class="brand">
         <h1>MCP Session Viewer</h1>
-        <p id="datasetSummary">Offline podgląd rozmów zapisanych w bridge SQLite.</p>
+        <p id="datasetSummary">Offline viewer for conversations saved in bridge SQLite.</p>
       </section>
 
-      <section class="controls" aria-label="Kontrolki">
+      <section class="controls" aria-label="Controls">
         <form id="sessionForm" class="session-form">
-          <input id="sessionInput" class="input" list="sessionOptions" autocomplete="off" placeholder="Wpisz albo wybierz session_id">
+          <input id="sessionInput" class="input" list="sessionOptions" autocomplete="off" placeholder="Type or choose session_id">
           <datalist id="sessionOptions"></datalist>
-          <button type="submit">Pokaż</button>
+          <button type="submit">Show</button>
         </form>
 
-        <input id="searchInput" class="input" type="search" autocomplete="off" placeholder="Filtruj po tytule, modelu albo ID">
+        <input id="searchInput" class="input" type="search" autocomplete="off" placeholder="Filter by title, model, or ID">
 
         <div class="actions">
-          <button id="refreshButton" type="button">Odśwież</button>
+          <button id="refreshButton" type="button">Refresh</button>
           <label class="file-button">
-            Wczytaj JSON
+            Load JSON
             <input id="fileInput" type="file" accept="application/json,.json">
           </label>
         </div>
 
         <label class="toggle-row">
           <input id="autoRefreshToggle" type="checkbox">
-          <span>Auto odświeżanie co 5 sekund</span>
+          <span>Auto-refresh every 5 seconds</span>
         </label>
 
         <p id="status" class="status" role="status"></p>
       </section>
 
-      <nav id="sessionList" class="session-list" aria-label="Lista sesji"></nav>
+      <nav id="sessionList" class="session-list" aria-label="Session list"></nav>
     </aside>
 
     <section class="main" aria-label="Transcript">
       <header class="topbar">
         <div>
-          <h2 id="sessionTitle">Wybierz sesję</h2>
-          <div id="sessionMeta" class="meta-line">Brak danych do wyświetlenia.</div>
+          <h2 id="sessionTitle">Choose a session</h2>
+          <div id="sessionMeta" class="meta-line">No data to display.</div>
         </div>
         <div class="top-actions">
           <button id="rawToggleButton" type="button">Markdown</button>
-          <button id="copyButton" class="copy-button" type="button">Kopiuj transcript</button>
+          <button id="copyButton" class="copy-button" type="button">Copy transcript</button>
         </div>
       </header>
 
       <div id="conversationWrap" class="conversation-wrap">
         <div id="emptyState" class="empty">
-          Wczytaj <strong>session-viewer-data.json</strong> albo uruchom lokalny eksport obok tego pliku HTML.
+          Load <strong>session-viewer-data.json</strong> or run a local export next to this HTML file.
         </div>
         <section id="chat" class="chat" aria-live="polite"></section>
         <section id="raw" class="raw" aria-label="Markdown transcript"><pre id="rawText"></pre></section>
@@ -546,21 +546,21 @@
       dom.rawToggleButton.addEventListener("click", () => {
         state.rawVisible = !state.rawVisible;
         dom.conversationWrap.classList.toggle("show-raw", state.rawVisible);
-        dom.rawToggleButton.textContent = state.rawVisible ? "Czat" : "Markdown";
+        dom.rawToggleButton.textContent = state.rawVisible ? "Chat" : "Markdown";
       });
 
       dom.copyButton.addEventListener("click", async () => {
         const transcript = currentTranscript();
         if (!transcript) {
-          setStatus("Nie ma transcriptu do skopiowania.", "warn");
+          setStatus("There is no transcript to copy.", "warn");
           return;
         }
 
         try {
           await navigator.clipboard.writeText(transcript.transcript_markdown || renderPlainText(transcript.turns || []));
-          setStatus("Transcript skopiowany do schowka.", "ok");
+          setStatus("Transcript copied to clipboard.", "ok");
         } catch (error) {
-          setStatus(`Nie udało się skopiować: ${error.message}`, "error");
+          setStatus(`Could not copy: ${error.message}`, "error");
         }
       });
 
@@ -577,7 +577,7 @@
       async function loadFromFetch({ silent }) {
         if (window.location.protocol === "file:") {
           if (!silent) {
-            setStatus("Otworzone jako plik lokalny. Wczytaj JSON ręcznie albo uruchom lokalny serwer statyczny.", "warn");
+            setStatus("Opened as a local file. Load JSON manually or run a local static server.", "warn");
           }
           renderAll();
           return;
@@ -591,11 +591,11 @@
           const payload = await response.json();
           setPayload(payload, "auto", null);
           if (!silent) {
-            setStatus(`Załadowano ${DATA_URL}.`, "ok");
+            setStatus(`Loaded ${DATA_URL}.`, "ok");
           }
         } catch (error) {
           if (!silent) {
-            setStatus(`Nie mogę załadować ${DATA_URL}: ${error.message}. Możesz wczytać JSON ręcznie.`, "warn");
+            setStatus(`Could not load ${DATA_URL}: ${error.message}. You can load JSON manually.`, "warn");
           }
           renderAll();
         }
@@ -610,12 +610,12 @@
               setPayload(payload, "file", file);
               setStatus(`Wczytano ${file.name}.`, "ok");
             } catch (error) {
-              setStatus(`Nieprawidłowy JSON: ${error.message}`, "error");
+              setStatus(`Invalid JSON: ${error.message}`, "error");
             }
             resolve();
           };
           reader.onerror = () => {
-            setStatus(`Nie udało się odczytać pliku: ${reader.error && reader.error.message}`, "error");
+            setStatus(`Could not read file: ${reader.error && reader.error.message}`, "error");
             resolve();
           };
           reader.readAsText(file, "utf-8");
@@ -624,7 +624,7 @@
 
       function setPayload(payload, source, file) {
         if (!payload || payload.ok !== true || !Array.isArray(payload.sessions) || typeof payload.transcripts !== "object") {
-          throw new Error("Plik nie wygląda jak eksport session viewer v1.");
+          throw new Error("File does not look like a session viewer v1 export.");
         }
 
         state.payload = payload;
@@ -663,13 +663,13 @@
 
       function renderDatasetSummary() {
         if (!state.payload) {
-          dom.datasetSummary.textContent = "Offline podgląd rozmów zapisanych w bridge SQLite.";
+          dom.datasetSummary.textContent = "Offline viewer for conversations saved in bridge SQLite.";
           return;
         }
 
         const source = state.source === "file" && state.file ? state.file.name : DATA_URL;
-        const generated = state.payload.generated_at_iso ? formatDate(state.payload.generated_at_iso) : "brak daty";
-        dom.datasetSummary.textContent = `${state.payload.session_count || 0} sesji, ${state.payload.turn_count || 0} tur. Źródło: ${source}. Aktualizacja: ${generated}.`;
+        const generated = state.payload.generated_at_iso ? formatDate(state.payload.generated_at_iso) : "no date";
+        dom.datasetSummary.textContent = `${state.payload.session_count || 0} sessions, ${state.payload.turn_count || 0} turns. Source: ${source}. Updated: ${generated}.`;
       }
 
       function renderSessionList() {
@@ -680,13 +680,13 @@
         for (const session of sessions) {
           const option = document.createElement("option");
           option.value = session.session_id;
-          option.label = `${session.title || "Bez tytułu"} (${session.exchange_count || 0})`;
+          option.label = `${session.title || "Untitled"} (${session.exchange_count || 0})`;
           dom.sessionOptions.append(option);
         }
 
         const visibleSessions = sessions.filter(matchesQuery);
         if (visibleSessions.length === 0) {
-          const empty = div("empty", state.payload ? "Brak pasujących sesji." : "Brak danych sesji.");
+          const empty = div("empty", state.payload ? "No matching sessions." : "No session data.");
           dom.sessionList.append(empty);
           return;
         }
@@ -701,9 +701,9 @@
           button.addEventListener("click", () => selectSession(session.session_id));
 
           button.append(
-            div("session-title", session.title || "Bez tytułu"),
+            div("session-title", session.title || "Untitled"),
             div("session-id", session.session_id),
-            div("session-meta", `${session.exchange_count || 0} wymian · update ${formatEpoch(session.updated_at)}`)
+            div("session-meta", `${session.exchange_count || 0} exchanges · updated ${formatEpoch(session.updated_at)}`)
           );
           dom.sessionList.append(button);
         }
@@ -716,8 +716,8 @@
 
         if (!transcript) {
           dom.emptyState.style.display = "block";
-          dom.sessionTitle.textContent = "Wybierz sesję";
-          dom.sessionMeta.textContent = state.payload ? "Wpisz session_id albo wybierz sesję z listy." : "Brak danych do wyświetlenia.";
+          dom.sessionTitle.textContent = "Choose a session";
+          dom.sessionMeta.textContent = state.payload ? "Type session_id or choose a session from the list." : "No data to display.";
           dom.sessionInput.value = state.selectedSessionId || "";
           return;
         }
@@ -728,10 +728,10 @@
         dom.sessionTitle.textContent = transcript.title || (session && session.title) || transcript.session_id;
         dom.sessionMeta.textContent = [
           transcript.session_id,
-          `${transcript.exchange_count || 0} wymian`,
-          `${transcript.turn_count || 0} tur`,
-          `context: ${transcript.context_pack_id || "brak"}`,
-          session ? `update ${formatEpoch(session.updated_at)}` : "",
+          `${transcript.exchange_count || 0} exchanges`,
+          `${transcript.turn_count || 0} turns`,
+          `context: ${transcript.context_pack_id || "none"}`,
+          session ? `updated ${formatEpoch(session.updated_at)}` : "",
         ].filter(Boolean).join(" · ");
 
         for (const turn of transcript.turns || []) {
@@ -760,17 +760,17 @@
 
       function selectSession(sessionId) {
         if (!sessionId) {
-          setStatus("Podaj session_id albo wybierz sesję z listy.", "warn");
+          setStatus("Enter session_id or choose a session from the list.", "warn");
           return;
         }
         if (!state.payload || !state.payload.transcripts[sessionId]) {
-          setStatus(`Nie znam session_id: ${sessionId}`, "error");
+          setStatus(`Unknown session_id: ${sessionId}`, "error");
           return;
         }
 
         state.selectedSessionId = sessionId;
         localStorage.setItem("mcp-session-viewer:selected", sessionId);
-        setStatus(`Wybrano ${sessionId}.`, "ok");
+        setStatus(`Selected ${sessionId}.`, "ok");
         renderAll();
       }
 

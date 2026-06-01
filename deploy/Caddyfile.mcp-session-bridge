@@ -1,5 +1,4 @@
-mcp.panchmurka.wtf {
-	bind 89.167.57.190
+your-mcp.example.com {
 	encode zstd gzip
 	reverse_proxy 127.0.0.1:8787
 }

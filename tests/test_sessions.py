@@ -3,7 +3,7 @@ import importlib
 import sys
 from datetime import datetime
 from pathlib import Path
-from zoneinfo import ZoneInfo
+from datetime import UTC
 
 import pytest
 
@@ -19,8 +19,8 @@ def test_store_saves_session_and_exchange(tmp_path) -> None:
     exchange = store.save_exchange(
         session_id=session.session_id,
         model_name="Claude",
-        user_message="Pierwsza wiadomość.",
-        assistant_response="Odpowiada model Claude. Pierwsza odpowiedź.",
+        user_message="First message.",
+        assistant_response="Response from model Claude. First answer.",
     )
 
     sessions = store.list_sessions()
@@ -29,17 +29,17 @@ def test_store_saves_session_and_exchange(tmp_path) -> None:
     assert exchange.exchange_id == 1
     assert exchange.assistant_created_at == exchange.created_at
     assert sessions[0]["exchange_count"] == 1
-    assert exchanges[0].assistant_response.startswith("Odpowiada model Claude")
+    assert exchanges[0].assistant_response.startswith("Response from model Claude")
     assert exchanges[0].assistant_created_at == exchange.assistant_created_at
 
 
 def test_store_soft_deletes_exchange_and_hides_it_from_transcript(tmp_path) -> None:
     store = Store(tmp_path / "bridge.sqlite3")
     session = store.create_session("s1", "Correction test", "manual-context")
-    first = store.save_exchange("s1", "Claude", "Pierwsza wiadomość.", "Pierwsza odpowiedź.")
-    duplicate = store.save_exchange("s1", "Claude", "Duplikat.", "Druga odpowiedź dopisana drugi raz.")
+    first = store.save_exchange("s1", "Claude", "First message.", "First answer.")
+    duplicate = store.save_exchange("s1", "Claude", "Duplicate.", "Second answer accidentally saved twice.")
 
-    deleted = store.delete_exchange(duplicate.exchange_id, reason="duplikat", actor="wojtek")
+    deleted = store.delete_exchange(duplicate.exchange_id, reason="duplicate", actor="owner")
     active_exchanges = store.list_exchanges("s1")
     all_exchanges = store.list_exchanges("s1", include_deleted=True)
     transcript = render_session_transcript(session, active_exchanges)
@@ -47,17 +47,17 @@ def test_store_soft_deletes_exchange_and_hides_it_from_transcript(tmp_path) -> N
     events = store.list_exchange_events(duplicate.exchange_id)
 
     assert deleted.deleted_at is not None
-    assert deleted.deleted_reason == "duplikat"
+    assert deleted.deleted_reason == "duplicate"
     assert [exchange.exchange_id for exchange in active_exchanges] == [first.exchange_id]
     assert all_exchanges[1].exchange_id == duplicate.exchange_id
     assert all_exchanges[1].deleted_at == deleted.deleted_at
-    assert "Druga odpowiedź dopisana drugi raz." not in transcript["transcript_markdown"]
+    assert "Second answer accidentally saved twice." not in transcript["transcript_markdown"]
     assert sessions[0]["exchange_count"] == 1
     assert sessions[0]["deleted_exchange_count"] == 1
     assert events[-1]["action"] == "delete"
-    assert events[-1]["actor"] == "wojtek"
+    assert events[-1]["actor"] == "owner"
 
-    restored = store.restore_exchange(duplicate.exchange_id, actor="wojtek")
+    restored = store.restore_exchange(duplicate.exchange_id, actor="owner")
 
     assert restored.deleted_at is None
     assert [exchange.exchange_id for exchange in store.list_exchanges("s1")] == [first.exchange_id, duplicate.exchange_id]
@@ -66,27 +66,27 @@ def test_store_soft_deletes_exchange_and_hides_it_from_transcript(tmp_path) -> N
 def test_store_edits_exchange_and_records_admin_event(tmp_path) -> None:
     store = Store(tmp_path / "bridge.sqlite3")
     session = store.create_session("s1", "Edit test", "manual-context")
-    exchange = store.save_exchange("s1", "Claude", "Stara wiadomość.", "Stara odpowiedź.")
+    exchange = store.save_exchange("s1", "Claude", "Old message.", "Old answer.")
 
     edited = store.update_exchange(
         exchange.exchange_id,
         model_name="ChatGPT",
-        user_message="Poprawiona wiadomość.",
-        assistant_response="Poprawiona odpowiedź.",
-        actor="wojtek",
+        user_message="Corrected message.",
+        assistant_response="Corrected answer.",
+        actor="owner",
     )
     transcript = render_session_transcript(session, store.list_exchanges("s1"))
     events = store.list_exchange_events(exchange.exchange_id)
 
     assert edited.model_name == "ChatGPT"
-    assert edited.user_message == "Poprawiona wiadomość."
-    assert edited.assistant_response == "Poprawiona odpowiedź."
+    assert edited.user_message == "Corrected message."
+    assert edited.assistant_response == "Corrected answer."
     assert edited.edited_at is not None
-    assert "Stara odpowiedź." not in transcript["transcript_markdown"]
-    assert "Poprawiona odpowiedź." in transcript["transcript_markdown"]
+    assert "Old answer." not in transcript["transcript_markdown"]
+    assert "Corrected answer." in transcript["transcript_markdown"]
     assert events[-1]["action"] == "edit"
-    assert events[-1]["before"]["assistant_response"] == "Stara odpowiedź."
-    assert events[-1]["after"]["assistant_response"] == "Poprawiona odpowiedź."
+    assert events[-1]["before"]["assistant_response"] == "Old answer."
+    assert events[-1]["after"]["assistant_response"] == "Corrected answer."
 
     with pytest.raises(ValueError, match="model_name"):
         store.update_exchange(exchange.exchange_id, model_name="   ")
@@ -94,39 +94,39 @@ def test_store_edits_exchange_and_records_admin_event(tmp_path) -> None:
 
 def test_store_renames_auto_titled_session_from_first_exchange(tmp_path) -> None:
     store = Store(tmp_path / "bridge.sqlite3")
-    store.create_session("s1", "Sesja 2026-05-26 18:00 UTC", "manual-context", title_is_auto=True)
+    store.create_session("s1", "Session 2026-05-26 18:00 UTC", "manual-context", title_is_auto=True)
 
     store.save_exchange(
         session_id="s1",
         model_name="ChatGPT",
-        user_message="Chcę porozmawiać o tym, jak opowiedzieć historię pracy bez korpojęzyka.",
-        assistant_response="Odpowiada model ChatGPT. Jasne.",
+        user_message="I want to discuss how to explain a work story without corporate jargon.",
+        assistant_response="Response from model ChatGPT. Sure.",
     )
 
     session = store.get_session("s1")
 
     assert session is not None
     assert not session.title_is_auto
-    assert session.title == "Chcę porozmawiać o tym, jak opowiedzieć historię pracy bez korpojęzyka"
+    assert session.title == "I want to discuss how to explain a work story without corporate jargon"
 
 
 def test_session_transcript_renders_conversation_without_context_pack(tmp_path) -> None:
     store = Store(tmp_path / "bridge.sqlite3")
     session = store.create_session("s1", "Audit test", "manual-context")
-    first_response_at = int(datetime(2026, 5, 26, 19, 21, tzinfo=ZoneInfo("Europe/Warsaw")).timestamp())
-    second_response_at = int(datetime(2026, 5, 27, 8, 21, tzinfo=ZoneInfo("Europe/Warsaw")).timestamp())
+    first_response_at = int(datetime(2026, 5, 26, 19, 21, tzinfo=UTC).timestamp())
+    second_response_at = int(datetime(2026, 5, 27, 8, 21, tzinfo=UTC).timestamp())
     store.save_exchange(
         "s1",
         "ChatGPT",
-        "Pierwsza wiadomość.",
-        "Odpowiada model ChatGPT. Pierwsza odpowiedź.",
+        "First message.",
+        "Response from model ChatGPT. First answer.",
         assistant_created_at=first_response_at,
     )
     store.save_exchange(
         "s1",
         "Claude",
-        "Druga wiadomość.",
-        "Odpowiada model Claude. Druga odpowiedź.",
+        "Second message.",
+        "Response from model Claude. Second answer.",
         assistant_created_at=second_response_at,
     )
 
@@ -137,19 +137,19 @@ def test_session_transcript_renders_conversation_without_context_pack(tmp_path) 
     assert transcript["turn_count"] == 4
     assert "context_pack_id" not in transcript["transcript_markdown"]
     assert "## Turn Sequence\n\nUSER\nChatGPT\nUSER\nClaude" in transcript["transcript_markdown"]
-    assert "### ChatGPT - 19:21 (wtorek, 26 maja 2026)" in transcript["transcript_markdown"]
-    assert "### Claude - 08:21 (środa, 27 maja 2026)" in transcript["transcript_markdown"]
-    assert "<!-- created_at_display=19:21 (wtorek, 26 maja 2026) -->" in transcript["transcript_markdown"]
-    assert "<!-- created_at_display=08:21 (środa, 27 maja 2026) -->" in transcript["transcript_markdown"]
-    assert "Pierwsza wiadomość." in transcript["transcript_markdown"]
-    assert "Odpowiada model Claude" in transcript["transcript_markdown"]
+    assert "### ChatGPT - 19:21 (Tuesday, May 26, 2026)" in transcript["transcript_markdown"]
+    assert "### Claude - 08:21 (Wednesday, May 27, 2026)" in transcript["transcript_markdown"]
+    assert "<!-- created_at_display=19:21 (Tuesday, May 26, 2026) -->" in transcript["transcript_markdown"]
+    assert "<!-- created_at_display=08:21 (Wednesday, May 27, 2026) -->" in transcript["transcript_markdown"]
+    assert "First message." in transcript["transcript_markdown"]
+    assert "Response from model Claude" in transcript["transcript_markdown"]
 
 
 def test_store_migrates_existing_exchanges_with_response_timestamp(tmp_path) -> None:
     db_path = tmp_path / "bridge.sqlite3"
     store = Store(db_path)
     session = store.create_session("s1", "Migration source", "manual-context")
-    store.save_exchange("s1", "Claude", "Stara wiadomość.", "Stara odpowiedź.")
+    store.save_exchange("s1", "Claude", "Old message.", "Old answer.")
     original_exchange = store.list_exchanges(session.session_id)[0]
 
     with store._connect() as conn:
@@ -193,8 +193,8 @@ def test_session_audit_builds_offline_viewer_payload(tmp_path) -> None:
     store.save_exchange(
         "s1",
         "ChatGPT",
-        "Pokaż mi tę rozmowę w viewerze.",
-        "Odpowiada model ChatGPT. Jasne, układam widok czatowy.",
+        "Show me this conversation in the viewer.",
+        "Response from model ChatGPT. Sure, I am building the chat view.",
     )
 
     payload = build_viewer_payload(store)
@@ -205,7 +205,7 @@ def test_session_audit_builds_offline_viewer_payload(tmp_path) -> None:
     assert payload["turn_count"] == 2
     assert payload["sessions"][0]["session_id"] == "s1"
     assert payload["transcripts"]["s1"]["turn_sequence"] == ["USER", "ChatGPT"]
-    assert payload["transcripts"]["s1"]["turns"][0]["content"] == "Pokaż mi tę rozmowę w viewerze."
+    assert payload["transcripts"]["s1"]["turns"][0]["content"] == "Show me this conversation in the viewer."
 
 
 def test_public_tools_hide_context_pack_tools(tmp_path, monkeypatch) -> None:
@@ -244,8 +244,8 @@ def test_session_overview_and_transcript_chunks_round_trip(tmp_path, monkeypatch
         main.store.save_exchange(
             "s1",
             "Claude" if index % 2 else "ChatGPT",
-            f"Wiadomość {index}\\n" + ("A" * 90),
-            f"Odpowiedź {index}\\n" + ("B" * 110),
+            f"Message {index}\\n" + ("A" * 90),
+            f"Answer {index}\\n" + ("B" * 110),
         )
 
     overview = main.get_session_overview("s1")
@@ -272,19 +272,19 @@ def test_save_session_summary_writes_markdown_file_and_lists_metadata(tmp_path, 
     main.store.create_session("s1", "Summary test", "manual-context")
 
     empty_result = main.save_session_summary("s1", "Claude", "   ")
-    unknown_result = main.save_session_summary("missing", "Claude", "## Podsumowanie")
-    success_result = main.save_session_summary("s1", "Claude", "## Podsumowanie", "Własny tytuł")
+    unknown_result = main.save_session_summary("missing", "Claude", "## Summary")
+    success_result = main.save_session_summary("s1", "Claude", "## Summary", "Custom title")
     list_result = main.list_session_summaries("s1")
 
     assert empty_result == {"ok": False, "error": "summary_markdown must not be empty"}
     assert unknown_result == {"ok": False, "error": "Unknown session_id: missing"}
     assert success_result["ok"] is True
     assert success_result["session_id"] == "s1"
-    assert success_result["title"] == "Własny tytuł"
+    assert success_result["title"] == "Custom title"
     assert success_result["model_name"] == "Claude"
-    assert Path(success_result["file_path"]).read_text(encoding="utf-8").strip() == "## Podsumowanie"
+    assert Path(success_result["file_path"]).read_text(encoding="utf-8").strip() == "## Summary"
     assert list_result["summary_count"] == 1
-    assert list_result["summaries"][0]["title"] == "Własny tytuł"
+    assert list_result["summaries"][0]["title"] == "Custom title"
     assert list_result["summaries"][0]["sha256"] == success_result["sha256"]
 
 
@@ -296,6 +296,19 @@ def test_project_prompt_documents_manual_context_and_chunk_protocol() -> None:
     assert "`save_session_summary`" in prompt
     assert "`get_session_package`" not in prompt
     assert "context pack" not in prompt.lower()
+
+
+def test_server_instructions_are_publication_ready(tmp_path, monkeypatch) -> None:
+    main = _load_main(tmp_path, monkeypatch)
+
+    assert len(main.SERVER_INSTRUCTIONS) <= 512
+    assert "MCP Session Bridge" in main.SERVER_INSTRUCTIONS
+    assert "WW" + "-MCP" not in main.SERVER_INSTRUCTIONS
+    assert "Woj" + "tek" not in main.SERVER_INSTRUCTIONS
+    assert "user" in main.SERVER_INSTRUCTIONS.lower()
+    assert "get_session_overview" in main.SERVER_INSTRUCTIONS
+    assert "get_session_transcript_chunk" in main.SERVER_INSTRUCTIONS
+    assert "save_exchange" in main.SERVER_INSTRUCTIONS
 
 
 def _load_main(tmp_path, monkeypatch, max_lines: int = 180, max_chars: int = 12000):

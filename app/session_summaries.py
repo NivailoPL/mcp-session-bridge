@@ -40,7 +40,7 @@ class SessionSummaryStore:
             raise ValueError("summary_markdown must not be empty")
 
         resolved_model = model_name.strip() or "Unknown model"
-        resolved_title = title.strip() or f"Podsumowanie sesji - {resolved_model}"
+        resolved_title = title.strip() or f"Session summary - {resolved_model}"
         created_at = int(time.time())
 
         with self._lock:
@@ -105,10 +105,10 @@ class SessionSummaryStore:
     def _summary_filename(self, session_dir: Path, created_at: int, title: str) -> str:
         stamp = time.strftime("%Y%m%d-%H%M%S", time.gmtime(created_at))
         slug = _slugify(title)
-        filename = f"{stamp}-podsumowanie-sesji-{slug}.md"
+        filename = f"{stamp}-session-summary-{slug}.md"
         suffix = 2
         while (session_dir / filename).exists():
-            filename = f"{stamp}-podsumowanie-sesji-{slug}-{suffix}.md"
+            filename = f"{stamp}-session-summary-{slug}-{suffix}.md"
             suffix += 1
         return filename
 

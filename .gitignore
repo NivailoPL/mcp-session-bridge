@@ -9,5 +9,6 @@ data/*.sqlite3
 data/*.sqlite3-*
 data/session-summaries/
 session-viewer-data*.json
+examples/output/
 secrets/*
 !secrets/.gitkeep

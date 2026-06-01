@@ -10,7 +10,7 @@ from app.security import password_hash
 def test_admin_api_requires_login_and_csrf_for_mutations(tmp_path, monkeypatch) -> None:
     main = _load_main(tmp_path, monkeypatch)
     session = main.store.create_session("s1", "Admin test", "manual-context")
-    exchange = main.store.save_exchange("s1", "Claude", "Wiadomość.", "Odpowiedź do korekty.")
+    exchange = main.store.save_exchange("s1", "Claude", "Message.", "Answer to correct.")
 
     client = TestClient(main.app, base_url="http://127.0.0.1:8787")
 
@@ -19,7 +19,7 @@ def test_admin_api_requires_login_and_csrf_for_mutations(tmp_path, monkeypatch) 
 
     login = client.post(
         "/admin/login",
-        data={"username": "wojtek", "password": "secret-admin-password", "next": "/admin/sessions"},
+        data={"username": "owner", "password": "secret-admin-password", "next": "/admin/sessions"},
         follow_redirects=False,
     )
     assert login.status_code == 303
@@ -31,13 +31,13 @@ def test_admin_api_requires_login_and_csrf_for_mutations(tmp_path, monkeypatch) 
     assert client.request(
         "DELETE",
         f"/admin/api/exchanges/{exchange.exchange_id}",
-        json={"reason": "duplikat"},
+        json={"reason": "duplicate"},
     ).status_code == 403
 
     deleted = client.request(
         "DELETE",
         f"/admin/api/exchanges/{exchange.exchange_id}",
-        json={"reason": "duplikat"},
+        json={"reason": "duplicate"},
         headers={"x-csrf-token": csrf_token},
     )
     assert deleted.status_code == 200
@@ -45,7 +45,7 @@ def test_admin_api_requires_login_and_csrf_for_mutations(tmp_path, monkeypatch) 
     assert main.store.list_exchanges(session.session_id) == []
 
     session_payload = client.get(f"/admin/api/sessions/{session.session_id}").json()
-    assert session_payload["exchanges"][0]["deleted_reason"] == "duplikat"
+    assert session_payload["exchanges"][0]["deleted_reason"] == "duplicate"
 
     restored = client.post(
         f"/admin/api/exchanges/{exchange.exchange_id}/restore",
@@ -60,7 +60,7 @@ def _load_main(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("BRIDGE_PUBLIC_BASE_URL", "https://example.test")
     monkeypatch.setenv("BRIDGE_DB_PATH", str(tmp_path / "bridge.sqlite3"))
     monkeypatch.setenv("BRIDGE_SUMMARIES_DIR", str(tmp_path / "summaries"))
-    monkeypatch.setenv("BRIDGE_OWNER_USERNAME", "wojtek")
+    monkeypatch.setenv("BRIDGE_OWNER_USERNAME", "owner")
     monkeypatch.setenv("BRIDGE_OWNER_PASSWORD_HASH", password_hash("secret-admin-password"))
     monkeypatch.setenv("BRIDGE_SECRET_KEY", "test-secret")
 

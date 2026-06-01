@@ -1,0 +1,31 @@
+{
+  "session_id": "sample-session",
+  "title": "Sample multi-model session",
+  "exchange_count": 2,
+  "turn_count": 4,
+  "turn_sequence": ["USER", "Claude", "USER", "GPT"],
+  "turns": [
+    {
+      "turn": 1,
+      "speaker": "USER",
+      "content": "We are testing whether MCP Session Bridge can keep a shared transcript across models."
+    },
+    {
+      "turn": 2,
+      "speaker": "Claude",
+      "created_at_display": "08:01 (Monday, June 1, 2026)",
+      "content": "I will start the shared session by naming the goal: preserve enough conversation history for the next model to continue without guessing."
+    },
+    {
+      "turn": 3,
+      "speaker": "USER",
+      "content": "Please continue from Claude's note and explain what the bridge should do next."
+    },
+    {
+      "turn": 4,
+      "speaker": "GPT",
+      "created_at_display": "08:02 (Monday, June 1, 2026)",
+      "content": "The bridge should expose an overview, return the transcript in bounded chunks, and save my full response before it is shown to the user."
+    }
+  ]
+}

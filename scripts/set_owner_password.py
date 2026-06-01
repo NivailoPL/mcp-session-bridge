@@ -15,7 +15,7 @@ from app.security import password_hash, token_urlsafe
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--env", default=str(ROOT / ".env"))
-    parser.add_argument("--username", default="wojtek")
+    parser.add_argument("--username", default="owner")
     parser.add_argument("--password")
     parser.add_argument("--write-once-file")
     args = parser.parse_args()
@@ -23,7 +23,7 @@ def main() -> None:
     env_path = Path(args.env)
     password = args.password or _generated_password()
     values = _read_env(env_path)
-    values.setdefault("BRIDGE_PUBLIC_BASE_URL", "https://mcp.panchmurka.wtf")
+    values.setdefault("BRIDGE_PUBLIC_BASE_URL", "http://127.0.0.1:8787")
     values.setdefault("BRIDGE_RESOURCE_PATH", "/mcp")
     values.setdefault("BRIDGE_DB_PATH", str(ROOT / "data" / "bridge.sqlite3"))
     values.setdefault("BRIDGE_SUMMARIES_DIR", str(ROOT / "data" / "session-summaries"))
@@ -37,6 +37,11 @@ def main() -> None:
     values.setdefault("BRIDGE_AUTH_CODE_SECONDS", "300")
     values.setdefault("BRIDGE_AUTH_CHALLENGE_SECONDS", "600")
     values.setdefault("BRIDGE_SCOPE", "bridge")
+    values.setdefault("BRIDGE_TRANSPORT_ALLOWED_HOSTS", "127.0.0.1:8787,localhost:8787")
+    values.setdefault(
+        "BRIDGE_TRANSPORT_ALLOWED_ORIGINS",
+        "http://127.0.0.1:8787,http://localhost:8787,https://claude.ai,https://chatgpt.com,https://chat.openai.com",
+    )
 
     _write_env(env_path, values)
     env_path.chmod(0o600)
@@ -89,6 +94,8 @@ def _write_env(path: Path, values: dict[str, str]) -> None:
         "BRIDGE_AUTH_CODE_SECONDS",
         "BRIDGE_AUTH_CHALLENGE_SECONDS",
         "BRIDGE_SCOPE",
+        "BRIDGE_TRANSPORT_ALLOWED_HOSTS",
+        "BRIDGE_TRANSPORT_ALLOWED_ORIGINS",
     ]
     lines = [f"{key}={values[key]}" for key in order if key in values]
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")

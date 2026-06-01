@@ -11,9 +11,9 @@ from typing import Any
 
 import yaml
 
-DEFAULT_PACK_NOTES = """Ten context pack nie ma dodatkowych notatek.
+DEFAULT_PACK_NOTES = """This context pack does not define additional notes.
 
-Główny protokół zachowania modelu powinien być zapisany w system prompcie projektu Claude/ChatGPT."""
+The main model behavior protocol should live in the project prompt or MCP server instructions."""
 
 
 @dataclass(frozen=True)
@@ -235,12 +235,12 @@ def _new_summary_path(index: int, session_id: str, suffix: int | None = None) ->
     stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
     slug = _slugify(session_id)
     collision_suffix = f"-{suffix}" if suffix else ""
-    return f"{index:02d}-podsumowanie-kontekstowe-{stamp}-{slug}{collision_suffix}.md"
+    return f"{index:02d}-context-summary-{stamp}-{slug}{collision_suffix}.md"
 
 
 def _default_summary_title(model_name: str) -> str:
     resolved_model = model_name.strip() or "model"
-    return f"Podsumowanie kontekstowe - {resolved_model}"
+    return f"Context summary - {resolved_model}"
 
 
 def _slugify(value: str) -> str:

@@ -43,7 +43,7 @@ def render_session_overview(
         "session_created_at": _format_ts(session.created_at),
         "session_updated_at": _format_ts(session.updated_at),
         "response_display_timezone": DISPLAY_TIMEZONE_NAME,
-        "response_display_format": "HH:MM (dzień tygodnia, D miesiąca YYYY)",
+        "response_display_format": "HH:MM (weekday, Month D, YYYY)",
         "exchange_count": transcript["exchange_count"],
         "turn_count": transcript["turn_count"],
         "transcript_char_count": transcript["char_count"],
@@ -217,7 +217,7 @@ def _render_transcript_markdown(
     turns: list[dict[str, Any]],
 ) -> str:
     parts = [
-        "# WW-MCP Session Transcript",
+        "# MCP Session Bridge Session Transcript",
         "",
         "## Metadata",
         "",
@@ -228,7 +228,7 @@ def _render_transcript_markdown(
         f"- session_created_at: {_format_ts(session.created_at)}",
         f"- session_updated_at: {_format_ts(session.updated_at)}",
         f"- response_display_timezone: {DISPLAY_TIMEZONE_NAME}",
-        "- response_display_format: HH:MM (dzień tygodnia, D miesiąca YYYY)",
+        "- response_display_format: HH:MM (weekday, Month D, YYYY)",
         "",
         "## Turn Sequence",
         "",

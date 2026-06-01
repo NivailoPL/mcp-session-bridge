@@ -771,7 +771,7 @@ def _derive_title(user_message: str) -> str:
     text = " ".join(line.strip() for line in user_message.splitlines() if line.strip())
     text = " ".join(text.split())
     if not text:
-        return "Sesja bez tytulu"
+        return "Untitled session"
     if len(text) <= 72:
         return text.rstrip(".!?")
     return text[:72].rsplit(" ", 1)[0].rstrip(".,;:!?") + "..."
