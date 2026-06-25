@@ -5,6 +5,7 @@ from pathlib import Path
 from starlette.testclient import TestClient
 
 from app.security import password_hash
+from app.time_format import DISPLAY_TIMEZONE_SETTING_KEY
 
 
 def test_admin_api_requires_login_and_csrf_for_mutations(tmp_path, monkeypatch) -> None:
@@ -54,6 +55,45 @@ def test_admin_api_requires_login_and_csrf_for_mutations(tmp_path, monkeypatch) 
     assert restored.status_code == 200
     assert restored.json()["exchange"]["is_deleted"] is False
     assert len(main.store.list_exchanges(session.session_id)) == 1
+
+
+def test_admin_can_update_display_timezone(tmp_path, monkeypatch) -> None:
+    main = _load_main(tmp_path, monkeypatch)
+    client = TestClient(main.app, base_url="http://127.0.0.1:8787")
+
+    login = client.post(
+        "/admin/login",
+        data={"username": "owner", "password": "secret-admin-password", "next": "/admin/sessions"},
+        follow_redirects=False,
+    )
+    assert login.status_code == 303
+    csrf_token = client.get("/admin/api/me").json()["csrf_token"]
+
+    invalid = client.post(
+        "/admin/api/timezone",
+        json={"timezone": "Not/AZone"},
+        headers={"x-csrf-token": csrf_token},
+    )
+    assert invalid.status_code == 400
+
+    updated = client.post(
+        "/admin/api/timezone",
+        json={"timezone": "Europe/Paris"},
+        headers={"x-csrf-token": csrf_token},
+    )
+
+    assert updated.status_code == 200
+    assert updated.json()["display_timezone"] == "Europe/Paris"
+    assert main.store.get_app_setting(DISPLAY_TIMEZONE_SETTING_KEY) == "Europe/Paris"
+    assert client.get("/admin/api/me").json()["display_timezone"] == "Europe/Paris"
+
+    legacy_updated = client.put(
+        "/admin/api/timezone",
+        json={"timezone": "UTC"},
+        headers={"x-csrf-token": csrf_token},
+    )
+    assert legacy_updated.status_code == 200
+    assert legacy_updated.json()["display_timezone"] == "UTC"
 
 
 def _load_main(tmp_path: Path, monkeypatch):

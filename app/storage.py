@@ -161,6 +161,12 @@ class Store:
                     updated_at INTEGER NOT NULL
                 );
 
+                CREATE TABLE IF NOT EXISTS app_settings (
+                    key TEXT PRIMARY KEY,
+                    value TEXT NOT NULL,
+                    updated_at INTEGER NOT NULL
+                );
+
                 CREATE TABLE IF NOT EXISTS sessions (
                     session_id TEXT PRIMARY KEY,
                     title TEXT NOT NULL,
@@ -441,6 +447,26 @@ class Store:
             "updated_by": row["updated_by"],
             "updated_at": row["updated_at"],
         }
+
+    def get_app_setting(self, key: str) -> str | None:
+        with self._lock, self._connect() as conn:
+            row = conn.execute("SELECT value FROM app_settings WHERE key = ?", (key,)).fetchone()
+        return str(row["value"]) if row else None
+
+    def set_app_setting(self, key: str, value: str) -> dict[str, Any]:
+        updated_at = int(time.time())
+        with self._lock, self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO app_settings (key, value, updated_at)
+                VALUES (?, ?, ?)
+                ON CONFLICT(key) DO UPDATE SET
+                    value = excluded.value,
+                    updated_at = excluded.updated_at
+                """,
+                (key, value, updated_at),
+            )
+        return {"key": key, "value": value, "updated_at": updated_at}
 
     def create_session(
         self,

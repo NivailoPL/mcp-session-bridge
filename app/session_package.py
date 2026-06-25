@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from app.storage import ExchangeRecord, SessionRecord
-from app.time_format import DISPLAY_TIMEZONE_NAME, format_response_timestamp, format_timestamp_iso
+from app.time_format import format_response_timestamp, format_timestamp_iso, resolve_timezone_name
 
 
 @dataclass(frozen=True)
@@ -33,8 +33,10 @@ def render_session_overview(
     exchanges: list[ExchangeRecord],
     max_lines: int,
     max_chars: int,
+    timezone_name: str | None = None,
 ) -> dict[str, Any]:
-    transcript = render_session_transcript(session, exchanges)
+    display_timezone_name = resolve_timezone_name(timezone_name)
+    transcript = render_session_transcript(session, exchanges, timezone_name=display_timezone_name)
     chunks = chunk_text(transcript["transcript_markdown"], max_lines=max_lines, max_chars=max_chars)
     return {
         "session_id": session.session_id,
@@ -42,7 +44,7 @@ def render_session_overview(
         "title_is_auto": session.title_is_auto,
         "session_created_at": _format_ts(session.created_at),
         "session_updated_at": _format_ts(session.updated_at),
-        "response_display_timezone": DISPLAY_TIMEZONE_NAME,
+        "response_display_timezone": display_timezone_name,
         "response_display_format": "HH:MM (weekday, Month D, YYYY)",
         "exchange_count": transcript["exchange_count"],
         "turn_count": transcript["turn_count"],
@@ -61,8 +63,9 @@ def render_session_transcript_chunk(
     chunk_index: int,
     max_lines: int,
     max_chars: int,
+    timezone_name: str | None = None,
 ) -> dict[str, Any]:
-    transcript = render_session_transcript(session, exchanges)
+    transcript = render_session_transcript(session, exchanges, timezone_name=timezone_name)
     chunks = chunk_text(transcript["transcript_markdown"], max_lines=max_lines, max_chars=max_chars)
     if chunk_index < 1 or chunk_index > len(chunks):
         raise ValueError(f"chunk_index must be between 1 and {len(chunks)}")
@@ -96,9 +99,11 @@ def render_session_transcript_chunk(
 def render_session_transcript(
     session: SessionRecord,
     exchanges: list[ExchangeRecord],
+    timezone_name: str | None = None,
 ) -> dict[str, Any]:
-    turns = _transcript_turns(exchanges)
-    markdown = _render_transcript_markdown(session, exchanges, turns)
+    display_timezone_name = resolve_timezone_name(timezone_name)
+    turns = _transcript_turns(exchanges, timezone_name=display_timezone_name)
+    markdown = _render_transcript_markdown(session, exchanges, turns, timezone_name=display_timezone_name)
     return {
         "session_id": session.session_id,
         "title": session.title,
@@ -180,12 +185,15 @@ def _split_lines_for_chunking(text: str, max_chars: int) -> list[dict[str, Any]]
     return segments
 
 
-def _transcript_turns(exchanges: list[ExchangeRecord]) -> list[dict[str, Any]]:
+def _transcript_turns(exchanges: list[ExchangeRecord], timezone_name: str) -> list[dict[str, Any]]:
     turns: list[dict[str, Any]] = []
     for exchange in exchanges:
         created_at = _format_ts(exchange.created_at)
         assistant_created_at = _format_ts(exchange.assistant_created_at)
-        assistant_created_at_display = format_response_timestamp(exchange.assistant_created_at)
+        assistant_created_at_display = format_response_timestamp(
+            exchange.assistant_created_at,
+            timezone_name=timezone_name,
+        )
         turns.append(
             {
                 "turn": len(turns) + 1,
@@ -215,6 +223,7 @@ def _render_transcript_markdown(
     session: SessionRecord,
     exchanges: list[ExchangeRecord],
     turns: list[dict[str, Any]],
+    timezone_name: str,
 ) -> str:
     parts = [
         "# MCP Session Bridge Session Transcript",
@@ -227,7 +236,7 @@ def _render_transcript_markdown(
         f"- turn_count: {len(turns)}",
         f"- session_created_at: {_format_ts(session.created_at)}",
         f"- session_updated_at: {_format_ts(session.updated_at)}",
-        f"- response_display_timezone: {DISPLAY_TIMEZONE_NAME}",
+        f"- response_display_timezone: {timezone_name}",
         "- response_display_format: HH:MM (weekday, Month D, YYYY)",
         "",
         "## Turn Sequence",

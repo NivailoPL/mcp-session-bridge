@@ -77,7 +77,7 @@
       mask-image: radial-gradient(1200px 800px at 30% 0%, #000 35%, transparent 78%);
     }
 
-    button, input, textarea { font: inherit; color: inherit; }
+    button, input, textarea, select { font: inherit; color: inherit; }
 
     ::selection { background: rgba(99, 102, 241, .4); color: #fff; }
 
@@ -132,13 +132,14 @@
 
     button:focus-visible,
     input:focus-visible,
-    textarea:focus-visible {
+    textarea:focus-visible,
+    select:focus-visible {
       outline: 2px solid var(--accent-2);
       outline-offset: 2px;
     }
 
     /* ---------- inputs ---------- */
-    input, textarea {
+    input, textarea, select {
       width: 100%;
       border: 1px solid var(--stroke);
       border-radius: var(--r-ctrl);
@@ -147,12 +148,13 @@
       transition: border-color .16s ease, box-shadow .16s ease, background .16s ease;
     }
     input::placeholder, textarea::placeholder { color: var(--faint-ink); }
-    input:focus, textarea:focus {
+    input:focus, textarea:focus, select:focus {
       outline: none;
       border-color: var(--accent);
       box-shadow: 0 0 0 3px var(--accent-soft);
       background: rgba(0, 0, 0, .4);
     }
+    select { min-height: 2.2rem; padding: .4rem .65rem; font-size: .78rem; }
     textarea {
       min-height: 9.5rem;
       resize: vertical;
@@ -229,17 +231,20 @@
 
     .identity-row {
       display: flex;
-      align-items: center;
+      align-items: flex-start;
       justify-content: space-between;
       gap: .6rem;
       padding: .85rem 1.2rem;
       border-bottom: 1px solid var(--stroke-soft);
     }
-    .identity-row .who { display: flex; align-items: center; gap: .6rem; min-width: 0; }
+    .identity-row .who { flex: 1 1 auto; display: flex; align-items: flex-start; gap: .6rem; min-width: 0; }
+    .identity-row .who-stack { display: grid; gap: .55rem; width: 100%; min-width: 0; }
     .identity-row .who-label { font-size: .68rem; text-transform: uppercase; letter-spacing: .14em; color: var(--faint-ink); }
     .identity-row .who-name { font-size: .86rem; font-weight: 600; overflow-wrap: anywhere; }
     .identity-row form { margin: 0; }
     .identity-row button { min-height: 2.1rem; padding: .35rem .7rem; font-size: .78rem; }
+    .timezone-field { display: grid; gap: .28rem; }
+    .timezone-field span { font-size: .66rem; text-transform: uppercase; letter-spacing: .12em; color: var(--faint-ink); }
 
     .toolbar { display: grid; gap: .7rem; padding: 1rem 1.2rem; border-bottom: 1px solid var(--stroke-soft); }
     .search-wrap { position: relative; }
@@ -507,10 +512,10 @@
     .avatar.xs { width: 22px; height: 22px; border-radius: 7px; font-size: .62rem; }
 
     /* ---------- alternate read layouts (bubbles / thread) ---------- */
-    .chat { display: grid; max-width: 62rem; margin: 0 auto; }
+    .chat { display: grid; width: 100%; max-width: 62rem; min-width: 0; margin: 0 auto; }
     .msg-meta { display: flex; align-items: baseline; gap: .5rem; font-size: .76rem; color: var(--faint-ink); }
     .msg-speaker { font-weight: 600; font-family: "Space Grotesk", sans-serif; }
-    .msg-content { overflow-wrap: anywhere; word-break: break-word; font-size: .92rem; line-height: 1.64; color: #d9dce6; }
+    .msg-content { max-width: 100%; min-width: 0; overflow-wrap: anywhere; word-break: break-word; font-size: .92rem; line-height: 1.64; color: #d9dce6; }
     .markdown-body > :first-child { margin-top: 0; }
     .markdown-body > :last-child { margin-bottom: 0; }
     .markdown-body p { margin: 0 0 .85rem; }
@@ -529,7 +534,7 @@
     }
     .markdown-body pre {
       margin: .85rem 0; padding: .75rem .85rem; border: 1px solid var(--stroke-soft); border-radius: 8px;
-      background: rgba(0, 0, 0, .35); overflow-x: auto; white-space: pre; font-family: "Geist Mono", ui-monospace, monospace; font-size: .82em; line-height: 1.55;
+      max-width: 100%; background: rgba(0, 0, 0, .35); overflow-x: auto; white-space: pre; font-family: "Geist Mono", ui-monospace, monospace; font-size: .82em; line-height: 1.55;
     }
     .markdown-body code {
       font-family: "Geist Mono", ui-monospace, monospace; font-size: .88em; border-radius: 5px; padding: .1rem .28rem;
@@ -542,7 +547,7 @@
     .chat.bubbles .message.is-user .markdown-body code { background: rgba(255, 255, 255, .18); }
     .chat.bubbles .message.is-user .markdown-body pre { background: rgba(0, 0, 0, .18); border-color: rgba(255, 255, 255, .16); }
 
-    .ex-group { display: grid; gap: .55rem; }
+    .ex-group { display: grid; gap: .55rem; min-width: 0; }
     .ex-group.is-deleted { opacity: .82; }
     .ex-actions { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
     .ex-actions button { min-height: 1.9rem; padding: .3rem .65rem; font-size: .76rem; }
@@ -551,15 +556,15 @@
 
     .chat.bubbles { gap: 1.3rem; }
     .chat.bubbles .ex-group { padding-bottom: .25rem; }
-    .chat.bubbles .message { display: grid; gap: .4rem; max-width: min(42rem, 84%); }
+    .chat.bubbles .message { display: grid; gap: .4rem; width: fit-content; max-width: min(42rem, 84%); min-width: 0; }
     .chat.bubbles .message.is-user { justify-self: end; }
     .chat.bubbles .message.is-model { justify-self: start; }
-    .chat.bubbles .row { display: flex; gap: .6rem; align-items: flex-end; }
+    .chat.bubbles .row { display: flex; gap: .6rem; align-items: flex-end; max-width: 100%; min-width: 0; }
     .chat.bubbles .message.is-user .row { flex-direction: row-reverse; }
     .chat.bubbles .message.is-user .msg-meta { justify-content: flex-end; padding-right: .2rem; }
     .chat.bubbles .message.is-model .msg-meta { padding-left: 3rem; }
     .chat.bubbles .message.is-model .msg-speaker { color: var(--m); }
-    .chat.bubbles .bubble { padding: .8rem 1rem; border-radius: 16px; border: 1px solid var(--stroke); background: var(--glass-2); box-shadow: var(--shadow-card); }
+    .chat.bubbles .bubble { max-width: 100%; min-width: 0; overflow: hidden; padding: .8rem 1rem; border-radius: 16px; border: 1px solid var(--stroke); background: var(--glass-2); box-shadow: var(--shadow-card); }
     .chat.bubbles .message.is-model .bubble { border-top-left-radius: 5px; border-left: 2px solid color-mix(in oklab, var(--m) 70%, transparent); background: color-mix(in oklab, var(--m) 7%, var(--glass-2)); }
     .chat.bubbles .message.is-user .bubble { border-top-right-radius: 5px; border-color: transparent; color: #fff; background: linear-gradient(180deg, var(--accent-2), var(--accent)); box-shadow: 0 16px 40px -16px var(--accent-glow); }
     .chat.bubbles .message.is-user .avatar { display: none; }
@@ -619,9 +624,13 @@
 
       <div class="identity-row">
         <div class="who">
-          <div>
+          <div class="who-stack">
             <div class="who-label">Signed in</div>
             <div id="identity" class="who-name">Loading...</div>
+            <label class="timezone-field">
+              <span>Timezone</span>
+              <select id="timezoneSelect" aria-label="Display timezone"></select>
+            </label>
           </div>
         </div>
         <form method="post" action="/admin/logout">
@@ -732,6 +741,7 @@
         layout: localStorage.getItem("mcp-admin:layout") || "pairs",
         rawVisible: false,
         userDisplayName: "USER",
+        displayTimezone: localStorage.getItem("mcp-admin:timezone") || "UTC",
       };
 
       const dom = {
@@ -749,6 +759,7 @@
         sessionTitle: document.getElementById("sessionTitle"),
         showDeletedToggle: document.getElementById("showDeletedToggle"),
         status: document.getElementById("status"),
+        timezoneSelect: document.getElementById("timezoneSelect"),
       };
 
       dom.refreshButton.addEventListener("click", () => refreshAll());
@@ -760,6 +771,7 @@
         state.showDeleted = dom.showDeletedToggle.checked;
         renderExchanges();
       });
+      dom.timezoneSelect.addEventListener("change", () => saveTimezone(dom.timezoneSelect.value));
       dom.layoutSeg.addEventListener("click", (event) => {
         const btn = event.target.closest("button[data-layout]");
         if (btn) setLayout(btn.dataset.layout);
@@ -780,6 +792,7 @@
         }
       });
       applyLayoutButtons();
+      populateTimezoneSelect();
 
       // offline demo store (declared before init so api() can reference it)
       const demo = { enabled: false, sessions: [], store: {} };
@@ -791,7 +804,9 @@
           const me = await api("/admin/api/me");
           state.csrfToken = me.csrf_token;
           state.userDisplayName = me.username || "USER";
+          state.displayTimezone = me.display_timezone || state.displayTimezone;
           dom.identity.textContent = state.userDisplayName;
+          populateTimezoneSelect();
           await refreshAll();
         } catch (error) {
           if (error.status === 401) {
@@ -842,6 +857,10 @@
           state.selectedSessionId = sessionId;
           state.selectedSession = payload.session;
           state.exchanges = payload.exchanges || [];
+          if (payload.display_timezone) {
+            state.displayTimezone = payload.display_timezone;
+            populateTimezoneSelect();
+          }
           localStorage.setItem("mcp-admin:selected", sessionId);
           renderSessions();
           renderExchanges();
@@ -931,6 +950,7 @@
           { mono: true, text: state.selectedSession.session_id },
           { text: `${activeCount} active exchanges` },
           { text: `${deletedCount} deleted` },
+          { text: `timezone ${state.displayTimezone}` },
           { text: `updated ${formatDate(state.selectedSession.updated_at_iso)}` },
         ]);
 
@@ -964,6 +984,95 @@
         for (const btn of dom.layoutSeg.querySelectorAll("button[data-layout]")) {
           btn.classList.toggle("is-active", btn.dataset.layout === state.layout);
         }
+      }
+
+      async function saveTimezone(timezone) {
+        const previous = state.displayTimezone;
+        let resolved = "";
+        try {
+          resolved = normalizeTimezone(timezone);
+        } catch (error) {
+          populateTimezoneSelect(previous);
+          setStatus(error.message, "error");
+          return;
+        }
+
+        setBusy(true);
+        try {
+          const payload = await api("/admin/api/timezone", {
+            method: "POST",
+            body: JSON.stringify({ timezone: resolved }),
+          });
+          state.displayTimezone = payload.display_timezone || resolved;
+          localStorage.setItem("mcp-admin:timezone", state.displayTimezone);
+          refreshDemoTimestamps();
+          populateTimezoneSelect();
+          await refreshAll();
+          setStatus(`Timezone set to ${state.displayTimezone}.`, "ok");
+        } catch (error) {
+          state.displayTimezone = previous;
+          populateTimezoneSelect();
+          const message = error.status === 404
+            ? "Timezone API is not loaded yet. Restart the bridge server, then select the timezone again."
+            : error.message;
+          setStatus(message, "error");
+        } finally {
+          setBusy(false);
+        }
+      }
+
+      function populateTimezoneSelect(selected = state.displayTimezone) {
+        const current = selected || state.displayTimezone || "UTC";
+        const browser = browserTimeZone();
+        dom.timezoneSelect.replaceChildren();
+        for (const zone of timezoneChoices(current)) {
+          const option = document.createElement("option");
+          option.value = zone;
+          option.textContent = timezoneLabel(zone, browser);
+          dom.timezoneSelect.append(option);
+        }
+        dom.timezoneSelect.value = current;
+      }
+
+      function timezoneChoices(selected) {
+        const supported = typeof Intl.supportedValuesOf === "function"
+          ? Intl.supportedValuesOf("timeZone")
+          : [];
+        const fallback = ["America/New_York", "America/Los_Angeles", "Europe/London", "Asia/Tokyo", "Australia/Sydney"];
+        const preferred = ["UTC", browserTimeZone(), selected].filter(Boolean);
+        const seen = new Set();
+        const add = (zone) => {
+          if (!zone || seen.has(zone)) return null;
+          seen.add(zone);
+          return zone;
+        };
+        const head = preferred.map(add).filter(Boolean);
+        const tail = [...supported, ...fallback]
+          .map(add)
+          .filter(Boolean)
+          .sort((a, b) => a.localeCompare(b));
+        return [...head, ...tail];
+      }
+
+      function timezoneLabel(zone, browser) {
+        const tags = [];
+        if (zone === "UTC") tags.push("default");
+        if (browser && zone === browser) tags.push("browser");
+        return tags.length ? `${zone} (${tags.join(", ")})` : zone;
+      }
+
+      function browserTimeZone() {
+        return Intl.DateTimeFormat().resolvedOptions().timeZone || "";
+      }
+
+      function normalizeTimezone(value) {
+        const zone = String(value || "").trim() || "UTC";
+        try {
+          new Intl.DateTimeFormat("en-US", { timeZone: zone }).format(new Date());
+        } catch (_) {
+          throw new Error(`Unknown timezone: ${zone}`);
+        }
+        return zone;
       }
 
       function statusPill(exchange) {
@@ -1241,6 +1350,9 @@
           buildDemoStore(data);
           demo.enabled = true;
           state.csrfToken = "demo";
+          state.displayTimezone = localStorage.getItem("mcp-admin:timezone") || browserTimeZone() || "UTC";
+          populateTimezoneSelect();
+          refreshDemoTimestamps();
           dom.identity.textContent = "owner";
           state.userDisplayName = "owner";
           dom.demoBanner.classList.add("show");
@@ -1322,12 +1434,25 @@
             exchanges,
           };
         }
+        refreshDemoTimestamps();
       }
 
       function demoApi(path, options = {}) {
         const method = (options.method || "GET").toUpperCase();
         const body = options.body ? JSON.parse(options.body) : {};
-        if (path === "/admin/api/me") return Promise.resolve({ ok: true, csrf_token: "demo", username: "owner" });
+        if (path === "/admin/api/me") {
+          return Promise.resolve({
+            ok: true,
+            csrf_token: "demo",
+            username: "owner",
+            display_timezone: state.displayTimezone,
+          });
+        }
+        if (path === "/admin/api/timezone" && (method === "POST" || method === "PUT")) {
+          state.displayTimezone = normalizeTimezone(body.timezone);
+          refreshDemoTimestamps();
+          return Promise.resolve({ ok: true, display_timezone: state.displayTimezone });
+        }
         if (path === "/admin/api/sessions") return Promise.resolve({ ok: true, sessions: demo.sessions });
 
         const single = path.match(/^\/admin\/api\/sessions\/(.+)$/);
@@ -1372,6 +1497,7 @@
       function setBusy(value) {
         state.busy = value;
         for (const node of document.querySelectorAll("button")) node.disabled = value;
+        dom.timezoneSelect.disabled = value;
       }
 
       function setStatus(message, tone) {
@@ -1385,7 +1511,44 @@
         if (!value) return "";
         const date = new Date(value);
         if (Number.isNaN(date.getTime())) return String(value);
-        return new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" }).format(date);
+        try {
+          return new Intl.DateTimeFormat("en-US", {
+            dateStyle: "medium",
+            timeStyle: "short",
+            timeZone: state.displayTimezone,
+          }).format(date);
+        } catch (_) {
+          return new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" }).format(date);
+        }
+      }
+
+      function refreshDemoTimestamps() {
+        if (!demo.enabled) return;
+        for (const key of Object.keys(demo.store)) {
+          for (const exchange of demo.store[key].exchanges || []) {
+            if (exchange.assistant_created_at_iso) {
+              exchange.assistant_created_at_display = formatBridgeTimestamp(exchange.assistant_created_at_iso);
+              exchange.assistant_created_at_timezone = state.displayTimezone;
+            }
+          }
+        }
+      }
+
+      function formatBridgeTimestamp(value) {
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) return "";
+        const options = { timeZone: state.displayTimezone };
+        const time = new Intl.DateTimeFormat("en-US", {
+          ...options,
+          hour: "2-digit",
+          minute: "2-digit",
+          hourCycle: "h23",
+        }).format(date);
+        const weekday = new Intl.DateTimeFormat("en-US", { ...options, weekday: "long" }).format(date);
+        const month = new Intl.DateTimeFormat("en-US", { ...options, month: "long" }).format(date);
+        const day = new Intl.DateTimeFormat("en-US", { ...options, day: "numeric" }).format(date);
+        const year = new Intl.DateTimeFormat("en-US", { ...options, year: "numeric" }).format(date);
+        return `${time} (${weekday}, ${month} ${day}, ${year})`;
       }
 
       function userDisplayName() {

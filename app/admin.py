@@ -15,7 +15,13 @@ from starlette.responses import HTMLResponse, JSONResponse, RedirectResponse, Re
 from app.security import token_urlsafe, verify_password
 from app.settings import Settings
 from app.storage import ExchangeRecord, SessionRecord, Store
-from app.time_format import format_response_timestamp, format_timestamp_iso
+from app.time_format import (
+    DEFAULT_DISPLAY_TIMEZONE_NAME,
+    DISPLAY_TIMEZONE_SETTING_KEY,
+    format_response_timestamp,
+    format_timestamp_iso,
+    resolve_timezone_name,
+)
 
 ADMIN_COOKIE = "mcp_bridge_admin"
 ADMIN_SESSION_SECONDS = 12 * 60 * 60
@@ -75,13 +81,38 @@ class AdminHandlers:
         session, error = self._require_admin(request)
         if error:
             return error
+        display_timezone = self._display_timezone_name()
         return JSONResponse(
             {
                 "ok": True,
                 "username": session["username"],
                 "csrf_token": session["csrf"],
                 "expires_at": session["exp"],
+                "display_timezone": display_timezone,
             },
+            headers=self._no_store_headers(),
+        )
+
+    async def api_update_timezone(self, request: Request) -> Response:
+        _, error = self._require_admin_mutation(request)
+        if error:
+            return error
+
+        payload, parse_error = await _json_body(request)
+        if parse_error:
+            return parse_error
+        timezone_value = payload.get("timezone")
+        if not isinstance(timezone_value, str):
+            return self._json_error("timezone must be a string.", status_code=400)
+
+        try:
+            display_timezone = resolve_timezone_name(timezone_value)
+        except ValueError as exc:
+            return self._json_error(str(exc), status_code=400)
+
+        self.store.set_app_setting(DISPLAY_TIMEZONE_SETTING_KEY, display_timezone)
+        return JSONResponse(
+            {"ok": True, "display_timezone": display_timezone},
             headers=self._no_store_headers(),
         )
 
@@ -108,11 +139,16 @@ class AdminHandlers:
             return self._json_error(f"Unknown session_id: {session_id}", status_code=404)
 
         exchanges = self.store.list_exchanges(session.session_id, include_deleted=True)
+        display_timezone = self._display_timezone_name()
         return JSONResponse(
             {
                 "ok": True,
+                "display_timezone": display_timezone,
                 "session": _session_payload(session),
-                "exchanges": [_exchange_payload(exchange) for exchange in exchanges],
+                "exchanges": [
+                    _exchange_payload(exchange, timezone_name=display_timezone)
+                    for exchange in exchanges
+                ],
             },
             headers=self._no_store_headers(),
         )
@@ -141,7 +177,10 @@ class AdminHandlers:
             exchange = self.store.update_exchange(exchange_id, actor=session["username"], **fields)
         except ValueError as exc:
             return self._value_error(exc)
-        return JSONResponse({"ok": True, "exchange": _exchange_payload(exchange)}, headers=self._no_store_headers())
+        return JSONResponse(
+            {"ok": True, "exchange": _exchange_payload(exchange, timezone_name=self._display_timezone_name())},
+            headers=self._no_store_headers(),
+        )
 
     async def api_delete_exchange(self, request: Request) -> Response:
         session, error = self._require_admin_mutation(request)
@@ -160,7 +199,10 @@ class AdminHandlers:
             exchange = self.store.delete_exchange(exchange_id, reason=reason, actor=session["username"])
         except ValueError as exc:
             return self._value_error(exc)
-        return JSONResponse({"ok": True, "exchange": _exchange_payload(exchange)}, headers=self._no_store_headers())
+        return JSONResponse(
+            {"ok": True, "exchange": _exchange_payload(exchange, timezone_name=self._display_timezone_name())},
+            headers=self._no_store_headers(),
+        )
 
     async def api_restore_exchange(self, request: Request) -> Response:
         session, error = self._require_admin_mutation(request)
@@ -174,7 +216,10 @@ class AdminHandlers:
             exchange = self.store.restore_exchange(exchange_id, actor=session["username"])
         except ValueError as exc:
             return self._value_error(exc)
-        return JSONResponse({"ok": True, "exchange": _exchange_payload(exchange)}, headers=self._no_store_headers())
+        return JSONResponse(
+            {"ok": True, "exchange": _exchange_payload(exchange, timezone_name=self._display_timezone_name())},
+            headers=self._no_store_headers(),
+        )
 
     def _require_admin(self, request: Request) -> tuple[dict[str, Any], Response | None]:
         session = self._read_cookie(request)
@@ -224,6 +269,13 @@ class AdminHandlers:
 
     def _signature(self, data: str) -> str:
         return hmac.new(self.settings.secret_key.encode("utf-8"), data.encode("utf-8"), hashlib.sha256).hexdigest()
+
+    def _display_timezone_name(self) -> str:
+        try:
+            return resolve_timezone_name(self.store.get_app_setting(DISPLAY_TIMEZONE_SETTING_KEY))
+        except ValueError:
+            self.store.set_app_setting(DISPLAY_TIMEZONE_SETTING_KEY, DEFAULT_DISPLAY_TIMEZONE_NAME)
+            return DEFAULT_DISPLAY_TIMEZONE_NAME
 
     def _login_form(self, next_path: str, error: str | None = None, status_code: int = 200) -> HTMLResponse:
         error_html = f'<p class="error">{html.escape(error)}</p>' if error else ""
@@ -340,7 +392,7 @@ def _session_payload(session: SessionRecord) -> dict[str, Any]:
     }
 
 
-def _exchange_payload(exchange: ExchangeRecord) -> dict[str, Any]:
+def _exchange_payload(exchange: ExchangeRecord, timezone_name: str | None = None) -> dict[str, Any]:
     return {
         "exchange_id": exchange.exchange_id,
         "session_id": exchange.session_id,
@@ -349,7 +401,11 @@ def _exchange_payload(exchange: ExchangeRecord) -> dict[str, Any]:
         "assistant_response": exchange.assistant_response,
         "assistant_created_at": exchange.assistant_created_at,
         "assistant_created_at_iso": format_timestamp_iso(exchange.assistant_created_at),
-        "assistant_created_at_display": format_response_timestamp(exchange.assistant_created_at),
+        "assistant_created_at_display": format_response_timestamp(
+            exchange.assistant_created_at,
+            timezone_name=timezone_name,
+        ),
+        "assistant_created_at_timezone": resolve_timezone_name(timezone_name),
         "created_at": exchange.created_at,
         "created_at_iso": format_timestamp_iso(exchange.created_at),
         "deleted_at": exchange.deleted_at,

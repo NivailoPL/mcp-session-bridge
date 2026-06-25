@@ -8,6 +8,7 @@ from datetime import UTC
 import pytest
 
 from app.session_package import render_session_transcript
+from app.time_format import DISPLAY_TIMEZONE_SETTING_KEY
 from app.storage import Store
 from scripts.session_audit import build_viewer_payload
 
@@ -145,6 +146,24 @@ def test_session_transcript_renders_conversation_without_context_pack(tmp_path) 
     assert "Response from model Claude" in transcript["transcript_markdown"]
 
 
+def test_session_transcript_uses_configured_display_timezone(tmp_path) -> None:
+    store = Store(tmp_path / "bridge.sqlite3")
+    session = store.create_session("s1", "Timezone test", "manual-context")
+    response_at = int(datetime(2026, 5, 26, 19, 21, tzinfo=UTC).timestamp())
+    store.save_exchange(
+        "s1",
+        "ChatGPT",
+        "First message.",
+        "Response from model ChatGPT. First answer.",
+        assistant_created_at=response_at,
+    )
+
+    transcript = render_session_transcript(session, store.list_exchanges("s1"), timezone_name="Europe/Paris")
+
+    assert "response_display_timezone: Europe/Paris" in transcript["transcript_markdown"]
+    assert "### ChatGPT - 21:21 (Tuesday, May 26, 2026)" in transcript["transcript_markdown"]
+
+
 def test_store_migrates_existing_exchanges_with_response_timestamp(tmp_path) -> None:
     db_path = tmp_path / "bridge.sqlite3"
     store = Store(db_path)
@@ -265,6 +284,25 @@ def test_session_overview_and_transcript_chunks_round_trip(tmp_path, monkeypatch
     assert "".join(chunk["transcript_markdown"] for chunk in chunks) == full_transcript
     assert chunks[-1]["has_more"] is False
     assert chunks[-1]["next_chunk_index"] is None
+
+
+def test_display_timezone_setting_controls_mcp_timestamps(tmp_path, monkeypatch) -> None:
+    main = _load_main(tmp_path, monkeypatch)
+    main.store.set_app_setting(DISPLAY_TIMEZONE_SETTING_KEY, "Europe/Paris")
+    main.store.create_session("s1", "Timezone setting", "manual-context")
+
+    result = main.save_exchange(
+        "s1",
+        "ChatGPT",
+        "First message.",
+        "Response from model ChatGPT. First answer.",
+    )
+    overview = main.get_session_overview("s1")
+    chunk = main.get_session_transcript_chunk("s1", 1)
+
+    assert result["assistant_created_at_timezone"] == "Europe/Paris"
+    assert overview["response_display_timezone"] == "Europe/Paris"
+    assert "response_display_timezone: Europe/Paris" in chunk["transcript_markdown"]
 
 
 def test_save_session_summary_writes_markdown_file_and_lists_metadata(tmp_path, monkeypatch) -> None:

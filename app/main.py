@@ -21,7 +21,12 @@ from app.session_package import render_session_overview, render_session_transcri
 from app.session_summaries import SessionSummaryStore
 from app.settings import ROOT, load_settings
 from app.storage import Store
-from app.time_format import DISPLAY_TIMEZONE_NAME, format_response_timestamp
+from app.time_format import (
+    DEFAULT_DISPLAY_TIMEZONE_NAME,
+    DISPLAY_TIMEZONE_SETTING_KEY,
+    format_response_timestamp,
+    resolve_timezone_name,
+)
 
 MANUAL_CONTEXT_ID = "manual-context"
 SERVER_INSTRUCTIONS = (
@@ -150,6 +155,11 @@ async def admin_api_me(request: Request) -> Response:
     return await admin.api_me(request)
 
 
+@mcp.custom_route("/admin/api/timezone", methods=["POST", "PUT"])
+async def admin_api_update_timezone(request: Request) -> Response:
+    return await admin.api_update_timezone(request)
+
+
 @mcp.custom_route("/admin/api/sessions", methods=["GET"])
 async def admin_api_sessions(request: Request) -> Response:
     return await admin.api_sessions(request)
@@ -263,6 +273,7 @@ def get_session_overview(session_id: str) -> dict[str, Any]:
         return {"ok": False, "error": f"Unknown session_id: {session_id}"}
     exchanges = store.list_exchanges(session.session_id)
     summaries = summary_store.list_summaries(session.session_id)
+    display_timezone = _display_timezone_name()
     return {
         "ok": True,
         "context_source": "manual",
@@ -272,6 +283,7 @@ def get_session_overview(session_id: str) -> dict[str, Any]:
             exchanges,
             max_lines=settings.transcript_chunk_max_lines,
             max_chars=settings.transcript_chunk_max_chars,
+            timezone_name=display_timezone,
         ),
     }
 
@@ -283,6 +295,7 @@ def get_session_transcript_chunk(session_id: str, chunk_index: int = 1) -> dict[
     if session is None:
         return {"ok": False, "error": f"Unknown session_id: {session_id}"}
     exchanges = store.list_exchanges(session.session_id)
+    display_timezone = _display_timezone_name()
     try:
         chunk = render_session_transcript_chunk(
             session,
@@ -290,6 +303,7 @@ def get_session_transcript_chunk(session_id: str, chunk_index: int = 1) -> dict[
             chunk_index=chunk_index,
             max_lines=settings.transcript_chunk_max_lines,
             max_chars=settings.transcript_chunk_max_chars,
+            timezone_name=display_timezone,
         )
     except ValueError as exc:
         return {"ok": False, "error": str(exc)}
@@ -310,6 +324,7 @@ def save_exchange(
         user_message=user_message.strip(),
         assistant_response=assistant_response.strip(),
     )
+    display_timezone = _display_timezone_name()
     return {
         "ok": True,
         "exchange_id": exchange.exchange_id,
@@ -318,8 +333,11 @@ def save_exchange(
         "user_message_chars": len(exchange.user_message),
         "assistant_response_chars": len(exchange.assistant_response),
         "assistant_created_at": exchange.assistant_created_at,
-        "assistant_created_at_display": format_response_timestamp(exchange.assistant_created_at),
-        "assistant_created_at_timezone": DISPLAY_TIMEZONE_NAME,
+        "assistant_created_at_display": format_response_timestamp(
+            exchange.assistant_created_at,
+            timezone_name=display_timezone,
+        ),
+        "assistant_created_at_timezone": display_timezone,
         "created_at": exchange.created_at,
     }
 
@@ -394,6 +412,14 @@ def _new_session_id(title: str, title_is_auto: bool = False) -> str:
 
 def _auto_title() -> str:
     return "Session " + datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")
+
+
+def _display_timezone_name() -> str:
+    try:
+        return resolve_timezone_name(store.get_app_setting(DISPLAY_TIMEZONE_SETTING_KEY))
+    except ValueError:
+        store.set_app_setting(DISPLAY_TIMEZONE_SETTING_KEY, DEFAULT_DISPLAY_TIMEZONE_NAME)
+        return DEFAULT_DISPLAY_TIMEZONE_NAME
 
 
 app = mcp.streamable_http_app()

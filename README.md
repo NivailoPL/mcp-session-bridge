@@ -94,6 +94,8 @@ Typical model flow:
 5. Call `save_exchange` before showing the response to the user.
 6. If the user asks for a summary, save it with `save_session_summary`.
 
+`get_session_overview` returns `response_display_timezone` for the configured bridge display timezone. `save_exchange` returns `assistant_created_at_display` and `assistant_created_at_timezone`; use that returned display timestamp as the user-visible response timestamp. The bridge renders response display timestamps in the configured bridge display timezone, UTC by default, so clients should not convert that value into their own local timezone.
+
 ## Documentation
 
 - [Installation](docs/installation.md)

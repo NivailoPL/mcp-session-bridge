@@ -16,6 +16,10 @@ When a `session_id` is known:
 4. Only answer after the required transcript chunks are available.
 5. Before showing the final response to the user, call `save_exchange`.
 
+## Response Timestamps
+
+Read `response_display_timezone` from `get_session_overview` when you need to know the bridge display timezone before saving a response. `save_exchange` returns `assistant_created_at_display` and `assistant_created_at_timezone`; treat those returned values as authoritative for the user-visible response header. Do not convert them into the user's local timezone. MCP Session Bridge renders response display timestamps in the configured bridge display timezone, UTC by default.
+
 If the user asks for a summary:
 
 1. Prepare the user-facing response.
