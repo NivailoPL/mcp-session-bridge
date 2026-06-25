@@ -149,8 +149,8 @@ class OAuthHandlers:
         if not code_challenge:
             return self._oauth_error("invalid_request", "code_challenge is required", 400)
 
-        resource = params.get("resource")
-        if resource and resource.rstrip("/") != self.settings.resource_url.rstrip("/"):
+        resource = self._canonical_resource(params.get("resource"))
+        if resource is None:
             return self._oauth_error("invalid_target", "unsupported resource", 400)
 
         scopes = self._normalize_scopes(params.get("scope") or client.scope)
@@ -166,7 +166,7 @@ class OAuthHandlers:
                 scope=" ".join(scopes),
                 state=params.get("state"),
                 code_challenge=code_challenge,
-                resource=resource or self.settings.resource_url,
+                resource=resource,
                 expires_at=int(time.time()) + self.settings.auth_challenge_seconds,
             )
         )
@@ -329,6 +329,20 @@ class OAuthHandlers:
         if self.settings.scope not in scopes:
             return None
         return scopes
+
+    def _canonical_resource(self, resource: Any) -> str | None:
+        if not resource:
+            return self.settings.resource_url
+
+        requested = str(resource).rstrip("/")
+        allowed = {
+            self.settings.resource_url.rstrip("/"),
+            self.settings.public_base_url.rstrip("/"),
+            self.settings.issuer_url.rstrip("/"),
+        }
+        if requested not in allowed:
+            return None
+        return self.settings.resource_url
 
     def _login_form(self, challenge: str, error: str | None = None, status_code: int = 200) -> HTMLResponse:
         escaped_challenge = html.escape(challenge, quote=True)
