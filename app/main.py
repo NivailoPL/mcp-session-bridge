@@ -31,11 +31,11 @@ from app.time_format import (
 MANUAL_CONTEXT_ID = "manual-context"
 SERVER_INSTRUCTIONS = (
     "MCP Session Bridge is a shared transcript bridge for multi-model conversations. "
-    "User context files are supplied manually outside MCP. If a session_id is known, "
-    "call get_session_overview, then fetch every get_session_transcript_chunk before "
-    "answering. Before showing a final answer for an active session, call save_exchange "
-    "with the full user message and full assistant response. Use list_session_groups before "
-    "create_session; use list_sessions to find an existing session."
+    "User context is supplied manually outside MCP. With a known session_id, call "
+    "get_session_overview, then get_last_speaker; fetch every get_session_transcript_chunk before "
+    "answering unless get_last_speaker says you wrote the last turn and still have it locally. "
+    "Always call save_exchange with the full user message and response before answering. Use "
+    "list_session_groups before create_session; list_sessions finds a session."
 )
 
 settings = load_settings()
@@ -360,6 +360,38 @@ def get_session_transcript_chunk(session_id: str, chunk_index: int = 1) -> dict[
     except ValueError as exc:
         return {"ok": False, "error": str(exc)}
     return {"ok": True, **chunk}
+
+
+@mcp.tool()
+def get_last_speaker(session_id: str, model_name: str = "") -> dict[str, Any]:
+    """Report who saved the latest turn so a continuing model can skip re-fetching transcript chunks it already holds. Call after get_session_overview and before get_session_transcript_chunk."""
+    session = store.get_session(session_id)
+    if session is None:
+        return {"ok": False, "error": f"Unknown session_id: {session_id}"}
+    latest = store.get_latest_exchange(session_id)
+    has_exchanges = latest is not None
+    caller_name = model_name.strip()
+    latest_name = latest.model_name if latest is not None else None
+    same_model = (
+        bool(caller_name)
+        and latest_name is not None
+        and caller_name.casefold() == latest_name.casefold()
+    )
+    should_fetch_transcript = not (has_exchanges and same_model)
+    return {
+        "ok": True,
+        "session_exists": True,
+        "has_exchanges": has_exchanges,
+        "latest_model_name": latest_name,
+        "caller_model_name": caller_name,
+        "same_model": same_model,
+        "should_fetch_transcript": should_fetch_transcript,
+        "guidance": (
+            "Skipping transcript chunks is only safe when you are the same model in the same "
+            "chat window with the previous turn still in your local context. If unsure, fetch the "
+            "chunks. Always call save_exchange before showing your response."
+        ),
+    }
 
 
 @mcp.tool()
