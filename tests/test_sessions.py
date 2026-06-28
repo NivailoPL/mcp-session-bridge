@@ -106,6 +106,26 @@ def test_store_soft_deletes_exchange_and_hides_it_from_transcript(tmp_path) -> N
     assert [exchange.exchange_id for exchange in store.list_exchanges("s1")] == [first.exchange_id, duplicate.exchange_id]
 
 
+def test_get_latest_exchange_returns_newest_active_exchange(tmp_path) -> None:
+    store = Store(tmp_path / "bridge.sqlite3")
+    store.create_session("s1", "Latest speaker", "manual-context")
+
+    assert store.get_latest_exchange("s1") is None
+
+    store.save_exchange("s1", "Claude", "First.", "First answer.")
+    second = store.save_exchange("s1", "ChatGPT", "Second.", "Second answer.")
+
+    latest = store.get_latest_exchange("s1")
+    assert latest is not None
+    assert latest.exchange_id == second.exchange_id
+    assert latest.model_name == "ChatGPT"
+
+    store.delete_exchange(second.exchange_id, reason="cleanup", actor="owner")
+    after_delete = store.get_latest_exchange("s1")
+    assert after_delete is not None
+    assert after_delete.model_name == "Claude"
+
+
 def test_store_edits_exchange_and_records_admin_event(tmp_path) -> None:
     store = Store(tmp_path / "bridge.sqlite3")
     session = store.create_session("s1", "Edit test", "manual-context")
@@ -275,6 +295,7 @@ def test_public_tools_hide_context_pack_tools(tmp_path, monkeypatch) -> None:
     tool_names = _tool_names(main)
 
     assert "get_session_overview" in tool_names
+    assert "get_last_speaker" in tool_names
     assert "get_session_transcript_chunk" in tool_names
     assert "list_session_groups" in tool_names
     assert "upload_session_file" in tool_names
@@ -288,6 +309,41 @@ def test_public_tools_hide_context_pack_tools(tmp_path, monkeypatch) -> None:
     assert "get_session_transcript" not in tool_names
     assert "save_context_summary" not in tool_names
     assert "export_session_markdown" not in tool_names
+
+
+def test_get_last_speaker_reports_continuity_decision(tmp_path, monkeypatch) -> None:
+    main = _load_main(tmp_path, monkeypatch)
+    main.store.create_session("s1", "Continuity", "manual-context")
+
+    unknown = main.get_last_speaker("missing", "Claude")
+    assert unknown["ok"] is False
+
+    empty = main.get_last_speaker("s1", "Claude")
+    assert empty["ok"] is True
+    assert empty["has_exchanges"] is False
+    assert empty["latest_model_name"] is None
+    assert empty["should_fetch_transcript"] is True
+
+    main.store.save_exchange("s1", "Claude", "Hi.", "Hello from Claude.")
+
+    same = main.get_last_speaker("s1", "claude")
+    assert same["same_model"] is True
+    assert same["should_fetch_transcript"] is False
+    assert same["latest_model_name"] == "Claude"
+
+    diff = main.get_last_speaker("s1", "ChatGPT")
+    assert diff["same_model"] is False
+    assert diff["should_fetch_transcript"] is True
+
+    blank = main.get_last_speaker("s1", "")
+    assert blank["same_model"] is False
+    assert blank["should_fetch_transcript"] is True
+
+    second = main.store.save_exchange("s1", "ChatGPT", "More.", "Reply from ChatGPT.")
+    main.store.delete_exchange(second.exchange_id, reason="cleanup", actor="owner")
+    after_delete = main.get_last_speaker("s1", "Claude")
+    assert after_delete["latest_model_name"] == "Claude"
+    assert after_delete["should_fetch_transcript"] is False
 
 
 def test_create_session_works_without_context_pack_manifest(tmp_path, monkeypatch) -> None:
@@ -414,6 +470,7 @@ def test_project_prompt_documents_manual_context_and_chunk_protocol() -> None:
     prompt = Path("docs/project-prompt-template.md").read_text(encoding="utf-8")
 
     assert "`get_session_overview`" in prompt
+    assert "`get_last_speaker`" in prompt
     assert "`get_session_transcript_chunk`" in prompt
     assert "`list_session_groups`" in prompt
     assert "`save_session_summary`" in prompt
@@ -433,6 +490,7 @@ def test_server_instructions_are_publication_ready(tmp_path, monkeypatch) -> Non
     assert "Woj" + "tek" not in main.SERVER_INSTRUCTIONS
     assert "user" in main.SERVER_INSTRUCTIONS.lower()
     assert "get_session_overview" in main.SERVER_INSTRUCTIONS
+    assert "get_last_speaker" in main.SERVER_INSTRUCTIONS
     assert "get_session_transcript_chunk" in main.SERVER_INSTRUCTIONS
     assert "list_session_groups" in main.SERVER_INSTRUCTIONS
     assert "save_exchange" in main.SERVER_INSTRUCTIONS

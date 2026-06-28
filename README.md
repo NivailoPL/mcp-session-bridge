@@ -81,6 +81,7 @@ http://127.0.0.1:8787/mcp
 | `create_session` | Creates a new conversation session. |
 | `list_sessions` | Lists saved sessions. |
 | `get_session_overview` | Returns session metadata and transcript chunk information. |
+| `get_last_speaker` | Reports who saved the last turn so a continuing model can skip re-fetching chunks. |
 | `get_session_transcript_chunk` | Returns one bounded transcript chunk. |
 | `save_exchange` | Saves one full user/model exchange. |
 | `save_session_summary` | Saves a Markdown summary for a session. |
@@ -94,8 +95,8 @@ Typical model flow:
 
 1. Establish the right `session_id` with `create_session` or `list_sessions`.
    For a new session, call `list_session_groups` first and pass a valid `group_id` when the user names a group. Omit `group_id` to use `uncategorized`.
-2. Call `get_session_overview`.
-3. Fetch every `get_session_transcript_chunk` from `1` through `transcript_chunk_count`.
+2. Call `get_session_overview`, then `get_last_speaker` with your own `model_name`.
+3. If `get_last_speaker` reports that you saved the last turn and you are still in the same chat window, you may skip the chunk fetch; otherwise fetch every `get_session_transcript_chunk` from `1` through `transcript_chunk_count`.
 4. Prepare the response.
 5. Call `save_exchange` before showing the response to the user.
 6. If the user asks for a summary, save it with `save_session_summary`.

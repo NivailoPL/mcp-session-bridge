@@ -34,7 +34,7 @@ BEFORE ANSWERING:
 
 1. If a `session_id` is established, call `get_session_overview` before answering the user.
 2. From `get_session_overview`, read `transcript_chunk_count`, `transcript_sha256`, exchange and turn counts, and the chunk limits.
-3. Then fetch the full transcript with `get_session_transcript_chunk`, from `chunk_index=1` through `chunk_index=transcript_chunk_count`.
+3. Call `get_last_speaker` with your own `model_name` to learn who saved the last turn. If it returns `should_fetch_transcript: false` (you saved that turn) and you are still in the same chat window with it in your local context, you may skip the transcript fetch and answer from local context. In any other case — a different or unknown last speaker, a fresh window, or any doubt — fetch the full transcript with `get_session_transcript_chunk`, from `chunk_index=1` through `chunk_index=transcript_chunk_count`.
 4. Do not assume one tool call is enough for a long conversation. If `has_more` is true, fetch the next chunk.
 5. Do not start drafting, outlining, planning, or composing the user-facing answer until every required transcript chunk has been fetched and checked. The latest chunks may change the answer.
 6. Only answer substantively after all required transcript chunks have been fetched.
@@ -45,7 +45,7 @@ BEFORE ANSWERING:
 SAVING THE RESPONSE:
 
 1. Prepare the full final response for the user.
-2. Before showing it to the user, call `save_exchange`.
+2. Before showing it to the user, call `save_exchange`. This is required on every turn, even when you skipped the transcript fetch after a `get_last_speaker` check.
 3. In `save_exchange`, save:
    - `session_id`: the established ID for this conversation,
    - `model_name`: your own model name, for example ChatGPT, Codex, Claude, or Gemini,
