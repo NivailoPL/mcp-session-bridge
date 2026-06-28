@@ -250,6 +250,22 @@ class AdminHandlers:
             headers=self._no_store_headers(),
         )
 
+    async def api_file(self, request: Request) -> Response:
+        _, error = self._require_admin(request)
+        if error:
+            return error
+        try:
+            file_id = int(request.path_params["file_id"])
+        except (KeyError, TypeError, ValueError):
+            return self._json_error("Invalid file_id.", status_code=400)
+        saved = self.store.get_session_file(file_id)
+        if saved is None:
+            return self._json_error(f"Unknown file_id: {file_id}", status_code=404)
+        return JSONResponse(
+            {"ok": True, "file": _session_file_payload(saved, include_content=True)},
+            headers=self._no_store_headers(),
+        )
+
     async def api_update_exchange(self, request: Request) -> Response:
         session, error = self._require_admin_mutation(request)
         if error:
@@ -504,8 +520,8 @@ def _session_group_payload(group: SessionGroupRecord) -> dict[str, Any]:
     }
 
 
-def _session_file_payload(file: SessionFileRecord) -> dict[str, Any]:
-    return {
+def _session_file_payload(file: SessionFileRecord, include_content: bool = False) -> dict[str, Any]:
+    payload = {
         "file_id": file.file_id,
         "scope_type": file.scope_type,
         "session_id": file.session_id,
@@ -517,6 +533,9 @@ def _session_file_payload(file: SessionFileRecord) -> dict[str, Any]:
         "created_by": file.created_by,
         "created_at": file.created_at,
     }
+    if include_content:
+        payload["content"] = file.content
+    return payload
 
 
 def _exchange_payload(exchange: ExchangeRecord, timezone_name: str | None = None) -> dict[str, Any]:

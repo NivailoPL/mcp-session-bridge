@@ -404,6 +404,37 @@
     .demo-banner.show { display: flex; }
     .demo-banner b { color: #fff; font-weight: 600; }
 
+    /* ---------- files ---------- */
+    .files-panel {
+      display: grid; gap: .8rem;
+      padding: 1rem;
+      border: 1px solid var(--stroke);
+      border-radius: var(--r-card);
+      background: var(--glass);
+      box-shadow: var(--shadow-card);
+      -webkit-backdrop-filter: blur(16px) saturate(130%);
+      backdrop-filter: blur(16px) saturate(130%);
+    }
+    .files-panel.is-empty { display: none; }
+    .files-head { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; }
+    .files-head h3 { margin: 0; font-family: "Space Grotesk", sans-serif; font-size: 1rem; font-weight: 600; }
+    .files-head span { color: var(--muted); font-size: .78rem; }
+    .files-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .8rem; }
+    .file-bucket { display: grid; gap: .45rem; min-width: 0; }
+    .file-bucket-title { font-size: .68rem; text-transform: uppercase; letter-spacing: .14em; color: var(--faint-ink); }
+    .file-list { display: grid; gap: .4rem; }
+    .file-button {
+      width: 100%; min-height: auto; justify-content: flex-start; text-align: left;
+      padding: .65rem .75rem; border-radius: 10px; background: rgba(0, 0, 0, .2);
+      -webkit-backdrop-filter: none; backdrop-filter: none;
+    }
+    .file-row { display: flex; align-items: center; gap: .6rem; width: 100%; min-width: 0; }
+    .file-icon { width: 2rem; height: 2rem; border-radius: 9px; display: grid; place-items: center; flex: 0 0 auto; color: var(--accent-ink); background: var(--accent-soft); border: 1px solid rgba(99, 102, 241, .25); }
+    .file-icon svg { width: 16px; height: 16px; }
+    .file-main { display: grid; gap: .12rem; min-width: 0; flex: 1; }
+    .file-name { font-weight: 600; font-size: .86rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .file-meta { font-size: .7rem; color: var(--faint-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
     /* ---------- exchange card ---------- */
     .exchange {
       border: 1px solid var(--stroke);
@@ -642,6 +673,7 @@
       .session-list { max-height: 19rem; }
       .topbar { flex-direction: column; align-items: stretch; }
       .top-actions { justify-content: flex-start; }
+      .files-grid { grid-template-columns: 1fr; }
       .exchange-grid, .field-grid { grid-template-columns: 1fr; }
       .turn + .turn { border-left: 0; border-top: 1px solid var(--stroke-soft); }
       .chat.bubbles .message { max-width: 92%; }
@@ -747,6 +779,7 @@
       <section class="content">
         <p id="demoBanner" class="demo-banner"></p>
         <p id="status" class="status" role="status"></p>
+        <section id="filesPanel" class="files-panel is-empty" aria-label="Session and group files"></section>
         <div id="exchangeList" aria-live="polite"></div>
       </section>
     </section>
@@ -777,6 +810,20 @@
         </div>
       </div>
     </form>
+  </dialog>
+
+  <dialog id="fileDialog">
+    <div class="dialog-head">
+      <h3 id="fileDialogTitle">File</h3>
+      <button type="button" class="ghost" id="fileDialogClose">Close</button>
+    </div>
+    <div class="dialog-body">
+      <div id="fileDialogMeta" class="meta"></div>
+      <div id="fileDialogContent" class="raw"></div>
+      <div class="edit-actions">
+        <button type="button" class="ghost" id="fileCopyButton">Copy content</button>
+      </div>
+    </div>
   </dialog>
 
   <script type="application/json" id="demo-data">{"ok":true,"schema":"mcp-session-bridge.viewer.v1","generated_at":1780321400,"generated_at_iso":"2026-06-01T13:43:20.000Z","session_count":4,"turn_count":22,"sessions":[{"session_id":"demo-2026-06-01-empty-followup","title":"Short follow-up session","title_is_auto":false,"context_pack_id":"manual-context","created_at":1780316600,"updated_at":1780317350,"exchange_count":1,"deleted_exchange_count":0},{"session_id":"demo-2026-06-01-incident-debugging","title":"Debugging a virtual environment issue","title_is_auto":false,"context_pack_id":"local-development","created_at":1780311200,"updated_at":1780313270,"exchange_count":3,"deleted_exchange_count":0},{"session_id":"demo-2026-06-01-ui-review","title":"Admin viewer UI review","title_is_auto":false,"context_pack_id":"viewer-design-refresh","created_at":1780305600,"updated_at":1780308330,"exchange_count":4,"deleted_exchange_count":1},{"session_id":"demo-2026-06-01-product-planning","title":"Product planning with Claude and GPT","title_is_auto":false,"context_pack_id":"public-release-notes","created_at":1780301400,"updated_at":1780303470,"exchange_count":3,"deleted_exchange_count":0}],"transcripts":{"demo-2026-06-01-product-planning":{"session_id":"demo-2026-06-01-product-planning","title":"Product planning with Claude and GPT","exchange_count":3,"turn_count":6,"char_count":2104,"sha256":"synthetic-preview-only","context_pack_id":"public-release-notes","turn_sequence":["USER","Claude","USER","GPT-5","USER","Claude"],"turns":[{"turn":1,"speaker":"USER","exchange_id":100,"created_at":"2026-06-01T08:10:00.000Z","created_at_display":null,"chars":103,"content":"We are preparing MCP Session Bridge for a public v0.1 release. What should the README make clear first?"},{"turn":2,"speaker":"Claude","exchange_id":100,"created_at":"2026-06-01T08:11:30.000Z","created_at_display":"Monday June 1, 2026 at 08:11","chars":226,"content":"Lead with the core promise: this is a small remote MCP server for shared, multi-model conversation memory. The README should show the quickest useful path, then explain tools, security assumptions, and the current limitations."},{"turn":3,"speaker":"USER","exchange_id":101,"created_at":"2026-06-01T08:21:00.000Z","created_at_display":null,"chars":50,"content":"Can you turn that into a concise launch checklist?"},{"turn":4,"speaker":"GPT-5","exchange_id":101,"created_at":"2026-06-01T08:22:30.000Z","created_at_display":"Monday June 1, 2026 at 08:22","chars":191,"content":"Yes. Suggested checklist: README quickstart, .env.example, MIT license, security policy, contributing notes, changelog, demo script, examples, and a CI workflow that runs tests plus the demo."},{"turn":5,"speaker":"USER","exchange_id":102,"created_at":"2026-06-01T08:32:00.000Z","created_at_display":null,"chars":80,"content":"The docs feel a little dense. What would make them easier for a new contributor?"},{"turn":6,"speaker":"Claude","exchange_id":102,"created_at":"2026-06-01T08:33:30.000Z","created_at_display":"Monday June 1, 2026 at 08:33","chars":199,"content":"Split the mental model from the operational steps. A first-time reader should find installation, client setup, model instructions, deployment, security, limitations, and operations as separate paths."}]},"demo-2026-06-01-ui-review":{"session_id":"demo-2026-06-01-ui-review","title":"Admin viewer UI review","exchange_count":4,"turn_count":8,"char_count":2480,"sha256":"synthetic-preview-only","context_pack_id":"viewer-design-refresh","turn_sequence":["USER","USER","USER","Claude","USER","GPT-5","USER","Claude"],"turns":[{"turn":1,"speaker":"USER","exchange_id":103,"created_at":"2026-06-01T09:20:00.000Z","created_at_display":null,"chars":113,"content":"The current admin panel works, but it feels a bit plain. I want it to stay practical while looking more polished."},{"turn":2,"speaker":"USER","exchange_id":103,"created_at":"2026-06-01T09:21:30.000Z","created_at_display":"Monday June 1, 2026 at 09:21","chars":196,"content":"The best direction is a calmer operational dashboard: stronger spacing rhythm, clearer active selection, better exchange cards, and more deliberate typography. Keep it dense enough for repeat use."},{"turn":3,"speaker":"USER","exchange_id":104,"created_at":"2026-06-01T09:31:00.000Z","created_at_display":null,"chars":66,"content":"Should the redesign use a big hero or decorative visual treatment?"},{"turn":4,"speaker":"Claude","exchange_id":104,"created_at":"2026-06-01T09:32:30.000Z","created_at_display":"Monday June 1, 2026 at 09:32","chars":150,"content":"No. This is an admin tool, so the first screen should be the working surface itself: session list, summary, transcript corrections, and clear actions."},{"turn":5,"speaker":"USER","exchange_id":105,"created_at":"2026-06-01T09:42:00.000Z","created_at_display":null,"chars":44,"content":"What UI states should the redesign preserve?"},{"turn":6,"speaker":"GPT-5","exchange_id":105,"created_at":"2026-06-01T09:43:30.000Z","created_at_display":"Monday June 1, 2026 at 09:43","chars":157,"content":"Keep loading, empty, selected, editing, deleted, error, and success states. Also preserve responsive behavior for narrow screens and long transcript content."},{"turn":7,"speaker":"USER","exchange_id":106,"created_at":"2026-06-01T09:53:00.000Z","created_at_display":null,"chars":74,"content":"The delete and restore actions need better affordance. Any recommendation?"},{"turn":8,"speaker":"Claude","exchange_id":106,"created_at":"2026-06-01T09:54:30.000Z","created_at_display":"Monday June 1, 2026 at 09:54","chars":166,"content":"Use restrained destructive styling for delete, a clear restored/saved status message, and make deleted exchanges visually distinct without making the text unreadable."}]},"demo-2026-06-01-incident-debugging":{"session_id":"demo-2026-06-01-incident-debugging","title":"Debugging a virtual environment issue","exchange_count":3,"turn_count":6,"char_count":1920,"sha256":"synthetic-preview-only","context_pack_id":"local-development","turn_sequence":["USER","USER","USER","GPT-5","USER","Claude"],"turns":[{"turn":1,"speaker":"USER","exchange_id":107,"created_at":"2026-06-01T10:53:20.000Z","created_at_display":null,"chars":70,"content":"uv run sometimes hangs on my mounted workspace. Is the project broken?"},{"turn":2,"speaker":"USER","exchange_id":107,"created_at":"2026-06-01T10:54:50.000Z","created_at_display":"Monday June 1, 2026 at 10:54","chars":192,"content":"The project is likely fine. The symptom points to the mounted filesystem and virtual environment metadata rather than app logic. Rebuilding .venv on the host where tests run is the safer path."},{"turn":3,"speaker":"USER","exchange_id":108,"created_at":"2026-06-01T11:04:20.000Z","created_at_display":null,"chars":41,"content":"What should we document for contributors?"},{"turn":4,"speaker":"GPT-5","exchange_id":108,"created_at":"2026-06-01T11:05:50.000Z","created_at_display":"Monday June 1, 2026 at 11:05","chars":171,"content":"Tell contributors to run uv sync locally on their own machine, avoid committing .venv, and rebuild the environment if packages look inconsistent after moving the checkout."},{"turn":5,"speaker":"USER","exchange_id":109,"created_at":"2026-06-01T11:15:20.000Z","created_at_display":null,"chars":33,"content":"Could this affect GitHub Actions?"},{"turn":6,"speaker":"Claude","exchange_id":109,"created_at":"2026-06-01T11:16:50.000Z","created_at_display":"Monday June 1, 2026 at 11:16","chars":160,"content":"No, GitHub Actions creates a fresh checkout and a fresh Python environment. That makes CI a useful independent signal for whether the project itself is healthy."}]},"demo-2026-06-01-empty-followup":{"session_id":"demo-2026-06-01-empty-followup","title":"Short follow-up session","exchange_count":1,"turn_count":2,"char_count":937,"sha256":"synthetic-preview-only","context_pack_id":"manual-context","turn_sequence":["USER","USER"],"turns":[{"turn":1,"speaker":"USER","exchange_id":110,"created_at":"2026-06-01T12:23:20.000Z","created_at_display":null,"chars":59,"content":"Give me a tiny explanation of what MCP Session Bridge does."},{"turn":2,"speaker":"USER","exchange_id":110,"created_at":"2026-06-01T12:24:50.000Z","created_at_display":"Monday June 1, 2026 at 12:24","chars":209,"content":"It gives multiple model clients one shared transcript store, so Claude, ChatGPT, Codex, or another MCP client can pick up the same conversation history through tools instead of relying on a single chat window."}]}}}</script>
@@ -846,6 +893,13 @@
         datasetSummary: document.getElementById("datasetSummary"),
         demoBanner: document.getElementById("demoBanner"),
         exchangeList: document.getElementById("exchangeList"),
+        fileCopyButton: document.getElementById("fileCopyButton"),
+        fileDialog: document.getElementById("fileDialog"),
+        fileDialogClose: document.getElementById("fileDialogClose"),
+        fileDialogContent: document.getElementById("fileDialogContent"),
+        fileDialogMeta: document.getElementById("fileDialogMeta"),
+        fileDialogTitle: document.getElementById("fileDialogTitle"),
+        filesPanel: document.getElementById("filesPanel"),
         groupActions: document.getElementById("groupActions"),
         groupCancelButton: document.getElementById("groupCancelButton"),
         groupColorInput: document.getElementById("groupColorInput"),
@@ -875,6 +929,17 @@
       dom.addGroupButton.addEventListener("click", () => openGroupDialog());
       dom.groupCancelButton.addEventListener("click", () => dom.groupDialog.close());
       dom.groupDialogClose.addEventListener("click", () => dom.groupDialog.close());
+      dom.fileDialogClose.addEventListener("click", () => dom.fileDialog.close());
+      dom.fileCopyButton.addEventListener("click", async () => {
+        const content = dom.fileDialogContent.dataset.content || "";
+        if (!content) { setStatus("No file content to copy.", "warn"); return; }
+        try {
+          await navigator.clipboard.writeText(content);
+          setStatus("File content copied.", "ok");
+        } catch (error) {
+          setStatus(`Could not copy file content: ${error.message}`, "error");
+        }
+      });
       dom.groupForm.addEventListener("submit", async (event) => {
         event.preventDefault();
         await saveGroupForm();
@@ -979,6 +1044,8 @@
         if (!sessionId) {
           state.selectedSession = null;
           state.exchanges = [];
+          state.files = { session: [], group: [] };
+          renderFiles();
           renderExchanges();
           return;
         }
@@ -996,6 +1063,7 @@
           localStorage.setItem("mcp-admin:selected", sessionId);
           renderSessions();
           renderSessionGroupSelect();
+          renderFiles();
           renderExchanges();
           setStatus(`Selected ${sessionId}.`, "ok");
         } finally {
@@ -1050,6 +1118,7 @@
           state.selectedSession = null;
           state.exchanges = [];
           state.files = { session: [], group: [] };
+          renderFiles();
               renderExchanges();
             }
           }
@@ -1132,6 +1201,108 @@
         d.className = "d";
         node.append(d, document.createTextNode(text));
         return node;
+      }
+
+      function renderFiles() {
+        const sessionFiles = state.files.session || [];
+        const groupFiles = state.files.group || [];
+        const count = sessionFiles.length + groupFiles.length;
+        dom.filesPanel.classList.toggle("is-empty", count === 0);
+        dom.filesPanel.replaceChildren();
+        if (!count) return;
+
+        const head = div("files-head");
+        const title = document.createElement("h3");
+        title.textContent = "Files";
+        head.append(title, spanCls("", `${count} uploaded`));
+
+        const grid = div("files-grid");
+        grid.append(fileBucket("Session files", sessionFiles), fileBucket("Group files", groupFiles));
+        dom.filesPanel.append(head, grid);
+      }
+
+      function fileBucket(title, files) {
+        const bucket = div("file-bucket");
+        bucket.append(spanCls("file-bucket-title", title));
+        const list = div("file-list");
+        if (!files.length) {
+          list.append(spanCls("file-meta", "No files"));
+        } else {
+          for (const file of files) list.append(fileButton(file));
+        }
+        bucket.append(list);
+        return bucket;
+      }
+
+      function fileButton(file) {
+        const node = document.createElement("button");
+        node.type = "button";
+        node.className = "file-button";
+        node.title = file.filename || `file ${file.file_id}`;
+        node.addEventListener("click", () => openFile(file.file_id));
+
+        const row = div("file-row");
+        const icon = div("file-icon");
+        icon.innerHTML = iconSvg("book");
+        const main = div("file-main");
+        main.append(
+          spanCls("file-name", file.filename || `file-${file.file_id}`),
+          spanCls("file-meta", `${formatBytes(file.size_bytes)} · ${file.mime_type || "text/plain"} · ${file.created_by || "unknown"} · ${formatUnixDate(file.created_at)}`)
+        );
+        row.append(icon, main);
+        node.append(row);
+        return node;
+      }
+
+      async function openFile(fileId) {
+        setBusy(true);
+        try {
+          const payload = await api(`/admin/api/files/${encodeURIComponent(fileId)}`);
+          const file = payload.file;
+          dom.fileDialogTitle.textContent = file.filename || `file-${file.file_id}`;
+          dom.fileDialogMeta.replaceChildren(
+            spanCls("mono", `#${file.file_id}`),
+            dotSep(),
+            spanCls("", file.scope_type === "group" ? `group ${file.group_id}` : `session ${file.session_id}`),
+            dotSep(),
+            spanCls("", formatBytes(file.size_bytes)),
+            dotSep(),
+            spanCls("", file.mime_type || "text/plain"),
+            dotSep(),
+            spanCls("", formatUnixDate(file.created_at))
+          );
+          dom.fileDialogContent.dataset.content = file.content || "";
+          dom.fileDialogContent.replaceChildren(preNode(file.content || ""));
+          dom.fileDialog.showModal();
+        } catch (error) {
+          setStatus(error.message, "error");
+        } finally {
+          setBusy(false);
+        }
+      }
+
+      function dotSep() {
+        const node = document.createElement("span");
+        node.className = "sep";
+        return node;
+      }
+
+      function preNode(text) {
+        const pre = document.createElement("pre");
+        pre.textContent = text;
+        return pre;
+      }
+
+      function formatBytes(value) {
+        const bytes = Number(value || 0);
+        if (bytes < 1024) return `${bytes} B`;
+        if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+        return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+      }
+
+      function formatUnixDate(value) {
+        if (!value) return "";
+        return formatDate(new Date(Number(value) * 1000).toISOString());
       }
 
       function renderSessionGroupSelect() {
@@ -1751,6 +1922,7 @@
           demo.store[id] = {
             session: demo.sessions.find((s) => s.session_id === id) || { session_id: id, title: transcripts[id].title },
             exchanges,
+            files: { session: [], group: [] },
           };
         }
         refreshDemoTimestamps();
@@ -1804,7 +1976,7 @@
         if (single && method === "GET") {
           const entry = demo.store[decodeURIComponent(single[1])];
           if (!entry) return Promise.reject(Object.assign(new Error("Unknown session"), { status: 404 }));
-          return Promise.resolve({ ok: true, session: entry.session, exchanges: entry.exchanges });
+          return Promise.resolve({ ok: true, session: entry.session, exchanges: entry.exchanges, files: entry.files || { session: [], group: [] } });
         }
         if (single && method === "PATCH") {
           const entry = demo.store[decodeURIComponent(single[1])];
@@ -1823,6 +1995,23 @@
           }
           return null;
         };
+        const fileMatch = path.match(/^\/admin\/api\/files\/(\d+)$/);
+        if (fileMatch) {
+          return Promise.resolve({
+            ok: true,
+            file: {
+              file_id: Number(fileMatch[1]),
+              filename: "demo.md",
+              scope_type: "session",
+              session_id: state.selectedSessionId,
+              mime_type: "text/markdown",
+              size_bytes: 18,
+              created_by: "demo",
+              created_at: Math.floor(Date.now() / 1000),
+              content: "# Demo\n\nNo live backend.",
+            },
+          });
+        }
         const restore = path.match(/^\/admin\/api\/exchanges\/(\d+)\/restore$/);
         if (restore) {
           const hit = find(restore[1]);

@@ -162,6 +162,38 @@ def test_admin_can_manage_session_groups_and_move_sessions(tmp_path, monkeypatch
     assert bad_move.status_code == 404
 
 
+def test_admin_can_view_session_and_group_files(tmp_path, monkeypatch) -> None:
+    main = _load_main(tmp_path, monkeypatch)
+    main.store.create_session_group("Tests", "#22c55e", "science")
+    main.store.create_session("s1", "File admin test", "manual-context", group_id="tests")
+    session_file = main.store.save_session_file("s1", "plan.md", "# Plan")
+    group_file = main.store.save_group_file("tests", "shared.md", "Shared context")
+    client = TestClient(main.app, base_url="http://127.0.0.1:8787")
+
+    client.post(
+        "/admin/login",
+        data={"username": "owner", "password": "secret-admin-password", "next": "/admin/sessions"},
+        follow_redirects=False,
+    )
+
+    session_payload = client.get("/admin/api/sessions/s1")
+    assert session_payload.status_code == 200
+    assert session_payload.json()["files"]["session"][0]["filename"] == "plan.md"
+    assert session_payload.json()["files"]["group"][0]["filename"] == "shared.md"
+
+    downloaded = client.get(f"/admin/api/files/{group_file.file_id}")
+    assert downloaded.status_code == 200
+    assert downloaded.json()["file"]["content"] == "Shared context"
+
+    missing = client.get("/admin/api/files/999999")
+    assert missing.status_code == 404
+
+    invalid = client.get("/admin/api/files/not-a-number")
+    assert invalid.status_code == 400
+
+    assert session_file.file_id != group_file.file_id
+
+
 def _load_main(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("BRIDGE_PUBLIC_BASE_URL", "https://example.test")
     monkeypatch.setenv("BRIDGE_DB_PATH", str(tmp_path / "bridge.sqlite3"))

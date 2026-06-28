@@ -175,6 +175,11 @@ async def admin_api_update_session(request: Request) -> Response:
     return await admin.api_update_session(request)
 
 
+@mcp.custom_route("/admin/api/files/{file_id}", methods=["GET"])
+async def admin_api_file(request: Request) -> Response:
+    return await admin.api_file(request)
+
+
 @mcp.custom_route("/admin/api/session-groups", methods=["GET"])
 async def admin_api_session_groups(request: Request) -> Response:
     return await admin.api_session_groups(request)
