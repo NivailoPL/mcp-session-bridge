@@ -280,6 +280,34 @@
       font-size: .68rem; text-transform: uppercase; letter-spacing: .14em; color: var(--faint-ink);
     }
 
+    .group-panel {
+      display: grid;
+      gap: .55rem;
+      padding: .75rem 1.2rem .85rem;
+      border-bottom: 1px solid var(--stroke-soft);
+    }
+    .group-head { display: flex; align-items: center; justify-content: space-between; gap: .6rem; }
+    .group-head span { font-size: .68rem; text-transform: uppercase; letter-spacing: .14em; color: var(--faint-ink); }
+    .group-head button { width: 2rem; min-height: 2rem; padding: 0; border-radius: 8px; font-size: 1.05rem; }
+    .group-list { display: flex; flex-wrap: wrap; gap: .45rem; }
+    .group-filter {
+      width: 2.35rem; height: 2.35rem; min-height: 2.35rem; padding: 0;
+      border-radius: 10px; color: var(--g, var(--muted));
+      background: color-mix(in oklab, var(--g, var(--muted)) 10%, transparent);
+      border-color: color-mix(in oklab, var(--g, var(--muted)) 32%, transparent);
+      -webkit-backdrop-filter: none; backdrop-filter: none;
+    }
+    .group-filter svg { width: 19px; height: 19px; }
+    .group-filter.is-active {
+      color: #fff;
+      background: color-mix(in oklab, var(--g, var(--accent)) 28%, rgba(255, 255, 255, .04));
+      border-color: color-mix(in oklab, var(--g, var(--accent)) 70%, transparent);
+      box-shadow: 0 10px 22px -14px var(--g, var(--accent));
+    }
+    .group-actions { display: none; gap: .45rem; }
+    .group-actions.show { display: flex; }
+    .group-actions button { min-height: 1.9rem; padding: .32rem .55rem; font-size: .74rem; border-radius: 8px; }
+
     .session-list {
       display: grid; align-content: start; gap: .4rem;
       padding: .2rem .7rem 1.2rem;
@@ -321,6 +349,8 @@
     }
     .mini-chip.warn { color: var(--warn); border-color: rgba(251, 191, 36, .3); }
     .mini-chip .d { width: 5px; height: 5px; border-radius: 50%; background: currentColor; opacity: .8; }
+    .mini-chip.group { color: var(--g, var(--muted)); border-color: color-mix(in oklab, var(--g, var(--muted)) 32%, transparent); }
+    .mini-chip.group svg { width: 12px; height: 12px; }
 
     /* ---------- main ---------- */
     .main { display: flex; flex-direction: column; min-width: 0; }
@@ -511,6 +541,26 @@
 
     .avatar.xs { width: 22px; height: 22px; border-radius: 7px; font-size: .62rem; }
 
+    .session-group-select { width: auto; min-width: 11rem; max-width: 15rem; }
+
+    dialog {
+      border: 1px solid var(--stroke);
+      border-radius: 12px;
+      background: #101218;
+      color: var(--text);
+      box-shadow: var(--shadow-pop);
+      width: min(34rem, calc(100vw - 2rem));
+      padding: 0;
+    }
+    dialog::backdrop { background: rgba(0, 0, 0, .62); }
+    .dialog-body { display: grid; gap: .85rem; padding: 1rem; }
+    .dialog-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1rem 1rem .2rem; }
+    .dialog-head h3 { margin: 0; font-family: "Space Grotesk", sans-serif; font-size: 1.05rem; }
+    .icon-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(2.4rem, 1fr)); gap: .45rem; }
+    .icon-choice { min-height: 2.35rem; padding: 0; border-radius: 9px; }
+    .icon-choice svg { width: 19px; height: 19px; }
+    .icon-choice.is-active { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-ink); }
+
     /* ---------- alternate read layouts (bubbles / thread) ---------- */
     .chat { display: grid; width: 100%; max-width: 62rem; min-width: 0; margin: 0 auto; }
     .msg-meta { display: flex; align-items: baseline; gap: .5rem; font-size: .76rem; color: var(--faint-ink); }
@@ -650,6 +700,15 @@
         <div id="datasetSummary" class="summary"></div>
       </section>
 
+      <section class="group-panel" aria-label="Session groups">
+        <div class="group-head">
+          <span>Groups</span>
+          <button id="addGroupButton" type="button" class="ghost" title="Add group">+</button>
+        </div>
+        <div id="groupList" class="group-list"></div>
+        <div id="groupActions" class="group-actions"></div>
+      </section>
+
       <div class="list-head"><span>Sessions</span></div>
       <nav id="sessionList" class="session-list" aria-label="Sessions"></nav>
     </aside>
@@ -675,6 +734,7 @@
               Thread
             </button>
           </div>
+          <select id="sessionGroupSelect" class="session-group-select" aria-label="Session group"></select>
           <button id="rawToggleButton" type="button" class="ghost">Markdown</button>
           <button id="copyButton" type="button" class="ghost">Copy transcript</button>
           <button id="refreshButton" type="button" class="ghost">
@@ -691,6 +751,33 @@
       </section>
     </section>
   </main>
+
+  <dialog id="groupDialog">
+    <form id="groupForm" method="dialog">
+      <div class="dialog-head">
+        <h3 id="groupDialogTitle">New group</h3>
+        <button type="button" class="ghost" id="groupDialogClose">Close</button>
+      </div>
+      <div class="dialog-body">
+        <input type="hidden" id="groupIdInput">
+        <label class="field">Name
+          <input id="groupNameInput" type="text" maxlength="48" required>
+        </label>
+        <label class="field">Color
+          <input id="groupColorInput" type="color" value="#22c55e">
+        </label>
+        <input type="hidden" id="groupIconInput" value="ideas">
+        <div>
+          <label class="field">Icon</label>
+          <div id="iconGrid" class="icon-grid" aria-label="Icon gallery"></div>
+        </div>
+        <div class="edit-actions">
+          <button type="submit" class="primary">Save group</button>
+          <button type="button" class="ghost" id="groupCancelButton">Cancel</button>
+        </div>
+      </div>
+    </form>
+  </dialog>
 
   <script type="application/json" id="demo-data">{"ok":true,"schema":"mcp-session-bridge.viewer.v1","generated_at":1780321400,"generated_at_iso":"2026-06-01T13:43:20.000Z","session_count":4,"turn_count":22,"sessions":[{"session_id":"demo-2026-06-01-empty-followup","title":"Short follow-up session","title_is_auto":false,"context_pack_id":"manual-context","created_at":1780316600,"updated_at":1780317350,"exchange_count":1,"deleted_exchange_count":0},{"session_id":"demo-2026-06-01-incident-debugging","title":"Debugging a virtual environment issue","title_is_auto":false,"context_pack_id":"local-development","created_at":1780311200,"updated_at":1780313270,"exchange_count":3,"deleted_exchange_count":0},{"session_id":"demo-2026-06-01-ui-review","title":"Admin viewer UI review","title_is_auto":false,"context_pack_id":"viewer-design-refresh","created_at":1780305600,"updated_at":1780308330,"exchange_count":4,"deleted_exchange_count":1},{"session_id":"demo-2026-06-01-product-planning","title":"Product planning with Claude and GPT","title_is_auto":false,"context_pack_id":"public-release-notes","created_at":1780301400,"updated_at":1780303470,"exchange_count":3,"deleted_exchange_count":0}],"transcripts":{"demo-2026-06-01-product-planning":{"session_id":"demo-2026-06-01-product-planning","title":"Product planning with Claude and GPT","exchange_count":3,"turn_count":6,"char_count":2104,"sha256":"synthetic-preview-only","context_pack_id":"public-release-notes","turn_sequence":["USER","Claude","USER","GPT-5","USER","Claude"],"turns":[{"turn":1,"speaker":"USER","exchange_id":100,"created_at":"2026-06-01T08:10:00.000Z","created_at_display":null,"chars":103,"content":"We are preparing MCP Session Bridge for a public v0.1 release. What should the README make clear first?"},{"turn":2,"speaker":"Claude","exchange_id":100,"created_at":"2026-06-01T08:11:30.000Z","created_at_display":"Monday June 1, 2026 at 08:11","chars":226,"content":"Lead with the core promise: this is a small remote MCP server for shared, multi-model conversation memory. The README should show the quickest useful path, then explain tools, security assumptions, and the current limitations."},{"turn":3,"speaker":"USER","exchange_id":101,"created_at":"2026-06-01T08:21:00.000Z","created_at_display":null,"chars":50,"content":"Can you turn that into a concise launch checklist?"},{"turn":4,"speaker":"GPT-5","exchange_id":101,"created_at":"2026-06-01T08:22:30.000Z","created_at_display":"Monday June 1, 2026 at 08:22","chars":191,"content":"Yes. Suggested checklist: README quickstart, .env.example, MIT license, security policy, contributing notes, changelog, demo script, examples, and a CI workflow that runs tests plus the demo."},{"turn":5,"speaker":"USER","exchange_id":102,"created_at":"2026-06-01T08:32:00.000Z","created_at_display":null,"chars":80,"content":"The docs feel a little dense. What would make them easier for a new contributor?"},{"turn":6,"speaker":"Claude","exchange_id":102,"created_at":"2026-06-01T08:33:30.000Z","created_at_display":"Monday June 1, 2026 at 08:33","chars":199,"content":"Split the mental model from the operational steps. A first-time reader should find installation, client setup, model instructions, deployment, security, limitations, and operations as separate paths."}]},"demo-2026-06-01-ui-review":{"session_id":"demo-2026-06-01-ui-review","title":"Admin viewer UI review","exchange_count":4,"turn_count":8,"char_count":2480,"sha256":"synthetic-preview-only","context_pack_id":"viewer-design-refresh","turn_sequence":["USER","USER","USER","Claude","USER","GPT-5","USER","Claude"],"turns":[{"turn":1,"speaker":"USER","exchange_id":103,"created_at":"2026-06-01T09:20:00.000Z","created_at_display":null,"chars":113,"content":"The current admin panel works, but it feels a bit plain. I want it to stay practical while looking more polished."},{"turn":2,"speaker":"USER","exchange_id":103,"created_at":"2026-06-01T09:21:30.000Z","created_at_display":"Monday June 1, 2026 at 09:21","chars":196,"content":"The best direction is a calmer operational dashboard: stronger spacing rhythm, clearer active selection, better exchange cards, and more deliberate typography. Keep it dense enough for repeat use."},{"turn":3,"speaker":"USER","exchange_id":104,"created_at":"2026-06-01T09:31:00.000Z","created_at_display":null,"chars":66,"content":"Should the redesign use a big hero or decorative visual treatment?"},{"turn":4,"speaker":"Claude","exchange_id":104,"created_at":"2026-06-01T09:32:30.000Z","created_at_display":"Monday June 1, 2026 at 09:32","chars":150,"content":"No. This is an admin tool, so the first screen should be the working surface itself: session list, summary, transcript corrections, and clear actions."},{"turn":5,"speaker":"USER","exchange_id":105,"created_at":"2026-06-01T09:42:00.000Z","created_at_display":null,"chars":44,"content":"What UI states should the redesign preserve?"},{"turn":6,"speaker":"GPT-5","exchange_id":105,"created_at":"2026-06-01T09:43:30.000Z","created_at_display":"Monday June 1, 2026 at 09:43","chars":157,"content":"Keep loading, empty, selected, editing, deleted, error, and success states. Also preserve responsive behavior for narrow screens and long transcript content."},{"turn":7,"speaker":"USER","exchange_id":106,"created_at":"2026-06-01T09:53:00.000Z","created_at_display":null,"chars":74,"content":"The delete and restore actions need better affordance. Any recommendation?"},{"turn":8,"speaker":"Claude","exchange_id":106,"created_at":"2026-06-01T09:54:30.000Z","created_at_display":"Monday June 1, 2026 at 09:54","chars":166,"content":"Use restrained destructive styling for delete, a clear restored/saved status message, and make deleted exchanges visually distinct without making the text unreadable."}]},"demo-2026-06-01-incident-debugging":{"session_id":"demo-2026-06-01-incident-debugging","title":"Debugging a virtual environment issue","exchange_count":3,"turn_count":6,"char_count":1920,"sha256":"synthetic-preview-only","context_pack_id":"local-development","turn_sequence":["USER","USER","USER","GPT-5","USER","Claude"],"turns":[{"turn":1,"speaker":"USER","exchange_id":107,"created_at":"2026-06-01T10:53:20.000Z","created_at_display":null,"chars":70,"content":"uv run sometimes hangs on my mounted workspace. Is the project broken?"},{"turn":2,"speaker":"USER","exchange_id":107,"created_at":"2026-06-01T10:54:50.000Z","created_at_display":"Monday June 1, 2026 at 10:54","chars":192,"content":"The project is likely fine. The symptom points to the mounted filesystem and virtual environment metadata rather than app logic. Rebuilding .venv on the host where tests run is the safer path."},{"turn":3,"speaker":"USER","exchange_id":108,"created_at":"2026-06-01T11:04:20.000Z","created_at_display":null,"chars":41,"content":"What should we document for contributors?"},{"turn":4,"speaker":"GPT-5","exchange_id":108,"created_at":"2026-06-01T11:05:50.000Z","created_at_display":"Monday June 1, 2026 at 11:05","chars":171,"content":"Tell contributors to run uv sync locally on their own machine, avoid committing .venv, and rebuild the environment if packages look inconsistent after moving the checkout."},{"turn":5,"speaker":"USER","exchange_id":109,"created_at":"2026-06-01T11:15:20.000Z","created_at_display":null,"chars":33,"content":"Could this affect GitHub Actions?"},{"turn":6,"speaker":"Claude","exchange_id":109,"created_at":"2026-06-01T11:16:50.000Z","created_at_display":"Monday June 1, 2026 at 11:16","chars":160,"content":"No, GitHub Actions creates a fresh checkout and a fresh Python environment. That makes CI a useful independent signal for whether the project itself is healthy."}]},"demo-2026-06-01-empty-followup":{"session_id":"demo-2026-06-01-empty-followup","title":"Short follow-up session","exchange_count":1,"turn_count":2,"char_count":937,"sha256":"synthetic-preview-only","context_pack_id":"manual-context","turn_sequence":["USER","USER"],"turns":[{"turn":1,"speaker":"USER","exchange_id":110,"created_at":"2026-06-01T12:23:20.000Z","created_at_display":null,"chars":59,"content":"Give me a tiny explanation of what MCP Session Bridge does."},{"turn":2,"speaker":"USER","exchange_id":110,"created_at":"2026-06-01T12:24:50.000Z","created_at_display":"Monday June 1, 2026 at 12:24","chars":209,"content":"It gives multiple model clients one shared transcript store, so Claude, ChatGPT, Codex, or another MCP client can pick up the same conversation history through tools instead of relying on a single chat window."}]}}}</script>
   <script>
@@ -728,12 +815,21 @@
         return node;
       }
 
+      const GROUP_ICONS = [
+        "folder", "brain", "medical_plus", "ideas", "heart", "book", "graduation", "pencil",
+        "code", "terminal", "music", "food", "palette", "tools", "travel", "world",
+        "legal", "science", "plants", "money"
+      ];
+
       const state = {
         csrfToken: "",
         sessions: [],
+        groups: [],
+        activeGroupId: localStorage.getItem("mcp-admin:group") || "all",
         selectedSessionId: localStorage.getItem("mcp-admin:selected") || "",
         selectedSession: null,
         exchanges: [],
+        files: { session: [], group: [] },
         query: "",
         showDeleted: true,
         editingExchangeId: null,
@@ -745,15 +841,29 @@
       };
 
       const dom = {
+        addGroupButton: document.getElementById("addGroupButton"),
         copyButton: document.getElementById("copyButton"),
         datasetSummary: document.getElementById("datasetSummary"),
         demoBanner: document.getElementById("demoBanner"),
         exchangeList: document.getElementById("exchangeList"),
+        groupActions: document.getElementById("groupActions"),
+        groupCancelButton: document.getElementById("groupCancelButton"),
+        groupColorInput: document.getElementById("groupColorInput"),
+        groupDialog: document.getElementById("groupDialog"),
+        groupDialogClose: document.getElementById("groupDialogClose"),
+        groupDialogTitle: document.getElementById("groupDialogTitle"),
+        groupForm: document.getElementById("groupForm"),
+        groupIconInput: document.getElementById("groupIconInput"),
+        groupIdInput: document.getElementById("groupIdInput"),
+        groupList: document.getElementById("groupList"),
+        groupNameInput: document.getElementById("groupNameInput"),
+        iconGrid: document.getElementById("iconGrid"),
         identity: document.getElementById("identity"),
         layoutSeg: document.getElementById("layoutSeg"),
         rawToggleButton: document.getElementById("rawToggleButton"),
         refreshButton: document.getElementById("refreshButton"),
         searchInput: document.getElementById("searchInput"),
+        sessionGroupSelect: document.getElementById("sessionGroupSelect"),
         sessionList: document.getElementById("sessionList"),
         sessionMeta: document.getElementById("sessionMeta"),
         sessionTitle: document.getElementById("sessionTitle"),
@@ -762,6 +872,14 @@
         timezoneSelect: document.getElementById("timezoneSelect"),
       };
 
+      dom.addGroupButton.addEventListener("click", () => openGroupDialog());
+      dom.groupCancelButton.addEventListener("click", () => dom.groupDialog.close());
+      dom.groupDialogClose.addEventListener("click", () => dom.groupDialog.close());
+      dom.groupForm.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        await saveGroupForm();
+      });
+      dom.sessionGroupSelect.addEventListener("change", () => moveSelectedSession(dom.sessionGroupSelect.value));
       dom.refreshButton.addEventListener("click", () => refreshAll());
       dom.searchInput.addEventListener("input", () => {
         state.query = dom.searchInput.value.trim().toLowerCase();
@@ -795,7 +913,7 @@
       populateTimezoneSelect();
 
       // offline demo store (declared before init so api() can reference it)
-      const demo = { enabled: false, sessions: [], store: {} };
+      const demo = { enabled: false, sessions: [], groups: [], store: {} };
 
       init();
 
@@ -820,6 +938,7 @@
       }
 
       async function refreshAll() {
+        await loadGroups();
         await loadSessions();
         if (state.selectedSessionId) {
           await loadSession(state.selectedSessionId);
@@ -828,14 +947,26 @@
         }
       }
 
+      async function loadGroups() {
+        const payload = await api("/admin/api/session-groups");
+        state.groups = payload.groups || [];
+        if (state.activeGroupId !== "all" && !state.groups.some((group) => group.group_id === state.activeGroupId)) {
+          state.activeGroupId = "all";
+          localStorage.setItem("mcp-admin:group", state.activeGroupId);
+        }
+        renderGroups();
+        renderSessionGroupSelect();
+      }
+
       async function loadSessions() {
         setBusy(true);
         try {
           const payload = await api("/admin/api/sessions");
           state.sessions = payload.sessions || [];
-          const stillExists = state.sessions.some((session) => session.session_id === state.selectedSessionId);
+          const visibleSessions = filteredSessions();
+          const stillExists = visibleSessions.some((session) => session.session_id === state.selectedSessionId);
           if (!stillExists) {
-            state.selectedSessionId = state.sessions[0] ? state.sessions[0].session_id : "";
+            state.selectedSessionId = visibleSessions[0] ? visibleSessions[0].session_id : "";
           }
           renderSessions();
           renderSummary();
@@ -857,12 +988,14 @@
           state.selectedSessionId = sessionId;
           state.selectedSession = payload.session;
           state.exchanges = payload.exchanges || [];
+          state.files = payload.files || { session: [], group: [] };
           if (payload.display_timezone) {
             state.displayTimezone = payload.display_timezone;
             populateTimezoneSelect();
           }
           localStorage.setItem("mcp-admin:selected", sessionId);
           renderSessions();
+          renderSessionGroupSelect();
           renderExchanges();
           setStatus(`Selected ${sessionId}.`, "ok");
         } finally {
@@ -889,13 +1022,74 @@
         return node;
       }
 
-      function renderSessions() {
-        dom.sessionList.replaceChildren();
-        const visible = state.sessions.filter((session) => {
+      function renderGroups() {
+        dom.groupList.replaceChildren();
+        const allButton = groupButton({ group_id: "all", name: "All sessions", color: "#8b8ff8", icon_key: "folder" });
+        dom.groupList.append(allButton);
+        for (const group of state.groups) dom.groupList.append(groupButton(group));
+        renderGroupActions();
+      }
+
+      function groupButton(group) {
+        const node = document.createElement("button");
+        node.type = "button";
+        node.className = "group-filter";
+        node.title = group.name || group.group_id;
+        node.style.setProperty("--g", group.color || "#8b93a7");
+        if (group.group_id === state.activeGroupId) node.classList.add("is-active");
+        node.innerHTML = iconSvg(group.icon_key || "folder");
+        node.addEventListener("click", () => {
+          state.activeGroupId = group.group_id;
+          localStorage.setItem("mcp-admin:group", state.activeGroupId);
+          const visible = filteredSessions();
+          if (!visible.some((session) => session.session_id === state.selectedSessionId)) {
+            state.selectedSessionId = visible[0] ? visible[0].session_id : "";
+            localStorage.setItem("mcp-admin:selected", state.selectedSessionId);
+            if (state.selectedSessionId) loadSession(state.selectedSessionId);
+            else {
+          state.selectedSession = null;
+          state.exchanges = [];
+          state.files = { session: [], group: [] };
+              renderExchanges();
+            }
+          }
+          renderGroups();
+          renderSessions();
+        });
+        return node;
+      }
+
+      function renderGroupActions() {
+        dom.groupActions.replaceChildren();
+        const group = currentGroup();
+        if (!group || group.is_system || group.group_id === "all") {
+          dom.groupActions.classList.remove("show");
+          return;
+        }
+        dom.groupActions.classList.add("show");
+        dom.groupActions.append(
+          button("Edit", () => openGroupDialog(group), "ghost"),
+          button("Delete", () => deleteGroup(group), "danger")
+        );
+      }
+
+      function currentGroup() {
+        return state.groups.find((group) => group.group_id === state.activeGroupId) || null;
+      }
+
+      function filteredSessions() {
+        return state.sessions.filter((session) => {
+          if (state.activeGroupId !== "all" && session.group_id !== state.activeGroupId) return false;
           if (!state.query) return true;
-          return [session.session_id, session.title, session.context_pack_id]
+          const group = session.group || {};
+          return [session.session_id, session.title, session.context_pack_id, group.name, session.group_id]
             .filter(Boolean).join(" ").toLowerCase().includes(state.query);
         });
+      }
+
+      function renderSessions() {
+        dom.sessionList.replaceChildren();
+        const visible = filteredSessions();
 
         if (!visible.length) {
           dom.sessionList.append(emptyRow("No matching sessions."));
@@ -910,6 +1104,13 @@
           button.addEventListener("click", () => loadSession(session.session_id));
 
           const foot = div("session-foot");
+          if (session.group) {
+            const groupChip = chip(session.group.name || session.group_id);
+            groupChip.classList.add("group");
+            groupChip.style.setProperty("--g", session.group.color || "#8b93a7");
+            groupChip.prepend(svgNode(session.group.icon_key || "folder"));
+            foot.append(groupChip);
+          }
           foot.append(chip(`${session.exchange_count || 0} exchanges`));
           if (Number(session.deleted_exchange_count || 0) > 0) {
             foot.append(chip(`${session.deleted_exchange_count} deleted`, true));
@@ -933,6 +1134,113 @@
         return node;
       }
 
+      function renderSessionGroupSelect() {
+        dom.sessionGroupSelect.replaceChildren();
+        for (const group of state.groups) {
+          const option = document.createElement("option");
+          option.value = group.group_id;
+          option.textContent = group.name;
+          dom.sessionGroupSelect.append(option);
+        }
+        const groupId = state.selectedSession ? state.selectedSession.group_id : "";
+        dom.sessionGroupSelect.value = groupId;
+        dom.sessionGroupSelect.disabled = state.busy || !state.selectedSession || !state.groups.length;
+      }
+
+      async function moveSelectedSession(groupId) {
+        if (!state.selectedSession || !groupId || groupId === state.selectedSession.group_id) return;
+        setBusy(true);
+        try {
+          const payload = await api(`/admin/api/sessions/${encodeURIComponent(state.selectedSession.session_id)}`, {
+            method: "PATCH",
+            body: JSON.stringify({ group_id: groupId }),
+          });
+          state.selectedSession = payload.session;
+          await loadSessions();
+          renderSessionGroupSelect();
+          setStatus("Session moved to group.", "ok");
+        } catch (error) {
+          renderSessionGroupSelect();
+          setStatus(error.message, "error");
+        } finally {
+          setBusy(false);
+        }
+      }
+
+      function openGroupDialog(group = null) {
+        dom.groupIdInput.value = group ? group.group_id : "";
+        dom.groupDialogTitle.textContent = group ? "Edit group" : "New group";
+        dom.groupNameInput.value = group ? group.name : "";
+        dom.groupColorInput.value = group ? group.color : "#22c55e";
+        dom.groupIconInput.value = group ? group.icon_key : "ideas";
+        renderIconGrid(dom.groupIconInput.value);
+        dom.groupDialog.showModal();
+        dom.groupNameInput.focus();
+      }
+
+      function renderIconGrid(activeIcon) {
+        dom.iconGrid.replaceChildren();
+        for (const key of GROUP_ICONS) {
+          const node = document.createElement("button");
+          node.type = "button";
+          node.className = "icon-choice";
+          node.title = key.replace(/_/g, " ");
+          if (key === activeIcon) node.classList.add("is-active");
+          node.innerHTML = iconSvg(key);
+          node.addEventListener("click", () => {
+            dom.groupIconInput.value = key;
+            renderIconGrid(key);
+          });
+          dom.iconGrid.append(node);
+        }
+      }
+
+      async function saveGroupForm() {
+        const groupId = dom.groupIdInput.value;
+        const payload = {
+          name: dom.groupNameInput.value,
+          color: dom.groupColorInput.value,
+          icon_key: dom.groupIconInput.value,
+        };
+        const path = groupId ? `/admin/api/session-groups/${encodeURIComponent(groupId)}` : "/admin/api/session-groups";
+        setBusy(true);
+        try {
+          const result = await api(path, {
+            method: groupId ? "PATCH" : "POST",
+            body: JSON.stringify(payload),
+          });
+          dom.groupDialog.close();
+          state.activeGroupId = result.group.group_id;
+          localStorage.setItem("mcp-admin:group", state.activeGroupId);
+          await refreshAll();
+          setStatus(groupId ? "Group updated." : "Group created.", "ok");
+        } catch (error) {
+          setStatus(error.message, "error");
+        } finally {
+          setBusy(false);
+        }
+      }
+
+      async function deleteGroup(group) {
+        if (!group || group.is_system) return;
+        if (!window.confirm(`Delete group "${group.name}" and move its sessions to Uncategorized?`)) return;
+        setBusy(true);
+        try {
+          await api(`/admin/api/session-groups/${encodeURIComponent(group.group_id)}`, {
+            method: "DELETE",
+            body: JSON.stringify({ destination_group_id: "uncategorized" }),
+          });
+          state.activeGroupId = "uncategorized";
+          localStorage.setItem("mcp-admin:group", state.activeGroupId);
+          await refreshAll();
+          setStatus("Group deleted and sessions moved.", "ok");
+        } catch (error) {
+          setStatus(error.message, "error");
+        } finally {
+          setBusy(false);
+        }
+      }
+
       function renderExchanges() {
         dom.exchangeList.replaceChildren();
 
@@ -945,9 +1253,13 @@
 
         const activeCount = state.exchanges.filter((e) => !e.is_deleted).length;
         const deletedCount = state.exchanges.length - activeCount;
+        const group = state.groups.find((item) => item.group_id === state.selectedSession.group_id);
+        const fileCount = Number((state.files.session || []).length) + Number((state.files.group || []).length);
         dom.sessionTitle.textContent = state.selectedSession.title || state.selectedSession.session_id;
         renderMeta([
           { mono: true, text: state.selectedSession.session_id },
+          { text: `group ${group ? group.name : state.selectedSession.group_id || "uncategorized"}` },
+          { text: `${fileCount} files` },
           { text: `${activeCount} active exchanges` },
           { text: `${deletedCount} deleted` },
           { text: `timezone ${state.displayTimezone}` },
@@ -1393,9 +1705,16 @@
 
       function buildDemoStore(data) {
         const sessions = Array.isArray(data.sessions) ? data.sessions : [];
+        demo.groups = [
+          { group_id: "uncategorized", name: "Uncategorized", color: "#8b93a7", icon_key: "folder", is_system: true },
+          { group_id: "brainstorming", name: "Brainstorming", color: "#3b82f6", icon_key: "brain", is_system: true },
+          { group_id: "health", name: "Health", color: "#ef4444", icon_key: "medical_plus", is_system: true },
+        ];
         demo.sessions = sessions.map((s) => ({
           session_id: s.session_id,
           title: s.title,
+          group_id: s.group_id || "uncategorized",
+          group: demo.groups.find((group) => group.group_id === (s.group_id || "uncategorized")),
           context_pack_id: s.context_pack_id,
           exchange_count: s.exchange_count || 0,
           deleted_exchange_count: s.deleted_exchange_count || 0,
@@ -1453,6 +1772,32 @@
           refreshDemoTimestamps();
           return Promise.resolve({ ok: true, display_timezone: state.displayTimezone });
         }
+        if (path === "/admin/api/session-groups" && method === "GET") {
+          return Promise.resolve({ ok: true, groups: demo.groups });
+        }
+        if (path === "/admin/api/session-groups" && method === "POST") {
+          const id = slugify(body.name || "group");
+          const group = { group_id: id, name: body.name, color: body.color, icon_key: body.icon_key, is_system: false };
+          demo.groups.push(group);
+          return Promise.resolve({ ok: true, group });
+        }
+        const groupMatch = path.match(/^\/admin\/api\/session-groups\/(.+)$/);
+        if (groupMatch && method === "PATCH") {
+          const group = demo.groups.find((item) => item.group_id === decodeURIComponent(groupMatch[1]));
+          if (group) Object.assign(group, body);
+          return Promise.resolve({ ok: true, group });
+        }
+        if (groupMatch && method === "DELETE") {
+          const groupId = decodeURIComponent(groupMatch[1]);
+          demo.groups = demo.groups.filter((item) => item.group_id !== groupId);
+          for (const session of demo.sessions) {
+            if (session.group_id === groupId) {
+              session.group_id = body.destination_group_id || "uncategorized";
+              session.group = demo.groups.find((group) => group.group_id === session.group_id);
+            }
+          }
+          return Promise.resolve({ ok: true, group: { group_id: groupId, deleted_at: Date.now() } });
+        }
         if (path === "/admin/api/sessions") return Promise.resolve({ ok: true, sessions: demo.sessions });
 
         const single = path.match(/^\/admin\/api\/sessions\/(.+)$/);
@@ -1460,6 +1805,15 @@
           const entry = demo.store[decodeURIComponent(single[1])];
           if (!entry) return Promise.reject(Object.assign(new Error("Unknown session"), { status: 404 }));
           return Promise.resolve({ ok: true, session: entry.session, exchanges: entry.exchanges });
+        }
+        if (single && method === "PATCH") {
+          const entry = demo.store[decodeURIComponent(single[1])];
+          if (!entry) return Promise.reject(Object.assign(new Error("Unknown session"), { status: 404 }));
+          entry.session.group_id = body.group_id || "uncategorized";
+          entry.session.group = demo.groups.find((group) => group.group_id === entry.session.group_id);
+          const session = demo.sessions.find((item) => item.session_id === entry.session.session_id);
+          if (session) Object.assign(session, entry.session);
+          return Promise.resolve({ ok: true, session: entry.session });
         }
 
         const find = (id) => {
@@ -1494,10 +1848,15 @@
         session.deleted_exchange_count = entry.exchanges.filter((e) => e.is_deleted).length;
       }
 
+      function slugify(value) {
+        return String(value).trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 48) || "group";
+      }
+
       function setBusy(value) {
         state.busy = value;
         for (const node of document.querySelectorAll("button")) node.disabled = value;
         dom.timezoneSelect.disabled = value;
+        renderSessionGroupSelect();
       }
 
       function setStatus(message, tone) {
@@ -1632,6 +1991,39 @@
 
       function escapeHtml(value) {
         return String(value).replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
+      }
+
+      function svgNode(key) {
+        const wrap = document.createElement("span");
+        wrap.innerHTML = iconSvg(key);
+        return wrap.firstElementChild;
+      }
+
+      function iconSvg(key) {
+        const common = 'viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"';
+        const paths = {
+          folder: '<path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H10l2 2h6.5A2.5 2.5 0 0 1 21 9.5v7A2.5 2.5 0 0 1 18.5 19h-13A2.5 2.5 0 0 1 3 16.5z"></path>',
+          brain: '<path d="M9 4.5a3 3 0 0 0-3 3 3 3 0 0 0-2 5.4A3.2 3.2 0 0 0 7.2 18H9"></path><path d="M15 4.5a3 3 0 0 1 3 3 3 3 0 0 1 2 5.4A3.2 3.2 0 0 1 16.8 18H15"></path><path d="M9 4.5V20"></path><path d="M15 4.5V20"></path><path d="M9 9H7"></path><path d="M15 9h2"></path><path d="M9 14H7.5"></path><path d="M15 14h1.5"></path>',
+          medical_plus: '<path d="M9 3h6v6h6v6h-6v6H9v-6H3V9h6z"></path>',
+          ideas: '<path d="M9 18h6"></path><path d="M10 22h4"></path><path d="M8.5 14.5A6 6 0 1 1 15.5 14c-.9.7-1.5 1.7-1.7 3h-3.6c-.2-1.1-.8-1.9-1.7-2.5z"></path>',
+          heart: '<path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8z"></path>',
+          book: '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5z"></path>',
+          graduation: '<path d="M22 10 12 5 2 10l10 5z"></path><path d="M6 12v5c3 2 9 2 12 0v-5"></path>',
+          pencil: '<path d="m4 20 4.5-1 10-10a2.1 2.1 0 0 0-3-3l-10 10z"></path><path d="m14 6 4 4"></path>',
+          code: '<path d="m8 8-4 4 4 4"></path><path d="m16 8 4 4-4 4"></path><path d="m14 4-4 16"></path>',
+          terminal: '<path d="m4 7 5 5-5 5"></path><path d="M12 17h8"></path>',
+          music: '<path d="M9 18V5l10-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="16" cy="16" r="3"></circle>',
+          food: '<path d="M7 3v8"></path><path d="M4 3v8"></path><path d="M10 3v8"></path><path d="M4 11h6"></path><path d="M7 11v10"></path><path d="M16 3c2 2 3 5 3 8s-1 5-3 6v4"></path>',
+          palette: '<path d="M12 3a9 9 0 0 0 0 18h1.5a2 2 0 0 0 0-4H12a2 2 0 0 1 0-4h2a7 7 0 0 0-2-10z"></path><circle cx="7.5" cy="10" r=".7"></circle><circle cx="10" cy="7.5" r=".7"></circle><circle cx="14" cy="7.5" r=".7"></circle>',
+          tools: '<path d="M14.7 6.3a4 4 0 0 0 5 5L11 20l-5-5 8.7-8.7z"></path><path d="m5 15-2 2 4 4 2-2"></path>',
+          travel: '<path d="M10.5 21 13 14l7-2-7-2-2.5-7L8 10l-7 2 7 2z"></path>',
+          world: '<circle cx="12" cy="12" r="9"></circle><path d="M3 12h18"></path><path d="M12 3a14 14 0 0 1 0 18"></path><path d="M12 3a14 14 0 0 0 0 18"></path>',
+          legal: '<path d="M12 3v18"></path><path d="M5 6h14"></path><path d="m6 6-3 7h6z"></path><path d="m18 6-3 7h6z"></path>',
+          science: '<path d="M9 3h6"></path><path d="M10 3v6l-5 9a2 2 0 0 0 1.7 3h10.6A2 2 0 0 0 19 18l-5-9V3"></path><path d="M8 15h8"></path>',
+          plants: '<path d="M12 21V10"></path><path d="M12 13c-5 0-7-3-7-7 5 0 7 3 7 7z"></path><path d="M12 15c5 0 7-3 7-7-5 0-7 3-7 7z"></path>',
+          money: '<circle cx="12" cy="12" r="9"></circle><path d="M15 9.5A3 3 0 0 0 12 8c-1.7 0-3 .8-3 2s1.3 1.8 3 2 3 .8 3 2-1.3 2-3 2a3.5 3.5 0 0 1-3.2-1.7"></path><path d="M12 6v12"></path>'
+        };
+        return `<svg ${common}>${paths[key] || paths.folder}</svg>`;
       }
 
       // ---------- tiny DOM helpers ----------

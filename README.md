@@ -77,6 +77,7 @@ http://127.0.0.1:8787/mcp
 | `bridge_ping` | Minimal authenticated MCP health check. |
 | `auth_whoami` | Shows the OAuth client attached to the current token. |
 | `save_probe` / `read_probe` | Simple connector testing tools for non-sensitive strings. |
+| `list_session_groups` | Lists local session groups and their valid `group_id` values. |
 | `create_session` | Creates a new conversation session. |
 | `list_sessions` | Lists saved sessions. |
 | `get_session_overview` | Returns session metadata and transcript chunk information. |
@@ -84,15 +85,22 @@ http://127.0.0.1:8787/mcp
 | `save_exchange` | Saves one full user/model exchange. |
 | `save_session_summary` | Saves a Markdown summary for a session. |
 | `list_session_summaries` | Lists saved summaries for a session. |
+| `upload_session_file` | Saves a text file for one session. |
+| `upload_group_file` | Saves a text file for an entire session group. |
+| `list_session_files` | Lists uploaded session/group files. |
+| `download_session_file` | Reads one uploaded text file by `file_id`. |
 
 Typical model flow:
 
 1. Establish the right `session_id` with `create_session` or `list_sessions`.
+   For a new session, call `list_session_groups` first and pass a valid `group_id` when the user names a group. Omit `group_id` to use `uncategorized`.
 2. Call `get_session_overview`.
 3. Fetch every `get_session_transcript_chunk` from `1` through `transcript_chunk_count`.
 4. Prepare the response.
 5. Call `save_exchange` before showing the response to the user.
 6. If the user asks for a summary, save it with `save_session_summary`.
+
+Session groups and uploaded files are runtime data in the SQLite database. User-created groups and their files are not stored in tracked repo configuration. The admin panel at `/admin/sessions` can create, edit, delete, filter by, and move sessions between groups.
 
 `get_session_overview` returns `response_display_timezone` for the configured bridge display timezone. `save_exchange` returns `assistant_created_at_display` and `assistant_created_at_timezone`; use that returned display timestamp as the user-visible response timestamp. The bridge renders response display timestamps in the configured bridge display timezone, UTC by default, so clients should not convert that value into their own local timezone.
 

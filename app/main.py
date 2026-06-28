@@ -34,8 +34,8 @@ SERVER_INSTRUCTIONS = (
     "User context files are supplied manually outside MCP. If a session_id is known, "
     "call get_session_overview, then fetch every get_session_transcript_chunk before "
     "answering. Before showing a final answer for an active session, call save_exchange "
-    "with the full user message and full assistant response. Use create_session/list_sessions "
-    "only to establish the right session."
+    "with the full user message and full assistant response. Use list_session_groups before "
+    "create_session; use list_sessions to find an existing session."
 )
 
 settings = load_settings()
@@ -170,6 +170,31 @@ async def admin_api_session(request: Request) -> Response:
     return await admin.api_session(request)
 
 
+@mcp.custom_route("/admin/api/sessions/{session_id}", methods=["PATCH"])
+async def admin_api_update_session(request: Request) -> Response:
+    return await admin.api_update_session(request)
+
+
+@mcp.custom_route("/admin/api/session-groups", methods=["GET"])
+async def admin_api_session_groups(request: Request) -> Response:
+    return await admin.api_session_groups(request)
+
+
+@mcp.custom_route("/admin/api/session-groups", methods=["POST"])
+async def admin_api_create_session_group(request: Request) -> Response:
+    return await admin.api_create_session_group(request)
+
+
+@mcp.custom_route("/admin/api/session-groups/{group_id}", methods=["PATCH"])
+async def admin_api_update_session_group(request: Request) -> Response:
+    return await admin.api_update_session_group(request)
+
+
+@mcp.custom_route("/admin/api/session-groups/{group_id}", methods=["DELETE"])
+async def admin_api_delete_session_group(request: Request) -> Response:
+    return await admin.api_delete_session_group(request)
+
+
 @mcp.custom_route("/admin/api/exchanges/{exchange_id}", methods=["PATCH"])
 async def admin_api_update_exchange(request: Request) -> Response:
     return await admin.api_update_exchange(request)
@@ -224,23 +249,36 @@ def read_probe(key: str) -> dict[str, Any]:
 
 
 @mcp.tool()
-def create_session(title: str = "") -> dict[str, Any]:
-    """Create a new model-to-model conversation session. Title is optional and may be inferred later."""
+def list_session_groups() -> dict[str, Any]:
+    """List available local session groups so a model can choose a valid group_id before creating a session."""
+    return {"ok": True, "groups": store.list_session_groups()}
+
+
+@mcp.tool()
+def create_session(title: str = "", group_id: str = "") -> dict[str, Any]:
+    """Create a new model-to-model conversation session. Title is optional and group_id defaults to uncategorized."""
     resolved_title = title.strip()
     title_is_auto = not resolved_title
     if title_is_auto:
         resolved_title = _auto_title()
     session_id = _new_session_id(resolved_title, title_is_auto=title_is_auto)
-    session = store.create_session(
-        session_id=session_id,
-        title=resolved_title,
-        context_pack_id=MANUAL_CONTEXT_ID,
-        title_is_auto=title_is_auto,
-    )
+    try:
+        session = store.create_session(
+            session_id=session_id,
+            title=resolved_title,
+            context_pack_id=MANUAL_CONTEXT_ID,
+            title_is_auto=title_is_auto,
+            group_id=group_id,
+        )
+    except ValueError as exc:
+        return {"ok": False, "error": str(exc)}
+    group = store.get_session_group(session.group_id)
     return {
         "ok": True,
         "session_id": session.session_id,
         "title": session.title,
+        "group_id": session.group_id,
+        "group": _group_payload(group),
         "context_source": "manual",
         "title_is_auto": session.title_is_auto,
         "created_at": session.created_at,
@@ -256,6 +294,8 @@ def list_sessions() -> dict[str, Any]:
             {
                 "session_id": session["session_id"],
                 "title": session["title"],
+                "group_id": session["group_id"],
+                "group": session["group"],
                 "title_is_auto": session["title_is_auto"],
                 "created_at": session["created_at"],
                 "updated_at": session["updated_at"],
@@ -274,10 +314,17 @@ def get_session_overview(session_id: str) -> dict[str, Any]:
     exchanges = store.list_exchanges(session.session_id)
     summaries = summary_store.list_summaries(session.session_id)
     display_timezone = _display_timezone_name()
+    group = store.get_session_group(session.group_id)
+    files = {
+        "session": store.list_session_files(session_id=session.session_id),
+        "group": store.list_session_files(group_id=session.group_id),
+    }
     return {
         "ok": True,
         "context_source": "manual",
         "summary_count": len(summaries),
+        "group": _group_payload(group),
+        "files": files,
         **render_session_overview(
             session,
             exchanges,
@@ -401,6 +448,73 @@ def list_session_summaries(session_id: str) -> dict[str, Any]:
     return {"ok": True, "session_id": session.session_id, "summary_count": len(summaries), "summaries": summaries}
 
 
+@mcp.tool()
+def upload_session_file(
+    session_id: str,
+    filename: str,
+    content: str,
+    mime_type: str = "text/markdown",
+) -> dict[str, Any]:
+    """Save a text file that belongs only to one conversation session."""
+    token = get_access_token()
+    created_by = token.client_id if token else "unknown"
+    try:
+        saved = store.save_session_file(
+            session_id=session_id,
+            filename=filename,
+            content=content,
+            mime_type=mime_type,
+            created_by=created_by,
+        )
+    except ValueError as exc:
+        return {"ok": False, "error": str(exc)}
+    return {"ok": True, "file": _file_payload(saved)}
+
+
+@mcp.tool()
+def upload_group_file(
+    group_id: str,
+    filename: str,
+    content: str,
+    mime_type: str = "text/markdown",
+) -> dict[str, Any]:
+    """Save a text file as durable context for an entire session group."""
+    token = get_access_token()
+    created_by = token.client_id if token else "unknown"
+    try:
+        saved = store.save_group_file(
+            group_id=group_id,
+            filename=filename,
+            content=content,
+            mime_type=mime_type,
+            created_by=created_by,
+        )
+    except ValueError as exc:
+        return {"ok": False, "error": str(exc)}
+    return {"ok": True, "file": _file_payload(saved)}
+
+
+@mcp.tool()
+def list_session_files(session_id: str = "", group_id: str = "") -> dict[str, Any]:
+    """List uploaded text files, optionally filtered by session_id and/or group_id."""
+    return {
+        "ok": True,
+        "files": store.list_session_files(
+            session_id=session_id.strip() or None,
+            group_id=group_id.strip() or None,
+        ),
+    }
+
+
+@mcp.tool()
+def download_session_file(file_id: int) -> dict[str, Any]:
+    """Download one uploaded text file by file_id."""
+    saved = store.get_session_file(file_id)
+    if saved is None:
+        return {"ok": False, "error": f"Unknown file_id: {file_id}"}
+    return {"ok": True, "file": _file_payload(saved, include_content=True)}
+
+
 def _new_session_id(title: str, title_is_auto: bool = False) -> str:
     stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
     slug_source = "session" if title_is_auto else title
@@ -420,6 +534,37 @@ def _display_timezone_name() -> str:
     except ValueError:
         store.set_app_setting(DISPLAY_TIMEZONE_SETTING_KEY, DEFAULT_DISPLAY_TIMEZONE_NAME)
         return DEFAULT_DISPLAY_TIMEZONE_NAME
+
+
+def _group_payload(group: Any) -> dict[str, Any] | None:
+    if group is None:
+        return None
+    return {
+        "group_id": group.group_id,
+        "name": group.name,
+        "color": group.color,
+        "icon_key": group.icon_key,
+        "sort_order": group.sort_order,
+        "is_system": group.is_system,
+    }
+
+
+def _file_payload(file: Any, include_content: bool = False) -> dict[str, Any]:
+    payload = {
+        "file_id": file.file_id,
+        "scope_type": file.scope_type,
+        "session_id": file.session_id,
+        "group_id": file.group_id,
+        "filename": file.filename,
+        "mime_type": file.mime_type,
+        "sha256": file.sha256,
+        "size_bytes": file.size_bytes,
+        "created_by": file.created_by,
+        "created_at": file.created_at,
+    }
+    if include_content:
+        payload["content"] = file.content
+    return payload
 
 
 app = mcp.streamable_http_app()

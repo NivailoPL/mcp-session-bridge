@@ -29,9 +29,51 @@ def test_store_saves_session_and_exchange(tmp_path) -> None:
 
     assert exchange.exchange_id == 1
     assert exchange.assistant_created_at == exchange.created_at
+    assert session.group_id == "uncategorized"
+    assert sessions[0]["group_id"] == "uncategorized"
+    assert sessions[0]["group"]["icon_key"] == "folder"
     assert sessions[0]["exchange_count"] == 1
     assert exchanges[0].assistant_response.startswith("Response from model Claude")
     assert exchanges[0].assistant_created_at == exchange.assistant_created_at
+
+
+def test_store_manages_session_groups_and_reassigns_deleted_group(tmp_path) -> None:
+    store = Store(tmp_path / "bridge.sqlite3")
+
+    groups = store.list_session_groups()
+    assert [group["group_id"] for group in groups[:3]] == ["uncategorized", "brainstorming", "health"]
+
+    ideas = store.create_session_group("Ideas", "#22c55e", "ideas")
+    session = store.create_session("s1", "Grouped", "manual-context", group_id=ideas.group_id)
+
+    assert ideas.group_id == "ideas"
+    assert ideas.is_system is False
+    assert session.group_id == "ideas"
+    assert store.list_sessions()[0]["group"]["name"] == "Ideas"
+
+    updated = store.update_session_group("ideas", name="Idea Lab", color="#0ea5e9", icon_key="brain")
+    assert updated.name == "Idea Lab"
+    assert updated.color == "#0ea5e9"
+    assert updated.icon_key == "brain"
+
+    with pytest.raises(ValueError, match="System session groups cannot be edited"):
+        store.update_session_group("health", name="Wellness")
+    with pytest.raises(ValueError, match="System session groups cannot be deleted"):
+        store.delete_session_group("health")
+    with pytest.raises(ValueError, match="session group name already exists"):
+        store.create_session_group("idea lab", "#22c55e", "ideas", group_id="idea-lab-2")
+    with pytest.raises(ValueError, match="Unknown session group"):
+        store.create_session("s2", "Bad group", "manual-context", group_id="missing")
+
+    store.set_session_group("s1", "brainstorming")
+    assert store.get_session("s1").group_id == "brainstorming"
+
+    store.set_session_group("s1", "ideas")
+    deleted = store.delete_session_group("ideas", destination_group_id="health")
+    assert deleted.deleted_at is not None
+    assert store.get_session("s1").group_id == "health"
+    assert "ideas" not in {group["group_id"] for group in store.list_session_groups()}
+    assert "ideas" in {group["group_id"] for group in store.list_session_groups(include_deleted=True)}
 
 
 def test_store_soft_deletes_exchange_and_hides_it_from_transcript(tmp_path) -> None:
@@ -234,6 +276,11 @@ def test_public_tools_hide_context_pack_tools(tmp_path, monkeypatch) -> None:
 
     assert "get_session_overview" in tool_names
     assert "get_session_transcript_chunk" in tool_names
+    assert "list_session_groups" in tool_names
+    assert "upload_session_file" in tool_names
+    assert "upload_group_file" in tool_names
+    assert "list_session_files" in tool_names
+    assert "download_session_file" in tool_names
     assert "save_session_summary" in tool_names
     assert "list_session_summaries" in tool_names
     assert "list_context_packs" not in tool_names
@@ -246,14 +293,24 @@ def test_public_tools_hide_context_pack_tools(tmp_path, monkeypatch) -> None:
 def test_create_session_works_without_context_pack_manifest(tmp_path, monkeypatch) -> None:
     main = _load_main(tmp_path, monkeypatch)
 
-    result = main.create_session("Manual context session")
+    main.store.create_session_group("Ideas", "#22c55e", "ideas")
+    groups_result = main.list_session_groups()
+    result = main.create_session("Manual context session", group_id="ideas")
+    invalid_result = main.create_session("Manual context session", group_id="missing")
     session = main.store.get_session(result["session_id"])
 
+    assert groups_result["ok"] is True
+    assert "ideas" in {group["group_id"] for group in groups_result["groups"]}
     assert result["ok"] is True
+    assert result["group_id"] == "ideas"
+    assert result["group"]["name"] == "Ideas"
+    assert invalid_result["ok"] is False
+    assert invalid_result["error"] == "Unknown session group: missing"
     assert result["context_source"] == "manual"
     assert "context_pack_id" not in result
     assert session is not None
     assert session.context_pack_id == "manual-context"
+    assert session.group_id == "ideas"
 
 
 def test_session_overview_and_transcript_chunks_round_trip(tmp_path, monkeypatch) -> None:
@@ -273,6 +330,8 @@ def test_session_overview_and_transcript_chunks_round_trip(tmp_path, monkeypatch
 
     assert overview["ok"] is True
     assert overview["context_source"] == "manual"
+    assert overview["group_id"] == "uncategorized"
+    assert overview["group"]["name"] == "Uncategorized"
     assert overview["exchange_count"] == 7
     assert overview["turn_count"] == 14
     assert overview["transcript_chunk_count"] > 1
@@ -284,6 +343,31 @@ def test_session_overview_and_transcript_chunks_round_trip(tmp_path, monkeypatch
     assert "".join(chunk["transcript_markdown"] for chunk in chunks) == full_transcript
     assert chunks[-1]["has_more"] is False
     assert chunks[-1]["next_chunk_index"] is None
+
+
+def test_mcp_session_files_upload_list_download_and_show_in_overview(tmp_path, monkeypatch) -> None:
+    main = _load_main(tmp_path, monkeypatch)
+    main.store.create_session_group("Ideas", "#22c55e", "ideas")
+    main.store.create_session("s1", "File test", "manual-context", group_id="ideas")
+
+    session_file = main.upload_session_file("s1", "plan.md", "# Plan\n\nDo the thing.")
+    group_file = main.upload_group_file("ideas", "context.md", "Shared group context.")
+    listed = main.list_session_files(session_id="s1", group_id="ideas")
+    downloaded = main.download_session_file(session_file["file"]["file_id"])
+    overview = main.get_session_overview("s1")
+    invalid = main.upload_group_file("missing", "x.md", "Nope.")
+
+    assert session_file["ok"] is True
+    assert session_file["file"]["scope_type"] == "session"
+    assert session_file["file"]["filename"] == "plan.md"
+    assert group_file["ok"] is True
+    assert group_file["file"]["scope_type"] == "group"
+    assert {file["filename"] for file in listed["files"]} == {"plan.md", "context.md"}
+    assert downloaded["file"]["content"] == "# Plan\n\nDo the thing."
+    assert overview["files"]["session"][0]["filename"] == "plan.md"
+    assert overview["files"]["group"][0]["filename"] == "context.md"
+    assert invalid["ok"] is False
+    assert invalid["error"] == "Unknown session group: missing"
 
 
 def test_display_timezone_setting_controls_mcp_timestamps(tmp_path, monkeypatch) -> None:
@@ -331,7 +415,11 @@ def test_project_prompt_documents_manual_context_and_chunk_protocol() -> None:
 
     assert "`get_session_overview`" in prompt
     assert "`get_session_transcript_chunk`" in prompt
+    assert "`list_session_groups`" in prompt
     assert "`save_session_summary`" in prompt
+    assert "`upload_session_file`" in prompt
+    assert "`upload_group_file`" in prompt
+    assert "`download_session_file`" in prompt
     assert "`get_session_package`" not in prompt
     assert "context pack" not in prompt.lower()
 
@@ -346,6 +434,7 @@ def test_server_instructions_are_publication_ready(tmp_path, monkeypatch) -> Non
     assert "user" in main.SERVER_INSTRUCTIONS.lower()
     assert "get_session_overview" in main.SERVER_INSTRUCTIONS
     assert "get_session_transcript_chunk" in main.SERVER_INSTRUCTIONS
+    assert "list_session_groups" in main.SERVER_INSTRUCTIONS
     assert "save_exchange" in main.SERVER_INSTRUCTIONS
 
 

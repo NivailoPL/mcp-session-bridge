@@ -14,7 +14,7 @@ from starlette.responses import HTMLResponse, JSONResponse, RedirectResponse, Re
 
 from app.security import token_urlsafe, verify_password
 from app.settings import Settings
-from app.storage import ExchangeRecord, SessionRecord, Store
+from app.storage import ExchangeRecord, SessionFileRecord, SessionGroupRecord, SessionRecord, Store
 from app.time_format import (
     DEFAULT_DISPLAY_TIMEZONE_NAME,
     DISPLAY_TIMEZONE_SETTING_KEY,
@@ -128,6 +128,78 @@ class AdminHandlers:
             headers=self._no_store_headers(),
         )
 
+    async def api_session_groups(self, request: Request) -> Response:
+        _, error = self._require_admin(request)
+        if error:
+            return error
+        return JSONResponse(
+            {"ok": True, "groups": self.store.list_session_groups()},
+            headers=self._no_store_headers(),
+        )
+
+    async def api_create_session_group(self, request: Request) -> Response:
+        _, error = self._require_admin_mutation(request)
+        if error:
+            return error
+        payload, parse_error = await _json_body(request)
+        if parse_error:
+            return parse_error
+        try:
+            group = self.store.create_session_group(
+                name=str(payload.get("name", "")),
+                color=str(payload.get("color", "")),
+                icon_key=str(payload.get("icon_key", "")),
+                group_id=str(payload.get("group_id", "")),
+            )
+        except ValueError as exc:
+            return self._value_error(exc)
+        return JSONResponse(
+            {"ok": True, "group": _session_group_payload(group)},
+            headers=self._no_store_headers(),
+        )
+
+    async def api_update_session_group(self, request: Request) -> Response:
+        _, error = self._require_admin_mutation(request)
+        if error:
+            return error
+        payload, parse_error = await _json_body(request)
+        if parse_error:
+            return parse_error
+        fields: dict[str, str] = {}
+        for key in ("name", "color", "icon_key"):
+            if key in payload:
+                fields[key] = str(payload[key])
+        if not fields:
+            return self._json_error("No editable session group fields provided.", status_code=400)
+        try:
+            group = self.store.update_session_group(request.path_params["group_id"], **fields)
+        except ValueError as exc:
+            return self._value_error(exc)
+        return JSONResponse(
+            {"ok": True, "group": _session_group_payload(group)},
+            headers=self._no_store_headers(),
+        )
+
+    async def api_delete_session_group(self, request: Request) -> Response:
+        _, error = self._require_admin_mutation(request)
+        if error:
+            return error
+        payload, parse_error = await _json_body(request, allow_empty=True)
+        if parse_error:
+            return parse_error
+        destination_group_id = str(payload.get("destination_group_id", "")) if payload else ""
+        try:
+            group = self.store.delete_session_group(
+                request.path_params["group_id"],
+                destination_group_id=destination_group_id,
+            )
+        except ValueError as exc:
+            return self._value_error(exc)
+        return JSONResponse(
+            {"ok": True, "group": _session_group_payload(group)},
+            headers=self._no_store_headers(),
+        )
+
     async def api_session(self, request: Request) -> Response:
         _, error = self._require_admin(request)
         if error:
@@ -145,11 +217,36 @@ class AdminHandlers:
                 "ok": True,
                 "display_timezone": display_timezone,
                 "session": _session_payload(session),
+                "files": {
+                    "session": self.store.list_session_files(session_id=session.session_id),
+                    "group": self.store.list_session_files(group_id=session.group_id),
+                },
                 "exchanges": [
                     _exchange_payload(exchange, timezone_name=display_timezone)
                     for exchange in exchanges
                 ],
             },
+            headers=self._no_store_headers(),
+        )
+
+    async def api_update_session(self, request: Request) -> Response:
+        _, error = self._require_admin_mutation(request)
+        if error:
+            return error
+        payload, parse_error = await _json_body(request)
+        if parse_error:
+            return parse_error
+        if "group_id" not in payload:
+            return self._json_error("group_id is required.", status_code=400)
+        try:
+            session = self.store.set_session_group(
+                request.path_params["session_id"],
+                str(payload.get("group_id", "")),
+            )
+        except ValueError as exc:
+            return self._value_error(exc)
+        return JSONResponse(
+            {"ok": True, "session": _session_payload(session)},
             headers=self._no_store_headers(),
         )
 
@@ -382,6 +479,7 @@ def _session_payload(session: SessionRecord) -> dict[str, Any]:
     return {
         "session_id": session.session_id,
         "title": session.title,
+        "group_id": session.group_id,
         "context_pack_id": session.context_pack_id,
         "context_pack_version": session.context_pack_version,
         "title_is_auto": session.title_is_auto,
@@ -389,6 +487,35 @@ def _session_payload(session: SessionRecord) -> dict[str, Any]:
         "created_at_iso": format_timestamp_iso(session.created_at),
         "updated_at": session.updated_at,
         "updated_at_iso": format_timestamp_iso(session.updated_at),
+    }
+
+
+def _session_group_payload(group: SessionGroupRecord) -> dict[str, Any]:
+    return {
+        "group_id": group.group_id,
+        "name": group.name,
+        "color": group.color,
+        "icon_key": group.icon_key,
+        "sort_order": group.sort_order,
+        "is_system": group.is_system,
+        "created_at": group.created_at,
+        "updated_at": group.updated_at,
+        "deleted_at": group.deleted_at,
+    }
+
+
+def _session_file_payload(file: SessionFileRecord) -> dict[str, Any]:
+    return {
+        "file_id": file.file_id,
+        "scope_type": file.scope_type,
+        "session_id": file.session_id,
+        "group_id": file.group_id,
+        "filename": file.filename,
+        "mime_type": file.mime_type,
+        "sha256": file.sha256,
+        "size_bytes": file.size_bytes,
+        "created_by": file.created_by,
+        "created_at": file.created_at,
     }
 
 
