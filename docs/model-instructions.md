@@ -12,9 +12,10 @@ When a `session_id` is known:
 
 1. Call `get_session_overview`.
 2. Read `transcript_chunk_count`, `transcript_sha256`, exchange count, turn count, and chunk limits.
-3. Fetch every `get_session_transcript_chunk` from `chunk_index=1` through `transcript_chunk_count`.
-4. Only answer after the required transcript chunks are available.
-5. Before showing the final response to the user, call `save_exchange`.
+3. Call `get_last_speaker` with your own `model_name`. If it returns `should_fetch_transcript: false` (you saved the last turn) **and** you are still in the same chat window with that turn in your local context, you may skip the chunk fetch and answer from local context.
+4. In every other case — different or unknown last speaker, a fresh window, or any doubt — fetch every `get_session_transcript_chunk` from `chunk_index=1` through `transcript_chunk_count`.
+5. Only answer after the required transcript chunks are available, or after a confirmed same-model, same-window skip.
+6. Before showing the final response to the user, call `save_exchange`. This is required on every turn, even when you skipped the chunk fetch.
 
 When starting a new session, call `list_session_groups` first. If the user names a group, pass the matching `group_id` to `create_session`; otherwise let the session default to `uncategorized`.
 

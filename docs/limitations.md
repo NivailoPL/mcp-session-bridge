@@ -23,6 +23,10 @@ BRIDGE_TRANSCRIPT_CHUNK_MAX_LINES=180
 BRIDGE_TRANSCRIPT_CHUNK_MAX_CHARS=12000
 ```
 
+## Continuity Check
+
+`get_last_speaker` lets a model skip re-fetching transcript chunks when it saved the last turn and is still in the same chat window. This is a best-effort optimization keyed on the self-declared `model_name`: the bridge cannot verify a model's real identity or whether it runs in the same window, so a wrong `model_name` or a fresh window can produce a misleading skip. When in doubt, fetch the chunks. `save_exchange` is still required on every turn.
+
 ## No Docker In v0.1
 
 Docker documentation and images are not part of v0.1. Use local `uv`, Uvicorn, and the deployment templates.
