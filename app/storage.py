@@ -1009,6 +1009,19 @@ class Store:
             ).fetchall()
         return [_exchange_from_row(row) for row in rows]
 
+    def get_latest_exchange(self, session_id: str) -> ExchangeRecord | None:
+        with self._lock, self._connect() as conn:
+            row = conn.execute(
+                """
+                SELECT * FROM exchanges
+                WHERE session_id = ? AND deleted_at IS NULL
+                ORDER BY created_at DESC, exchange_id DESC
+                LIMIT 1
+                """,
+                (session_id,),
+            ).fetchone()
+        return _exchange_from_row(row) if row is not None else None
+
     def update_exchange(
         self,
         exchange_id: int,

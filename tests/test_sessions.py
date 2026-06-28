@@ -106,6 +106,26 @@ def test_store_soft_deletes_exchange_and_hides_it_from_transcript(tmp_path) -> N
     assert [exchange.exchange_id for exchange in store.list_exchanges("s1")] == [first.exchange_id, duplicate.exchange_id]
 
 
+def test_get_latest_exchange_returns_newest_active_exchange(tmp_path) -> None:
+    store = Store(tmp_path / "bridge.sqlite3")
+    store.create_session("s1", "Latest speaker", "manual-context")
+
+    assert store.get_latest_exchange("s1") is None
+
+    store.save_exchange("s1", "Claude", "First.", "First answer.")
+    second = store.save_exchange("s1", "ChatGPT", "Second.", "Second answer.")
+
+    latest = store.get_latest_exchange("s1")
+    assert latest is not None
+    assert latest.exchange_id == second.exchange_id
+    assert latest.model_name == "ChatGPT"
+
+    store.delete_exchange(second.exchange_id, reason="cleanup", actor="owner")
+    after_delete = store.get_latest_exchange("s1")
+    assert after_delete is not None
+    assert after_delete.model_name == "Claude"
+
+
 def test_store_edits_exchange_and_records_admin_event(tmp_path) -> None:
     store = Store(tmp_path / "bridge.sqlite3")
     session = store.create_session("s1", "Edit test", "manual-context")
