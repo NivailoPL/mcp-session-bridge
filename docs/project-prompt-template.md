@@ -36,8 +36,8 @@ BEFORE ANSWERING:
 2. From `get_session_overview`, read `transcript_chunk_count`, `transcript_sha256`, exchange and turn counts, and the chunk limits.
 3. Call `get_last_speaker` with your own `model_name` to learn who saved the last turn. If it returns `should_fetch_transcript: false` (you saved that turn) and you are still in the same chat window with it in your local context, you may skip the transcript fetch and answer from local context. In any other case — a different or unknown last speaker, a fresh window, or any doubt — fetch the full transcript with `get_session_transcript_chunk`, from `chunk_index=1` through `chunk_index=transcript_chunk_count`.
 4. Do not assume one tool call is enough for a long conversation. If `has_more` is true, fetch the next chunk.
-5. Do not start drafting, outlining, planning, or composing the user-facing answer until every required transcript chunk has been fetched and checked. The latest chunks may change the answer.
-6. Only answer substantively after all required transcript chunks have been fetched.
+5. Do not start drafting, outlining, planning, or composing the user-facing answer until every required transcript chunk has been fetched and checked, unless step 3 confirmed a safe same-model, same-window skip. The latest chunks may change the answer.
+6. Only answer substantively after all required transcript chunks have been fetched, or after a confirmed same-model, same-window skip from step 3.
 7. If `get_session_overview` or any required chunk returns an error, tell the user that you cannot safely continue without the current transcript.
 8. Treat manually supplied files or context in the chat as the primary source of domain context. Treat MCP Session Bridge as the source of conversation history between models.
 9. If `get_session_overview` includes session or group files that are relevant to the user's request, use `download_session_file` to read the needed files before answering.
