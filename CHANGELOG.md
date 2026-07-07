@@ -4,7 +4,7 @@ All notable changes to MCP Session Bridge will be documented in this file.
 
 This project follows a lightweight changelog format inspired by Keep a Changelog.
 
-## [Unreleased]
+## [0.2.0] - 2026-07-07
 
 ### Highlights
 
