@@ -1,6 +1,6 @@
 # MCP Session Bridge
 
-MCP Session Bridge is a small remote MCP server for shared, multi-model conversation memory. It gives different LLM assistants one durable place to create sessions, save full user/model exchanges, read transcripts in bounded chunks, and write optional Markdown summaries.
+MCP Session Bridge is a small remote MCP server for shared, multi-model conversation memory. It gives different LLM assistants one durable place to create sessions, save full user/model exchanges, read transcripts in bounded chunks, and upload session/group text files.
 
 It is intentionally narrow. The bridge stores conversation history; it does not upload or manage the user's external project files. Users can still paste files or attach notes directly in their chat client, while MCP Session Bridge keeps the cross-model transcript consistent.
 
@@ -10,7 +10,7 @@ It is intentionally narrow. The bridge stores conversation history; it does not 
 - Supports OAuth authorization-code + PKCE and dynamic client registration.
 - Stores sessions, transcript exchanges, OAuth records, and admin events in SQLite.
 - Returns long transcripts in chunks so clients do not need one oversized tool result.
-- Saves optional session summaries as Markdown files.
+- Saves uploaded session and group text files for reusable context.
 - Includes an offline transcript viewer and an authenticated admin correction UI.
 - Ships a local demo script for understanding the core workflow without setting up a remote MCP client.
 
@@ -84,8 +84,6 @@ http://127.0.0.1:8787/mcp
 | `get_last_speaker` | Reports who saved the last turn so a continuing model can skip re-fetching chunks. |
 | `get_session_transcript_chunk` | Returns one bounded transcript chunk. |
 | `save_exchange` | Saves one full user/model exchange. |
-| `save_session_summary` | Saves a Markdown summary for a session. |
-| `list_session_summaries` | Lists saved summaries for a session. |
 | `upload_session_file` | Saves a text file for one session. |
 | `upload_group_file` | Saves a text file for an entire session group. |
 | `list_session_files` | Lists uploaded session/group files. |
@@ -99,7 +97,7 @@ Typical model flow:
 3. If `get_last_speaker` reports that you saved the last turn and you are still in the same chat window, you may skip the chunk fetch; otherwise fetch every `get_session_transcript_chunk` from `1` through `transcript_chunk_count`.
 4. Prepare the response.
 5. Call `save_exchange` before showing the response to the user.
-6. If the user asks for a summary, save it with `save_session_summary`.
+6. If the user asks to save a summary, plan, note, or reusable context, use `upload_session_file` or `upload_group_file`.
 
 Session groups and uploaded files are runtime data in the SQLite database. User-created groups and their files are not stored in tracked repo configuration. The admin panel at `/admin/sessions` can create, edit, delete, filter by, and move sessions between groups.
 
@@ -166,7 +164,6 @@ Then open `http://127.0.0.1:8799/session-viewer.html`.
 | `app/oauth.py` | OAuth dynamic registration, login, token exchange, and refresh. |
 | `app/storage.py` | SQLite schema and persistence for sessions, transcripts, and tokens. |
 | `app/session_package.py` | Transcript rendering and chunking. |
-| `app/session_summaries.py` | Markdown session summary storage. |
 | `app/admin.py` | Admin login and transcript correction API. |
 | `scripts/demo_session.py` | Local demo transcript generator. |
 | `scripts/session_audit.py` | CLI for session inspection and viewer export. |

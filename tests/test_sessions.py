@@ -37,6 +37,36 @@ def test_store_saves_session_and_exchange(tmp_path) -> None:
     assert exchanges[0].assistant_created_at == exchange.assistant_created_at
 
 
+def test_store_sorts_sessions_by_last_active_turn_not_admin_update(tmp_path) -> None:
+    store = Store(tmp_path / "bridge.sqlite3")
+    store.create_session("older", "Older", "manual-context")
+    store.create_session("newer", "Newer", "manual-context")
+    older_exchange = store.save_exchange(
+        "older",
+        "Claude",
+        "Older conversation.",
+        "Older answer.",
+        assistant_created_at=100,
+    )
+    newer_exchange = store.save_exchange(
+        "newer",
+        "Claude",
+        "Newer conversation.",
+        "Newer answer.",
+        assistant_created_at=200,
+    )
+
+    assert [session["session_id"] for session in store.list_sessions()[:2]] == ["newer", "older"]
+
+    store.set_session_title("older", "Renamed older conversation")
+    sessions = store.list_sessions()
+
+    assert [session["session_id"] for session in sessions[:2]] == ["newer", "older"]
+    assert sessions[0]["last_turn_at"] == newer_exchange.assistant_created_at
+    assert sessions[1]["last_turn_at"] == older_exchange.assistant_created_at
+    assert sessions[0]["last_turn_at_iso"]
+
+
 def test_store_manages_session_groups_and_reassigns_deleted_group(tmp_path) -> None:
     store = Store(tmp_path / "bridge.sqlite3")
 
@@ -302,8 +332,8 @@ def test_public_tools_hide_context_pack_tools(tmp_path, monkeypatch) -> None:
     assert "upload_group_file" in tool_names
     assert "list_session_files" in tool_names
     assert "download_session_file" in tool_names
-    assert "save_session_summary" in tool_names
-    assert "list_session_summaries" in tool_names
+    assert "save_session_summary" not in tool_names
+    assert "list_session_summaries" not in tool_names
     assert "list_context_packs" not in tool_names
     assert "get_session_package" not in tool_names
     assert "get_session_transcript" not in tool_names
@@ -445,27 +475,6 @@ def test_display_timezone_setting_controls_mcp_timestamps(tmp_path, monkeypatch)
     assert "response_display_timezone: Europe/Paris" in chunk["transcript_markdown"]
 
 
-def test_save_session_summary_writes_markdown_file_and_lists_metadata(tmp_path, monkeypatch) -> None:
-    main = _load_main(tmp_path, monkeypatch)
-    main.store.create_session("s1", "Summary test", "manual-context")
-
-    empty_result = main.save_session_summary("s1", "Claude", "   ")
-    unknown_result = main.save_session_summary("missing", "Claude", "## Summary")
-    success_result = main.save_session_summary("s1", "Claude", "## Summary", "Custom title")
-    list_result = main.list_session_summaries("s1")
-
-    assert empty_result == {"ok": False, "error": "summary_markdown must not be empty"}
-    assert unknown_result == {"ok": False, "error": "Unknown session_id: missing"}
-    assert success_result["ok"] is True
-    assert success_result["session_id"] == "s1"
-    assert success_result["title"] == "Custom title"
-    assert success_result["model_name"] == "Claude"
-    assert Path(success_result["file_path"]).read_text(encoding="utf-8").strip() == "## Summary"
-    assert list_result["summary_count"] == 1
-    assert list_result["summaries"][0]["title"] == "Custom title"
-    assert list_result["summaries"][0]["sha256"] == success_result["sha256"]
-
-
 def test_project_prompt_documents_manual_context_and_chunk_protocol() -> None:
     prompt = Path("docs/project-prompt-template.md").read_text(encoding="utf-8")
 
@@ -473,7 +482,7 @@ def test_project_prompt_documents_manual_context_and_chunk_protocol() -> None:
     assert "`get_last_speaker`" in prompt
     assert "`get_session_transcript_chunk`" in prompt
     assert "`list_session_groups`" in prompt
-    assert "`save_session_summary`" in prompt
+    assert "`save_session_summary`" not in prompt
     assert "`upload_session_file`" in prompt
     assert "`upload_group_file`" in prompt
     assert "`download_session_file`" in prompt
@@ -499,7 +508,6 @@ def test_server_instructions_are_publication_ready(tmp_path, monkeypatch) -> Non
 def _load_main(tmp_path, monkeypatch, max_lines: int = 180, max_chars: int = 12000):
     monkeypatch.setenv("BRIDGE_PUBLIC_BASE_URL", "https://example.test")
     monkeypatch.setenv("BRIDGE_DB_PATH", str(tmp_path / "bridge.sqlite3"))
-    monkeypatch.setenv("BRIDGE_SUMMARIES_DIR", str(tmp_path / "summaries"))
     monkeypatch.setenv("BRIDGE_TRANSCRIPT_CHUNK_MAX_LINES", str(max_lines))
     monkeypatch.setenv("BRIDGE_TRANSCRIPT_CHUNK_MAX_CHARS", str(max_chars))
     monkeypatch.setenv("BRIDGE_OWNER_PASSWORD_HASH", "not-used-in-this-test")

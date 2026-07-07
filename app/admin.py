@@ -1,14 +1,19 @@
 from __future__ import annotations
 
+import asyncio
 import base64
 import hashlib
 import hmac
 import html
 import json
+import re
 import time
+import urllib.error
+import urllib.request
 from pathlib import Path
 from typing import Any
 
+from cryptography.fernet import Fernet, InvalidToken
 from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 
@@ -25,6 +30,12 @@ from app.time_format import (
 
 ADMIN_COOKIE = "mcp_bridge_admin"
 ADMIN_SESSION_SECONDS = 12 * 60 * 60
+TOKEN_PATTERN = re.compile(r"\w+|[^\w\s]", re.UNICODE)
+AI_RENAME_API_KEY_SETTING = "ai_rename.api_key"
+AI_RENAME_MODEL_SETTING = "ai_rename.model"
+AI_RENAME_DEFAULT_MODEL = "gpt-5.4-nano"
+AI_RENAME_ENDPOINT = "https://api.openai.com/v1/chat/completions"
+SESSION_TITLE_MAX_CHARS = 72
 
 
 class AdminHandlers:
@@ -113,6 +124,51 @@ class AdminHandlers:
         self.store.set_app_setting(DISPLAY_TIMEZONE_SETTING_KEY, display_timezone)
         return JSONResponse(
             {"ok": True, "display_timezone": display_timezone},
+            headers=self._no_store_headers(),
+        )
+
+    async def api_ai_settings(self, request: Request) -> Response:
+        _, error = self._require_admin(request)
+        if error:
+            return error
+        return JSONResponse(
+            {"ok": True, "settings": self._ai_settings_payload()},
+            headers=self._no_store_headers(),
+        )
+
+    async def api_update_ai_settings(self, request: Request) -> Response:
+        _, error = self._require_admin_mutation(request)
+        if error:
+            return error
+
+        payload, parse_error = await _json_body(request)
+        if parse_error:
+            return parse_error
+
+        if "api_key" in payload:
+            api_key = str(payload.get("api_key", "")).strip()
+            if not api_key:
+                return self._json_error("api_key must not be empty.", status_code=400)
+            self.store.set_app_setting(AI_RENAME_API_KEY_SETTING, self._encrypt_secret(api_key))
+
+        if "model" in payload:
+            model = str(payload.get("model", "")).strip() or AI_RENAME_DEFAULT_MODEL
+            if len(model) > 96:
+                return self._json_error("model must be 96 characters or fewer.", status_code=400)
+            self.store.set_app_setting(AI_RENAME_MODEL_SETTING, model)
+
+        return JSONResponse(
+            {"ok": True, "settings": self._ai_settings_payload()},
+            headers=self._no_store_headers(),
+        )
+
+    async def api_delete_ai_key(self, request: Request) -> Response:
+        _, error = self._require_admin_mutation(request)
+        if error:
+            return error
+        self.store.delete_app_setting(AI_RENAME_API_KEY_SETTING)
+        return JSONResponse(
+            {"ok": True, "settings": self._ai_settings_payload()},
             headers=self._no_store_headers(),
         )
 
@@ -212,19 +268,22 @@ class AdminHandlers:
 
         exchanges = self.store.list_exchanges(session.session_id, include_deleted=True)
         display_timezone = self._display_timezone_name()
+        exchange_payloads = [
+            _exchange_payload(exchange, timezone_name=display_timezone)
+            for exchange in exchanges
+        ]
+        session_payload = _session_payload(session)
+        session_payload["token_count"] = sum(exchange["total_token_count"] for exchange in exchange_payloads)
         return JSONResponse(
             {
                 "ok": True,
                 "display_timezone": display_timezone,
-                "session": _session_payload(session),
+                "session": session_payload,
                 "files": {
                     "session": self.store.list_session_files(session_id=session.session_id),
                     "group": self.store.list_session_files(group_id=session.group_id),
                 },
-                "exchanges": [
-                    _exchange_payload(exchange, timezone_name=display_timezone)
-                    for exchange in exchanges
-                ],
+                "exchanges": exchange_payloads,
             },
             headers=self._no_store_headers(),
         )
@@ -236,17 +295,54 @@ class AdminHandlers:
         payload, parse_error = await _json_body(request)
         if parse_error:
             return parse_error
-        if "group_id" not in payload:
-            return self._json_error("group_id is required.", status_code=400)
+        if "group_id" not in payload and "title" not in payload:
+            return self._json_error("group_id or title is required.", status_code=400)
         try:
-            session = self.store.set_session_group(
-                request.path_params["session_id"],
-                str(payload.get("group_id", "")),
-            )
+            session_id = request.path_params["session_id"]
+            session = self.store.get_session(session_id)
+            if session is None:
+                raise ValueError(f"Unknown session_id: {session_id}")
+            if "group_id" in payload:
+                session = self.store.set_session_group(session.session_id, str(payload.get("group_id", "")))
+            if "title" in payload:
+                session = self.store.set_session_title(session.session_id, str(payload.get("title", "")))
         except ValueError as exc:
             return self._value_error(exc)
         return JSONResponse(
             {"ok": True, "session": _session_payload(session)},
+            headers=self._no_store_headers(),
+        )
+
+    async def api_ai_rename_session(self, request: Request) -> Response:
+        _, error = self._require_admin_mutation(request)
+        if error:
+            return error
+
+        api_key = self._read_ai_api_key()
+        if not api_key:
+            return self._json_error("AI rename API key is not configured.", status_code=400)
+
+        session_id = request.path_params["session_id"]
+        session = self.store.get_session(session_id)
+        if session is None:
+            return self._json_error(f"Unknown session_id: {session_id}", status_code=404)
+
+        exchanges = self.store.list_exchanges(session.session_id)
+        if not exchanges:
+            return self._json_error("Session has no user message to rename from.", status_code=400)
+
+        first_user_message = exchanges[0].user_message
+        model = self.store.get_app_setting(AI_RENAME_MODEL_SETTING) or AI_RENAME_DEFAULT_MODEL
+        try:
+            title = await asyncio.to_thread(_suggest_session_title, api_key, model, first_user_message)
+            session = self.store.set_session_title(session.session_id, title)
+        except ValueError as exc:
+            return self._value_error(exc)
+        except RuntimeError as exc:
+            return self._json_error(str(exc), status_code=502)
+
+        return JSONResponse(
+            {"ok": True, "session": _session_payload(session), "title": session.title},
             headers=self._no_store_headers(),
         )
 
@@ -389,6 +485,35 @@ class AdminHandlers:
         except ValueError:
             self.store.set_app_setting(DISPLAY_TIMEZONE_SETTING_KEY, DEFAULT_DISPLAY_TIMEZONE_NAME)
             return DEFAULT_DISPLAY_TIMEZONE_NAME
+
+    def _ai_settings_payload(self) -> dict[str, Any]:
+        api_key = self._read_ai_api_key()
+        model = self.store.get_app_setting(AI_RENAME_MODEL_SETTING) or AI_RENAME_DEFAULT_MODEL
+        return {
+            "configured": bool(api_key),
+            "api_key_preview": _secret_preview(api_key) if api_key else "",
+            "model": model,
+            "title_max_chars": SESSION_TITLE_MAX_CHARS,
+        }
+
+    def _read_ai_api_key(self) -> str:
+        encrypted = self.store.get_app_setting(AI_RENAME_API_KEY_SETTING)
+        if not encrypted:
+            return ""
+        try:
+            return self._decrypt_secret(encrypted)
+        except (InvalidToken, ValueError):
+            return ""
+
+    def _encrypt_secret(self, value: str) -> str:
+        return self._fernet().encrypt(value.encode("utf-8")).decode("ascii")
+
+    def _decrypt_secret(self, value: str) -> str:
+        return self._fernet().decrypt(value.encode("ascii")).decode("utf-8")
+
+    def _fernet(self) -> Fernet:
+        key = base64.urlsafe_b64encode(hashlib.sha256(self.settings.secret_key.encode("utf-8")).digest())
+        return Fernet(key)
 
     def _login_form(self, next_path: str, error: str | None = None, status_code: int = 200) -> HTMLResponse:
         error_html = f'<p class="error">{html.escape(error)}</p>' if error else ""
@@ -538,13 +663,85 @@ def _session_file_payload(file: SessionFileRecord, include_content: bool = False
     return payload
 
 
+def _secret_preview(value: str) -> str:
+    if len(value) <= 8:
+        return "configured"
+    return f"{value[:3]}...{value[-4:]}"
+
+
+def _suggest_session_title(api_key: str, model: str, first_user_message: str) -> str:
+    prompt = (
+        "Rename this conversation session from the first user message only. "
+        f"Return JSON only with one key: title. The title must be at most {SESSION_TITLE_MAX_CHARS} characters, "
+        "clear, specific, and in the same language as the user message when possible. "
+        "Do not add markdown, quotes around the whole response, trailing ellipses, or bracket noise."
+    )
+    payload = {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": prompt},
+            {"role": "user", "content": first_user_message[:4000]},
+        ],
+        "temperature": 0.2,
+        "max_completion_tokens": 80,
+        "response_format": {"type": "json_object"},
+    }
+    request = urllib.request.Request(
+        AI_RENAME_ENDPOINT,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            data = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        body = exc.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"AI rename request failed: HTTP {exc.code} {body[:240]}") from exc
+    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
+        raise RuntimeError(f"AI rename request failed: {exc}") from exc
+
+    try:
+        content = data["choices"][0]["message"]["content"]
+    except (KeyError, IndexError, TypeError) as exc:
+        raise RuntimeError("AI rename response did not include message content.") from exc
+
+    title = _title_from_ai_content(content)
+    if not title:
+        raise RuntimeError("AI rename response did not include a title.")
+    return title
+
+
+def _title_from_ai_content(content: str) -> str:
+    raw = content.strip()
+    try:
+        parsed = json.loads(raw)
+        if isinstance(parsed, dict):
+            raw = str(parsed.get("title", ""))
+    except json.JSONDecodeError:
+        pass
+    title = " ".join(raw.strip().strip(chr(34) + chr(39)).split())
+    title = title.rstrip(" .,-;:...")
+    if len(title) > SESSION_TITLE_MAX_CHARS:
+        title = title[:SESSION_TITLE_MAX_CHARS].rsplit(" ", 1)[0].rstrip(" .,-;:...")
+    return title
+
+
 def _exchange_payload(exchange: ExchangeRecord, timezone_name: str | None = None) -> dict[str, Any]:
+    user_token_count = _estimate_token_count(exchange.user_message)
+    assistant_token_count = _estimate_token_count(exchange.assistant_response)
     return {
         "exchange_id": exchange.exchange_id,
         "session_id": exchange.session_id,
         "model_name": exchange.model_name,
         "user_message": exchange.user_message,
         "assistant_response": exchange.assistant_response,
+        "user_message_token_count": user_token_count,
+        "assistant_response_token_count": assistant_token_count,
+        "total_token_count": user_token_count + assistant_token_count,
         "assistant_created_at": exchange.assistant_created_at,
         "assistant_created_at_iso": format_timestamp_iso(exchange.assistant_created_at),
         "assistant_created_at_display": format_response_timestamp(
@@ -561,6 +758,14 @@ def _exchange_payload(exchange: ExchangeRecord, timezone_name: str | None = None
         "edited_at_iso": format_timestamp_iso(exchange.edited_at) if exchange.edited_at else None,
         "is_deleted": exchange.deleted_at is not None,
     }
+
+
+def _estimate_token_count(text: str) -> int:
+    if not text:
+        return 0
+    lexical_count = len(TOKEN_PATTERN.findall(text))
+    char_estimate = (len(text) + 3) // 4
+    return max(lexical_count, char_estimate)
 
 
 async def _json_body(request: Request, allow_empty: bool = False) -> tuple[dict[str, Any], JSONResponse | None]:

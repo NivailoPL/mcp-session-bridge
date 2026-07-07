@@ -12,7 +12,6 @@ Create a production `.env` from `.env.example` and set at least:
 BRIDGE_PUBLIC_BASE_URL=https://your-mcp.example.com
 BRIDGE_RESOURCE_PATH=/mcp
 BRIDGE_DB_PATH=data/bridge.sqlite3
-BRIDGE_SUMMARIES_DIR=data/session-summaries
 BRIDGE_OWNER_USERNAME=owner
 BRIDGE_OWNER_PASSWORD_HASH=<generated hash>
 BRIDGE_SECRET_KEY=<long random secret>

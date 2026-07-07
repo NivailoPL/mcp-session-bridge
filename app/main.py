@@ -18,7 +18,6 @@ from app.admin import AdminHandlers
 from app.oauth import OAuthHandlers
 from app.security import hash_secret
 from app.session_package import render_session_overview, render_session_transcript_chunk
-from app.session_summaries import SessionSummaryStore
 from app.settings import ROOT, load_settings
 from app.storage import Store
 from app.time_format import (
@@ -40,7 +39,6 @@ SERVER_INSTRUCTIONS = (
 
 settings = load_settings()
 store = Store(settings.db_path)
-summary_store = SessionSummaryStore(settings.summaries_dir)
 
 
 class BridgeTokenVerifier(TokenVerifier):
@@ -160,6 +158,21 @@ async def admin_api_update_timezone(request: Request) -> Response:
     return await admin.api_update_timezone(request)
 
 
+@mcp.custom_route("/admin/api/ai-settings", methods=["GET"])
+async def admin_api_ai_settings(request: Request) -> Response:
+    return await admin.api_ai_settings(request)
+
+
+@mcp.custom_route("/admin/api/ai-settings", methods=["POST", "PUT"])
+async def admin_api_update_ai_settings(request: Request) -> Response:
+    return await admin.api_update_ai_settings(request)
+
+
+@mcp.custom_route("/admin/api/ai-settings/key", methods=["DELETE"])
+async def admin_api_delete_ai_key(request: Request) -> Response:
+    return await admin.api_delete_ai_key(request)
+
+
 @mcp.custom_route("/admin/api/sessions", methods=["GET"])
 async def admin_api_sessions(request: Request) -> Response:
     return await admin.api_sessions(request)
@@ -173,6 +186,11 @@ async def admin_api_session(request: Request) -> Response:
 @mcp.custom_route("/admin/api/sessions/{session_id}", methods=["PATCH"])
 async def admin_api_update_session(request: Request) -> Response:
     return await admin.api_update_session(request)
+
+
+@mcp.custom_route("/admin/api/sessions/{session_id}/rename/ai", methods=["POST"])
+async def admin_api_ai_rename_session(request: Request) -> Response:
+    return await admin.api_ai_rename_session(request)
 
 
 @mcp.custom_route("/admin/api/files/{file_id}", methods=["GET"])
@@ -317,7 +335,6 @@ def get_session_overview(session_id: str) -> dict[str, Any]:
     if session is None:
         return {"ok": False, "error": f"Unknown session_id: {session_id}"}
     exchanges = store.list_exchanges(session.session_id)
-    summaries = summary_store.list_summaries(session.session_id)
     display_timezone = _display_timezone_name()
     group = store.get_session_group(session.group_id)
     files = {
@@ -327,7 +344,6 @@ def get_session_overview(session_id: str) -> dict[str, Any]:
     return {
         "ok": True,
         "context_source": "manual",
-        "summary_count": len(summaries),
         "group": _group_payload(group),
         "files": files,
         **render_session_overview(
@@ -424,65 +440,6 @@ def save_exchange(
         "assistant_created_at_timezone": display_timezone,
         "created_at": exchange.created_at,
     }
-
-
-@mcp.tool()
-def save_session_summary(
-    session_id: str,
-    model_name: str,
-    summary_markdown: str,
-    title: str = "",
-) -> dict[str, Any]:
-    """Save a Markdown summary file for the current conversation session."""
-    resolved_session_id = session_id.strip()
-    if not resolved_session_id:
-        return {"ok": False, "error": "session_id must not be empty"}
-
-    content = summary_markdown.strip()
-    if not content:
-        return {"ok": False, "error": "summary_markdown must not be empty"}
-
-    session = store.get_session(resolved_session_id)
-    if session is None:
-        return {"ok": False, "error": f"Unknown session_id: {resolved_session_id}"}
-
-    try:
-        saved = summary_store.save_summary(
-            session_id=session.session_id,
-            model_name=model_name.strip() or "Unknown model",
-            summary_markdown=content,
-            title=title,
-        )
-    except (OSError, ValueError) as exc:
-        return {"ok": False, "error": str(exc)}
-
-    return {
-        "ok": True,
-        "session_id": saved.session_id,
-        "title": saved.title,
-        "model_name": saved.model_name,
-        "path": saved.path,
-        "file_path": saved.file_path,
-        "chars": saved.chars,
-        "sha256": saved.sha256,
-        "created_at": saved.created_at,
-    }
-
-
-@mcp.tool()
-def list_session_summaries(session_id: str) -> dict[str, Any]:
-    """List Markdown summaries saved for a conversation session."""
-    resolved_session_id = session_id.strip()
-    if not resolved_session_id:
-        return {"ok": False, "error": "session_id must not be empty"}
-    session = store.get_session(resolved_session_id)
-    if session is None:
-        return {"ok": False, "error": f"Unknown session_id: {resolved_session_id}"}
-    try:
-        summaries = summary_store.list_summaries(session.session_id)
-    except ValueError as exc:
-        return {"ok": False, "error": str(exc)}
-    return {"ok": True, "session_id": session.session_id, "summary_count": len(summaries), "summaries": summaries}
 
 
 @mcp.tool()

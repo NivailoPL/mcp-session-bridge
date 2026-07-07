@@ -21,7 +21,6 @@ def _settings(tmp_path: Path) -> Settings:
         db_path=tmp_path / "bridge.sqlite3",
         context_packs_dir=tmp_path / "context-packs",
         default_context_pack_id="manual-context",
-        summaries_dir=tmp_path / "summaries",
         transcript_chunk_max_lines=180,
         transcript_chunk_max_chars=12000,
         owner_username="owner",

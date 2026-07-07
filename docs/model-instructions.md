@@ -23,18 +23,13 @@ When starting a new session, call `list_session_groups` first. If the user names
 
 Read `response_display_timezone` from `get_session_overview` when you need to know the bridge display timezone before saving a response. `save_exchange` returns `assistant_created_at_display` and `assistant_created_at_timezone`; treat those returned values as authoritative for the user-visible response header. Do not convert them into the user's local timezone. MCP Session Bridge renders response display timestamps in the configured bridge display timezone, UTC by default.
 
-If the user asks for a summary:
-
-1. Prepare the user-facing response.
-2. Save the response with `save_exchange`.
-3. Save the Markdown summary with `save_session_summary`.
-4. Then show the response to the user.
+If the user asks you to save a summary, plan, note, or reusable context, prepare the user-facing response, save it with `save_exchange`, then save the durable text with `upload_session_file` or `upload_group_file`.
 
 ## What The Bridge Is Not
 
 MCP Session Bridge is not an automatic file-context delivery system. It does not automatically provide the user's external notes, project files, PDFs, or other knowledge material to the model.
 
-The user supplies those materials manually in the chat. The bridge supplies conversation history, summaries, session groups, and text files that a model explicitly saves with `upload_session_file` or `upload_group_file`. Use `list_session_files` and `download_session_file` when those uploaded files are relevant.
+The user supplies those materials manually in the chat. The bridge supplies conversation history, session groups, and text files that a model explicitly saves with `upload_session_file` or `upload_group_file`. Use `list_session_files` and `download_session_file` when those uploaded files are relevant.
 
 ## Response Storage
 

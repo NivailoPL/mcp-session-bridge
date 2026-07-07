@@ -88,7 +88,6 @@ It supports:
 Back up at least:
 
 - the SQLite database configured by `BRIDGE_DB_PATH`
-- the summaries directory configured by `BRIDGE_SUMMARIES_DIR`
 - the production `.env`
 
 Do not publish these backups.

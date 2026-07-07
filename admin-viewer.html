@@ -229,20 +229,26 @@
     }
     .tag-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 8px var(--ok); }
 
-    .identity-row {
+    .settings-row {
       display: flex;
-      align-items: flex-start;
-      justify-content: space-between;
-      gap: .6rem;
-      padding: .85rem 1.2rem;
+      gap: .45rem;
+      align-items: center;
+      padding: .8rem 1.2rem .25rem;
+    }
+    .settings-row form { margin: 0; }
+    .settings-row button { min-height: 2.05rem; padding: .36rem .68rem; font-size: .78rem; border-radius: 9px; }
+    .settings-button { display: inline-flex; align-items: center; gap: .42rem; }
+    .settings-button svg { width: 15px; height: 15px; }
+
+    .identity-row {
+      display: block;
+      padding: .65rem 1.2rem .9rem;
       border-bottom: 1px solid var(--stroke-soft);
     }
     .identity-row .who { flex: 1 1 auto; display: flex; align-items: flex-start; gap: .6rem; min-width: 0; }
     .identity-row .who-stack { display: grid; gap: .55rem; width: 100%; min-width: 0; }
     .identity-row .who-label { font-size: .68rem; text-transform: uppercase; letter-spacing: .14em; color: var(--faint-ink); }
     .identity-row .who-name { font-size: .86rem; font-weight: 600; overflow-wrap: anywhere; }
-    .identity-row form { margin: 0; }
-    .identity-row button { min-height: 2.1rem; padding: .35rem .7rem; font-size: .78rem; }
     .timezone-field { display: grid; gap: .28rem; }
     .timezone-field span { font-size: .66rem; text-transform: uppercase; letter-spacing: .12em; color: var(--faint-ink); }
 
@@ -260,19 +266,6 @@
     }
     .toggle input { width: auto; accent-color: var(--accent); }
 
-    .summary {
-      display: flex; flex-wrap: wrap; gap: .4rem;
-    }
-    .stat {
-      display: inline-flex; align-items: baseline; gap: .35rem;
-      padding: .32rem .6rem;
-      border: 1px solid var(--stroke-soft);
-      border-radius: var(--r-pill);
-      background: var(--glass);
-      font-size: .74rem; color: var(--muted);
-    }
-    .stat b { font-family: "Space Grotesk", sans-serif; font-size: .86rem; font-weight: 600; color: var(--text); }
-    .stat.is-deleted b { color: var(--warn); }
 
     .list-head {
       display: flex; align-items: center; justify-content: space-between;
@@ -298,6 +291,12 @@
       -webkit-backdrop-filter: none; backdrop-filter: none;
     }
     .group-filter svg { width: 19px; height: 19px; }
+    .group-filter.is-all { margin-right: .9rem; }
+    .group-filter.is-all::after {
+      content: "|"; position: absolute; right: -.62rem; top: 50%; transform: translateY(-50%);
+      color: var(--faint-ink); font-weight: 500; pointer-events: none;
+    }
+    .group-filter.is-uncategorized { border-style: dashed; }
     .group-filter.is-active {
       color: #fff;
       background: color-mix(in oklab, var(--g, var(--accent)) 28%, rgba(255, 255, 255, .04));
@@ -337,10 +336,23 @@
       border-radius: 999px; background: linear-gradient(var(--accent-2), var(--accent));
       box-shadow: 0 0 12px var(--accent-glow);
     }
-    .session-button { gap: .4rem; }
+    .session-button { gap: .4rem; cursor: pointer; }
     .session-title { font-weight: 600; font-size: .9rem; line-height: 1.3; overflow-wrap: anywhere; }
+    .session-actions {
+      position: absolute; inset: .55rem .55rem auto auto; display: flex; gap: .35rem;
+      opacity: 0; transform: translateY(-3px); pointer-events: none; transition: opacity .16s ease, transform .16s ease;
+      padding: .25rem; border-radius: 10px; background: rgba(8, 9, 15, .88); border: 1px solid var(--stroke-soft);
+      box-shadow: 0 10px 26px -18px #000;
+    }
+    .session-button:hover .session-actions, .session-button:focus-within .session-actions { opacity: 1; transform: translateY(0); pointer-events: auto; }
+    .session-actions button { min-height: 1.75rem; padding: .28rem .48rem; border-radius: 8px; font-size: .68rem; }
+    .session-actions button:disabled { opacity: .38; cursor: not-allowed; }
+    .session-rename { display: grid; gap: .45rem; position: relative; z-index: 2; }
+    .session-rename input { width: 100%; min-height: 2rem; border-radius: 8px; font-size: .8rem; }
+    .session-rename .edit-actions { gap: .35rem; }
+    .session-rename .edit-actions button { min-height: 1.8rem; padding: .28rem .52rem; font-size: .7rem; }
     .session-sub { font-size: .7rem; color: var(--faint-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .session-foot { display: flex; flex-wrap: wrap; gap: .3rem; margin-top: .1rem; }
+    .session-foot { display: grid; justify-items: start; gap: .3rem; margin-top: .1rem; }
     .mini-chip {
       display: inline-flex; align-items: center; gap: .25rem;
       font-size: .68rem; color: var(--muted);
@@ -348,7 +360,14 @@
       border: 1px solid var(--stroke-soft); background: rgba(0, 0, 0, .25);
     }
     .mini-chip.warn { color: var(--warn); border-color: rgba(251, 191, 36, .3); }
+    .mini-chip.last-turn {
+      color: #f6c453;
+      border-color: rgba(246, 196, 83, .42);
+      background: rgba(246, 196, 83, .1);
+      box-shadow: 0 0 0 1px rgba(246, 196, 83, .08) inset;
+    }
     .mini-chip .d { width: 5px; height: 5px; border-radius: 50%; background: currentColor; opacity: .8; }
+    .mini-chip.last-turn .d { display: none; }
     .mini-chip.group { color: var(--g, var(--muted)); border-color: color-mix(in oklab, var(--g, var(--muted)) 32%, transparent); }
     .mini-chip.group svg { width: 12px; height: 12px; }
 
@@ -365,6 +384,10 @@
       backdrop-filter: blur(20px) saturate(135%);
     }
     .topbar-title { min-width: 0; display: grid; gap: .3rem; }
+    .session-title-line { display: flex; align-items: center; gap: .55rem; min-width: 0; }
+    .session-title-icon { display: none; width: 1.35rem; height: 1.35rem; color: var(--g, var(--accent-ink)); flex: 0 0 auto; }
+    .session-title-icon.show { display: inline-flex; }
+    .session-title-icon svg { width: 100%; height: 100%; }
     .topbar-title h2 {
       margin: 0; font-family: "Space Grotesk", sans-serif;
       font-size: 1.4rem; font-weight: 600; letter-spacing: -.015em; line-height: 1.15;
@@ -373,7 +396,16 @@
     .meta { display: flex; flex-wrap: wrap; align-items: center; gap: .45rem; color: var(--muted); font-size: .8rem; }
     .meta .sep { width: 3px; height: 3px; border-radius: 50%; background: var(--faint-ink); }
     .top-actions { display: flex; flex-wrap: wrap; gap: .5rem; justify-content: flex-start; align-items: center; }
-    .content { display: grid; gap: 1rem; width: 100%; max-width: 80rem; padding: 1.4rem 1.5rem 3rem; }
+    .content-wrap { position: relative; display: flex; align-items: flex-start; width: 100%; max-width: 84rem; }
+    .turn-nav {
+      position: sticky; top: 50vh; transform: translateY(-50%); z-index: 4; display: none; flex-direction: column; gap: .35rem;
+      padding: .35rem; margin: 0 .55rem 0 1rem; border: 1px solid var(--stroke-soft);
+      border-radius: 12px; background: rgba(8, 9, 15, .72); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+    }
+    .turn-nav.show { display: flex; }
+    .turn-nav button { width: 2rem; min-height: 2rem; padding: 0; border-radius: 9px; }
+    .turn-nav svg { width: 15px; height: 15px; }
+    .content { display: grid; gap: 1rem; width: 100%; min-width: 0; max-width: 80rem; padding: 1.4rem 1.5rem 3rem .4rem; }
 
     .status {
       min-height: 0;
@@ -406,20 +438,29 @@
 
     /* ---------- files ---------- */
     .files-panel {
-      display: grid; gap: .8rem;
-      padding: 1rem;
+      display: grid; gap: .55rem;
+      padding: .75rem .85rem;
       border: 1px solid var(--stroke);
       border-radius: var(--r-card);
       background: var(--glass);
       box-shadow: var(--shadow-card);
       -webkit-backdrop-filter: blur(16px) saturate(130%);
       backdrop-filter: blur(16px) saturate(130%);
+      transition: border-color .18s ease, background .18s ease;
     }
     .files-panel.is-empty { display: none; }
+    .files-panel:hover, .files-panel:focus-within { border-color: rgba(139, 143, 248, .45); background: rgba(255, 255, 255, .055); }
     .files-head { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; }
-    .files-head h3 { margin: 0; font-family: "Space Grotesk", sans-serif; font-size: 1rem; font-weight: 600; }
+    .files-head h3 { margin: 0; font-family: "Space Grotesk", sans-serif; font-size: .92rem; font-weight: 600; }
     .files-head span { color: var(--muted); font-size: .78rem; }
-    .files-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .8rem; }
+    .files-summary { display: flex; flex-wrap: wrap; gap: .35rem; color: var(--muted); font-size: .78rem; }
+    .files-summary .mini-chip { border-radius: 8px; }
+    .files-grid {
+      display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .8rem;
+      max-height: 0; opacity: 0; overflow: hidden; pointer-events: none;
+      transition: max-height .22s ease, opacity .16s ease, padding-top .22s ease;
+    }
+    .files-panel:hover .files-grid, .files-panel:focus-within .files-grid { max-height: 28rem; opacity: 1; pointer-events: auto; padding-top: .25rem; overflow: auto; }
     .file-bucket { display: grid; gap: .45rem; min-width: 0; }
     .file-bucket-title { font-size: .68rem; text-transform: uppercase; letter-spacing: .14em; color: var(--faint-ink); }
     .file-list { display: grid; gap: .4rem; }
@@ -522,6 +563,8 @@
       color: var(--faint-ink);
     }
     .turn.model .turn-label { color: var(--m); }
+    .token-count { color: var(--muted); font-size: .72rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .turn-head .token-count { margin-left: auto; }
     .turn-content { overflow-wrap: anywhere; font-size: .9rem; line-height: 1.62; color: #d9dce6; }
     .turn.user .turn-content { color: #eceef5; }
 
@@ -704,6 +747,16 @@
         </div>
       </section>
 
+      <div class="settings-row" aria-label="Admin menu">
+        <button id="aiSettingsButton" type="button" class="ghost settings-button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z"></path><path d="M19.4 15a1.8 1.8 0 0 0 .36 2l.05.05a2.2 2.2 0 1 1-3.11 3.11l-.05-.05a1.8 1.8 0 0 0-2-.36 1.8 1.8 0 0 0-1.1 1.66V21.5a2.2 2.2 0 1 1-4.4 0v-.09A1.8 1.8 0 0 0 8.05 19.75a1.8 1.8 0 0 0-2 .36l-.05.05a2.2 2.2 0 1 1-3.11-3.11l.05-.05a1.8 1.8 0 0 0 .36-2A1.8 1.8 0 0 0 1.64 13.9H1.5a2.2 2.2 0 1 1 0-4.4h.14A1.8 1.8 0 0 0 3.3 8.4a1.8 1.8 0 0 0-.36-2l-.05-.05A2.2 2.2 0 1 1 6 3.24l.05.05a1.8 1.8 0 0 0 2 .36A1.8 1.8 0 0 0 9.15 2V1.9a2.2 2.2 0 1 1 4.4 0V2a1.8 1.8 0 0 0 1.1 1.65 1.8 1.8 0 0 0 2-.36l.05-.05a2.2 2.2 0 1 1 3.11 3.11l-.05.05a1.8 1.8 0 0 0-.36 2A1.8 1.8 0 0 0 21.1 9.5h.1a2.2 2.2 0 1 1 0 4.4h-.1A1.8 1.8 0 0 0 19.4 15z"></path></svg>
+          Settings
+        </button>
+        <form method="post" action="/admin/logout">
+          <button type="submit" class="ghost">Sign out</button>
+        </form>
+      </div>
+
       <div class="identity-row">
         <div class="who">
           <div class="who-stack">
@@ -715,9 +768,6 @@
             </label>
           </div>
         </div>
-        <form method="post" action="/admin/logout">
-          <button type="submit" class="ghost">Sign out</button>
-        </form>
       </div>
 
       <section class="toolbar">
@@ -729,7 +779,6 @@
           <input id="showDeletedToggle" type="checkbox" checked>
           <span>Show deleted exchanges</span>
         </label>
-        <div id="datasetSummary" class="summary"></div>
       </section>
 
       <section class="group-panel" aria-label="Session groups">
@@ -748,7 +797,10 @@
     <section class="main" aria-label="Session corrections">
       <header class="topbar">
         <div class="topbar-title">
-          <h2 id="sessionTitle">Select a session</h2>
+          <div class="session-title-line">
+            <span id="sessionTitleIcon" class="session-title-icon" aria-hidden="true"></span>
+            <h2 id="sessionTitle">Select a session</h2>
+          </div>
           <div id="sessionMeta" class="meta">Conversation history correction panel.</div>
         </div>
         <div class="top-actions">
@@ -776,12 +828,20 @@
         </div>
       </header>
 
-      <section class="content">
-        <p id="demoBanner" class="demo-banner"></p>
-        <p id="status" class="status" role="status"></p>
-        <section id="filesPanel" class="files-panel is-empty" aria-label="Session and group files"></section>
-        <div id="exchangeList" aria-live="polite"></div>
-      </section>
+      <div class="content-wrap">
+        <nav id="turnNav" class="turn-nav" aria-label="Transcript navigation">
+          <button id="scrollTopButton" type="button" class="ghost" title="Scroll to top"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"></path><path d="M6 5h12"></path></svg></button>
+          <button id="scrollPrevButton" type="button" class="ghost" title="Previous turn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"></path></svg></button>
+          <button id="scrollNextButton" type="button" class="ghost" title="Next turn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"></path></svg></button>
+          <button id="scrollBottomButton" type="button" class="ghost" title="Scroll to bottom"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"></path><path d="M6 19h12"></path></svg></button>
+        </nav>
+        <section class="content">
+          <p id="demoBanner" class="demo-banner"></p>
+          <p id="status" class="status" role="status"></p>
+          <section id="filesPanel" class="files-panel is-empty" aria-label="Session and group files"></section>
+          <div id="exchangeList" aria-live="polite"></div>
+        </section>
+      </div>
     </section>
   </main>
 
@@ -824,6 +884,28 @@
         <button type="button" class="ghost" id="fileCopyButton">Copy content</button>
       </div>
     </div>
+  </dialog>
+
+  <dialog id="aiSettingsDialog">
+    <form id="aiSettingsForm" method="dialog">
+      <div class="dialog-head">
+        <h3>AI rename settings</h3>
+        <button type="button" class="ghost" id="aiSettingsClose">Close</button>
+      </div>
+      <div class="dialog-body">
+        <div id="aiSettingsStatus" class="meta"></div>
+        <label class="field">Model
+          <input id="aiModelInput" type="text" maxlength="96" autocomplete="off">
+        </label>
+        <label class="field">API key
+          <input id="aiKeyInput" type="password" autocomplete="off" placeholder="Leave blank to keep current key">
+        </label>
+        <div class="edit-actions">
+          <button type="submit" class="primary">Save settings</button>
+          <button type="button" class="danger" id="aiKeyRemoveButton">Remove key</button>
+        </div>
+      </div>
+    </form>
   </dialog>
 
   <script type="application/json" id="demo-data">{"ok":true,"schema":"mcp-session-bridge.viewer.v1","generated_at":1780321400,"generated_at_iso":"2026-06-01T13:43:20.000Z","session_count":4,"turn_count":22,"sessions":[{"session_id":"demo-2026-06-01-empty-followup","title":"Short follow-up session","title_is_auto":false,"context_pack_id":"manual-context","created_at":1780316600,"updated_at":1780317350,"exchange_count":1,"deleted_exchange_count":0},{"session_id":"demo-2026-06-01-incident-debugging","title":"Debugging a virtual environment issue","title_is_auto":false,"context_pack_id":"local-development","created_at":1780311200,"updated_at":1780313270,"exchange_count":3,"deleted_exchange_count":0},{"session_id":"demo-2026-06-01-ui-review","title":"Admin viewer UI review","title_is_auto":false,"context_pack_id":"viewer-design-refresh","created_at":1780305600,"updated_at":1780308330,"exchange_count":4,"deleted_exchange_count":1},{"session_id":"demo-2026-06-01-product-planning","title":"Product planning with Claude and GPT","title_is_auto":false,"context_pack_id":"public-release-notes","created_at":1780301400,"updated_at":1780303470,"exchange_count":3,"deleted_exchange_count":0}],"transcripts":{"demo-2026-06-01-product-planning":{"session_id":"demo-2026-06-01-product-planning","title":"Product planning with Claude and GPT","exchange_count":3,"turn_count":6,"char_count":2104,"sha256":"synthetic-preview-only","context_pack_id":"public-release-notes","turn_sequence":["USER","Claude","USER","GPT-5","USER","Claude"],"turns":[{"turn":1,"speaker":"USER","exchange_id":100,"created_at":"2026-06-01T08:10:00.000Z","created_at_display":null,"chars":103,"content":"We are preparing MCP Session Bridge for a public v0.1 release. What should the README make clear first?"},{"turn":2,"speaker":"Claude","exchange_id":100,"created_at":"2026-06-01T08:11:30.000Z","created_at_display":"Monday June 1, 2026 at 08:11","chars":226,"content":"Lead with the core promise: this is a small remote MCP server for shared, multi-model conversation memory. The README should show the quickest useful path, then explain tools, security assumptions, and the current limitations."},{"turn":3,"speaker":"USER","exchange_id":101,"created_at":"2026-06-01T08:21:00.000Z","created_at_display":null,"chars":50,"content":"Can you turn that into a concise launch checklist?"},{"turn":4,"speaker":"GPT-5","exchange_id":101,"created_at":"2026-06-01T08:22:30.000Z","created_at_display":"Monday June 1, 2026 at 08:22","chars":191,"content":"Yes. Suggested checklist: README quickstart, .env.example, MIT license, security policy, contributing notes, changelog, demo script, examples, and a CI workflow that runs tests plus the demo."},{"turn":5,"speaker":"USER","exchange_id":102,"created_at":"2026-06-01T08:32:00.000Z","created_at_display":null,"chars":80,"content":"The docs feel a little dense. What would make them easier for a new contributor?"},{"turn":6,"speaker":"Claude","exchange_id":102,"created_at":"2026-06-01T08:33:30.000Z","created_at_display":"Monday June 1, 2026 at 08:33","chars":199,"content":"Split the mental model from the operational steps. A first-time reader should find installation, client setup, model instructions, deployment, security, limitations, and operations as separate paths."}]},"demo-2026-06-01-ui-review":{"session_id":"demo-2026-06-01-ui-review","title":"Admin viewer UI review","exchange_count":4,"turn_count":8,"char_count":2480,"sha256":"synthetic-preview-only","context_pack_id":"viewer-design-refresh","turn_sequence":["USER","USER","USER","Claude","USER","GPT-5","USER","Claude"],"turns":[{"turn":1,"speaker":"USER","exchange_id":103,"created_at":"2026-06-01T09:20:00.000Z","created_at_display":null,"chars":113,"content":"The current admin panel works, but it feels a bit plain. I want it to stay practical while looking more polished."},{"turn":2,"speaker":"USER","exchange_id":103,"created_at":"2026-06-01T09:21:30.000Z","created_at_display":"Monday June 1, 2026 at 09:21","chars":196,"content":"The best direction is a calmer operational dashboard: stronger spacing rhythm, clearer active selection, better exchange cards, and more deliberate typography. Keep it dense enough for repeat use."},{"turn":3,"speaker":"USER","exchange_id":104,"created_at":"2026-06-01T09:31:00.000Z","created_at_display":null,"chars":66,"content":"Should the redesign use a big hero or decorative visual treatment?"},{"turn":4,"speaker":"Claude","exchange_id":104,"created_at":"2026-06-01T09:32:30.000Z","created_at_display":"Monday June 1, 2026 at 09:32","chars":150,"content":"No. This is an admin tool, so the first screen should be the working surface itself: session list, summary, transcript corrections, and clear actions."},{"turn":5,"speaker":"USER","exchange_id":105,"created_at":"2026-06-01T09:42:00.000Z","created_at_display":null,"chars":44,"content":"What UI states should the redesign preserve?"},{"turn":6,"speaker":"GPT-5","exchange_id":105,"created_at":"2026-06-01T09:43:30.000Z","created_at_display":"Monday June 1, 2026 at 09:43","chars":157,"content":"Keep loading, empty, selected, editing, deleted, error, and success states. Also preserve responsive behavior for narrow screens and long transcript content."},{"turn":7,"speaker":"USER","exchange_id":106,"created_at":"2026-06-01T09:53:00.000Z","created_at_display":null,"chars":74,"content":"The delete and restore actions need better affordance. Any recommendation?"},{"turn":8,"speaker":"Claude","exchange_id":106,"created_at":"2026-06-01T09:54:30.000Z","created_at_display":"Monday June 1, 2026 at 09:54","chars":166,"content":"Use restrained destructive styling for delete, a clear restored/saved status message, and make deleted exchanges visually distinct without making the text unreadable."}]},"demo-2026-06-01-incident-debugging":{"session_id":"demo-2026-06-01-incident-debugging","title":"Debugging a virtual environment issue","exchange_count":3,"turn_count":6,"char_count":1920,"sha256":"synthetic-preview-only","context_pack_id":"local-development","turn_sequence":["USER","USER","USER","GPT-5","USER","Claude"],"turns":[{"turn":1,"speaker":"USER","exchange_id":107,"created_at":"2026-06-01T10:53:20.000Z","created_at_display":null,"chars":70,"content":"uv run sometimes hangs on my mounted workspace. Is the project broken?"},{"turn":2,"speaker":"USER","exchange_id":107,"created_at":"2026-06-01T10:54:50.000Z","created_at_display":"Monday June 1, 2026 at 10:54","chars":192,"content":"The project is likely fine. The symptom points to the mounted filesystem and virtual environment metadata rather than app logic. Rebuilding .venv on the host where tests run is the safer path."},{"turn":3,"speaker":"USER","exchange_id":108,"created_at":"2026-06-01T11:04:20.000Z","created_at_display":null,"chars":41,"content":"What should we document for contributors?"},{"turn":4,"speaker":"GPT-5","exchange_id":108,"created_at":"2026-06-01T11:05:50.000Z","created_at_display":"Monday June 1, 2026 at 11:05","chars":171,"content":"Tell contributors to run uv sync locally on their own machine, avoid committing .venv, and rebuild the environment if packages look inconsistent after moving the checkout."},{"turn":5,"speaker":"USER","exchange_id":109,"created_at":"2026-06-01T11:15:20.000Z","created_at_display":null,"chars":33,"content":"Could this affect GitHub Actions?"},{"turn":6,"speaker":"Claude","exchange_id":109,"created_at":"2026-06-01T11:16:50.000Z","created_at_display":"Monday June 1, 2026 at 11:16","chars":160,"content":"No, GitHub Actions creates a fresh checkout and a fresh Python environment. That makes CI a useful independent signal for whether the project itself is healthy."}]},"demo-2026-06-01-empty-followup":{"session_id":"demo-2026-06-01-empty-followup","title":"Short follow-up session","exchange_count":1,"turn_count":2,"char_count":937,"sha256":"synthetic-preview-only","context_pack_id":"manual-context","turn_sequence":["USER","USER"],"turns":[{"turn":1,"speaker":"USER","exchange_id":110,"created_at":"2026-06-01T12:23:20.000Z","created_at_display":null,"chars":59,"content":"Give me a tiny explanation of what MCP Session Bridge does."},{"turn":2,"speaker":"USER","exchange_id":110,"created_at":"2026-06-01T12:24:50.000Z","created_at_display":"Monday June 1, 2026 at 12:24","chars":209,"content":"It gives multiple model clients one shared transcript store, so Claude, ChatGPT, Codex, or another MCP client can pick up the same conversation history through tools instead of relying on a single chat window."}]}}}</script>
@@ -877,6 +959,9 @@
         selectedSession: null,
         exchanges: [],
         files: { session: [], group: [] },
+        aiSettings: { configured: false, api_key_preview: "", model: "gpt-5.4-nano", title_max_chars: 72 },
+        renamingSessionId: "",
+        manualRenameSessionId: "",
         query: "",
         showDeleted: true,
         editingExchangeId: null,
@@ -889,8 +974,15 @@
 
       const dom = {
         addGroupButton: document.getElementById("addGroupButton"),
+        aiKeyInput: document.getElementById("aiKeyInput"),
+        aiKeyRemoveButton: document.getElementById("aiKeyRemoveButton"),
+        aiModelInput: document.getElementById("aiModelInput"),
+        aiSettingsButton: document.getElementById("aiSettingsButton"),
+        aiSettingsClose: document.getElementById("aiSettingsClose"),
+        aiSettingsDialog: document.getElementById("aiSettingsDialog"),
+        aiSettingsForm: document.getElementById("aiSettingsForm"),
+        aiSettingsStatus: document.getElementById("aiSettingsStatus"),
         copyButton: document.getElementById("copyButton"),
-        datasetSummary: document.getElementById("datasetSummary"),
         demoBanner: document.getElementById("demoBanner"),
         exchangeList: document.getElementById("exchangeList"),
         fileCopyButton: document.getElementById("fileCopyButton"),
@@ -916,17 +1008,30 @@
         layoutSeg: document.getElementById("layoutSeg"),
         rawToggleButton: document.getElementById("rawToggleButton"),
         refreshButton: document.getElementById("refreshButton"),
+        scrollBottomButton: document.getElementById("scrollBottomButton"),
+        scrollNextButton: document.getElementById("scrollNextButton"),
+        scrollPrevButton: document.getElementById("scrollPrevButton"),
+        scrollTopButton: document.getElementById("scrollTopButton"),
         searchInput: document.getElementById("searchInput"),
         sessionGroupSelect: document.getElementById("sessionGroupSelect"),
         sessionList: document.getElementById("sessionList"),
         sessionMeta: document.getElementById("sessionMeta"),
         sessionTitle: document.getElementById("sessionTitle"),
+        sessionTitleIcon: document.getElementById("sessionTitleIcon"),
         showDeletedToggle: document.getElementById("showDeletedToggle"),
         status: document.getElementById("status"),
         timezoneSelect: document.getElementById("timezoneSelect"),
+        turnNav: document.getElementById("turnNav"),
       };
 
       dom.addGroupButton.addEventListener("click", () => openGroupDialog());
+      dom.aiSettingsButton.addEventListener("click", () => openAiSettingsDialog());
+      dom.aiSettingsClose.addEventListener("click", () => dom.aiSettingsDialog.close());
+      dom.aiSettingsForm.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        await saveAiSettings();
+      });
+      dom.aiKeyRemoveButton.addEventListener("click", () => removeAiKey());
       dom.groupCancelButton.addEventListener("click", () => dom.groupDialog.close());
       dom.groupDialogClose.addEventListener("click", () => dom.groupDialog.close());
       dom.fileDialogClose.addEventListener("click", () => dom.fileDialog.close());
@@ -946,6 +1051,10 @@
       });
       dom.sessionGroupSelect.addEventListener("change", () => moveSelectedSession(dom.sessionGroupSelect.value));
       dom.refreshButton.addEventListener("click", () => refreshAll());
+      dom.scrollTopButton.addEventListener("click", () => scrollTranscript("top"));
+      dom.scrollPrevButton.addEventListener("click", () => scrollTranscript("prev"));
+      dom.scrollNextButton.addEventListener("click", () => scrollTranscript("next"));
+      dom.scrollBottomButton.addEventListener("click", () => scrollTranscript("bottom"));
       dom.searchInput.addEventListener("input", () => {
         state.query = dom.searchInput.value.trim().toLowerCase();
         renderSessions();
@@ -990,6 +1099,7 @@
           state.displayTimezone = me.display_timezone || state.displayTimezone;
           dom.identity.textContent = state.userDisplayName;
           populateTimezoneSelect();
+          await loadAiSettings();
           await refreshAll();
         } catch (error) {
           if (error.status === 401) {
@@ -999,6 +1109,65 @@
           // No live backend → fall back to an offline demo dataset so the UI is reviewable.
           const ok = await enableDemo();
           if (!ok) setStatus(error.message, "error");
+        }
+      }
+
+      async function loadAiSettings() {
+        try {
+          const payload = await api("/admin/api/ai-settings");
+          state.aiSettings = payload.settings || state.aiSettings;
+        } catch (error) {
+          state.aiSettings = { configured: false, api_key_preview: "", model: "gpt-5.4-nano", title_max_chars: 72 };
+        }
+      }
+
+      function openAiSettingsDialog() {
+        dom.aiModelInput.value = state.aiSettings.model || "gpt-5.4-nano";
+        dom.aiKeyInput.value = "";
+        renderAiSettingsStatus();
+        dom.aiSettingsDialog.showModal();
+        dom.aiModelInput.focus();
+      }
+
+      function renderAiSettingsStatus() {
+        const keyText = state.aiSettings.configured
+          ? `API key configured: ${state.aiSettings.api_key_preview || "configured"}`
+          : "API key is not configured. AI rename buttons are disabled.";
+        dom.aiSettingsStatus.textContent = `${keyText} Title limit: ${state.aiSettings.title_max_chars || 72} characters.`;
+        dom.aiKeyRemoveButton.disabled = !state.aiSettings.configured || state.busy;
+      }
+
+      async function saveAiSettings() {
+        const payload = { model: dom.aiModelInput.value.trim() || "gpt-5.4-nano" };
+        if (dom.aiKeyInput.value.trim()) payload.api_key = dom.aiKeyInput.value.trim();
+        setBusy(true);
+        try {
+          const result = await api("/admin/api/ai-settings", { method: "PUT", body: JSON.stringify(payload) });
+          state.aiSettings = result.settings || state.aiSettings;
+          dom.aiKeyInput.value = "";
+          renderAiSettingsStatus();
+          renderSessions();
+          setStatus("AI rename settings saved.", "ok");
+        } catch (error) {
+          setStatus(error.message, "error");
+        } finally {
+          setBusy(false);
+        }
+      }
+
+      async function removeAiKey() {
+        if (!window.confirm("Remove the saved AI API key?")) return;
+        setBusy(true);
+        try {
+          const result = await api("/admin/api/ai-settings/key", { method: "DELETE" });
+          state.aiSettings = result.settings || state.aiSettings;
+          renderAiSettingsStatus();
+          renderSessions();
+          setStatus("AI API key removed.", "ok");
+        } catch (error) {
+          setStatus(error.message, "error");
+        } finally {
+          setBusy(false);
         }
       }
 
@@ -1034,7 +1203,6 @@
             state.selectedSessionId = visibleSessions[0] ? visibleSessions[0].session_id : "";
           }
           renderSessions();
-          renderSummary();
         } finally {
           setBusy(false);
         }
@@ -1071,25 +1239,6 @@
         }
       }
 
-      function renderSummary() {
-        const active = state.sessions.reduce((sum, s) => sum + Number(s.exchange_count || 0), 0);
-        const deleted = state.sessions.reduce((sum, s) => sum + Number(s.deleted_exchange_count || 0), 0);
-        dom.datasetSummary.replaceChildren(
-          stat(state.sessions.length, "sessions"),
-          stat(active, "exchanges"),
-          stat(deleted, "deleted", deleted > 0)
-        );
-      }
-
-      function stat(value, label, warn) {
-        const node = document.createElement("span");
-        node.className = "stat" + (warn ? " is-deleted" : "");
-        const b = document.createElement("b");
-        b.textContent = String(value);
-        node.append(b, document.createTextNode(label));
-        return node;
-      }
-
       function renderGroups() {
         dom.groupList.replaceChildren();
         const allButton = groupButton({ group_id: "all", name: "All sessions", color: "#8b8ff8", icon_key: "folder" });
@@ -1102,6 +1251,8 @@
         const node = document.createElement("button");
         node.type = "button";
         node.className = "group-filter";
+        if (group.group_id === "all") node.classList.add("is-all");
+        if (group.group_id === "uncategorized") node.classList.add("is-uncategorized");
         node.title = group.name || group.group_id;
         node.style.setProperty("--g", group.color || "#8b93a7");
         if (group.group_id === state.activeGroupId) node.classList.add("is-active");
@@ -1166,11 +1317,18 @@
         }
 
         for (const session of visible) {
-          const button = document.createElement("button");
-          button.type = "button";
-          button.className = "session-button";
-          if (session.session_id === state.selectedSessionId) button.classList.add("is-active");
-          button.addEventListener("click", () => loadSession(session.session_id));
+          const item = document.createElement("article");
+          item.tabIndex = 0;
+          item.role = "button";
+          item.className = "session-button";
+          if (session.session_id === state.selectedSessionId) item.classList.add("is-active");
+          item.addEventListener("click", () => loadSession(session.session_id));
+          item.addEventListener("keydown", (event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              loadSession(session.session_id);
+            }
+          });
 
           const foot = div("session-foot");
           if (session.group) {
@@ -1180,17 +1338,24 @@
             groupChip.prepend(svgNode(session.group.icon_key || "folder"));
             foot.append(groupChip);
           }
-          foot.append(chip(`${session.exchange_count || 0} exchanges`));
+          const lastTurnChip = chip(formatLastTurnDate(session.last_turn_at_iso || session.updated_at_iso));
+          lastTurnChip.classList.add("last-turn");
+          foot.append(lastTurnChip, chip(`${(session.exchange_count || 0) * 2} turns`));
           if (Number(session.deleted_exchange_count || 0) > 0) {
             foot.append(chip(`${session.deleted_exchange_count} deleted`, true));
           }
 
-          button.append(
-            div("session-title", session.title || "Untitled"),
-            spanCls("session-sub mono", session.session_id),
-            foot
-          );
-          dom.sessionList.append(button);
+          if (state.manualRenameSessionId === session.session_id) {
+            item.append(renderSessionRenameForm(session));
+          } else {
+            item.append(
+              div("session-title", session.title || "Untitled"),
+              spanCls("session-sub mono", session.session_id),
+              foot,
+              renderSessionActions(session)
+            );
+          }
+          dom.sessionList.append(item);
         }
       }
 
@@ -1214,11 +1379,18 @@
         const head = div("files-head");
         const title = document.createElement("h3");
         title.textContent = "Files";
-        head.append(title, spanCls("", `${count} uploaded`));
+        head.append(title, spanCls("", "hover to expand"));
+
+        const summary = div("files-summary");
+        summary.append(
+          chip(`${count} uploaded`),
+          chip(`${sessionFiles.length} session`),
+          chip(`${groupFiles.length} group`)
+        );
 
         const grid = div("files-grid");
         grid.append(fileBucket("Session files", sessionFiles), fileBucket("Group files", groupFiles));
-        dom.filesPanel.append(head, grid);
+        dom.filesPanel.append(head, summary, grid);
       }
 
       function fileBucket(title, files) {
@@ -1303,6 +1475,109 @@
       function formatUnixDate(value) {
         if (!value) return "";
         return formatDate(new Date(Number(value) * 1000).toISOString());
+      }
+
+      function formatLastTurnDate(value) {
+        if (!value) return "no turns";
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) return "no turns";
+        const time = new Intl.DateTimeFormat("pl-PL", { hour: "2-digit", minute: "2-digit" }).format(date);
+        const weekday = new Intl.DateTimeFormat("pl-PL", { weekday: "long" }).format(date);
+        const day = String(date.getDate()).padStart(2, "0");
+        const month = String(date.getMonth() + 1).padStart(2, "0");
+        const year = String(date.getFullYear()).slice(-2);
+        return `${time} ${weekday} (${day}.${month}.${year})`;
+      }
+
+      function renderSessionActions(session) {
+        const actions = div("session-actions");
+        const aiButton = button(state.renamingSessionId === session.session_id ? "..." : "AI", (event) => {
+          event.stopPropagation();
+          aiRenameSession(session.session_id);
+        }, "ghost");
+        aiButton.title = state.aiSettings.configured
+          ? "Rename from the first user message"
+          : "Configure an AI API key first";
+        aiButton.disabled = state.busy || !state.aiSettings.configured || state.renamingSessionId === session.session_id;
+
+        const manualButton = button("Edit", (event) => {
+          event.stopPropagation();
+          state.manualRenameSessionId = session.session_id;
+          renderSessions();
+        }, "ghost");
+        manualButton.title = "Set title manually";
+        manualButton.disabled = state.busy;
+
+        actions.append(aiButton, manualButton);
+        return actions;
+      }
+
+      function renderSessionRenameForm(session) {
+        const form = document.createElement("form");
+        form.className = "session-rename";
+        form.addEventListener("click", (event) => event.stopPropagation());
+        form.addEventListener("submit", async (event) => {
+          event.preventDefault();
+          await manualRenameSession(session.session_id, input.value);
+        });
+        const input = document.createElement("input");
+        input.value = session.title || "";
+        input.maxLength = state.aiSettings.title_max_chars || 72;
+        input.required = true;
+        const actions = div("edit-actions");
+        actions.append(
+          button("Save", null, "primary", "submit"),
+          button("Cancel", (event) => {
+            event.stopPropagation();
+            state.manualRenameSessionId = "";
+            renderSessions();
+          }, "ghost")
+        );
+        form.append(input, actions);
+        setTimeout(() => { input.focus(); input.select(); }, 0);
+        return form;
+      }
+
+      async function manualRenameSession(sessionId, title) {
+        const trimmed = String(title || "").trim();
+        if (!trimmed) { setStatus("Title cannot be empty.", "error"); return; }
+        if (trimmed.length > (state.aiSettings.title_max_chars || 72)) {
+          setStatus(`Title must be ${(state.aiSettings.title_max_chars || 72)} characters or fewer.`, "error");
+          return;
+        }
+        await renameSessionRequest(sessionId, { method: "PATCH", body: JSON.stringify({ title: trimmed }) }, "Session title updated.");
+      }
+
+      async function aiRenameSession(sessionId) {
+        if (!state.aiSettings.configured) { setStatus("Configure an AI API key first.", "warn"); return; }
+        state.renamingSessionId = sessionId;
+        renderSessions();
+        await renameSessionRequest(sessionId, { method: "POST" }, "Session title updated by AI.", `/admin/api/sessions/${encodeURIComponent(sessionId)}/rename/ai`);
+      }
+
+      async function renameSessionRequest(sessionId, options, successMessage, path = null) {
+        setBusy(true);
+        try {
+          const result = await api(path || `/admin/api/sessions/${encodeURIComponent(sessionId)}`, options);
+          const updated = result.session;
+          if (updated) {
+            state.sessions = state.sessions.map((session) => session.session_id === updated.session_id ? { ...session, ...updated } : session);
+            if (state.selectedSession && state.selectedSession.session_id === updated.session_id) {
+              state.selectedSession = { ...state.selectedSession, ...updated };
+            }
+          }
+          state.manualRenameSessionId = "";
+          setStatus(successMessage, "ok");
+          await loadSessions();
+          if (state.selectedSessionId === sessionId) await loadSession(sessionId);
+          else renderSessions();
+        } catch (error) {
+          setStatus(error.message, "error");
+        } finally {
+          state.renamingSessionId = "";
+          setBusy(false);
+          renderSessions();
+        }
       }
 
       function renderSessionGroupSelect() {
@@ -1417,6 +1692,9 @@
 
         if (!state.selectedSession) {
           dom.sessionTitle.textContent = "Select a session";
+          dom.sessionTitleIcon.classList.remove("show");
+          dom.sessionTitleIcon.replaceChildren();
+          dom.turnNav.classList.remove("show");
           dom.sessionMeta.textContent = "Conversation history correction panel.";
           dom.exchangeList.append(emptyState("No session selected", "Select a session from the list on the left to review and correct its exchanges."));
           return;
@@ -1427,9 +1705,12 @@
         const group = state.groups.find((item) => item.group_id === state.selectedSession.group_id);
         const fileCount = Number((state.files.session || []).length) + Number((state.files.group || []).length);
         dom.sessionTitle.textContent = state.selectedSession.title || state.selectedSession.session_id;
+        renderSessionTitleIcon(group);
+        dom.turnNav.classList.toggle("show", state.exchanges.length > 0);
         renderMeta([
           { mono: true, text: state.selectedSession.session_id },
           { text: `group ${group ? group.name : state.selectedSession.group_id || "uncategorized"}` },
+          { text: `${formatNumber(state.selectedSession.token_count || 0)} tokens` },
           { text: `${fileCount} files` },
           { text: `${activeCount} active exchanges` },
           { text: `${deletedCount} deleted` },
@@ -1490,6 +1771,7 @@
           localStorage.setItem("mcp-admin:timezone", state.displayTimezone);
           refreshDemoTimestamps();
           populateTimezoneSelect();
+          await loadAiSettings();
           await refreshAll();
           setStatus(`Timezone set to ${state.displayTimezone}.`, "ok");
         } catch (error) {
@@ -1568,14 +1850,14 @@
         group.style.setProperty("--m", modelIdentity(exchange.model_name).color);
         const modelTime = exchange.assistant_created_at_display || formatDate(exchange.assistant_created_at_iso);
         group.append(
-          renderMsg("USER", exchange.user_message, false, ""),
-          renderMsg(exchange.model_name || "Model", exchange.assistant_response, true, modelTime),
+          renderMsg("USER", exchange.user_message, false, "", exchange.user_message_token_count),
+          renderMsg(exchange.model_name || "Model", exchange.assistant_response, true, modelTime, exchange.assistant_response_token_count),
           renderExActions(exchange)
         );
         return group;
       }
 
-      function renderMsg(speakerName, content, isModel, timeText) {
+      function renderMsg(speakerName, content, isModel, timeText, tokenCount) {
         const speaker = isModel ? (speakerName || "Model") : userDisplayName();
         const article = document.createElement("article");
         article.className = "message " + (isModel ? "is-model" : "is-user");
@@ -1585,6 +1867,7 @@
           const body = div("body");
           const meta = div("msg-meta");
           meta.append(spanCls("msg-speaker", speaker));
+          meta.append(spanCls("token-count", tokenLabel(tokenCount)));
           if (timeText) meta.append(spanCls("", timeText));
           const bubble = div("bubble");
           bubble.append(markdownContent("msg-content", content || "—"));
@@ -1595,6 +1878,7 @@
 
         const meta = div("msg-meta");
         meta.append(spanCls("msg-speaker", speaker));
+        meta.append(spanCls("token-count", tokenLabel(tokenCount)));
         if (timeText) meta.append(spanCls("", timeText));
         const row = div("row");
         row.append(avatar(isModel ? speakerName : "USER"));
@@ -1641,14 +1925,70 @@
         if (!state.selectedSession) return "";
         const s = state.selectedSession;
         const visible = state.showDeleted ? state.exchanges : state.exchanges.filter((e) => !e.is_deleted);
-        const lines = [`# ${s.title || s.session_id}`, "", `- session_id: \`${s.session_id}\``, `- exchanges: ${visible.length}`, "", "## Transcript", ""];
+        const lines = [`# ${s.title || s.session_id}`, "", `- session_id: \`${s.session_id}\``, `- tokens: ${s.token_count || 0}`, `- exchanges: ${visible.length}`, "", "## Transcript", ""];
         for (const ex of visible) {
-          lines.push("### USER", "", ex.user_message || "", "");
+          lines.push(`### USER (${ex.user_message_token_count || 0} tokens)`, "", ex.user_message || "", "");
           const model = ex.model_name || "Model";
           const t = ex.assistant_created_at_display ? ` — ${ex.assistant_created_at_display}` : "";
-          lines.push(`### ${model}${t}${ex.is_deleted ? " (deleted)" : ""}`, "", ex.assistant_response || "", "");
+          lines.push(`### ${model}${t}${ex.is_deleted ? " (deleted)" : ""} (${ex.assistant_response_token_count || 0} tokens)`, "", ex.assistant_response || "", "");
         }
         return lines.join("\n");
+      }
+
+      function renderSessionTitleIcon(group) {
+        dom.sessionTitleIcon.replaceChildren();
+        if (!group) {
+          dom.sessionTitleIcon.classList.remove("show");
+          return;
+        }
+        dom.sessionTitleIcon.style.setProperty("--g", group.color || "#8b93a7");
+        dom.sessionTitleIcon.append(svgNode(group.icon_key || "folder"));
+        dom.sessionTitleIcon.classList.add("show");
+      }
+
+      function transcriptTurnNodes() {
+        if (state.rawVisible) return [];
+        if (state.layout === "pairs") return Array.from(dom.exchangeList.querySelectorAll(".exchange"));
+        return Array.from(dom.exchangeList.querySelectorAll(".message"));
+      }
+
+      function scrollTranscript(direction) {
+        const nodes = transcriptTurnNodes();
+        if (direction === "top") {
+          scrollToNode(dom.exchangeList, "start");
+          return;
+        }
+        if (direction === "bottom") {
+          const target = nodes[nodes.length - 1] || dom.exchangeList;
+          scrollToNode(target, "end");
+          return;
+        }
+        if (!nodes.length) return;
+        const topOffset = scrollTopOffset();
+        const currentY = window.scrollY + topOffset;
+        let target = null;
+        if (direction === "next") {
+          target = nodes.find((node) => node.getBoundingClientRect().top + window.scrollY > currentY + 12) || nodes[nodes.length - 1];
+        } else {
+          target = [...nodes].reverse().find((node) => node.getBoundingClientRect().top + window.scrollY < currentY - 12) || nodes[0];
+        }
+        scrollToNode(target, "start");
+      }
+
+      function scrollTopOffset() {
+        const topbar = document.querySelector(".topbar");
+        const height = topbar ? topbar.getBoundingClientRect().height : 0;
+        return Math.ceil(height + 22);
+      }
+
+      function scrollToNode(node, align = "start") {
+        const rect = node.getBoundingClientRect();
+        const absoluteTop = rect.top + window.scrollY;
+        const offset = scrollTopOffset();
+        const targetY = align === "end"
+          ? absoluteTop + rect.height - window.innerHeight + offset
+          : absoluteTop - offset;
+        window.scrollTo({ top: Math.max(0, targetY), behavior: "smooth" });
       }
 
       function renderMeta(parts) {
@@ -1717,8 +2057,8 @@
         // body grid
         const grid = div("exchange-grid");
         grid.append(
-          renderTurn("USER", userDisplayName(), exchange.user_message),
-          renderTurn(exchange.model_name || "MODEL", exchange.model_name || "Model", exchange.assistant_response, true)
+          renderTurn("USER", userDisplayName(), exchange.user_message, false, exchange.user_message_token_count),
+          renderTurn(exchange.model_name || "MODEL", exchange.model_name || "Model", exchange.assistant_response, true, exchange.assistant_response_token_count)
         );
         article.append(grid);
 
@@ -1726,13 +2066,21 @@
         return article;
       }
 
-      function renderTurn(identityName, label, content, isModel) {
+      function renderTurn(identityName, label, content, isModel, tokenCount) {
         const node = div("turn " + (isModel ? "model" : "user"));
         if (isModel) node.style.setProperty("--m", modelIdentity(identityName).color);
         const headRow = div("turn-head");
-        headRow.append(avatar(identityName, true), spanCls("turn-label", label));
+        headRow.append(avatar(identityName, true), spanCls("turn-label", label), spanCls("token-count", tokenLabel(tokenCount)));
         node.append(headRow, markdownContent("turn-content", content || "—"));
         return node;
+      }
+
+      function tokenLabel(value) {
+        return `${formatNumber(value || 0)} tokens`;
+      }
+
+      function formatNumber(value) {
+        return new Intl.NumberFormat("en-US").format(Number(value || 0));
       }
 
       function renderEditForm(exchange) {
@@ -1890,6 +2238,7 @@
           exchange_count: s.exchange_count || 0,
           deleted_exchange_count: s.deleted_exchange_count || 0,
           updated_at_iso: s.updated_at ? new Date(Number(s.updated_at) * 1000).toISOString() : null,
+          last_turn_at_iso: s.last_turn_at ? new Date(Number(s.last_turn_at) * 1000).toISOString() : (s.updated_at ? new Date(Number(s.updated_at) * 1000).toISOString() : null),
         }));
         demo.store = {};
         const transcripts = data.transcripts || {};
@@ -1943,6 +2292,22 @@
           state.displayTimezone = normalizeTimezone(body.timezone);
           refreshDemoTimestamps();
           return Promise.resolve({ ok: true, display_timezone: state.displayTimezone });
+        }
+        if (path === "/admin/api/ai-settings" && method === "GET") {
+          return Promise.resolve({ ok: true, settings: state.aiSettings });
+        }
+        if (path === "/admin/api/ai-settings" && (method === "POST" || method === "PUT")) {
+          state.aiSettings = {
+            ...state.aiSettings,
+            configured: Boolean(body.api_key) || state.aiSettings.configured,
+            api_key_preview: body.api_key ? `${body.api_key.slice(0, 3)}...${body.api_key.slice(-4)}` : state.aiSettings.api_key_preview,
+            model: body.model || state.aiSettings.model,
+          };
+          return Promise.resolve({ ok: true, settings: state.aiSettings });
+        }
+        if (path === "/admin/api/ai-settings/key" && method === "DELETE") {
+          state.aiSettings = { ...state.aiSettings, configured: false, api_key_preview: "" };
+          return Promise.resolve({ ok: true, settings: state.aiSettings });
         }
         if (path === "/admin/api/session-groups" && method === "GET") {
           return Promise.resolve({ ok: true, groups: demo.groups });

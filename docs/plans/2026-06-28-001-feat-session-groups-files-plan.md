@@ -183,7 +183,7 @@ The bridge should make these objects visible to both the admin UI and agent tool
   A single attachment model with `scope_type` and `scope_id` supports both session files and group files, while Store methods validate that session scopes reference real sessions and group scopes reference real groups.
 
 - KTD6. Store attachment content on disk and metadata in SQLite.
-  This follows the existing `SessionSummaryStore` and `ContextPackStore` pattern of atomic filesystem writes with hash metadata, while avoiding SQLite BLOB growth for user-supplied files.
+  This follows the existing `ContextPackStore` pattern of atomic filesystem writes with hash metadata, while avoiding SQLite BLOB growth for user-supplied files.
 
 - KTD7. Limit the attachment MVP to text payloads with explicit size and MIME allowlists.
   The MCP tool surface accepts string content naturally; binary data, decompression, and document parsing increase risk and should wait for a follow-up design.
@@ -283,7 +283,7 @@ flowchart TB
 - `app/main.py` defines FastMCP tools and currently exposes flat `create_session`, `list_sessions`, and `get_session_overview`.
 - `app/admin.py` protects admin mutation routes with CSRF and returns session payloads for `admin-viewer.html`.
 - `admin-viewer.html` owns the current sessions sidebar, search, selected transcript view, offline demo fallback, and mutation fetch helper.
-- `app/session_summaries.py` and `app/context_packs.py` demonstrate safe IDs, atomic file writes, hash metadata, manifest/index handling, and path-boundary checks.
+- `app/context_packs.py` demonstrates safe IDs, atomic file writes, hash metadata, manifest/index handling, and path-boundary checks.
 - `tests/test_sessions.py`, `tests/test_admin.py`, and `tests/test_context_packs.py` show the test style for storage, MCP tools, admin CSRF, and file-like stores.
 - OWASP File Upload Cheat Sheet recommends allowlisted extensions, not trusting user-supplied content type alone, generated filenames, file size limits, authenticated uploads, storage outside webroot, least-privilege permissions, and CSRF protection for uploads: https://cheatsheetseries.owasp.org/cheatsheets/File_Upload_Cheat_Sheet.html.
 - MCP Resources specification defines resources as URI-addressed context, supports list/read operations, text and binary content, annotations, and URI/access validation requirements: https://modelcontextprotocol.io/specification/2025-06-18/server/resources.
@@ -441,7 +441,7 @@ Write files atomically, compute SHA-256 from stored content, and rollback metada
 
 **Execution note:** Start with failing tests for path traversal, unknown scope, and oversized content before implementing write behavior.
 
-**Patterns to follow:** Atomic write and safe ID helpers in `app/session_summaries.py` and `app/context_packs.py`; SQLite schema style in `app/storage.py`.
+**Patterns to follow:** Atomic write and safe ID helpers in `app/context_packs.py`; SQLite schema style in `app/storage.py`.
 
 **Test scenarios:**
 
@@ -472,7 +472,7 @@ Return metadata after upload, list compact records, and return content only from
 Extend `get_session_overview` with compact `session_files` and `group_files` manifests that include counts, IDs, filenames, descriptions, MIME types, sizes, hashes, and timestamps.
 Keep transcript chunks unchanged.
 
-**Patterns to follow:** Existing `save_session_summary`, `list_session_summaries`, `get_session_overview`, and structured error style in current tools.
+**Patterns to follow:** Existing `upload_session_file`, `upload_group_file`, `get_session_overview`, and structured error style in current tools.
 
 **Test scenarios:**
 

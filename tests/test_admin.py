@@ -46,7 +46,14 @@ def test_admin_api_requires_login_and_csrf_for_mutations(tmp_path, monkeypatch) 
     assert main.store.list_exchanges(session.session_id) == []
 
     session_payload = client.get(f"/admin/api/sessions/{session.session_id}").json()
-    assert session_payload["exchanges"][0]["deleted_reason"] == "duplicate"
+    first_exchange = session_payload["exchanges"][0]
+    assert first_exchange["deleted_reason"] == "duplicate"
+    assert first_exchange["user_message_token_count"] > 0
+    assert first_exchange["assistant_response_token_count"] > 0
+    assert first_exchange["total_token_count"] == (
+        first_exchange["user_message_token_count"] + first_exchange["assistant_response_token_count"]
+    )
+    assert session_payload["session"]["token_count"] == first_exchange["total_token_count"]
 
     restored = client.post(
         f"/admin/api/exchanges/{exchange.exchange_id}/restore",
@@ -55,6 +62,89 @@ def test_admin_api_requires_login_and_csrf_for_mutations(tmp_path, monkeypatch) 
     assert restored.status_code == 200
     assert restored.json()["exchange"]["is_deleted"] is False
     assert len(main.store.list_exchanges(session.session_id)) == 1
+
+
+def test_admin_can_configure_ai_rename_and_update_session_title(tmp_path, monkeypatch) -> None:
+    main = _load_main(tmp_path, monkeypatch)
+    main.store.create_session("s1", "Chaotic long title", "manual-context")
+    main.store.save_exchange("s1", "Claude", "Pierwsza wiadomość użytkownika o ewaluacji LLM.", "OK")
+    client = TestClient(main.app, base_url="http://127.0.0.1:8787")
+
+    client.post(
+        "/admin/login",
+        data={"username": "owner", "password": "secret-admin-password", "next": "/admin/sessions"},
+        follow_redirects=False,
+    )
+    csrf_token = client.get("/admin/api/me").json()["csrf_token"]
+
+    settings = client.get("/admin/api/ai-settings")
+    assert settings.status_code == 200
+    assert settings.json()["settings"]["configured"] is False
+
+    blocked = client.post(
+        "/admin/api/sessions/s1/rename/ai",
+        headers={"x-csrf-token": csrf_token},
+    )
+    assert blocked.status_code == 400
+
+    saved = client.put(
+        "/admin/api/ai-settings",
+        json={"api_key": "sk-test-secret", "model": "gpt-5.4-nano"},
+        headers={"x-csrf-token": csrf_token},
+    )
+    assert saved.status_code == 200
+    assert saved.json()["settings"]["configured"] is True
+    assert saved.json()["settings"]["api_key_preview"] == "sk-...cret"
+    assert "sk-test-secret" not in saved.text
+    assert main.store.get_app_setting("ai_rename.api_key") != "sk-test-secret"
+
+    import app.admin as admin_module
+
+    captured = {}
+
+    def fake_suggest(api_key: str, model: str, first_user_message: str) -> str:
+        captured["api_key"] = api_key
+        captured["model"] = model
+        captured["first_user_message"] = first_user_message
+        return "Ewaluacja LLM"
+
+    monkeypatch.setattr(admin_module, "_suggest_session_title", fake_suggest)
+
+    renamed = client.post(
+        "/admin/api/sessions/s1/rename/ai",
+        headers={"x-csrf-token": csrf_token},
+    )
+    assert renamed.status_code == 200
+    assert renamed.json()["session"]["title"] == "Ewaluacja LLM"
+    assert main.store.get_session("s1").title == "Ewaluacja LLM"
+    assert captured == {
+        "api_key": "sk-test-secret",
+        "model": "gpt-5.4-nano",
+        "first_user_message": "Pierwsza wiadomość użytkownika o ewaluacji LLM.",
+    }
+
+    manual = client.patch(
+        "/admin/api/sessions/s1",
+        json={"title": "Manualny tytuł"},
+        headers={"x-csrf-token": csrf_token},
+    )
+    assert manual.status_code == 200
+    assert manual.json()["session"]["title"] == "Manualny tytuł"
+
+    too_long = client.patch(
+        "/admin/api/sessions/s1",
+        json={"title": "x" * 73},
+        headers={"x-csrf-token": csrf_token},
+    )
+    assert too_long.status_code == 400
+
+    removed = client.request(
+        "DELETE",
+        "/admin/api/ai-settings/key",
+        headers={"x-csrf-token": csrf_token},
+    )
+    assert removed.status_code == 200
+    assert removed.json()["settings"]["configured"] is False
 
 
 def test_admin_can_update_display_timezone(tmp_path, monkeypatch) -> None:
@@ -197,7 +287,6 @@ def test_admin_can_view_session_and_group_files(tmp_path, monkeypatch) -> None:
 def _load_main(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("BRIDGE_PUBLIC_BASE_URL", "https://example.test")
     monkeypatch.setenv("BRIDGE_DB_PATH", str(tmp_path / "bridge.sqlite3"))
-    monkeypatch.setenv("BRIDGE_SUMMARIES_DIR", str(tmp_path / "summaries"))
     monkeypatch.setenv("BRIDGE_OWNER_USERNAME", "owner")
     monkeypatch.setenv("BRIDGE_OWNER_PASSWORD_HASH", password_hash("secret-admin-password"))
     monkeypatch.setenv("BRIDGE_SECRET_KEY", "test-secret")

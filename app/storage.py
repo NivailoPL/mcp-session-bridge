@@ -10,6 +10,8 @@ from pathlib import Path
 from threading import Lock
 from typing import Any
 
+from app.time_format import format_timestamp_iso
+
 UNCATEGORIZED_GROUP_ID = "uncategorized"
 
 SYSTEM_SESSION_GROUPS = (
@@ -576,6 +578,10 @@ class Store:
             row = conn.execute("SELECT value FROM app_settings WHERE key = ?", (key,)).fetchone()
         return str(row["value"]) if row else None
 
+    def delete_app_setting(self, key: str) -> None:
+        with self._lock, self._connect() as conn:
+            conn.execute("DELETE FROM app_settings WHERE key = ?", (key,))
+
     def set_app_setting(self, key: str, value: str) -> dict[str, Any]:
         updated_at = int(time.time())
         with self._lock, self._connect() as conn:
@@ -889,6 +895,20 @@ class Store:
             return None
         return _session_from_row(row)
 
+    def set_session_title(self, session_id: str, title: str) -> SessionRecord:
+        resolved_title = _validate_session_title(title)
+        now = int(time.time())
+        with self._lock, self._connect() as conn:
+            row = conn.execute("SELECT * FROM sessions WHERE session_id = ?", (session_id,)).fetchone()
+            if row is None:
+                raise ValueError(f"Unknown session_id: {session_id}")
+            conn.execute(
+                "UPDATE sessions SET title = ?, title_is_auto = 0, updated_at = ? WHERE session_id = ?",
+                (resolved_title, now, session_id),
+            )
+            updated = conn.execute("SELECT * FROM sessions WHERE session_id = ?", (session_id,)).fetchone()
+        return _session_from_row(updated)
+
     def set_session_group(self, session_id: str, group_id: str) -> SessionRecord:
         resolved_group_id = group_id.strip() or UNCATEGORIZED_GROUP_ID
         now = int(time.time())
@@ -922,13 +942,20 @@ class Store:
                     g.icon_key AS group_icon_key,
                     g.sort_order AS group_sort_order,
                     g.is_system AS group_is_system,
+                    COALESCE(
+                        MAX(CASE
+                            WHEN e.deleted_at IS NULL THEN COALESCE(e.assistant_created_at, e.created_at)
+                            ELSE NULL
+                        END),
+                        s.created_at
+                    ) AS last_turn_at,
                     SUM(CASE WHEN e.exchange_id IS NOT NULL AND e.deleted_at IS NULL THEN 1 ELSE 0 END) AS exchange_count,
                     SUM(CASE WHEN e.deleted_at IS NOT NULL THEN 1 ELSE 0 END) AS deleted_exchange_count
                 FROM sessions s
                 LEFT JOIN session_groups g ON g.group_id = s.group_id
                 LEFT JOIN exchanges e ON e.session_id = s.session_id
                 GROUP BY s.session_id
-                ORDER BY s.updated_at DESC, s.created_at DESC
+                ORDER BY last_turn_at DESC, s.created_at DESC
                 """
             ).fetchall()
         return [
@@ -942,6 +969,8 @@ class Store:
                 "title_is_auto": bool(row["title_is_auto"]),
                 "created_at": row["created_at"],
                 "updated_at": row["updated_at"],
+                "last_turn_at": row["last_turn_at"],
+                "last_turn_at_iso": format_timestamp_iso(row["last_turn_at"]),
                 "exchange_count": row["exchange_count"] or 0,
                 "deleted_exchange_count": row["deleted_exchange_count"] or 0,
             }
@@ -1366,6 +1395,15 @@ def _derive_title(user_message: str) -> str:
     if len(text) <= 72:
         return text.rstrip(".!?")
     return text[:72].rsplit(" ", 1)[0].rstrip(".,;:!?") + "..."
+
+
+def _validate_session_title(value: str) -> str:
+    title = " ".join(value.strip().split())
+    if not title:
+        raise ValueError("session title must not be empty")
+    if len(title) > 72:
+        raise ValueError("session title must be 72 characters or fewer")
+    return title
 
 
 def _validate_group_id(value: str) -> str:

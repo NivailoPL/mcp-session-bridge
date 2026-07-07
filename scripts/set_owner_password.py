@@ -26,7 +26,6 @@ def main() -> None:
     values.setdefault("BRIDGE_PUBLIC_BASE_URL", "http://127.0.0.1:8787")
     values.setdefault("BRIDGE_RESOURCE_PATH", "/mcp")
     values.setdefault("BRIDGE_DB_PATH", str(ROOT / "data" / "bridge.sqlite3"))
-    values.setdefault("BRIDGE_SUMMARIES_DIR", str(ROOT / "data" / "session-summaries"))
     values.setdefault("BRIDGE_TRANSCRIPT_CHUNK_MAX_LINES", "180")
     values.setdefault("BRIDGE_TRANSCRIPT_CHUNK_MAX_CHARS", "12000")
     values["BRIDGE_OWNER_USERNAME"] = args.username
@@ -83,7 +82,6 @@ def _write_env(path: Path, values: dict[str, str]) -> None:
         "BRIDGE_PUBLIC_BASE_URL",
         "BRIDGE_RESOURCE_PATH",
         "BRIDGE_DB_PATH",
-        "BRIDGE_SUMMARIES_DIR",
         "BRIDGE_TRANSCRIPT_CHUNK_MAX_LINES",
         "BRIDGE_TRANSCRIPT_CHUNK_MAX_CHARS",
         "BRIDGE_OWNER_USERNAME",
