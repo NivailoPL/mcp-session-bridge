@@ -1,11 +1,31 @@
 import importlib
+import json
+import re
 import sys
 from pathlib import Path
 
 from starlette.testclient import TestClient
 
 from app.security import password_hash
+from app.storage import SESSION_GROUP_ICON_KEYS
 from app.time_format import DISPLAY_TIMEZONE_SETTING_KEY
+
+
+def test_admin_viewer_group_ui_contract() -> None:
+    viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
+
+    icon_match = re.search(r"const GROUP_ICONS = (\[[\s\S]*?\]);", viewer)
+    assert icon_match is not None
+    icon_keys = set(json.loads(icon_match.group(1)))
+    assert len(icon_keys) >= 40
+    assert icon_keys <= SESSION_GROUP_ICON_KEYS
+
+    assert 'id="groupDeleteButton"' in viewer
+    assert 'icon_key: "all_sessions"' in viewer
+    assert 'node.dataset.count = String(conversationCount);' in viewer
+    assert 'spanCls("group-file-identity")' in viewer
+    assert 'setStatus(`Selected ${sessionId}.`, "ok");' not in viewer
+    assert 'spanCls("file-meta", "No files")' not in viewer
 
 
 def test_admin_api_requires_login_and_csrf_for_mutations(tmp_path, monkeypatch) -> None:
@@ -204,11 +224,12 @@ def test_admin_can_manage_session_groups_and_move_sessions(tmp_path, monkeypatch
 
     created = client.post(
         "/admin/api/session-groups",
-        json={"name": "Ideas", "color": "#22c55e", "icon_key": "ideas"},
+        json={"name": "Ideas", "color": "#22c55e", "icon_key": "car"},
         headers={"x-csrf-token": csrf_token},
     )
     assert created.status_code == 200
     assert created.json()["group"]["group_id"] == "ideas"
+    assert created.json()["group"]["icon_key"] == "car"
 
     moved = client.patch(
         "/admin/api/sessions/s1",
