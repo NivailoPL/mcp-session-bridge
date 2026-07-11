@@ -475,11 +475,32 @@
     }
     .group-file-identity svg { width: 14px; height: 14px; }
     .file-list { display: grid; gap: .4rem; }
+    .file-drop-zone {
+      display: grid; gap: .4rem; padding: .7rem; border: 1px dashed var(--stroke);
+      border-radius: 9px; background: rgba(255, 255, 255, .025); color: var(--muted);
+      font-size: .75rem; transition: border-color .16s ease, background .16s ease, box-shadow .16s ease;
+    }
+    .file-drop-zone:focus-within, .file-drop-zone.is-drop-target {
+      border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 2px rgba(122, 125, 240, .12);
+    }
+    .file-drop-zone.is-pending { opacity: .65; pointer-events: none; }
+    .file-drop-zone input[type="file"] { max-width: 100%; color: var(--ink); font: inherit; }
+    .file-drop-zone input[type="file"]::file-selector-button {
+      margin-right: .55rem; padding: .42rem .62rem; border: 1px solid var(--stroke);
+      border-radius: 7px; background: rgba(255, 255, 255, .06); color: var(--ink); cursor: pointer;
+    }
+    .file-operation-status { min-height: 1.1rem; margin: 0; color: var(--faint-ink); font-size: .72rem; }
+    .file-operation-status.is-error { color: var(--danger); }
+    .file-operation-status.is-ok { color: var(--ok); }
     .file-list-empty { margin: 0; padding: .65rem .75rem; border: 1px dashed var(--stroke-soft); border-radius: 9px; color: var(--faint-ink); font-size: .78rem; }
+    .file-row-card { display: flex; align-items: stretch; gap: .4rem; min-width: 0; }
+    .file-row-card[draggable="true"] { cursor: grab; }
+    .file-row-card.is-dragging { opacity: .46; }
     .file-button {
-      width: 100%; min-height: 3.25rem; justify-content: flex-start; text-align: left;
+      min-width: 0; flex: 1; min-height: 3.25rem; justify-content: flex-start; text-align: left;
       padding: .65rem .75rem; border-radius: 9px; background: rgba(0, 0, 0, .18);
     }
+    .file-move-button { flex: 0 0 auto; align-self: stretch; padding: .45rem .55rem; font-size: .7rem; }
     .file-button.is-active { border-color: var(--accent); background: var(--accent-soft); }
     .file-row { display: flex; align-items: center; gap: .6rem; width: 100%; min-width: 0; }
     .file-icon { width: 2rem; height: 2rem; border-radius: 8px; display: grid; place-items: center; flex: 0 0 auto; color: var(--accent-ink); background: var(--accent-soft); border: 1px solid rgba(99, 102, 241, .22); }
@@ -933,10 +954,20 @@
       <section id="fileWorkspaceListPane" class="file-workspace-list" aria-label="Available files">
         <section class="file-bucket" aria-labelledby="sessionFilesHeading">
           <div id="sessionFilesHeading" class="file-bucket-title">Session files</div>
+          <label class="file-drop-zone" data-scope="session">
+            <span>Upload one text file here, or drop it from your computer.</span>
+            <input id="sessionFileInput" type="file" accept=".md,.markdown,.txt,.json,.yaml,.yml,.csv,.tsv" aria-describedby="sessionFileStatus">
+          </label>
+          <p id="sessionFileStatus" class="file-operation-status" aria-live="polite"></p>
           <div id="sessionFileList" class="file-list"></div>
         </section>
         <section class="file-bucket" aria-labelledby="groupFilesHeading">
           <div id="groupFilesHeading" class="file-bucket-title">Group files</div>
+          <label class="file-drop-zone" data-scope="group">
+            <span>Upload one shared text file here, or drop it from your computer.</span>
+            <input id="groupFileInput" type="file" accept=".md,.markdown,.txt,.json,.yaml,.yml,.csv,.tsv" aria-describedby="groupFileStatus">
+          </label>
+          <p id="groupFileStatus" class="file-operation-status" aria-live="polite"></p>
           <div id="groupFileList" class="file-list"></div>
         </section>
       </section>
@@ -1060,6 +1091,9 @@
         "phone", "mail", "shopping", "gift", "game", "rocket", "shield", "lock",
         "key", "map", "pin", "car", "plane", "coffee", "fitness", "pet"
       ];
+      const INTERNAL_FILE_DRAG_TYPE = "application/x-mcp-session-file";
+      const MAX_FILE_BYTES = 1_000_000;
+      const ALLOWED_FILE_EXTENSIONS = new Set([".md", ".markdown", ".txt", ".json", ".yaml", ".yml", ".csv", ".tsv"]);
 
       const state = {
         csrfToken: "",
@@ -1071,6 +1105,7 @@
         exchanges: [],
         files: { session: [], group: [] },
         selectedFileId: null,
+        fileOperationPending: false,
         aiSettings: { configured: false, api_key_preview: "", model: "gpt-5.4-nano", title_max_chars: 72 },
         renamingSessionId: "",
         manualRenameSessionId: "",
@@ -1113,6 +1148,8 @@
         fileWorkspaceSummary: document.getElementById("fileWorkspaceSummary"),
         fileWorkspaceTitle: document.getElementById("fileWorkspaceTitle"),
         groupFileList: document.getElementById("groupFileList"),
+        groupFileInput: document.getElementById("groupFileInput"),
+        groupFileStatus: document.getElementById("groupFileStatus"),
         groupCancelButton: document.getElementById("groupCancelButton"),
         groupColorInput: document.getElementById("groupColorInput"),
         groupDialog: document.getElementById("groupDialog"),
@@ -1136,6 +1173,8 @@
         searchInput: document.getElementById("searchInput"),
         sessionGroupSelect: document.getElementById("sessionGroupSelect"),
         sessionFileList: document.getElementById("sessionFileList"),
+        sessionFileInput: document.getElementById("sessionFileInput"),
+        sessionFileStatus: document.getElementById("sessionFileStatus"),
         sessionList: document.getElementById("sessionList"),
         sessionMeta: document.getElementById("sessionMeta"),
         sessionTitle: document.getElementById("sessionTitle"),
@@ -1182,6 +1221,11 @@
         }
       });
       dom.fileDownloadButton.addEventListener("click", () => downloadOpenFile());
+      dom.sessionFileInput.addEventListener("change", () => uploadSelectedFiles("session", dom.sessionFileInput));
+      dom.groupFileInput.addEventListener("change", () => uploadSelectedFiles("group", dom.groupFileInput));
+      for (const zone of document.querySelectorAll(".file-drop-zone")) bindFileDropZone(zone);
+      window.addEventListener("dragend", clearFileDropHighlights);
+      window.addEventListener("drop", clearFileDropHighlights);
       dom.groupForm.addEventListener("submit", async (event) => {
         event.preventDefault();
         await saveGroupForm();
@@ -1224,7 +1268,7 @@
       populateTimezoneSelect();
 
       // offline demo store (declared before init so api() can reference it)
-      const demo = { enabled: false, sessions: [], groups: [], store: {} };
+      const demo = { enabled: false, sessions: [], groups: [], store: {}, files: [], nextFileId: 1000 };
 
       init();
 
@@ -1545,10 +1589,20 @@
           list.append(spanCls("file-list-empty", "No files in this bucket."));
           return;
         }
-        for (const file of files) list.append(fileButton(file));
+        for (const file of files) list.append(fileRowCard(file));
       }
 
-      function fileButton(file) {
+      function fileRowCard(file) {
+        const card = div("file-row-card");
+        card.draggable = true;
+        card.dataset.fileId = String(file.file_id);
+        card.dataset.scope = file.scope_type;
+        card.addEventListener("dragstart", (event) => startFileDrag(event, file, card));
+        card.addEventListener("dragend", () => {
+          card.classList.remove("is-dragging");
+          clearFileDropHighlights();
+        });
+
         const node = document.createElement("button");
         node.type = "button";
         node.className = "file-button";
@@ -1572,7 +1626,21 @@
         );
         row.append(icon, main);
         node.append(row);
-        return node;
+
+        const targetScope = file.scope_type === "group" ? "session" : "group";
+        const moveButton = document.createElement("button");
+        moveButton.type = "button";
+        moveButton.className = "ghost file-move-button";
+        moveButton.dataset.fileAction = "move";
+        moveButton.title = `Move to ${scopeLabel(targetScope)} files`;
+        moveButton.setAttribute("aria-label", `Move ${file.filename || `file ${file.file_id}`} to ${scopeLabel(targetScope)} files`);
+        moveButton.textContent = `Move to ${scopeLabel(targetScope)}`;
+        moveButton.addEventListener("click", async () => {
+          const fileId = file.file_id;
+          await moveFile(fileId, targetScope, moveButton);
+        });
+        card.append(node, moveButton);
+        return card;
       }
 
       function fileFormatLabel(file) {
@@ -1581,6 +1649,209 @@
         if (extension) return extension.toUpperCase().slice(0, 10);
         const subtype = String(file.mime_type || "text/plain").split("/").pop() || "FILE";
         return subtype.toUpperCase().slice(0, 10);
+      }
+
+      function scopeLabel(scope) {
+        return scope === "group" ? "group" : "session";
+      }
+
+      function findVisibleFile(fileId) {
+        return [...(state.files.session || []), ...(state.files.group || [])]
+          .find((file) => String(file.file_id) === String(fileId)) || null;
+      }
+
+      async function uploadSelectedFiles(targetScope, input) {
+        const files = Array.from(input.files || []);
+        try {
+          await uploadFiles(targetScope, files, input);
+        } finally {
+          input.value = "";
+        }
+      }
+
+      async function uploadFiles(targetScope, files, focusTarget) {
+        if (state.fileOperationPending) return;
+        clearFileDropHighlights();
+        setFileOperationStatus(targetScope, "Checking file...", "");
+        try {
+          const prepared = await prepareUpload(files);
+          state.fileOperationPending = true;
+          setFileOperationPending(true);
+          const payload = await api(`/admin/api/sessions/${encodeURIComponent(state.selectedSessionId)}/files`, {
+            method: "POST",
+            body: JSON.stringify({
+              scope_type: targetScope,
+              filename: prepared.file.name,
+              content_base64: bytesToBase64(prepared.bytes),
+            }),
+          });
+          state.selectedFileId = payload.file.file_id;
+          await loadSession(state.selectedSessionId);
+          setFileOperationStatus(targetScope, `${prepared.file.name} uploaded.`, "ok");
+        } catch (error) {
+          setFileOperationStatus(targetScope, error.message, "error");
+          restoreFileOperationFocus(focusTarget);
+        } finally {
+          state.fileOperationPending = false;
+          setFileOperationPending(false);
+          clearFileDropHighlights();
+        }
+      }
+
+      async function prepareUpload(files) {
+        if (files.length !== 1) throw new Error("Choose or drop exactly one file.");
+        const file = files[0];
+        const lowerName = String(file.name || "").toLowerCase();
+        const extension = lowerName.includes(".") ? lowerName.slice(lowerName.lastIndexOf(".")) : "";
+        if (!ALLOWED_FILE_EXTENSIONS.has(extension)) {
+          throw new Error("Unsupported format. Use MD, TXT, JSON, YAML, CSV, or TSV.");
+        }
+        const bytes = new Uint8Array(await file.arrayBuffer());
+        if (bytes.byteLength > MAX_FILE_BYTES) throw new Error("File is larger than 1 MB.");
+        let normalized = bytes;
+        if (bytes.byteLength >= 3 && bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) {
+          normalized = bytes.slice(3);
+        }
+        if (normalized.byteLength === 0) throw new Error("File is empty.");
+        try {
+          new TextDecoder("utf-8", { fatal: true }).decode(normalized);
+        } catch (_) {
+          throw new Error("File must contain valid UTF-8 text.");
+        }
+        return { file, bytes: normalized };
+      }
+
+      function bytesToBase64(bytes) {
+        let binary = "";
+        const chunkSize = 0x8000;
+        for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+          binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize));
+        }
+        return window.btoa(binary);
+      }
+
+      async function moveFile(fileId, targetScope, focusTarget) {
+        if (state.fileOperationPending) return;
+        const file = findVisibleFile(fileId);
+        if (!file) {
+          setFileOperationStatus(targetScope, "File is no longer visible. Refresh and try again.", "error");
+          if (focusTarget && typeof focusTarget.focus === "function") focusTarget.focus();
+          return;
+        }
+        const sourceScope = file.scope_type;
+        if (sourceScope === targetScope) {
+          setFileOperationStatus(targetScope, `Already in ${scopeLabel(targetScope)} files.`, "ok");
+          clearFileDropHighlights();
+          return;
+        }
+        setFileOperationStatus(targetScope, `Moving ${file.filename}...`, "");
+        try {
+          state.fileOperationPending = true;
+          setFileOperationPending(true);
+          const payload = await api(`/admin/api/sessions/${encodeURIComponent(state.selectedSessionId)}/files/${encodeURIComponent(fileId)}`, {
+            method: "PATCH",
+            body: JSON.stringify({ scope_type: targetScope }),
+          });
+          state.selectedFileId = payload.file.file_id;
+          await loadSession(state.selectedSessionId);
+          setFileOperationStatus(targetScope, `${file.filename} moved to ${scopeLabel(targetScope)} files.`, "ok");
+        } catch (error) {
+          setFileOperationStatus(sourceScope, error.message, "error");
+          restoreFileOperationFocus(focusTarget);
+        } finally {
+          state.fileOperationPending = false;
+          setFileOperationPending(false);
+          clearFileDropHighlights();
+        }
+      }
+
+      function setFileOperationStatus(scope, message, tone) {
+        const node = scope === "group" ? dom.groupFileStatus : dom.sessionFileStatus;
+        node.textContent = message || "";
+        node.classList.toggle("is-error", tone === "error");
+        node.classList.toggle("is-ok", tone === "ok");
+      }
+
+      function restoreFileOperationFocus(focusTarget) {
+        if (!focusTarget || typeof focusTarget.focus !== "function") return;
+        window.requestAnimationFrame(() => focusTarget.focus());
+      }
+
+      function setFileOperationPending(pending) {
+        for (const zone of document.querySelectorAll(".file-drop-zone")) {
+          zone.classList.toggle("is-pending", pending);
+          zone.setAttribute("aria-busy", pending ? "true" : "false");
+        }
+        dom.sessionFileInput.disabled = pending;
+        dom.groupFileInput.disabled = pending;
+        for (const button of dom.fileWorkspaceDialog.querySelectorAll('[data-file-action="move"]')) button.disabled = pending;
+      }
+
+      function startFileDrag(event, file, card) {
+        if (!event.dataTransfer || state.fileOperationPending) {
+          event.preventDefault();
+          return;
+        }
+        event.dataTransfer.effectAllowed = "move";
+        event.dataTransfer.setData(INTERNAL_FILE_DRAG_TYPE, JSON.stringify({
+          file_id: file.file_id,
+          scope_type: file.scope_type,
+          session_id: state.selectedSessionId,
+        }));
+        card.classList.add("is-dragging");
+      }
+
+      function fileDragKind(dataTransfer) {
+        const types = Array.from((dataTransfer && dataTransfer.types) || []);
+        if (types.includes(INTERNAL_FILE_DRAG_TYPE)) return "internal";
+        if (types.includes("Files")) return "files";
+        return "";
+      }
+
+      function bindFileDropZone(zone) {
+        const targetScope = zone.dataset.scope;
+        zone.addEventListener("dragenter", (event) => updateFileDropTarget(event, zone));
+        zone.addEventListener("dragover", (event) => updateFileDropTarget(event, zone));
+        zone.addEventListener("dragleave", (event) => {
+          if (!zone.contains(event.relatedTarget)) zone.classList.remove("is-drop-target");
+        });
+        zone.addEventListener("drop", async (event) => {
+          const kind = fileDragKind(event.dataTransfer);
+          clearFileDropHighlights();
+          if (!kind) return;
+          event.preventDefault();
+          if (kind === "files") {
+            await uploadFiles(targetScope, Array.from(event.dataTransfer.files || []), zone.querySelector('input[type="file"]'));
+            return;
+          }
+          let payload = null;
+          try {
+            payload = JSON.parse(event.dataTransfer.getData(INTERNAL_FILE_DRAG_TYPE));
+          } catch (_) {
+            setFileOperationStatus(targetScope, "Could not read the dragged file.", "error");
+            restoreFileOperationFocus(zone.querySelector('input[type="file"]'));
+            return;
+          }
+          if (!payload || !payload.file_id || payload.session_id !== state.selectedSessionId) {
+            setFileOperationStatus(targetScope, "That dragged file does not belong to this session.", "error");
+            restoreFileOperationFocus(zone.querySelector('input[type="file"]'));
+            return;
+          }
+          await moveFile(payload.file_id, targetScope, zone.querySelector('input[type="file"]'));
+        });
+      }
+
+      function updateFileDropTarget(event, zone) {
+        const kind = fileDragKind(event.dataTransfer);
+        if (!kind || state.fileOperationPending) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = kind === "internal" ? "move" : "copy";
+        clearFileDropHighlights();
+        zone.classList.add("is-drop-target");
+      }
+
+      function clearFileDropHighlights() {
+        for (const zone of document.querySelectorAll(".file-drop-zone.is-drop-target")) zone.classList.remove("is-drop-target");
       }
 
       function openFileWorkspace() {
@@ -2487,6 +2758,8 @@
           last_turn_at_iso: s.last_turn_at ? new Date(Number(s.last_turn_at) * 1000).toISOString() : (s.updated_at ? new Date(Number(s.updated_at) * 1000).toISOString() : null),
         }));
         demo.store = {};
+        demo.files = [];
+        demo.nextFileId = 1000;
         const transcripts = data.transcripts || {};
         for (const id of Object.keys(transcripts)) {
           const turns = transcripts[id].turns || [];
@@ -2583,11 +2856,54 @@
         }
         if (path === "/admin/api/sessions") return Promise.resolve({ ok: true, sessions: demo.sessions });
 
+        const demoCreate = path.match(/^\/admin\/api\/sessions\/(.+)\/files$/);
+        if (demoCreate && method === "POST") {
+          const sessionId = decodeURIComponent(demoCreate[1]);
+          const entry = demo.store[sessionId];
+          if (!entry) return Promise.reject(Object.assign(new Error("Unknown session"), { status: 404 }));
+          const binary = window.atob(body.content_base64 || "");
+          const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+          const content = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+          const scope = body.scope_type === "group" ? "group" : "session";
+          const demoFile = {
+            file_id: demo.nextFileId++,
+            filename: body.filename,
+            scope_type: scope,
+            session_id: scope === "session" ? sessionId : null,
+            group_id: scope === "group" ? entry.session.group_id : null,
+            mime_type: demoMimeType(body.filename),
+            size_bytes: bytes.byteLength,
+            sha256: `demo-${Date.now()}-${bytes.byteLength}`,
+            created_by: "demo",
+            created_at: Math.floor(Date.now() / 1000),
+            content,
+          };
+          demo.files.push(demoFile);
+          return Promise.resolve({ ok: true, file: demoFileManifest(demoFile) });
+        }
+
+        const demoFileMutation = path.match(/^\/admin\/api\/sessions\/(.+)\/files\/(\d+)$/);
+        if (demoFileMutation && method === "PATCH") {
+          const sessionId = decodeURIComponent(demoFileMutation[1]);
+          const entry = demo.store[sessionId];
+          const demoFile = demoFilesForSession(sessionId)
+            .find((file) => String(file.file_id) === demoFileMutation[2]);
+          if (!entry || !demoFile) return Promise.reject(Object.assign(new Error("File not found"), { status: 404 }));
+          moveDemoFile(entry, demoFile, body.scope_type);
+          return Promise.resolve({ ok: true, file: demoFileManifest(demoFile) });
+        }
+
         const single = path.match(/^\/admin\/api\/sessions\/(.+)$/);
         if (single && method === "GET") {
-          const entry = demo.store[decodeURIComponent(single[1])];
+          const sessionId = decodeURIComponent(single[1]);
+          const entry = demo.store[sessionId];
           if (!entry) return Promise.reject(Object.assign(new Error("Unknown session"), { status: 404 }));
-          return Promise.resolve({ ok: true, session: entry.session, exchanges: entry.exchanges, files: entry.files || { session: [], group: [] } });
+          const visibleFiles = demoFilesForSession(sessionId);
+          entry.files = {
+            session: visibleFiles.filter((file) => file.scope_type === "session").map(demoFileManifest),
+            group: visibleFiles.filter((file) => file.scope_type === "group").map(demoFileManifest),
+          };
+          return Promise.resolve({ ok: true, session: entry.session, exchanges: entry.exchanges, files: entry.files });
         }
         if (single && method === "PATCH") {
           const entry = demo.store[decodeURIComponent(single[1])];
@@ -2608,20 +2924,9 @@
         };
         const fileMatch = path.match(/^\/admin\/api\/files\/(\d+)$/);
         if (fileMatch) {
-          return Promise.resolve({
-            ok: true,
-            file: {
-              file_id: Number(fileMatch[1]),
-              filename: "demo.md",
-              scope_type: "session",
-              session_id: state.selectedSessionId,
-              mime_type: "text/markdown",
-              size_bytes: 18,
-              created_by: "demo",
-              created_at: Math.floor(Date.now() / 1000),
-              content: "# Demo\n\nNo live backend.",
-            },
-          });
+          const demoFile = demo.files.find((file) => String(file.file_id) === fileMatch[1]);
+          if (!demoFile) return Promise.reject(Object.assign(new Error("File not found"), { status: 404 }));
+          return Promise.resolve({ ok: true, file: { ...demoFile } });
         }
         const restore = path.match(/^\/admin\/api\/exchanges\/(\d+)\/restore$/);
         if (restore) {
@@ -2637,6 +2942,42 @@
           return Promise.resolve({ ok: true });
         }
         return Promise.resolve({ ok: true });
+      }
+
+      function demoFilesForSession(sessionId) {
+        const entry = demo.store[sessionId];
+        if (!entry) return [];
+        return demo.files.filter((file) => (
+          (file.scope_type === "session" && file.session_id === sessionId)
+          || (file.scope_type === "group" && file.group_id === entry.session.group_id)
+        ));
+      }
+
+      function demoFileManifest(file) {
+        const { content, ...manifest } = file;
+        return { ...manifest };
+      }
+
+      function moveDemoFile(entry, demoFile, targetScope) {
+        if (targetScope === "group") {
+          demoFile.scope_type = "group";
+          demoFile.session_id = null;
+          demoFile.group_id = entry.session.group_id;
+        } else {
+          demoFile.scope_type = "session";
+          demoFile.session_id = entry.session.session_id;
+          demoFile.group_id = null;
+        }
+      }
+
+      function demoMimeType(filename) {
+        const extension = String(filename || "").toLowerCase().split(".").pop();
+        if (extension === "md" || extension === "markdown") return "text/markdown";
+        if (extension === "json") return "application/json";
+        if (extension === "csv") return "text/csv";
+        if (extension === "tsv") return "text/tab-separated-values";
+        if (extension === "yaml" || extension === "yml") return "application/yaml";
+        return "text/plain";
       }
 
       function recountDemo(sessionId) {

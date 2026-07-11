@@ -54,6 +54,47 @@ def test_admin_viewer_file_workspace_shell_contract() -> None:
     assert 'dom.fileWorkspaceOpen.focus();' in viewer
 
 
+def test_admin_viewer_file_upload_and_move_contract() -> None:
+    viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
+
+    # Each scope remains fully usable without drag-and-drop.
+    assert 'id="sessionFileInput"' in viewer
+    assert 'id="groupFileInput"' in viewer
+    assert viewer.count('class="file-drop-zone"') == 2
+    assert 'aria-describedby="sessionFileStatus"' in viewer
+    assert 'aria-describedby="groupFileStatus"' in viewer
+    assert 'data-file-action="move"' in viewer
+    assert 'await moveFile(fileId, targetScope, moveButton);' in viewer
+
+    # Browser preflight happens on bytes before the JSON/base64 request is built.
+    assert 'const MAX_FILE_BYTES = 1_000_000;' in viewer
+    assert 'new Set([".md", ".markdown", ".txt", ".json", ".yaml", ".yml", ".csv", ".tsv"])' in viewer
+    assert 'new TextDecoder("utf-8", { fatal: true })' in viewer
+    assert 'bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf' in viewer
+    assert 'content_base64: bytesToBase64(prepared.bytes)' in viewer
+
+    # DnD is an enhancement with explicit internal-vs-OS discrimination.
+    assert 'const INTERNAL_FILE_DRAG_TYPE = "application/x-mcp-session-file";' in viewer
+    assert 'types.includes(INTERNAL_FILE_DRAG_TYPE)' in viewer
+    assert 'types.includes("Files")' in viewer
+    assert 'event.dataTransfer.getData(INTERNAL_FILE_DRAG_TYPE)' in viewer
+    assert 'event.dataTransfer.files' in viewer
+    assert 'dropEffect = kind === "internal" ? "move" : "copy"' in viewer
+
+    # Current-scope moves are local no-ops; successful server responses drive refresh.
+    assert 'if (sourceScope === targetScope)' in viewer
+    assert 'Already in ${scopeLabel(targetScope)} files.' in viewer
+    assert 'await api(`/admin/api/sessions/${encodeURIComponent(state.selectedSessionId)}/files`' in viewer
+    assert 'await loadSession(state.selectedSessionId);' in viewer
+    assert 'window.requestAnimationFrame(() => focusTarget.focus());' in viewer
+
+    # Demo mode uses the same create/move paths and mutates its in-memory manifests.
+    assert 'const demoCreate = path.match(/^\\/admin\\/api\\/sessions\\/(.+)\\/files$/);' in viewer
+    assert 'const demoFileMutation = path.match(/^\\/admin\\/api\\/sessions\\/(.+)\\/files\\/(\\d+)$/);' in viewer
+    assert 'created_by: "demo"' in viewer
+    assert 'moveDemoFile(entry, demoFile, body.scope_type);' in viewer
+
+
 def test_admin_api_requires_login_and_csrf_for_mutations(tmp_path, monkeypatch) -> None:
     main = _load_main(tmp_path, monkeypatch)
     session = main.store.create_session("s1", "Admin test", "manual-context")
