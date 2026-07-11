@@ -460,6 +460,55 @@ def test_mcp_session_files_upload_list_download_and_show_in_overview(tmp_path, m
     assert invalid["error"] == "Unknown session group: missing"
 
 
+def test_mcp_overview_reads_session_and_group_files_in_one_snapshot(tmp_path, monkeypatch) -> None:
+    main = _load_main(tmp_path, monkeypatch)
+    main.store.create_session_group("Ideas", "#22c55e", "ideas")
+    main.store.create_session("s1", "File test", "manual-context", group_id="ideas")
+    main.store.save_session_file("s1", "plan.md", "# Plan")
+    main.store.save_group_file("ideas", "context.md", "Shared context")
+    calls: list[dict[str, str | None]] = []
+    original_list = main.store.list_session_files
+
+    def tracked_list(**kwargs):
+        calls.append(kwargs)
+        return original_list(**kwargs)
+
+    monkeypatch.setattr(main.store, "list_session_files", tracked_list)
+
+    overview = main.get_session_overview("s1")
+
+    assert calls == [{"session_id": "s1", "group_id": "ideas"}]
+    assert [file["filename"] for file in overview["files"]["session"]] == ["plan.md"]
+    assert [file["filename"] for file in overview["files"]["group"]] == ["context.md"]
+
+
+def test_list_session_files_does_not_select_content_bodies(tmp_path) -> None:
+    store = Store(tmp_path / "bridge.sqlite3")
+    store.create_session("s1", "File test", "manual-context")
+    store.save_session_file("s1", "large.md", "x" * 100_000)
+    statements: list[str] = []
+    original_connect = store._connect
+
+    def traced_connect():
+        connection = original_connect()
+        connection.set_trace_callback(statements.append)
+        return connection
+
+    store._connect = traced_connect  # type: ignore[method-assign]
+
+    listed = store.list_session_files(session_id="s1")
+
+    select = next(
+        statement
+        for statement in statements
+        if statement.lstrip().upper().startswith("SELECT") and "FROM session_files" in statement
+    )
+    projection = select.split("FROM session_files", 1)[0].lower()
+    assert "content" not in projection
+    assert "*" not in projection
+    assert listed[0]["filename"] == "large.md"
+
+
 def test_store_moves_session_files_without_changing_identity_or_metadata(tmp_path) -> None:
     store = Store(tmp_path / "bridge.sqlite3")
     store.create_session_group("Ideas", "#22c55e", "ideas")
@@ -502,6 +551,50 @@ def test_store_moves_session_files_without_changing_identity_or_metadata(tmp_pat
     assert [item["file_id"] for item in store.list_session_files(session_id="s1")] == [saved.file_id]
     assert store.list_session_files(session_id="s2") == []
     assert store.list_session_files(group_id="ideas") == []
+
+
+def test_store_file_mutations_recheck_admin_visibility_atomically(tmp_path) -> None:
+    store = Store(tmp_path / "bridge.sqlite3")
+    store.create_session_group("Ideas", "#22c55e", "ideas")
+    store.create_session_group("Other", "#ef4444", "camera")
+    store.create_session("s1", "First", "manual-context", group_id="ideas")
+    store.create_session("s2", "Other", "manual-context", group_id="other")
+    edit_file = store.save_session_file("s1", "edit.md", "Original")
+    move_file = store.save_session_file("s1", "move.md", "Original")
+    delete_file = store.save_session_file("s1", "delete.md", "Original")
+
+    for saved in (edit_file, move_file, delete_file):
+        assert store.get_session_file(saved.file_id) == saved
+        store.move_session_file(saved.file_id, scope_type="session", session_id="s2")
+
+    with pytest.raises(SessionFileConflictError, match="no longer visible"):
+        store.update_session_file(
+            edit_file.file_id,
+            "Changed",
+            expected_sha256=edit_file.sha256,
+            visible_session_id="s1",
+            visible_group_id="ideas",
+        )
+    with pytest.raises(SessionFileConflictError, match="no longer visible"):
+        store.move_session_file(
+            move_file.file_id,
+            scope_type="group",
+            group_id="ideas",
+            visible_session_id="s1",
+            visible_group_id="ideas",
+        )
+    with pytest.raises(SessionFileConflictError, match="no longer visible"):
+        store.delete_session_file(
+            delete_file.file_id,
+            visible_session_id="s1",
+            visible_group_id="ideas",
+        )
+
+    for saved in (edit_file, move_file, delete_file):
+        current = store.get_session_file(saved.file_id)
+        assert current is not None
+        assert current.session_id == "s2"
+        assert current.content == "Original"
 
 
 def test_store_rejects_invalid_file_moves_without_partial_updates(tmp_path) -> None:

@@ -352,9 +352,13 @@ def get_session_overview(session_id: str) -> dict[str, Any]:
     exchanges = store.list_exchanges(session.session_id)
     display_timezone = _display_timezone_name()
     group = store.get_session_group(session.group_id)
+    listed_files = store.list_session_files(
+        session_id=session.session_id,
+        group_id=session.group_id,
+    )
     files = {
-        "session": store.list_session_files(session_id=session.session_id),
-        "group": store.list_session_files(group_id=session.group_id),
+        "session": [file for file in listed_files if file["scope_type"] == "session"],
+        "group": [file for file in listed_files if file["scope_type"] == "group"],
     }
     return {
         "ok": True,

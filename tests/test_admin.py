@@ -526,6 +526,32 @@ def test_admin_uploads_bounded_utf8_files_to_selected_session_or_group(tmp_path,
     assert len(main.store.list_session_files(session_id="s1")) == 1
 
 
+def test_admin_group_upload_uses_session_current_group_atomically(tmp_path, monkeypatch) -> None:
+    main = _load_main(tmp_path, monkeypatch)
+    main.store.create_session_group("First", "#22c55e", "science")
+    main.store.create_session_group("Second", "#3b82f6", "ideas")
+    main.store.create_session("s1", "File mutations", "manual-context", group_id="first")
+    client, csrf = _admin_client(main)
+    original_selected_session = main.admin._selected_session
+
+    def select_then_move(request):
+        selected, error = original_selected_session(request)
+        main.store.set_session_group("s1", "second")
+        return selected, error
+
+    monkeypatch.setattr(main.admin, "_selected_session", select_then_move)
+
+    uploaded = client.post(
+        "/admin/api/sessions/s1/files",
+        json=_encoded_file(b"Current context", filename="context.md", scope_type="group"),
+        headers={"x-csrf-token": csrf},
+    )
+
+    assert uploaded.status_code == 200
+    assert uploaded.json()["file"]["group_id"] == "second"
+    assert main.store.list_session_files(group_id="first") == []
+
+
 def test_admin_edits_moves_and_deletes_only_visible_files(tmp_path, monkeypatch) -> None:
     main = _load_main(tmp_path, monkeypatch)
     main.store.create_session_group("Tests", "#22c55e", "science")
@@ -588,6 +614,87 @@ def test_admin_edits_moves_and_deletes_only_visible_files(tmp_path, monkeypatch)
     assert client.delete(path, headers=headers).status_code == 404
     assert client.get(f"/admin/api/files/{saved.file_id}").status_code == 404
     assert main.store.get_session_file(unrelated.file_id).content == "untouched"
+
+
+def test_admin_file_mutations_conflict_if_file_moves_after_visibility_check(tmp_path, monkeypatch) -> None:
+    main = _load_main(tmp_path, monkeypatch)
+    main.store.create_session_group("First", "#22c55e", "science")
+    main.store.create_session_group("Second", "#ef4444", "camera")
+    main.store.create_session("s1", "First", "manual-context", group_id="first")
+    main.store.create_session("s2", "Second", "manual-context", group_id="second")
+    edit_file = main.store.save_session_file("s1", "edit.md", "Original")
+    move_file = main.store.save_session_file("s1", "move.md", "Original")
+    delete_file = main.store.save_session_file("s1", "delete.md", "Original")
+    pending_moves = {edit_file.file_id, move_file.file_id, delete_file.file_id}
+    original_get = main.store.get_session_file
+
+    def move_after_visibility_check(file_id):
+        saved = original_get(file_id)
+        if file_id in pending_moves:
+            pending_moves.remove(file_id)
+            main.store.move_session_file(file_id, scope_type="session", session_id="s2")
+        return saved
+
+    monkeypatch.setattr(main.store, "get_session_file", move_after_visibility_check)
+    client, csrf = _admin_client(main)
+    headers = {"x-csrf-token": csrf}
+
+    assert client.patch(
+        f"/admin/api/sessions/s1/files/{edit_file.file_id}",
+        json={"content": "Changed", "expected_sha256": edit_file.sha256},
+        headers=headers,
+    ).status_code == 409
+    assert client.patch(
+        f"/admin/api/sessions/s1/files/{move_file.file_id}",
+        json={"scope_type": "group"},
+        headers=headers,
+    ).status_code == 409
+    assert client.delete(
+        f"/admin/api/sessions/s1/files/{delete_file.file_id}",
+        headers=headers,
+    ).status_code == 409
+
+    monkeypatch.setattr(main.store, "get_session_file", original_get)
+    for saved in (edit_file, move_file, delete_file):
+        current = main.store.get_session_file(saved.file_id)
+        assert current is not None
+        assert current.session_id == "s2"
+        assert current.content == "Original"
+
+
+def test_admin_rejects_oversized_or_malformed_patch_lengths_without_mutation(tmp_path, monkeypatch) -> None:
+    main = _load_main(tmp_path, monkeypatch)
+    main.store.create_session("s1", "File mutations", "manual-context")
+    saved = main.store.save_session_file("s1", "notes.md", "Original")
+    client, csrf = _admin_client(main)
+    headers = {"x-csrf-token": csrf, "content-type": "application/json"}
+    path = f"/admin/api/sessions/s1/files/{saved.file_id}"
+    oversized = (
+        b'{"content":"'
+        + b"x" * 6_100_000
+        + f'","expected_sha256":"{saved.sha256}"}}'.encode()
+    )
+
+    misleading = client.build_request(
+        "PATCH",
+        path,
+        content=oversized,
+        headers={**headers, "content-length": "1"},
+    )
+    assert client.send(misleading).status_code == 413
+
+    absent = client.build_request("PATCH", path, content=oversized, headers=headers)
+    del absent.headers["content-length"]
+    assert client.send(absent).status_code == 413
+
+    malformed = client.build_request(
+        "PATCH",
+        path,
+        content=b"{}",
+        headers={**headers, "content-length": "not-a-number"},
+    )
+    assert client.send(malformed).status_code == 400
+    assert main.store.get_session_file(saved.file_id) == saved
 
 
 def test_admin_file_workspace_stays_consistent_with_mcp_reads(tmp_path, monkeypatch) -> None:

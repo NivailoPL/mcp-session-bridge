@@ -376,10 +376,9 @@ class AdminHandlers:
         _, error = self._require_admin(request)
         if error:
             return error
-        try:
-            file_id = int(request.path_params["file_id"])
-        except (KeyError, TypeError, ValueError):
-            return self._json_error("Invalid file_id.", status_code=400)
+        file_id, path_error = _path_file_id(request)
+        if path_error:
+            return path_error
         saved = self.store.get_session_file(file_id)
         if saved is None:
             return self._json_error(f"Unknown file_id: {file_id}", status_code=404)
@@ -445,8 +444,8 @@ class AdminHandlers:
                     created_by=admin_session["username"],
                 )
             else:
-                saved = self.store.save_group_file(
-                    selected.group_id,
+                saved = self.store.save_group_file_for_session(
+                    selected.session_id,
                     filename,
                     content,
                     mime_type=mime_type,
@@ -492,6 +491,8 @@ class AdminHandlers:
                     file_id,
                     payload["content"],
                     expected_sha256=payload["expected_sha256"],
+                    visible_session_id=selected.session_id,
+                    visible_group_id=selected.group_id,
                 )
             elif set(payload) == move_keys:
                 scope_type = payload["scope_type"]
@@ -500,12 +501,16 @@ class AdminHandlers:
                         file_id,
                         scope_type="session",
                         session_id=selected.session_id,
+                        visible_session_id=selected.session_id,
+                        visible_group_id=selected.group_id,
                     )
                 elif scope_type == "group":
                     updated = self.store.move_session_file(
                         file_id,
                         scope_type="group",
                         group_id=selected.group_id,
+                        visible_session_id=selected.session_id,
+                        visible_group_id=selected.group_id,
                     )
                 else:
                     return self._json_error("scope_type must be session or group.", status_code=400)
@@ -537,7 +542,13 @@ class AdminHandlers:
         if saved is None or not _file_visible_to_session(saved, selected):
             return self._json_error(f"Unknown file_id: {file_id}", status_code=404)
         try:
-            deleted = self.store.delete_session_file(file_id)
+            deleted = self.store.delete_session_file(
+                file_id,
+                visible_session_id=selected.session_id,
+                visible_group_id=selected.group_id,
+            )
+        except SessionFileConflictError as exc:
+            return self._json_error(str(exc), status_code=409)
         except ValueError as exc:
             return self._value_error(exc)
         return JSONResponse(
