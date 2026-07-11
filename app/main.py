@@ -19,7 +19,7 @@ from app.oauth import OAuthHandlers
 from app.security import hash_secret
 from app.session_package import render_session_overview, render_session_transcript_chunk
 from app.settings import ROOT, load_settings
-from app.storage import Store
+from app.storage import Store, session_file_payload
 from app.time_format import (
     DEFAULT_DISPLAY_TIMEZONE_NAME,
     DISPLAY_TIMEZONE_SETTING_KEY,
@@ -477,7 +477,7 @@ def upload_session_file(
         )
     except ValueError as exc:
         return {"ok": False, "error": str(exc)}
-    return {"ok": True, "file": _file_payload(saved)}
+    return {"ok": True, "file": session_file_payload(saved)}
 
 
 @mcp.tool()
@@ -500,7 +500,7 @@ def upload_group_file(
         )
     except ValueError as exc:
         return {"ok": False, "error": str(exc)}
-    return {"ok": True, "file": _file_payload(saved)}
+    return {"ok": True, "file": session_file_payload(saved)}
 
 
 @mcp.tool()
@@ -521,7 +521,7 @@ def download_session_file(file_id: int) -> dict[str, Any]:
     saved = store.get_session_file(file_id)
     if saved is None:
         return {"ok": False, "error": f"Unknown file_id: {file_id}"}
-    return {"ok": True, "file": _file_payload(saved, include_content=True)}
+    return {"ok": True, "file": session_file_payload(saved, include_content=True)}
 
 
 def _new_session_id(title: str, title_is_auto: bool = False) -> str:
@@ -556,24 +556,6 @@ def _group_payload(group: Any) -> dict[str, Any] | None:
         "sort_order": group.sort_order,
         "is_system": group.is_system,
     }
-
-
-def _file_payload(file: Any, include_content: bool = False) -> dict[str, Any]:
-    payload = {
-        "file_id": file.file_id,
-        "scope_type": file.scope_type,
-        "session_id": file.session_id,
-        "group_id": file.group_id,
-        "filename": file.filename,
-        "mime_type": file.mime_type,
-        "sha256": file.sha256,
-        "size_bytes": file.size_bytes,
-        "created_by": file.created_by,
-        "created_at": file.created_at,
-    }
-    if include_content:
-        payload["content"] = file.content
-    return payload
 
 
 app = mcp.streamable_http_app()

@@ -296,14 +296,18 @@ class AdminHandlers:
         ]
         session_payload = _session_payload(session)
         session_payload["token_count"] = sum(exchange["total_token_count"] for exchange in exchange_payloads)
+        files = self.store.list_session_files(
+            session_id=session.session_id,
+            group_id=session.group_id,
+        )
         return JSONResponse(
             {
                 "ok": True,
                 "display_timezone": display_timezone,
                 "session": session_payload,
                 "files": {
-                    "session": self.store.list_session_files(session_id=session.session_id),
-                    "group": self.store.list_session_files(group_id=session.group_id),
+                    "session": [file for file in files if file["scope_type"] == "session"],
+                    "group": [file for file in files if file["scope_type"] == "group"],
                 },
                 "exchanges": exchange_payloads,
             },
@@ -380,7 +384,7 @@ class AdminHandlers:
         if saved is None:
             return self._json_error(f"Unknown file_id: {file_id}", status_code=404)
         return JSONResponse(
-            {"ok": True, "file": _session_file_payload(saved, include_content=True)},
+            {"ok": True, "file": session_file_payload(saved, include_content=True)},
             headers=self._no_store_headers(),
         )
 
@@ -832,24 +836,6 @@ def _session_group_payload(group: SessionGroupRecord) -> dict[str, Any]:
         "updated_at": group.updated_at,
         "deleted_at": group.deleted_at,
     }
-
-
-def _session_file_payload(file: SessionFileRecord, include_content: bool = False) -> dict[str, Any]:
-    payload = {
-        "file_id": file.file_id,
-        "scope_type": file.scope_type,
-        "session_id": file.session_id,
-        "group_id": file.group_id,
-        "filename": file.filename,
-        "mime_type": file.mime_type,
-        "sha256": file.sha256,
-        "size_bytes": file.size_bytes,
-        "created_by": file.created_by,
-        "created_at": file.created_at,
-    }
-    if include_content:
-        payload["content"] = file.content
-    return payload
 
 
 def _secret_preview(value: str) -> str:
