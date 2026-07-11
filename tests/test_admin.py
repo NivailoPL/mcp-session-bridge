@@ -29,6 +29,31 @@ def test_admin_viewer_group_ui_contract() -> None:
     assert 'spanCls("file-meta", "No files")' not in viewer
 
 
+def test_admin_viewer_file_workspace_shell_contract() -> None:
+    viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
+
+    assert 'id="filesPanel"' not in viewer
+    assert 'id="fileDialog"' not in viewer
+    assert viewer.count('<dialog id="fileWorkspaceDialog"') == 1
+
+    rail = viewer[viewer.index('<nav id="turnNav"'):viewer.index("</nav>", viewer.index('<nav id="turnNav"'))]
+    assert 'id="fileWorkspaceOpen"' in rail
+    assert 'id="fileWorkspaceCount"' in rail
+    assert 'aria-haspopup="dialog"' in rail
+
+    assert 'dom.turnNav.classList.toggle("show", Boolean(state.selectedSession));' in viewer
+    assert 'button.disabled = !hasTurns;' in viewer
+    assert 'class="file-workspace-grid"' in viewer
+    assert 'id="fileWorkspaceListPane"' in viewer
+    assert 'id="fileWorkspaceDetailPane"' in viewer
+    assert 'id="fileWorkspaceBack"' in viewer
+    assert 'spanCls("file-format-badge", fileFormatLabel(file))' in viewer
+
+    assert 'dom.fileWorkspaceContent.innerHTML = renderMarkdown(content || "\u2014");' in viewer
+    assert 'dom.fileWorkspaceContent.replaceChildren(preNode(content));' in viewer
+    assert 'dom.fileWorkspaceOpen.focus();' in viewer
+
+
 def test_admin_api_requires_login_and_csrf_for_mutations(tmp_path, monkeypatch) -> None:
     main = _load_main(tmp_path, monkeypatch)
     session = main.store.create_session("s1", "Admin test", "manual-context")

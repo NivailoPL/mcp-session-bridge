@@ -403,8 +403,16 @@
       border-radius: 11px; background: #10131a;
     }
     .turn-nav.show { display: flex; }
-    .turn-nav button { width: 2rem; min-height: 2rem; padding: 0; border-radius: 8px; }
+    .turn-nav button { width: 2.75rem; min-height: 2.75rem; padding: 0; border-radius: 8px; }
     .turn-nav svg { width: 15px; height: 15px; }
+    .turn-nav-divider { width: 100%; height: 1px; margin: .1rem 0; background: var(--stroke-soft); }
+    .file-workspace-launcher { position: relative; }
+    .file-workspace-count {
+      position: absolute; top: -.35rem; right: -.35rem; display: grid; place-items: center;
+      min-width: 1.15rem; height: 1.15rem; padding: 0 .25rem; border-radius: var(--r-pill);
+      border: 1px solid #10131a; background: var(--accent); color: #fff;
+      font-size: .62rem; font-weight: 800; font-variant-numeric: tabular-nums;
+    }
     .content { display: grid; gap: 1rem; width: 100%; min-width: 0; max-width: 80rem; padding: 1.4rem 1.5rem 3rem .4rem; }
 
     .status {
@@ -440,28 +448,23 @@
     .demo-banner.show { display: flex; }
     .demo-banner b { color: #fff; font-weight: 600; }
 
-    /* ---------- files ---------- */
-    .files-panel {
-      display: grid; gap: .55rem;
-      padding: .75rem .85rem;
-      border: 1px solid var(--stroke);
-      border-radius: var(--r-card);
-      background: var(--glass);
-      transition: border-color .18s ease, background .18s ease;
+    /* ---------- file workspace ---------- */
+    #fileWorkspaceDialog {
+      width: min(72rem, calc(100vw - 2rem)); height: min(48rem, calc(100vh - 2rem));
+      max-width: none; max-height: none;
     }
-    .files-panel.is-empty { display: none; }
-    .files-panel:hover, .files-panel:focus-within { border-color: rgba(122, 125, 240, .38); background: rgba(255, 255, 255, .045); }
-    .files-head { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; }
-    .files-head h3 { margin: 0; font-size: .92rem; font-weight: 700; }
-    .files-head span { color: var(--muted); font-size: .78rem; }
-    .files-summary { display: flex; flex-wrap: wrap; gap: .35rem; color: var(--muted); font-size: .78rem; }
-    .files-summary .mini-chip { border-radius: 8px; }
-    .files-grid {
-      display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .8rem;
-      max-height: 0; opacity: 0; overflow: hidden; pointer-events: none;
-      transition: max-height .22s ease, opacity .16s ease, padding-top .22s ease;
+    #fileWorkspaceDialog[open] { display: grid; grid-template-rows: auto minmax(0, 1fr); }
+    .file-workspace-grid { display: grid; grid-template-columns: minmax(18rem, 23rem) minmax(0, 1fr); min-height: 0; }
+    .file-workspace-list, .file-workspace-detail { min-width: 0; min-height: 0; overflow: auto; padding: 1rem; }
+    .file-workspace-list { display: grid; align-content: start; gap: 1rem; border-right: 1px solid var(--stroke-soft); }
+    .file-workspace-detail { display: grid; align-content: start; gap: .85rem; }
+    .file-workspace-detail-head { display: flex; align-items: flex-start; justify-content: space-between; gap: .75rem; }
+    .file-workspace-detail-head h4 { margin: 0; overflow-wrap: anywhere; }
+    .file-workspace-back { display: none; }
+    .file-workspace-placeholder {
+      display: grid; place-items: center; min-height: 15rem; padding: 2rem; text-align: center;
+      border: 1px dashed var(--stroke); border-radius: var(--r-card); color: var(--muted);
     }
-    .files-panel:hover .files-grid, .files-panel:focus-within .files-grid { max-height: 28rem; opacity: 1; pointer-events: auto; padding-top: .25rem; overflow: auto; }
     .file-bucket { display: grid; gap: .45rem; min-width: 0; }
     .file-bucket-title { display: flex; align-items: center; gap: .45rem; min-height: 1.55rem; font-size: .68rem; text-transform: uppercase; letter-spacing: .14em; color: var(--faint-ink); }
     .group-file-identity {
@@ -472,15 +475,23 @@
     }
     .group-file-identity svg { width: 14px; height: 14px; }
     .file-list { display: grid; gap: .4rem; }
+    .file-list-empty { margin: 0; padding: .65rem .75rem; border: 1px dashed var(--stroke-soft); border-radius: 9px; color: var(--faint-ink); font-size: .78rem; }
     .file-button {
-      width: 100%; min-height: auto; justify-content: flex-start; text-align: left;
+      width: 100%; min-height: 3.25rem; justify-content: flex-start; text-align: left;
       padding: .65rem .75rem; border-radius: 9px; background: rgba(0, 0, 0, .18);
     }
+    .file-button.is-active { border-color: var(--accent); background: var(--accent-soft); }
     .file-row { display: flex; align-items: center; gap: .6rem; width: 100%; min-width: 0; }
     .file-icon { width: 2rem; height: 2rem; border-radius: 8px; display: grid; place-items: center; flex: 0 0 auto; color: var(--accent-ink); background: var(--accent-soft); border: 1px solid rgba(99, 102, 241, .22); }
     .file-icon svg { width: 16px; height: 16px; }
     .file-main { display: grid; gap: .12rem; min-width: 0; flex: 1; }
-    .file-name { font-weight: 600; font-size: .86rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .file-title-line { display: flex; align-items: center; gap: .4rem; min-width: 0; }
+    .file-name { min-width: 0; flex: 1; font-weight: 600; font-size: .86rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .file-format-badge {
+      flex: 0 0 auto; padding: .13rem .35rem; border: 1px solid rgba(122, 125, 240, .35);
+      border-radius: 5px; background: var(--accent-soft); color: var(--accent-ink);
+      font-family: "Geist Mono", ui-monospace, monospace; font-size: .62rem; font-weight: 800; letter-spacing: .04em;
+    }
     .file-meta { font-size: .7rem; color: var(--faint-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
     /* ---------- exchange card (flat) ---------- */
@@ -639,7 +650,6 @@
     .dialog-actions { display: flex; align-items: center; gap: .45rem; flex: 0 0 auto; }
     .dialog-actions .icon-only { width: 2.45rem; min-height: 2.45rem; padding: 0; display: inline-grid; place-items: center; }
     .dialog-actions .icon-only svg { width: 17px; height: 17px; }
-    #fileDialog { width: min(52rem, calc(100vw - 2rem)); }
     .icon-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(2.4rem, 1fr)); gap: .45rem; }
     .icon-choice { min-height: 2.35rem; padding: 0; border-radius: 8px; }
     .icon-choice svg { width: 19px; height: 19px; }
@@ -719,7 +729,7 @@
     /* ---------- markdown view ---------- */
     .raw { max-width: 62rem; margin: 0 auto; border: 1px solid var(--stroke); border-radius: var(--r-card); background: rgba(0, 0, 0, .3); }
     .raw pre { margin: 0; padding: 1.25rem 1.4rem; white-space: pre-wrap; overflow-wrap: anywhere; font-family: "Geist Mono", ui-monospace, monospace; font-size: .8rem; line-height: 1.7; color: #c6cbd8; }
-    #fileDialogContent.raw, .file-preview { max-height: min(68vh, 48rem); overflow: auto; }
+    #fileWorkspaceContent.raw, .file-preview { max-height: min(68vh, 48rem); overflow: auto; }
     .file-preview {
       max-width: 62rem; margin: 0 auto; padding: 1.25rem 1.4rem;
       border: 1px solid var(--stroke); border-radius: var(--r-card);
@@ -734,7 +744,7 @@
       .session-list { max-height: 19rem; }
       .topbar { flex-direction: column; align-items: stretch; }
       .top-actions { justify-content: flex-start; }
-      .files-grid { grid-template-columns: 1fr; }
+      #fileWorkspaceDialog { width: calc(100vw - 1rem); height: calc(100vh - 1rem); }
       .exchange-grid, .field-grid { grid-template-columns: 1fr; }
       .turn + .turn { border-left: 0; border-top: 1px solid var(--stroke-soft); }
       .chat.bubbles .message { max-width: 92%; }
@@ -742,6 +752,12 @@
     @media (max-width: 520px) {
       .exchange-head { flex-direction: column; }
       .head-right { width: 100%; justify-content: space-between; }
+      .file-workspace-grid { display: block; }
+      .file-workspace-grid:not(.show-detail) .file-workspace-detail { display: none; }
+      .file-workspace-grid.show-detail .file-workspace-list { display: none; }
+      .file-workspace-back { display: inline-flex; }
+      .file-workspace-list, .file-workspace-detail { height: 100%; border-right: 0; }
+      .dialog-actions { gap: .25rem; }
     }
 
     @media (prefers-reduced-motion: reduce) {
@@ -854,11 +870,15 @@
           <button id="scrollPrevButton" type="button" class="ghost" title="Previous turn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"></path></svg></button>
           <button id="scrollNextButton" type="button" class="ghost" title="Next turn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"></path></svg></button>
           <button id="scrollBottomButton" type="button" class="ghost" title="Scroll to bottom"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"></path><path d="M6 19h12"></path></svg></button>
+          <span class="turn-nav-divider" aria-hidden="true"></span>
+          <button id="fileWorkspaceOpen" type="button" class="ghost file-workspace-launcher" title="Open files" aria-label="Open files" aria-haspopup="dialog" aria-controls="fileWorkspaceDialog">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H10l2 2h6.5A2.5 2.5 0 0 1 21 9.5v7A2.5 2.5 0 0 1 18.5 19h-13A2.5 2.5 0 0 1 3 16.5z"></path></svg>
+            <span id="fileWorkspaceCount" class="file-workspace-count" aria-hidden="true">0</span>
+          </button>
         </nav>
         <section class="content">
           <p id="demoBanner" class="demo-banner"></p>
           <p id="status" class="status" role="status"></p>
-          <section id="filesPanel" class="files-panel is-empty" aria-label="Session and group files"></section>
           <div id="exchangeList" aria-live="polite"></div>
         </section>
       </div>
@@ -893,24 +913,43 @@
     </form>
   </dialog>
 
-  <dialog id="fileDialog">
+  <dialog id="fileWorkspaceDialog" aria-labelledby="fileWorkspaceHeading">
     <div class="dialog-head">
       <div class="dialog-title">
-        <h3 id="fileDialogTitle">File</h3>
+        <h3 id="fileWorkspaceHeading">Files</h3>
+        <div id="fileWorkspaceSummary" class="meta">0 files</div>
       </div>
       <div class="dialog-actions">
-        <button type="button" class="ghost icon-only" id="fileCopyButton" title="Copy content" aria-label="Copy content">
+        <button type="button" class="ghost icon-only" id="fileCopyButton" title="Copy content" aria-label="Copy content" disabled>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
         </button>
-        <button type="button" class="ghost icon-only" id="fileDownloadButton" title="Download file" aria-label="Download file">
+        <button type="button" class="ghost icon-only" id="fileDownloadButton" title="Download file" aria-label="Download file" disabled>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"></path><path d="m7 10 5 5 5-5"></path><path d="M5 21h14"></path></svg>
         </button>
-        <button type="button" class="ghost" id="fileDialogClose">Close</button>
+        <button type="button" class="ghost" id="fileWorkspaceClose">Close</button>
       </div>
     </div>
-    <div class="dialog-body">
-      <div id="fileDialogMeta" class="meta"></div>
-      <div id="fileDialogContent" class="raw"></div>
+    <div id="fileWorkspaceGrid" class="file-workspace-grid">
+      <section id="fileWorkspaceListPane" class="file-workspace-list" aria-label="Available files">
+        <section class="file-bucket" aria-labelledby="sessionFilesHeading">
+          <div id="sessionFilesHeading" class="file-bucket-title">Session files</div>
+          <div id="sessionFileList" class="file-list"></div>
+        </section>
+        <section class="file-bucket" aria-labelledby="groupFilesHeading">
+          <div id="groupFilesHeading" class="file-bucket-title">Group files</div>
+          <div id="groupFileList" class="file-list"></div>
+        </section>
+      </section>
+      <section id="fileWorkspaceDetailPane" class="file-workspace-detail" aria-live="polite" tabindex="-1">
+        <div class="file-workspace-detail-head">
+          <div class="dialog-title">
+            <button type="button" class="ghost file-workspace-back" id="fileWorkspaceBack">Back to files</button>
+            <h4 id="fileWorkspaceTitle">Select a file</h4>
+          </div>
+        </div>
+        <div id="fileWorkspaceMeta" class="meta"></div>
+        <div id="fileWorkspaceContent" class="file-workspace-placeholder">Choose a session or group file to preview it here.</div>
+      </section>
     </div>
   </dialog>
 
@@ -1031,6 +1070,7 @@
         selectedSession: null,
         exchanges: [],
         files: { session: [], group: [] },
+        selectedFileId: null,
         aiSettings: { configured: false, api_key_preview: "", model: "gpt-5.4-nano", title_max_chars: 72 },
         renamingSessionId: "",
         manualRenameSessionId: "",
@@ -1061,12 +1101,18 @@
         editGroupButton: document.getElementById("editGroupButton"),
         fileCopyButton: document.getElementById("fileCopyButton"),
         fileDownloadButton: document.getElementById("fileDownloadButton"),
-        fileDialog: document.getElementById("fileDialog"),
-        fileDialogClose: document.getElementById("fileDialogClose"),
-        fileDialogContent: document.getElementById("fileDialogContent"),
-        fileDialogMeta: document.getElementById("fileDialogMeta"),
-        fileDialogTitle: document.getElementById("fileDialogTitle"),
-        filesPanel: document.getElementById("filesPanel"),
+        fileWorkspaceBack: document.getElementById("fileWorkspaceBack"),
+        fileWorkspaceClose: document.getElementById("fileWorkspaceClose"),
+        fileWorkspaceContent: document.getElementById("fileWorkspaceContent"),
+        fileWorkspaceCount: document.getElementById("fileWorkspaceCount"),
+        fileWorkspaceDetailPane: document.getElementById("fileWorkspaceDetailPane"),
+        fileWorkspaceDialog: document.getElementById("fileWorkspaceDialog"),
+        fileWorkspaceGrid: document.getElementById("fileWorkspaceGrid"),
+        fileWorkspaceMeta: document.getElementById("fileWorkspaceMeta"),
+        fileWorkspaceOpen: document.getElementById("fileWorkspaceOpen"),
+        fileWorkspaceSummary: document.getElementById("fileWorkspaceSummary"),
+        fileWorkspaceTitle: document.getElementById("fileWorkspaceTitle"),
+        groupFileList: document.getElementById("groupFileList"),
         groupCancelButton: document.getElementById("groupCancelButton"),
         groupColorInput: document.getElementById("groupColorInput"),
         groupDialog: document.getElementById("groupDialog"),
@@ -1089,6 +1135,7 @@
         scrollTopButton: document.getElementById("scrollTopButton"),
         searchInput: document.getElementById("searchInput"),
         sessionGroupSelect: document.getElementById("sessionGroupSelect"),
+        sessionFileList: document.getElementById("sessionFileList"),
         sessionList: document.getElementById("sessionList"),
         sessionMeta: document.getElementById("sessionMeta"),
         sessionTitle: document.getElementById("sessionTitle"),
@@ -1117,9 +1164,15 @@
         const group = state.groups.find((item) => item.group_id === dom.groupIdInput.value);
         if (group) deleteGroup(group);
       });
-      dom.fileDialogClose.addEventListener("click", () => dom.fileDialog.close());
+      dom.fileWorkspaceOpen.addEventListener("click", () => openFileWorkspace());
+      dom.fileWorkspaceClose.addEventListener("click", () => dom.fileWorkspaceDialog.close());
+      dom.fileWorkspaceBack.addEventListener("click", () => showFileListPane());
+      dom.fileWorkspaceDialog.addEventListener("close", () => {
+        dom.fileWorkspaceGrid.classList.remove("show-detail");
+        dom.fileWorkspaceOpen.focus();
+      });
       dom.fileCopyButton.addEventListener("click", async () => {
-        const content = dom.fileDialogContent.dataset.content || "";
+        const content = dom.fileWorkspaceContent.dataset.content || "";
         if (!content) { setStatus("No file content to copy.", "warn"); return; }
         try {
           await navigator.clipboard.writeText(content);
@@ -1459,53 +1512,48 @@
         const sessionFiles = state.files.session || [];
         const groupFiles = state.files.group || [];
         const count = sessionFiles.length + groupFiles.length;
-        dom.filesPanel.classList.toggle("is-empty", count === 0);
-        dom.filesPanel.replaceChildren();
-        if (!count) return;
-
-        const head = div("files-head");
-        const title = document.createElement("h3");
-        title.textContent = "Files";
-        head.append(title, spanCls("", "hover to expand"));
-
-        const summary = div("files-summary");
-        summary.append(
-          chip(`${count} uploaded`),
-          chip(`${sessionFiles.length} session`),
-          chip(`${groupFiles.length} group`)
-        );
-
-        const grid = div("files-grid");
         const group = state.groups.find((item) => item.group_id === state.selectedSession?.group_id)
           || state.selectedSession?.group
           || null;
-        grid.append(fileBucket("Session files", sessionFiles), fileBucket("Group files", groupFiles, group));
-        dom.filesPanel.append(head, summary, grid);
+        const visibleFileIds = [...sessionFiles, ...groupFiles].map((file) => String(file.file_id));
+        if (state.selectedFileId !== null && !visibleFileIds.includes(String(state.selectedFileId))) resetFilePreview();
+        dom.fileWorkspaceCount.textContent = String(count);
+        dom.fileWorkspaceOpen.setAttribute("aria-label", `Open files, ${count} total`);
+        dom.fileWorkspaceSummary.textContent = `${count} total · ${sessionFiles.length} session · ${groupFiles.length} group`;
+        renderFileList(dom.sessionFileList, sessionFiles);
+        renderFileList(dom.groupFileList, groupFiles);
+        renderGroupFileHeading(group);
       }
 
-      function fileBucket(title, files, group = null) {
-        const bucket = div("file-bucket");
-        const heading = spanCls("file-bucket-title");
+      function renderGroupFileHeading(group) {
+        const heading = document.getElementById("groupFilesHeading");
+        heading.replaceChildren();
         if (group) {
           const identity = spanCls("group-file-identity");
           identity.style.setProperty("--g", group.color || "#8b93a7");
           identity.innerHTML = iconSvg(group.icon_key || "folder");
           identity.title = group.name || group.group_id;
-          heading.append(identity, document.createTextNode(title));
+          heading.append(identity, document.createTextNode(`Group files · ${group.name || group.group_id}`));
         } else {
-          heading.textContent = title;
+          heading.textContent = "Group files";
         }
-        bucket.append(heading);
-        const list = div("file-list");
+      }
+
+      function renderFileList(list, files) {
+        list.replaceChildren();
+        if (!files.length) {
+          list.append(spanCls("file-list-empty", "No files in this bucket."));
+          return;
+        }
         for (const file of files) list.append(fileButton(file));
-        bucket.append(list);
-        return bucket;
       }
 
       function fileButton(file) {
         const node = document.createElement("button");
         node.type = "button";
         node.className = "file-button";
+        node.dataset.fileId = String(file.file_id);
+        node.classList.toggle("is-active", String(state.selectedFileId) === String(file.file_id));
         node.title = file.filename || `file ${file.file_id}`;
         node.addEventListener("click", () => openFile(file.file_id));
 
@@ -1513,8 +1561,13 @@
         const icon = div("file-icon");
         icon.innerHTML = iconSvg("book");
         const main = div("file-main");
-        main.append(
+        const titleLine = div("file-title-line");
+        titleLine.append(
           spanCls("file-name", file.filename || `file-${file.file_id}`),
+          spanCls("file-format-badge", fileFormatLabel(file))
+        );
+        main.append(
+          titleLine,
           spanCls("file-meta", `${formatBytes(file.size_bytes)} · ${file.mime_type || "text/plain"} · ${file.created_by || "unknown"} · ${formatUnixDate(file.created_at)}`)
         );
         row.append(icon, main);
@@ -1522,13 +1575,39 @@
         return node;
       }
 
+      function fileFormatLabel(file) {
+        const filename = String(file.filename || "");
+        const extension = filename.includes(".") ? filename.split(".").pop() : "";
+        if (extension) return extension.toUpperCase().slice(0, 10);
+        const subtype = String(file.mime_type || "text/plain").split("/").pop() || "FILE";
+        return subtype.toUpperCase().slice(0, 10);
+      }
+
+      function openFileWorkspace() {
+        if (!state.selectedSession || dom.fileWorkspaceDialog.open) return;
+        renderFiles();
+        showFileListPane();
+        dom.fileWorkspaceDialog.showModal();
+        window.requestAnimationFrame(() => {
+          const firstFile = dom.fileWorkspaceDialog.querySelector(".file-button");
+          (firstFile || dom.fileWorkspaceClose).focus();
+        });
+      }
+
+      function showFileListPane() {
+        dom.fileWorkspaceGrid.classList.remove("show-detail");
+        const selected = dom.fileWorkspaceDialog.querySelector(".file-button.is-active");
+        if (selected) selected.focus();
+      }
+
       async function openFile(fileId) {
         setBusy(true);
         try {
           const payload = await api(`/admin/api/files/${encodeURIComponent(fileId)}`);
           const file = payload.file;
-          dom.fileDialogTitle.textContent = file.filename || `file-${file.file_id}`;
-          dom.fileDialogMeta.replaceChildren(
+          state.selectedFileId = file.file_id;
+          dom.fileWorkspaceTitle.textContent = file.filename || `file-${file.file_id}`;
+          dom.fileWorkspaceMeta.replaceChildren(
             spanCls("mono", `#${file.file_id}`),
             dotSep(),
             spanCls("", file.scope_type === "group" ? `group ${file.group_id}` : `session ${file.session_id}`),
@@ -1540,8 +1619,14 @@
             spanCls("", formatUnixDate(file.created_at))
           );
           renderFilePreview(file);
-          dom.fileDialog.showModal();
+          for (const button of dom.fileWorkspaceDialog.querySelectorAll(".file-button")) {
+            button.classList.toggle("is-active", button.dataset.fileId === String(file.file_id));
+          }
+          dom.fileWorkspaceGrid.classList.add("show-detail");
+          if (window.matchMedia("(max-width: 520px)").matches) dom.fileWorkspaceBack.focus();
+          else dom.fileWorkspaceDetailPane.focus();
         } catch (error) {
+          showFilePreviewError(error.message);
           setStatus(error.message, "error");
         } finally {
           setBusy(false);
@@ -1556,16 +1641,38 @@
 
       function renderFilePreview(file) {
         const content = file.content || "";
-        dom.fileDialogContent.dataset.content = content;
-        dom.fileDialogContent.dataset.filename = file.filename || `file-${file.file_id}.txt`;
-        dom.fileDialogContent.dataset.mimeType = file.mime_type || "text/plain";
+        dom.fileCopyButton.disabled = false;
+        dom.fileDownloadButton.disabled = false;
+        dom.fileWorkspaceContent.dataset.content = content;
+        dom.fileWorkspaceContent.dataset.filename = file.filename || `file-${file.file_id}.txt`;
+        dom.fileWorkspaceContent.dataset.mimeType = file.mime_type || "text/plain";
         if (isMarkdownFile(file)) {
-          dom.fileDialogContent.className = "file-preview markdown-body";
-          dom.fileDialogContent.innerHTML = renderMarkdown(content || "—");
+          dom.fileWorkspaceContent.className = "file-preview markdown-body";
+          dom.fileWorkspaceContent.innerHTML = renderMarkdown(content || "—");
         } else {
-          dom.fileDialogContent.className = "raw";
-          dom.fileDialogContent.replaceChildren(preNode(content));
+          dom.fileWorkspaceContent.className = "raw";
+          dom.fileWorkspaceContent.replaceChildren(preNode(content));
         }
+      }
+
+      function resetFilePreview() {
+        state.selectedFileId = null;
+        dom.fileCopyButton.disabled = true;
+        dom.fileDownloadButton.disabled = true;
+        dom.fileWorkspaceTitle.textContent = "Select a file";
+        dom.fileWorkspaceMeta.replaceChildren();
+        dom.fileWorkspaceContent.className = "file-workspace-placeholder";
+        dom.fileWorkspaceContent.replaceChildren(document.createTextNode("Choose a session or group file to preview it here."));
+        delete dom.fileWorkspaceContent.dataset.content;
+        delete dom.fileWorkspaceContent.dataset.filename;
+        delete dom.fileWorkspaceContent.dataset.mimeType;
+      }
+
+      function showFilePreviewError(message) {
+        resetFilePreview();
+        dom.fileWorkspaceTitle.textContent = "Could not open file";
+        dom.fileWorkspaceContent.replaceChildren(document.createTextNode(String(message || "Unknown error")));
+        dom.fileWorkspaceGrid.classList.add("show-detail");
       }
 
       function isMarkdownFile(file) {
@@ -1575,9 +1682,9 @@
       }
 
       function downloadOpenFile() {
-        const content = dom.fileDialogContent.dataset.content || "";
-        const filename = sanitizeDownloadName(dom.fileDialogContent.dataset.filename || "session-file.txt");
-        const mimeType = dom.fileDialogContent.dataset.mimeType || "text/plain;charset=utf-8";
+        const content = dom.fileWorkspaceContent.dataset.content || "";
+        const filename = sanitizeDownloadName(dom.fileWorkspaceContent.dataset.filename || "session-file.txt");
+        const mimeType = dom.fileWorkspaceContent.dataset.mimeType || "text/plain;charset=utf-8";
         const url = URL.createObjectURL(new Blob([content], { type: mimeType }));
         const link = document.createElement("a");
         link.href = url;
@@ -1825,12 +1932,16 @@
 
       function renderExchanges() {
         dom.exchangeList.replaceChildren();
+        dom.turnNav.classList.toggle("show", Boolean(state.selectedSession));
+        const hasTurns = state.exchanges.length > 0;
+        for (const button of [dom.scrollTopButton, dom.scrollPrevButton, dom.scrollNextButton, dom.scrollBottomButton]) {
+          button.disabled = !hasTurns;
+        }
 
         if (!state.selectedSession) {
           dom.sessionTitle.textContent = "Select a session";
           dom.sessionTitleIcon.classList.remove("show");
           dom.sessionTitleIcon.replaceChildren();
-          dom.turnNav.classList.remove("show");
           dom.sessionMeta.textContent = "Conversation history correction panel.";
           dom.exchangeList.append(emptyState("No session selected", "Select a session from the list on the left to review and correct its exchanges."));
           return;
@@ -1842,7 +1953,6 @@
         const fileCount = Number((state.files.session || []).length) + Number((state.files.group || []).length);
         dom.sessionTitle.textContent = state.selectedSession.title || state.selectedSession.session_id;
         renderSessionTitleIcon(group);
-        dom.turnNav.classList.toggle("show", state.exchanges.length > 0);
         renderMeta([
           { mono: true, text: state.selectedSession.session_id },
           { text: `group ${group ? group.name : state.selectedSession.group_id || "uncategorized"}` },
