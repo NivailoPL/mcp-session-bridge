@@ -1,3 +1,4 @@
+import base64
 import importlib
 import json
 import re
@@ -303,6 +304,171 @@ def test_admin_can_view_session_and_group_files(tmp_path, monkeypatch) -> None:
     assert invalid.status_code == 400
 
     assert session_file.file_id != group_file.file_id
+
+
+def _admin_client(main):
+    client = TestClient(main.app, base_url="http://127.0.0.1:8787")
+    client.post(
+        "/admin/login",
+        data={"username": "owner", "password": "secret-admin-password", "next": "/admin/sessions"},
+        follow_redirects=False,
+    )
+    return client, client.get("/admin/api/me").json()["csrf_token"]
+
+
+def _encoded_file(content: bytes, *, filename: str = "notes.md", scope_type: str = "session") -> dict:
+    return {
+        "scope_type": scope_type,
+        "filename": filename,
+        "content_base64": base64.b64encode(content).decode("ascii"),
+    }
+
+
+def test_admin_file_mutations_require_login_and_csrf(tmp_path, monkeypatch) -> None:
+    main = _load_main(tmp_path, monkeypatch)
+    main.store.create_session("s1", "File mutations", "manual-context")
+    saved = main.store.save_session_file("s1", "existing.md", "old")
+    anonymous = TestClient(main.app, base_url="http://127.0.0.1:8787")
+    calls = [
+        ("POST", "/admin/api/sessions/s1/files", _encoded_file(b"hello")),
+        ("PATCH", f"/admin/api/sessions/s1/files/{saved.file_id}", {"content": "new", "expected_sha256": saved.sha256}),
+        ("DELETE", f"/admin/api/sessions/s1/files/{saved.file_id}", None),
+    ]
+    for method, path, payload in calls:
+        assert anonymous.request(method, path, json=payload).status_code == 401
+
+    client, csrf = _admin_client(main)
+    for method, path, payload in calls:
+        assert client.request(method, path, json=payload).status_code == 403
+    assert csrf
+
+
+def test_admin_uploads_bounded_utf8_files_to_selected_session_or_group(tmp_path, monkeypatch) -> None:
+    main = _load_main(tmp_path, monkeypatch)
+    main.store.create_session_group("Tests", "#22c55e", "science")
+    main.store.create_session("s1", "File mutations", "manual-context", group_id="tests")
+    client, csrf = _admin_client(main)
+    headers = {"x-csrf-token": csrf}
+
+    uploaded = client.post(
+        "/admin/api/sessions/s1/files",
+        json=_encoded_file(b"\xef\xbb\xbf# Hello", filename="README.MD"),
+        headers=headers,
+    )
+    assert uploaded.status_code == 200
+    session_file = uploaded.json()["file"]
+    assert session_file["scope_type"] == "session"
+    assert session_file["session_id"] == "s1"
+    assert session_file["mime_type"] == "text/markdown"
+    assert session_file["created_by"] == "owner"
+    assert main.store.get_session_file(session_file["file_id"]).content == "# Hello"
+
+    group_upload = client.post(
+        "/admin/api/sessions/s1/files",
+        json=_encoded_file(b"a,b\n1,2", filename="data.csv", scope_type="group"),
+        headers=headers,
+    )
+    assert group_upload.status_code == 200
+    assert group_upload.json()["file"]["group_id"] == "tests"
+    assert group_upload.json()["file"]["mime_type"] == "text/csv"
+
+    bad_payloads = [
+        {"scope_type": "session", "filename": "bad.md", "content_base64": "%%%"},
+        _encoded_file(b"\xff", filename="bad.md"),
+        _encoded_file(b"hello", filename="bad.exe"),
+        _encoded_file(b"", filename="empty.md"),
+        {"scope_type": "session", "files": [_encoded_file(b"one"), _encoded_file(b"two")]},
+    ]
+    for payload in bad_payloads:
+        assert client.post("/admin/api/sessions/s1/files", json=payload, headers=headers).status_code == 400
+
+    assert client.post(
+        "/admin/api/sessions/s1/files",
+        json=_encoded_file(b"x" * 1_000_001),
+        headers=headers,
+    ).status_code == 400
+
+    oversized = b'{"padding":"' + b"x" * 1_500_000 + b'"}'
+    misleading = client.build_request(
+        "POST",
+        "/admin/api/sessions/s1/files",
+        content=oversized,
+        headers={**headers, "content-type": "application/json", "content-length": "1"},
+    )
+    assert client.send(misleading).status_code == 413
+    absent = client.build_request(
+        "POST",
+        "/admin/api/sessions/s1/files",
+        content=oversized,
+        headers={**headers, "content-type": "application/json"},
+    )
+    del absent.headers["content-length"]
+    assert client.send(absent).status_code == 413
+    assert len(main.store.list_session_files(session_id="s1")) == 1
+
+
+def test_admin_edits_moves_and_deletes_only_visible_files(tmp_path, monkeypatch) -> None:
+    main = _load_main(tmp_path, monkeypatch)
+    main.store.create_session_group("Tests", "#22c55e", "science")
+    main.store.create_session_group("Other", "#ef4444", "camera")
+    main.store.create_session("s1", "File mutations", "manual-context", group_id="tests")
+    main.store.create_session("s2", "Other session", "manual-context", group_id="other")
+    saved = main.store.save_session_file("s1", "notes.md", "old")
+    unrelated = main.store.save_session_file("s2", "private.md", "untouched")
+    client, csrf = _admin_client(main)
+    headers = {"x-csrf-token": csrf}
+    path = f"/admin/api/sessions/s1/files/{saved.file_id}"
+
+    assert client.patch(
+        path,
+        json={"content": "new", "expected_sha256": saved.sha256, "scope_type": "group"},
+        headers=headers,
+    ).status_code == 400
+
+    edited = client.patch(
+        path,
+        json={"content": "new", "expected_sha256": saved.sha256},
+        headers=headers,
+    )
+    assert edited.status_code == 200
+    assert edited.json()["file"]["file_id"] == saved.file_id
+    assert edited.json()["file"]["sha256"] != saved.sha256
+    assert "content" not in edited.json()["file"]
+
+    stale = client.patch(
+        path,
+        json={"content": "stale write", "expected_sha256": saved.sha256},
+        headers=headers,
+    )
+    assert stale.status_code == 409
+    assert "content" not in stale.text
+
+    moved = client.patch(path, json={"scope_type": "group"}, headers=headers)
+    assert moved.status_code == 200
+    assert moved.json()["file"]["group_id"] == "tests"
+    assert client.patch(path, json={"scope_type": "group"}, headers=headers).status_code == 200
+    moved_back = client.patch(path, json={"scope_type": "session"}, headers=headers)
+    assert moved_back.status_code == 200
+    assert moved_back.json()["file"]["session_id"] == "s1"
+
+    assert client.patch(
+        path,
+        json={"scope_type": "group", "group_id": "other"},
+        headers=headers,
+    ).status_code == 400
+    assert client.patch(
+        f"/admin/api/sessions/s1/files/{unrelated.file_id}",
+        json={"scope_type": "group"},
+        headers=headers,
+    ).status_code == 404
+
+    deleted = client.delete(path, headers=headers)
+    assert deleted.status_code == 200
+    assert deleted.json()["file"]["file_id"] == saved.file_id
+    assert "content" not in deleted.json()["file"]
+    assert client.delete(path, headers=headers).status_code == 404
+    assert client.get(f"/admin/api/files/{saved.file_id}").status_code == 404
+    assert main.store.get_session_file(unrelated.file_id).content == "untouched"
 
 
 def _load_main(tmp_path: Path, monkeypatch):

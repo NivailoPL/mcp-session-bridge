@@ -198,6 +198,21 @@ async def admin_api_file(request: Request) -> Response:
     return await admin.api_file(request)
 
 
+@mcp.custom_route("/admin/api/sessions/{session_id}/files", methods=["POST"])
+async def admin_api_upload_file(request: Request) -> Response:
+    return await admin.api_upload_file(request)
+
+
+@mcp.custom_route("/admin/api/sessions/{session_id}/files/{file_id}", methods=["PATCH"])
+async def admin_api_mutate_file(request: Request) -> Response:
+    return await admin.api_mutate_file(request)
+
+
+@mcp.custom_route("/admin/api/sessions/{session_id}/files/{file_id}", methods=["DELETE"])
+async def admin_api_delete_file(request: Request) -> Response:
+    return await admin.api_delete_file(request)
+
+
 @mcp.custom_route("/admin/api/session-groups", methods=["GET"])
 async def admin_api_session_groups(request: Request) -> Response:
     return await admin.api_session_groups(request)
