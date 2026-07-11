@@ -2,11 +2,11 @@
 
 MCP Session Bridge v0.1 is intentionally small and conservative.
 
-## Not A File Context Store
+## Explicit File Context Only
 
-The bridge does not automatically send project files, notes, PDFs, or other user context to models. Users should provide that context directly in the chat client.
+The bridge does not automatically ingest external files or directories, watch a project folder, or send local project material to models. A user or owner must explicitly upload supported text files through the admin UI, or a model must use `upload_session_file` or `upload_group_file` when asked.
 
-The bridge stores conversation history and optional Markdown session summaries.
+Uploaded files are mutable runtime context. An owner can move, edit, or permanently delete them in the admin UI, which can change what a model is able to find during a conversation. Models are not automatically notified when these mutations happen; the current overview and file manifest must be checked deliberately.
 
 ## SQLite Storage
 

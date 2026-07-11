@@ -4,6 +4,23 @@ All notable changes to MCP Session Bridge will be documented in this file.
 
 This project follows a lightweight changelog format inspired by Keep a Changelog.
 
+## [Unreleased]
+
+### New Features
+
+- Replaced the admin page's top file strip and nested detail overlay with one always-available file workspace opened from the conversation rail.
+- Added explicit admin uploads, OS drag-and-drop, and session/group drag-and-drop moves while preserving each file's identity.
+- Added text and Markdown editing with stale-write protection, plus a clearly warned permanent-delete flow.
+
+### Quality of Life
+
+- File formats now have prominent labels, and the workspace remains usable with the keyboard, file picker, or touch-sized controls when a session has no messages yet.
+- Admin and MCP read surfaces now reconcile against the same current file manifest after owner uploads, moves, edits, or deletes.
+
+### Security
+
+- Admin file mutations require an authenticated owner session and CSRF protection, enforce bounded UTF-8 text uploads, and do not expose new MCP mutation tools.
+
 ## [0.2.0] - 2026-07-07
 
 ### Highlights

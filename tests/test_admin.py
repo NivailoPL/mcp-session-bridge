@@ -590,6 +590,87 @@ def test_admin_edits_moves_and_deletes_only_visible_files(tmp_path, monkeypatch)
     assert main.store.get_session_file(unrelated.file_id).content == "untouched"
 
 
+def test_admin_file_workspace_stays_consistent_with_mcp_reads(tmp_path, monkeypatch) -> None:
+    main = _load_main(tmp_path, monkeypatch)
+    main.store.create_session_group("Ideas", "#22c55e", "science")
+    main.store.create_session("s1", "Owner session", "manual-context", group_id="ideas")
+    main.store.create_session("s2", "Peer session", "manual-context", group_id="ideas")
+    client, csrf = _admin_client(main)
+    headers = {"x-csrf-token": csrf}
+
+    uploaded = client.post(
+        "/admin/api/sessions/s1/files",
+        json=_encoded_file(b"First draft", filename="plan.md"),
+        headers=headers,
+    )
+    assert uploaded.status_code == 200
+    original = uploaded.json()["file"]
+    file_id = original["file_id"]
+    manifest_keys = {
+        "file_id",
+        "scope_type",
+        "session_id",
+        "group_id",
+        "filename",
+        "mime_type",
+        "sha256",
+        "size_bytes",
+        "created_by",
+        "created_at",
+    }
+    assert set(original) == manifest_keys
+    assert [item["file_id"] for item in client.get("/admin/api/sessions/s1").json()["files"]["session"]] == [file_id]
+    assert main.get_session_overview("s2")["files"]["group"] == []
+
+    path = f"/admin/api/sessions/s1/files/{file_id}"
+    moved_to_group = client.patch(path, json={"scope_type": "group"}, headers=headers)
+    assert moved_to_group.status_code == 200
+    assert moved_to_group.json()["file"]["file_id"] == file_id
+    for session_id in ("s1", "s2"):
+        assert [item["file_id"] for item in client.get(f"/admin/api/sessions/{session_id}").json()["files"]["group"]] == [file_id]
+        assert [item["file_id"] for item in main.get_session_overview(session_id)["files"]["group"]] == [file_id]
+    assert [item["file_id"] for item in main.list_session_files(group_id="ideas")["files"]] == [file_id]
+
+    moved_to_session = client.patch(path, json={"scope_type": "session"}, headers=headers)
+    assert moved_to_session.status_code == 200
+    assert moved_to_session.json()["file"]["file_id"] == file_id
+    assert main.get_session_overview("s2")["files"]["group"] == []
+    assert [item["file_id"] for item in main.get_session_overview("s1")["files"]["session"]] == [file_id]
+
+    edited = client.patch(
+        path,
+        json={"content": "Updated draft", "expected_sha256": original["sha256"]},
+        headers=headers,
+    )
+    assert edited.status_code == 200
+    current = edited.json()["file"]
+    assert set(current) == manifest_keys
+    assert current["file_id"] == file_id
+    assert current["sha256"] != original["sha256"]
+    assert current["size_bytes"] == len("Updated draft".encode("utf-8"))
+    assert main.download_session_file(file_id)["file"]["content"] == "Updated draft"
+
+    stale = client.patch(
+        path,
+        json={"content": "Stale overwrite", "expected_sha256": original["sha256"]},
+        headers=headers,
+    )
+    assert stale.status_code == 409
+    assert main.download_session_file(file_id)["file"]["content"] == "Updated draft"
+
+    assert client.patch(path, json={"scope_type": "group"}, headers=headers).status_code == 200
+    assert [item["file_id"] for item in main.get_session_overview("s2")["files"]["group"]] == [file_id]
+    deleted = client.delete(path, headers=headers)
+    assert deleted.status_code == 200
+    assert deleted.json()["file"]["file_id"] == file_id
+    for session_id in ("s1", "s2"):
+        admin_files = client.get(f"/admin/api/sessions/{session_id}").json()["files"]
+        assert admin_files == {"session": [], "group": []}
+        assert main.get_session_overview(session_id)["files"] == {"session": [], "group": []}
+    assert main.list_session_files(session_id="s1", group_id="ideas")["files"] == []
+    assert main.download_session_file(file_id) == {"ok": False, "error": f"Unknown file_id: {file_id}"}
+
+
 def _load_main(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("BRIDGE_PUBLIC_BASE_URL", "https://example.test")
     monkeypatch.setenv("BRIDGE_DB_PATH", str(tmp_path / "bridge.sqlite3"))

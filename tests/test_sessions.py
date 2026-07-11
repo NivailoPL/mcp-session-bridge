@@ -339,6 +339,10 @@ def test_public_tools_hide_context_pack_tools(tmp_path, monkeypatch) -> None:
     assert "get_session_transcript" not in tool_names
     assert "save_context_summary" not in tool_names
     assert "export_session_markdown" not in tool_names
+    assert "move_session_file" not in tool_names
+    assert "edit_session_file" not in tool_names
+    assert "update_session_file" not in tool_names
+    assert "delete_session_file" not in tool_names
 
 
 def test_get_last_speaker_reports_continuity_decision(tmp_path, monkeypatch) -> None:
@@ -629,6 +633,25 @@ def test_project_prompt_documents_manual_context_and_chunk_protocol() -> None:
     assert "`download_session_file`" in prompt
     assert "`get_session_package`" not in prompt
     assert "context pack" not in prompt.lower()
+
+
+def test_public_docs_describe_explicit_mutable_file_context() -> None:
+    readme = Path("README.md").read_text(encoding="utf-8").lower()
+    limitations = Path("docs/limitations.md").read_text(encoding="utf-8").lower()
+    instructions = Path("docs/model-instructions.md").read_text(encoding="utf-8").lower()
+    prompt = Path("docs/project-prompt-template.md").read_text(encoding="utf-8").lower()
+
+    assert "admin ui" in readme
+    assert "`upload_session_file`" in readme
+    assert "`upload_group_file`" in readme
+    assert "does not automatically ingest" in limitations
+    assert "external files or directories" in limitations
+
+    for model_doc in (instructions, prompt):
+        assert "current file manifest is authoritative" in model_doc
+        assert "not automatically notified" in model_doc
+        assert "`list_session_files`" in model_doc
+        assert "`download_session_file`" in model_doc
 
 
 def test_server_instructions_are_publication_ready(tmp_path, monkeypatch) -> None:

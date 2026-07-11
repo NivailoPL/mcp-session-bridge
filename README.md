@@ -1,8 +1,8 @@
 # MCP Session Bridge
 
-MCP Session Bridge is a small remote MCP server for shared, multi-model conversation memory. It gives different LLM assistants one durable place to create sessions, save full user/model exchanges, read transcripts in bounded chunks, and upload session/group text files.
+MCP Session Bridge is a small remote MCP server for shared, multi-model conversation memory. It gives different LLM assistants one durable place to create sessions, save full user/model exchanges, read transcripts in bounded chunks, and keep session/group text files.
 
-It is intentionally narrow. The bridge stores conversation history; it does not upload or manage the user's external project files. Users can still paste files or attach notes directly in their chat client, while MCP Session Bridge keeps the cross-model transcript consistent.
+It is intentionally narrow. Files enter the bridge only through an explicit upload in the admin UI or the `upload_session_file` and `upload_group_file` MCP tools. The bridge does not watch, scan, or automatically ingest the user's external project files or directories.
 
 ## What It Does
 
@@ -10,8 +10,8 @@ It is intentionally narrow. The bridge stores conversation history; it does not 
 - Supports OAuth authorization-code + PKCE and dynamic client registration.
 - Stores sessions, transcript exchanges, OAuth records, and admin events in SQLite.
 - Returns long transcripts in chunks so clients do not need one oversized tool result.
-- Saves uploaded session and group text files for reusable context.
-- Includes an offline transcript viewer and an authenticated admin correction UI.
+- Saves explicitly uploaded session and group text files for reusable context.
+- Includes an offline transcript viewer and an authenticated admin UI for transcript correction and file management.
 - Ships a local demo script for understanding the core workflow without setting up a remote MCP client.
 
 ![Turn system diagram](docs/assets/turn-system.png)
@@ -99,7 +99,7 @@ Typical model flow:
 5. Call `save_exchange` before showing the response to the user.
 6. If the user asks to save a summary, plan, note, or reusable context, use `upload_session_file` or `upload_group_file`.
 
-Session groups and uploaded files are runtime data in the SQLite database. User-created groups and their files are not stored in tracked repo configuration. The admin panel at `/admin/sessions` can create, edit, delete, filter by, and move sessions between groups.
+Session groups and uploaded files are runtime data in the SQLite database. User-created groups and their files are not stored in tracked repo configuration. The admin panel at `/admin/sessions` can create, edit, delete, filter by, and move sessions between groups. Its file workspace can explicitly upload text files, move them between session and group scope, edit text content, and permanently delete files. These owner actions change what models can find through the current overview and file manifest; they do not add MCP move, edit, or delete tools.
 
 `get_session_overview` returns `response_display_timezone` for the configured bridge display timezone. `save_exchange` returns `assistant_created_at_display` and `assistant_created_at_timezone`; use that returned display timestamp as the user-visible response timestamp. The bridge renders response display timestamps in the configured bridge display timezone, UTC by default, so clients should not convert that value into their own local timezone.
 
