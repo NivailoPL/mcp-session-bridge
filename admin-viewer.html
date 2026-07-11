@@ -460,6 +460,27 @@
     .file-workspace-detail { display: grid; align-content: start; gap: .85rem; }
     .file-workspace-detail-head { display: flex; align-items: flex-start; justify-content: space-between; gap: .75rem; }
     .file-workspace-detail-head h4 { margin: 0; overflow-wrap: anywhere; }
+    .file-detail-actions { display: flex; align-items: center; gap: .45rem; flex-wrap: wrap; }
+    .file-delete-button { color: var(--danger); border-color: rgba(251, 113, 133, .35); }
+    .file-delete-button:hover { background: var(--danger-soft); border-color: var(--danger); color: #fff; }
+    .file-editor-pane, .file-decision-pane { display: grid; gap: .75rem; }
+    .file-editor-pane textarea {
+      min-height: min(56vh, 32rem); resize: vertical; tab-size: 2;
+      font-family: "Geist Mono", ui-monospace, monospace; font-size: .82rem; line-height: 1.55;
+    }
+    .file-editor-status { min-height: 1.25rem; margin: 0; color: var(--faint-ink); font-size: .76rem; }
+    .file-editor-status.is-error { color: var(--danger); }
+    .file-editor-status.is-ok { color: var(--ok); }
+    .file-decision-pane {
+      padding: 1rem; border: 1px solid var(--stroke); border-radius: var(--r-card);
+      background: rgba(255, 255, 255, .025);
+    }
+    .file-decision-pane.is-danger { border-color: rgba(251, 113, 133, .34); background: var(--danger-soft); }
+    .file-decision-pane h5 { margin: 0; font-size: 1rem; }
+    .file-decision-pane p { margin: 0; color: var(--muted); line-height: 1.55; }
+    .file-decision-actions { display: flex; gap: .5rem; flex-wrap: wrap; }
+    .file-decision-actions .danger { margin-left: auto; }
+    [hidden] { display: none !important; }
     .file-workspace-back { display: none; }
     .file-workspace-placeholder {
       display: grid; place-items: center; min-height: 15rem; padding: 2rem; text-align: center;
@@ -977,9 +998,43 @@
             <button type="button" class="ghost file-workspace-back" id="fileWorkspaceBack">Back to files</button>
             <h4 id="fileWorkspaceTitle">Select a file</h4>
           </div>
+          <div class="file-detail-actions">
+            <button type="button" class="ghost" id="fileEditButton" disabled>Edit</button>
+            <button type="button" class="ghost file-delete-button" id="fileDeleteButton" disabled aria-label="Delete selected file">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"></path><path d="M8 6V4h8v2"></path><path d="M19 6l-1 14H6L5 6"></path><path d="M10 11v5M14 11v5"></path></svg>
+              Delete
+            </button>
+          </div>
         </div>
         <div id="fileWorkspaceMeta" class="meta"></div>
         <div id="fileWorkspaceContent" class="file-workspace-placeholder">Choose a session or group file to preview it here.</div>
+        <section id="fileEditorPane" class="file-editor-pane" aria-labelledby="fileEditorHeading" hidden>
+          <h5 id="fileEditorHeading">Edit file</h5>
+          <textarea id="fileEditor" aria-describedby="fileEditorStatus" spellcheck="false"></textarea>
+          <p id="fileEditorStatus" class="file-editor-status" aria-live="polite"></p>
+          <div class="file-decision-actions">
+            <button type="button" class="primary" id="fileSaveButton">Save changes</button>
+            <button type="button" class="ghost" id="fileEditCancel">Cancel</button>
+          </div>
+        </section>
+        <section id="fileGuardPane" class="file-decision-pane" aria-labelledby="fileGuardHeading" hidden>
+          <h5 id="fileGuardHeading">Unsaved changes</h5>
+          <p>Your draft has not been saved. Save it, discard it, or keep editing.</p>
+          <div class="file-decision-actions">
+            <button type="button" class="primary" id="fileGuardSave">Save and continue</button>
+            <button type="button" class="danger" id="fileGuardDiscard">Discard and continue</button>
+            <button type="button" class="ghost" id="fileGuardKeepEditing">Keep editing</button>
+          </div>
+        </section>
+        <section id="fileDeletePane" class="file-decision-pane is-danger" aria-labelledby="fileDeleteHeading" hidden>
+          <h5 id="fileDeleteHeading">Delete <span id="fileDeleteName"></span>?</h5>
+          <p id="fileDeleteWarning"><strong>This is permanent and there is no recovery.</strong> Models may still have references in conversation context and may no longer find or download the file.</p>
+          <p id="fileDeleteStatus" class="file-editor-status" aria-live="polite"></p>
+          <div class="file-decision-actions">
+            <button type="button" class="ghost" id="fileDeleteCancel">Cancel</button>
+            <button type="button" class="danger" id="fileDeleteConfirm">Delete permanently</button>
+          </div>
+        </section>
       </section>
     </div>
   </dialog>
@@ -1105,6 +1160,13 @@
         exchanges: [],
         files: { session: [], group: [] },
         selectedFileId: null,
+        selectedFile: null,
+        fileBaselineContent: "",
+        fileOpenedSha256: "",
+        fileDraft: "",
+        fileViewMode: "preview",
+        pendingFileContinuation: null,
+        fileDeleteTarget: null,
         fileOperationPending: false,
         aiSettings: { configured: false, api_key_preview: "", model: "gpt-5.4-nano", title_max_chars: 72 },
         renamingSessionId: "",
@@ -1135,7 +1197,23 @@
         exchangeList: document.getElementById("exchangeList"),
         editGroupButton: document.getElementById("editGroupButton"),
         fileCopyButton: document.getElementById("fileCopyButton"),
+        fileDeleteButton: document.getElementById("fileDeleteButton"),
+        fileDeleteCancel: document.getElementById("fileDeleteCancel"),
+        fileDeleteConfirm: document.getElementById("fileDeleteConfirm"),
+        fileDeleteName: document.getElementById("fileDeleteName"),
+        fileDeletePane: document.getElementById("fileDeletePane"),
+        fileDeleteStatus: document.getElementById("fileDeleteStatus"),
         fileDownloadButton: document.getElementById("fileDownloadButton"),
+        fileEditButton: document.getElementById("fileEditButton"),
+        fileEditCancel: document.getElementById("fileEditCancel"),
+        fileEditor: document.getElementById("fileEditor"),
+        fileEditorPane: document.getElementById("fileEditorPane"),
+        fileEditorStatus: document.getElementById("fileEditorStatus"),
+        fileGuardDiscard: document.getElementById("fileGuardDiscard"),
+        fileGuardKeepEditing: document.getElementById("fileGuardKeepEditing"),
+        fileGuardPane: document.getElementById("fileGuardPane"),
+        fileGuardSave: document.getElementById("fileGuardSave"),
+        fileSaveButton: document.getElementById("fileSaveButton"),
         fileWorkspaceBack: document.getElementById("fileWorkspaceBack"),
         fileWorkspaceClose: document.getElementById("fileWorkspaceClose"),
         fileWorkspaceContent: document.getElementById("fileWorkspaceContent"),
@@ -1204,14 +1282,36 @@
         if (group) deleteGroup(group);
       });
       dom.fileWorkspaceOpen.addEventListener("click", () => openFileWorkspace());
-      dom.fileWorkspaceClose.addEventListener("click", () => dom.fileWorkspaceDialog.close());
-      dom.fileWorkspaceBack.addEventListener("click", () => showFileListPane());
+      dom.fileWorkspaceClose.addEventListener("click", () => runFileContinuation("close", () => dom.fileWorkspaceDialog.close(), dom.fileWorkspaceClose));
+      dom.fileWorkspaceBack.addEventListener("click", () => runFileContinuation("back", () => showFileListPane(), dom.fileWorkspaceBack));
+      dom.fileWorkspaceDialog.addEventListener("cancel", (event) => {
+        if (!isFileDraftDirty()) return;
+        event.preventDefault();
+        runFileContinuation("close", () => dom.fileWorkspaceDialog.close(), dom.fileWorkspaceClose);
+      });
       dom.fileWorkspaceDialog.addEventListener("close", () => {
         dom.fileWorkspaceGrid.classList.remove("show-detail");
+        resetFilePreview();
         dom.fileWorkspaceOpen.focus();
       });
+      dom.fileEditButton.addEventListener("click", () => beginFileEdit());
+      dom.fileEditor.addEventListener("input", () => {
+        state.fileDraft = dom.fileEditor.value;
+        setFileEditorStatus(isFileDraftDirty() ? "Unsaved changes." : "No unsaved changes.", "");
+      });
+      dom.fileSaveButton.addEventListener("click", () => saveOpenFile({ continuePending: Boolean(state.pendingFileContinuation) }));
+      dom.fileEditCancel.addEventListener("click", () => runFileContinuation("back", () => discardFileDraftAndPreview(), dom.fileEditCancel));
+      dom.fileGuardSave.addEventListener("click", () => saveOpenFile({ continuePending: true }));
+      dom.fileGuardDiscard.addEventListener("click", () => discardAndRunFileContinuation());
+      dom.fileGuardKeepEditing.addEventListener("click", () => keepEditingFile());
+      dom.fileDeleteButton.addEventListener("click", () => {
+        if (!state.selectedFile) return;
+        runFileContinuation("delete", () => showFileDeleteConfirmation(state.selectedFile), dom.fileDeleteButton);
+      });
+      dom.fileDeleteCancel.addEventListener("click", () => cancelFileDelete());
+      dom.fileDeleteConfirm.addEventListener("click", () => deleteOpenFile());
       dom.fileCopyButton.addEventListener("click", async () => {
-        const content = dom.fileWorkspaceContent.dataset.content || "";
+        const content = isFileDraftDirty() ? state.fileDraft : (dom.fileWorkspaceContent.dataset.content || "");
         if (!content) { setStatus("No file content to copy.", "warn"); return; }
         try {
           await navigator.clipboard.writeText(content);
@@ -1609,7 +1709,7 @@
         node.dataset.fileId = String(file.file_id);
         node.classList.toggle("is-active", String(state.selectedFileId) === String(file.file_id));
         node.title = file.filename || `file ${file.file_id}`;
-        node.addEventListener("click", () => openFile(file.file_id));
+        node.addEventListener("click", () => runFileContinuation("select", () => openFile(file.file_id), node));
 
         const row = div("file-row");
         const icon = div("file-icon");
@@ -1635,9 +1735,9 @@
         moveButton.title = `Move to ${scopeLabel(targetScope)} files`;
         moveButton.setAttribute("aria-label", `Move ${file.filename || `file ${file.file_id}`} to ${scopeLabel(targetScope)} files`);
         moveButton.textContent = `Move to ${scopeLabel(targetScope)}`;
-        moveButton.addEventListener("click", async () => {
+        moveButton.addEventListener("click", () => {
           const fileId = file.file_id;
-          await moveFile(fileId, targetScope, moveButton);
+          runFileContinuation("move", () => moveFile(fileId, targetScope, moveButton), moveButton);
         });
         card.append(node, moveButton);
         return card;
@@ -1785,6 +1885,7 @@
         dom.sessionFileInput.disabled = pending;
         dom.groupFileInput.disabled = pending;
         for (const button of dom.fileWorkspaceDialog.querySelectorAll('[data-file-action="move"]')) button.disabled = pending;
+        renderFileWorkspaceMode();
       }
 
       function startFileDrag(event, file, card) {
@@ -1837,7 +1938,8 @@
             restoreFileOperationFocus(zone.querySelector('input[type="file"]'));
             return;
           }
-          await moveFile(payload.file_id, targetScope, zone.querySelector('input[type="file"]'));
+          const focusTarget = zone.querySelector('input[type="file"]');
+          runFileContinuation("move", () => moveFile(payload.file_id, targetScope, focusTarget), focusTarget);
         });
       }
 
@@ -1866,6 +1968,8 @@
       }
 
       function showFileListPane() {
+        state.fileViewMode = "preview";
+        renderFileWorkspaceMode();
         dom.fileWorkspaceGrid.classList.remove("show-detail");
         const selected = dom.fileWorkspaceDialog.querySelector(".file-button.is-active");
         if (selected) selected.focus();
@@ -1877,6 +1981,13 @@
           const payload = await api(`/admin/api/files/${encodeURIComponent(fileId)}`);
           const file = payload.file;
           state.selectedFileId = file.file_id;
+          state.selectedFile = file;
+          state.fileBaselineContent = file.content || "";
+          state.fileOpenedSha256 = file.sha256 || "";
+          state.fileDraft = state.fileBaselineContent;
+          state.fileViewMode = "preview";
+          state.pendingFileContinuation = null;
+          state.fileDeleteTarget = null;
           dom.fileWorkspaceTitle.textContent = file.filename || `file-${file.file_id}`;
           dom.fileWorkspaceMeta.replaceChildren(
             spanCls("mono", `#${file.file_id}`),
@@ -1890,6 +2001,7 @@
             spanCls("", formatUnixDate(file.created_at))
           );
           renderFilePreview(file);
+          renderFileWorkspaceMode();
           for (const button of dom.fileWorkspaceDialog.querySelectorAll(".file-button")) {
             button.classList.toggle("is-active", button.dataset.fileId === String(file.file_id));
           }
@@ -1914,6 +2026,9 @@
         const content = file.content || "";
         dom.fileCopyButton.disabled = false;
         dom.fileDownloadButton.disabled = false;
+        dom.fileEditButton.disabled = !isEditableTextFile(file);
+        dom.fileDeleteButton.disabled = false;
+        dom.fileDeleteButton.setAttribute("aria-label", `Delete ${file.filename || `file ${file.file_id}`}`);
         dom.fileWorkspaceContent.dataset.content = content;
         dom.fileWorkspaceContent.dataset.filename = file.filename || `file-${file.file_id}.txt`;
         dom.fileWorkspaceContent.dataset.mimeType = file.mime_type || "text/plain";
@@ -1928,8 +2043,13 @@
 
       function resetFilePreview() {
         state.selectedFileId = null;
+        state.selectedFile = null;
+        clearFileTransientState();
         dom.fileCopyButton.disabled = true;
         dom.fileDownloadButton.disabled = true;
+        dom.fileEditButton.disabled = true;
+        dom.fileDeleteButton.disabled = true;
+        dom.fileDeleteButton.setAttribute("aria-label", "Delete selected file");
         dom.fileWorkspaceTitle.textContent = "Select a file";
         dom.fileWorkspaceMeta.replaceChildren();
         dom.fileWorkspaceContent.className = "file-workspace-placeholder";
@@ -1937,6 +2057,7 @@
         delete dom.fileWorkspaceContent.dataset.content;
         delete dom.fileWorkspaceContent.dataset.filename;
         delete dom.fileWorkspaceContent.dataset.mimeType;
+        renderFileWorkspaceMode();
       }
 
       function showFilePreviewError(message) {
@@ -1944,6 +2065,201 @@
         dom.fileWorkspaceTitle.textContent = "Could not open file";
         dom.fileWorkspaceContent.replaceChildren(document.createTextNode(String(message || "Unknown error")));
         dom.fileWorkspaceGrid.classList.add("show-detail");
+      }
+
+      function isEditableTextFile(file) {
+        const filename = String(file?.filename || "").toLowerCase();
+        return [...ALLOWED_FILE_EXTENSIONS].some((extension) => filename.endsWith(extension));
+      }
+
+      function isFileDraftDirty() {
+        return Boolean(state.selectedFile) && state.fileDraft !== state.fileBaselineContent;
+      }
+
+      function clearFileTransientState() {
+        state.fileBaselineContent = "";
+        state.fileOpenedSha256 = "";
+        state.fileDraft = "";
+        state.fileViewMode = "preview";
+        state.pendingFileContinuation = null;
+        state.fileDeleteTarget = null;
+        dom.fileEditor.value = "";
+        setFileEditorStatus("", "");
+        setFileDeleteStatus("", "");
+      }
+
+      function renderFileWorkspaceMode() {
+        const mode = state.fileViewMode;
+        dom.fileWorkspaceContent.hidden = mode !== "preview";
+        dom.fileEditorPane.hidden = mode !== "edit";
+        dom.fileGuardPane.hidden = mode !== "guard";
+        dom.fileDeletePane.hidden = mode !== "delete";
+        dom.fileEditButton.hidden = mode !== "preview";
+        dom.fileDeleteButton.hidden = mode !== "preview";
+        const pending = state.fileOperationPending;
+        dom.fileCopyButton.disabled = pending || !state.selectedFile || mode === "delete";
+        dom.fileDownloadButton.disabled = pending || !state.selectedFile || mode === "delete";
+        dom.fileEditButton.disabled = pending || !state.selectedFile || !isEditableTextFile(state.selectedFile);
+        dom.fileDeleteButton.disabled = pending || !state.selectedFile;
+        dom.fileSaveButton.disabled = pending;
+        dom.fileGuardSave.disabled = pending;
+        dom.fileGuardDiscard.disabled = pending;
+        dom.fileDeleteConfirm.disabled = pending;
+      }
+
+      function beginFileEdit() {
+        if (!state.selectedFile || !isEditableTextFile(state.selectedFile)) return;
+        state.fileDraft = state.fileBaselineContent;
+        dom.fileEditor.value = state.fileDraft;
+        state.fileViewMode = "edit";
+        setFileEditorStatus("No unsaved changes.", "");
+        renderFileWorkspaceMode();
+        window.requestAnimationFrame(() => dom.fileEditor.focus());
+      }
+
+      function setFileEditorStatus(message, tone) {
+        dom.fileEditorStatus.textContent = message || "";
+        dom.fileEditorStatus.classList.toggle("is-error", tone === "error");
+        dom.fileEditorStatus.classList.toggle("is-ok", tone === "ok");
+      }
+
+      function setFileDeleteStatus(message, tone) {
+        dom.fileDeleteStatus.textContent = message || "";
+        dom.fileDeleteStatus.classList.toggle("is-error", tone === "error");
+        dom.fileDeleteStatus.classList.toggle("is-ok", tone === "ok");
+      }
+
+      function runFileContinuation(action, continuation, focusTarget) {
+        if (!isFileDraftDirty()) {
+          return Promise.resolve().then(continuation);
+        }
+        state.pendingFileContinuation = { action, continuation, focusTarget };
+        state.fileViewMode = "guard";
+        renderFileWorkspaceMode();
+        window.requestAnimationFrame(() => dom.fileGuardKeepEditing.focus());
+        return Promise.resolve();
+      }
+
+      function keepEditingFile() {
+        const pending = state.pendingFileContinuation;
+        state.pendingFileContinuation = null;
+        state.fileViewMode = "edit";
+        renderFileWorkspaceMode();
+        window.requestAnimationFrame(() => {
+          if (pending?.focusTarget === dom.fileEditor) pending.focusTarget.focus();
+          else dom.fileEditor.focus();
+        });
+      }
+
+      async function discardAndRunFileContinuation() {
+        const pending = state.pendingFileContinuation;
+        state.pendingFileContinuation = null;
+        state.fileDraft = state.fileBaselineContent;
+        dom.fileEditor.value = state.fileDraft;
+        state.fileViewMode = "preview";
+        renderFileWorkspaceMode();
+        if (pending?.continuation) await pending.continuation();
+      }
+
+      function discardFileDraftAndPreview() {
+        state.fileDraft = state.fileBaselineContent;
+        dom.fileEditor.value = state.fileDraft;
+        state.fileViewMode = "preview";
+        state.pendingFileContinuation = null;
+        renderFileWorkspaceMode();
+        window.requestAnimationFrame(() => dom.fileEditButton.focus());
+      }
+
+      async function saveOpenFile({ continuePending = false } = {}) {
+        if (!state.selectedFile || state.fileOperationPending) return false;
+        const draft = state.fileDraft;
+        if (!draft) {
+          setFileEditorStatus("File content cannot be empty. Your draft is still here.", "error");
+          dom.fileEditor.focus();
+          return false;
+        }
+        if (new TextEncoder().encode(draft).byteLength > MAX_FILE_BYTES) {
+          setFileEditorStatus("File content is larger than 1 MB. Your draft is still here.", "error");
+          dom.fileEditor.focus();
+          return false;
+        }
+        const fileId = state.selectedFile.file_id;
+        const pending = continuePending ? state.pendingFileContinuation : null;
+        setFileEditorStatus("Saving...", "");
+        try {
+          state.fileOperationPending = true;
+          setFileOperationPending(true);
+          const payload = await api(`/admin/api/sessions/${encodeURIComponent(state.selectedSessionId)}/files/${encodeURIComponent(fileId)}`, {
+            method: "PATCH",
+            body: JSON.stringify({ content: draft, expected_sha256: state.fileOpenedSha256 }),
+          });
+          state.fileBaselineContent = draft;
+          state.fileOpenedSha256 = payload.file.sha256;
+          state.fileDraft = draft;
+          state.pendingFileContinuation = null;
+          await loadSession(state.selectedSessionId);
+          await openFile(fileId);
+          setStatus(`${payload.file.filename || "File"} saved.`, "ok");
+          if (pending?.continuation) await pending.continuation();
+          return true;
+        } catch (error) {
+          state.fileViewMode = "edit";
+          renderFileWorkspaceMode();
+          if (error.status === 409) {
+            setFileEditorStatus("This file changed after you opened it. Your draft is still here. Reload the latest file or copy your draft before trying again.", "error");
+          } else if (error.status === 404) {
+            setFileEditorStatus("This file can no longer be found. Your draft is still here. Copy it before leaving the editor.", "error");
+          } else if (error.status === 401 || error.status === 403) {
+            setFileEditorStatus("You are not authorized to save this file. Your draft is still here.", "error");
+          } else {
+            setFileEditorStatus(`Save failed: ${error.message}. Your draft is still here.`, "error");
+          }
+          window.requestAnimationFrame(() => dom.fileEditor.focus());
+          return false;
+        } finally {
+          state.fileOperationPending = false;
+          setFileOperationPending(false);
+        }
+      }
+
+      function showFileDeleteConfirmation(file) {
+        state.fileDeleteTarget = file;
+        state.fileViewMode = "delete";
+        dom.fileDeleteName.textContent = file.filename || `file-${file.file_id}`;
+        setFileDeleteStatus("", "");
+        renderFileWorkspaceMode();
+        window.requestAnimationFrame(() => dom.fileDeleteCancel.focus());
+      }
+
+      function cancelFileDelete() {
+        state.fileDeleteTarget = null;
+        state.fileViewMode = "preview";
+        setFileDeleteStatus("", "");
+        renderFileWorkspaceMode();
+        window.requestAnimationFrame(() => dom.fileDeleteButton.focus());
+      }
+
+      async function deleteOpenFile() {
+        const file = state.fileDeleteTarget;
+        if (!file || state.fileOperationPending) return;
+        setFileDeleteStatus(`Deleting ${file.filename || `file-${file.file_id}`}...`, "");
+        try {
+          state.fileOperationPending = true;
+          setFileOperationPending(true);
+          await api(`/admin/api/sessions/${encodeURIComponent(state.selectedSessionId)}/files/${encodeURIComponent(file.file_id)}`, {
+            method: "DELETE",
+          });
+          await loadSession(state.selectedSessionId);
+          resetFilePreview();
+          showFileListPane();
+          setStatus(`${file.filename || "File"} permanently deleted.`, "ok");
+        } catch (error) {
+          setFileDeleteStatus(`Delete failed: ${error.message}. The file has not been removed; try again or cancel.`, "error");
+          window.requestAnimationFrame(() => dom.fileDeleteConfirm.focus());
+        } finally {
+          state.fileOperationPending = false;
+          setFileOperationPending(false);
+        }
       }
 
       function isMarkdownFile(file) {
@@ -2889,7 +3205,22 @@
           const demoFile = demoFilesForSession(sessionId)
             .find((file) => String(file.file_id) === demoFileMutation[2]);
           if (!entry || !demoFile) return Promise.reject(Object.assign(new Error("File not found"), { status: 404 }));
-          moveDemoFile(entry, demoFile, body.scope_type);
+          if (Object.prototype.hasOwnProperty.call(body, "content")) {
+            if (body.expected_sha256 !== demoFile.sha256) {
+              return Promise.reject(Object.assign(new Error("File changed after it was opened"), { status: 409 }));
+            }
+            updateDemoFileContent(demoFile, body.content);
+          } else {
+            moveDemoFile(entry, demoFile, body.scope_type);
+          }
+          return Promise.resolve({ ok: true, file: demoFileManifest(demoFile) });
+        }
+        if (demoFileMutation && method === "DELETE") {
+          const sessionId = decodeURIComponent(demoFileMutation[1]);
+          const demoFile = demoFilesForSession(sessionId)
+            .find((file) => String(file.file_id) === demoFileMutation[2]);
+          if (!demoFile) return Promise.reject(Object.assign(new Error("File not found"), { status: 404 }));
+          demo.files = demo.files.filter((file) => String(file.file_id) !== String(demoFile.file_id));
           return Promise.resolve({ ok: true, file: demoFileManifest(demoFile) });
         }
 
@@ -2970,6 +3301,13 @@
         }
       }
 
+      function updateDemoFileContent(demoFile, content) {
+        const bytes = new TextEncoder().encode(content);
+        demoFile.content = content;
+        demoFile.size_bytes = bytes.byteLength;
+        demoFile.sha256 = `demo-${Date.now()}-${bytes.byteLength}`;
+      }
+
       function demoMimeType(filename) {
         const extension = String(filename || "").toLowerCase().split(".").pop();
         if (extension === "md" || extension === "markdown") return "text/markdown";
@@ -2998,6 +3336,7 @@
         for (const node of document.querySelectorAll("button")) node.disabled = value;
         dom.timezoneSelect.disabled = value;
         renderSessionGroupSelect();
+        if (!value) renderFileWorkspaceMode();
       }
 
       function setStatus(message, tone) {

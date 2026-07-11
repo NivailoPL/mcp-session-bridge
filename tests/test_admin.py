@@ -64,7 +64,7 @@ def test_admin_viewer_file_upload_and_move_contract() -> None:
     assert 'aria-describedby="sessionFileStatus"' in viewer
     assert 'aria-describedby="groupFileStatus"' in viewer
     assert 'data-file-action="move"' in viewer
-    assert 'await moveFile(fileId, targetScope, moveButton);' in viewer
+    assert 'runFileContinuation("move", () => moveFile(fileId, targetScope, moveButton), moveButton);' in viewer
 
     # Browser preflight happens on bytes before the JSON/base64 request is built.
     assert 'const MAX_FILE_BYTES = 1_000_000;' in viewer
@@ -93,6 +93,59 @@ def test_admin_viewer_file_upload_and_move_contract() -> None:
     assert 'const demoFileMutation = path.match(/^\\/admin\\/api\\/sessions\\/(.+)\\/files\\/(\\d+)$/);' in viewer
     assert 'created_by: "demo"' in viewer
     assert 'moveDemoFile(entry, demoFile, body.scope_type);' in viewer
+
+
+def test_admin_viewer_file_edit_delete_and_dirty_guard_contract() -> None:
+    viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
+
+    # Preview, edit, guard, conflict, and delete all live inside one workspace.
+    assert viewer.count('<dialog id="fileWorkspaceDialog"') == 1
+    workspace = viewer[
+        viewer.index('<dialog id="fileWorkspaceDialog"'):
+        viewer.index('<dialog id="aiSettingsDialog"')
+    ]
+    assert workspace.count("<dialog") == 1
+    assert 'id="fileEditButton"' in workspace
+    assert 'id="fileEditor"' in workspace
+    assert 'id="fileGuardPane"' in workspace
+    assert 'id="fileDeletePane"' in workspace
+    assert 'id="fileDeleteWarning"' in workspace
+
+    # Dirty means draft differs from the content opened from this exact hash.
+    assert "fileBaselineContent: \"\"" in viewer
+    assert "fileOpenedSha256: \"\"" in viewer
+    assert "fileDraft: \"\"" in viewer
+    assert "state.fileDraft !== state.fileBaselineContent" in viewer
+    assert "expected_sha256: state.fileOpenedSha256" in viewer
+    assert 'method: "PATCH"' in viewer
+
+    # One continuation guard owns every draft-losing action, including Escape.
+    for action in ("close", "back", "select", "move", "delete"):
+        assert f'runFileContinuation("{action}"' in viewer
+    assert 'dom.fileWorkspaceDialog.addEventListener("cancel"' in viewer
+    assert "event.preventDefault();" in viewer
+    assert "state.pendingFileContinuation" in viewer
+    assert 'id="fileGuardSave"' in workspace
+    assert 'id="fileGuardDiscard"' in workspace
+    assert 'id="fileGuardKeepEditing"' in workspace
+
+    # Invalid/conflicting saves retain the editor buffer and give recovery help.
+    assert "File content cannot be empty." in viewer
+    assert "File content is larger than 1 MB." in viewer
+    assert "Your draft is still here." in viewer
+    assert "Reload the latest file or copy your draft" in viewer
+
+    # Permanent delete is accessible, inline, explicit, and server-confirmed.
+    assert "Delete ${file.filename" in viewer
+    assert "permanent" in workspace.lower()
+    assert "no recovery" in workspace.lower()
+    assert "Models may still have references in conversation context" in workspace
+    assert "may no longer find or download the file" in workspace
+    assert 'method: "DELETE"' in viewer
+
+    # Demo mode exercises the same PATCH edit and DELETE endpoints.
+    assert "updateDemoFileContent(demoFile, body.content);" in viewer
+    assert "demo.files = demo.files.filter" in viewer
 
 
 def test_admin_api_requires_login_and_csrf_for_mutations(tmp_path, monkeypatch) -> None:
