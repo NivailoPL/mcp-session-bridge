@@ -81,11 +81,16 @@ def test_admin_viewer_file_upload_and_move_contract() -> None:
     assert 'event.dataTransfer.files' in viewer
     assert 'dropEffect = kind === "internal" ? "move" : "copy"' in viewer
 
-    # Current-scope moves are local no-ops; successful server responses drive refresh.
+    # Current-scope moves are local no-ops; successful responses commit manifests locally.
     assert 'if (sourceScope === targetScope)' in viewer
     assert 'Already in ${scopeLabel(targetScope)} files.' in viewer
-    assert 'await api(`/admin/api/sessions/${encodeURIComponent(state.selectedSessionId)}/files`' in viewer
-    assert 'await loadSession(state.selectedSessionId);' in viewer
+    assert 'function applyFileManifest(file)' in viewer
+    assert 'function removeFileManifest(fileId)' in viewer
+    assert 'Number(right.created_at || 0) - Number(left.created_at || 0)' in viewer
+    assert 'const operationSessionId = state.selectedSessionId;' in viewer
+    assert 'encodeURIComponent(operationSessionId)' in viewer
+    assert 'if (state.selectedSessionId !== operationSessionId) return;' in viewer
+    assert 'const movingSelectedFile = state.selectedFile && String(state.selectedFile.file_id) === String(fileId);' in viewer
     assert 'window.requestAnimationFrame(() => focusTarget.focus());' in viewer
 
     # Demo mode uses the same create/move paths and mutates its in-memory manifests.
@@ -125,6 +130,9 @@ def test_admin_viewer_file_edit_delete_and_dirty_guard_contract() -> None:
     assert 'dom.fileWorkspaceDialog.addEventListener("cancel"' in viewer
     assert "event.preventDefault();" in viewer
     assert "state.pendingFileContinuation" in viewer
+    assert "if (state.pendingFileContinuation) return Promise.resolve();" in viewer
+    assert 'const interactionsLocked = pending || mode === "guard";' in viewer
+    assert 'for (const button of dom.fileWorkspaceDialog.querySelectorAll(".file-button"))' in viewer
     assert 'id="fileGuardSave"' in workspace
     assert 'id="fileGuardDiscard"' in workspace
     assert 'id="fileGuardKeepEditing"' in workspace
@@ -138,6 +146,16 @@ def test_admin_viewer_file_edit_delete_and_dirty_guard_contract() -> None:
     # Permanent delete is accessible, inline, explicit, and server-confirmed.
     assert "Delete ${file.filename" in viewer
     assert "permanent" in workspace.lower()
+    assert "fileOpenGeneration: 0" in viewer
+    assert "sessionLoadGeneration: 0" in viewer
+    assert "function invalidateFileOpen()" in viewer
+    assert "const openGeneration = ++state.fileOpenGeneration;" in viewer
+    assert "openGeneration !== state.fileOpenGeneration" in viewer
+    assert "const loadGeneration = ++state.sessionLoadGeneration;" in viewer
+    assert "loadGeneration !== state.sessionLoadGeneration" in viewer
+    assert 'runFileContinuation("session", continueSelection, item);' in viewer
+    assert 'Wait for the file operation to finish.' in viewer
+    assert "!dom.fileWorkspaceDialog.open" in viewer
     assert "no recovery" in workspace.lower()
     assert "Models may still have references in conversation context" in workspace
     assert "may no longer find or download the file" in workspace
@@ -146,6 +164,19 @@ def test_admin_viewer_file_edit_delete_and_dirty_guard_contract() -> None:
     # Demo mode exercises the same PATCH edit and DELETE endpoints.
     assert "updateDemoFileContent(demoFile, body.content);" in viewer
     assert "demo.files = demo.files.filter" in viewer
+
+
+def test_admin_viewer_demo_group_delete_reassigns_group_files() -> None:
+    viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
+
+    delete_branch = viewer[
+        viewer.index('if (groupMatch && method === "DELETE")'):
+        viewer.index('if (path === "/admin/api/sessions")')
+    ]
+    assert 'const destinationGroupId = body.destination_group_id || "uncategorized";' in delete_branch
+    assert "for (const file of demo.files)" in delete_branch
+    assert 'file.scope_type === "group" && file.group_id === groupId' in delete_branch
+    assert "file.group_id = destinationGroupId;" in delete_branch
 
 
 def test_admin_api_requires_login_and_csrf_for_mutations(tmp_path, monkeypatch) -> None:

@@ -1168,6 +1168,8 @@
         pendingFileContinuation: null,
         fileDeleteTarget: null,
         fileOperationPending: false,
+        fileOpenGeneration: 0,
+        sessionLoadGeneration: 0,
         aiSettings: { configured: false, api_key_preview: "", model: "gpt-5.4-nano", title_max_chars: 72 },
         renamingSessionId: "",
         manualRenameSessionId: "",
@@ -1285,11 +1287,17 @@
       dom.fileWorkspaceClose.addEventListener("click", () => runFileContinuation("close", () => dom.fileWorkspaceDialog.close(), dom.fileWorkspaceClose));
       dom.fileWorkspaceBack.addEventListener("click", () => runFileContinuation("back", () => showFileListPane(), dom.fileWorkspaceBack));
       dom.fileWorkspaceDialog.addEventListener("cancel", (event) => {
+        if (state.fileOperationPending) {
+          event.preventDefault();
+          return;
+        }
         if (!isFileDraftDirty()) return;
         event.preventDefault();
         runFileContinuation("close", () => dom.fileWorkspaceDialog.close(), dom.fileWorkspaceClose);
       });
       dom.fileWorkspaceDialog.addEventListener("close", () => {
+        invalidateFileOpen();
+        setBusy(false);
         dom.fileWorkspaceGrid.classList.remove("show-detail");
         resetFilePreview();
         dom.fileWorkspaceOpen.focus();
@@ -1491,7 +1499,10 @@
       }
 
       async function loadSession(sessionId) {
+        const loadGeneration = ++state.sessionLoadGeneration;
+        invalidateFileOpen();
         if (!sessionId) {
+          state.selectedSessionId = "";
           state.selectedSession = null;
           state.exchanges = [];
           state.files = { session: [], group: [] };
@@ -1499,10 +1510,12 @@
           renderExchanges();
           return;
         }
+        state.selectedSessionId = sessionId;
+        renderSessions();
         setBusy(true);
         try {
           const payload = await api(`/admin/api/sessions/${encodeURIComponent(sessionId)}`);
-          state.selectedSessionId = sessionId;
+          if (loadGeneration !== state.sessionLoadGeneration) return;
           state.selectedSession = payload.session;
           state.exchanges = payload.exchanges || [];
           state.files = payload.files || { session: [], group: [] };
@@ -1516,7 +1529,7 @@
           renderFiles();
           renderExchanges();
         } finally {
-          setBusy(false);
+          if (loadGeneration === state.sessionLoadGeneration) setBusy(false);
         }
       }
 
@@ -1606,11 +1619,22 @@
           item.role = "button";
           item.className = "session-button";
           if (session.session_id === state.selectedSessionId) item.classList.add("is-active");
-          item.addEventListener("click", () => loadSession(session.session_id));
+          const selectSession = () => {
+            if (state.fileOperationPending) {
+              setStatus("Wait for the file operation to finish.", "warn");
+              return;
+            }
+            const continueSelection = async () => {
+              if (dom.fileWorkspaceDialog.open) dom.fileWorkspaceDialog.close();
+              await loadSession(session.session_id);
+            };
+            runFileContinuation("session", continueSelection, item);
+          };
+          item.addEventListener("click", selectSession);
           item.addEventListener("keydown", (event) => {
             if (event.key === "Enter" || event.key === " ") {
               event.preventDefault();
-              loadSession(session.session_id);
+              selectSession();
             }
           });
 
@@ -1760,6 +1784,42 @@
           .find((file) => String(file.file_id) === String(fileId)) || null;
       }
 
+      function sortFileManifests(files) {
+        return [...files].sort((left, right) => (
+          Number(right.created_at || 0) - Number(left.created_at || 0)
+          || Number(right.file_id || 0) - Number(left.file_id || 0)
+        ));
+      }
+
+      function applyFileManifest(file) {
+        const fileId = String(file.file_id);
+        const next = {
+          session: (state.files.session || []).filter((item) => String(item.file_id) !== fileId),
+          group: (state.files.group || []).filter((item) => String(item.file_id) !== fileId),
+        };
+        const bucket = file.scope_type === "group" ? "group" : "session";
+        next[bucket].push(file);
+        state.files = {
+          session: sortFileManifests(next.session),
+          group: sortFileManifests(next.group),
+        };
+        if (state.selectedFile && String(state.selectedFile.file_id) === fileId) {
+          state.selectedFile = { ...state.selectedFile, ...file };
+        }
+      }
+
+      function removeFileManifest(fileId) {
+        const resolvedId = String(fileId);
+        state.files = {
+          session: (state.files.session || []).filter((item) => String(item.file_id) !== resolvedId),
+          group: (state.files.group || []).filter((item) => String(item.file_id) !== resolvedId),
+        };
+      }
+
+      function invalidateFileOpen() {
+        state.fileOpenGeneration += 1;
+      }
+
       async function uploadSelectedFiles(targetScope, input) {
         const files = Array.from(input.files || []);
         try {
@@ -1770,14 +1830,15 @@
       }
 
       async function uploadFiles(targetScope, files, focusTarget) {
-        if (state.fileOperationPending) return;
+        if (state.fileOperationPending || state.fileViewMode === "guard") return;
+        const operationSessionId = state.selectedSessionId;
         clearFileDropHighlights();
         setFileOperationStatus(targetScope, "Checking file...", "");
+        state.fileOperationPending = true;
+        setFileOperationPending(true);
         try {
           const prepared = await prepareUpload(files);
-          state.fileOperationPending = true;
-          setFileOperationPending(true);
-          const payload = await api(`/admin/api/sessions/${encodeURIComponent(state.selectedSessionId)}/files`, {
+          const payload = await api(`/admin/api/sessions/${encodeURIComponent(operationSessionId)}/files`, {
             method: "POST",
             body: JSON.stringify({
               scope_type: targetScope,
@@ -1785,8 +1846,9 @@
               content_base64: bytesToBase64(prepared.bytes),
             }),
           });
-          state.selectedFileId = payload.file.file_id;
-          await loadSession(state.selectedSessionId);
+          if (state.selectedSessionId !== operationSessionId) return;
+          applyFileManifest(payload.file);
+          renderFiles();
           setFileOperationStatus(targetScope, `${prepared.file.name} uploaded.`, "ok");
         } catch (error) {
           setFileOperationStatus(targetScope, error.message, "error");
@@ -1831,7 +1893,7 @@
       }
 
       async function moveFile(fileId, targetScope, focusTarget) {
-        if (state.fileOperationPending) return;
+        if (state.fileOperationPending || state.fileViewMode === "guard") return;
         const file = findVisibleFile(fileId);
         if (!file) {
           setFileOperationStatus(targetScope, "File is no longer visible. Refresh and try again.", "error");
@@ -1844,16 +1906,23 @@
           clearFileDropHighlights();
           return;
         }
+        const operationSessionId = state.selectedSessionId;
+        const movingSelectedFile = state.selectedFile && String(state.selectedFile.file_id) === String(fileId);
         setFileOperationStatus(targetScope, `Moving ${file.filename}...`, "");
         try {
           state.fileOperationPending = true;
           setFileOperationPending(true);
-          const payload = await api(`/admin/api/sessions/${encodeURIComponent(state.selectedSessionId)}/files/${encodeURIComponent(fileId)}`, {
+          const payload = await api(`/admin/api/sessions/${encodeURIComponent(operationSessionId)}/files/${encodeURIComponent(fileId)}`, {
             method: "PATCH",
             body: JSON.stringify({ scope_type: targetScope }),
           });
-          state.selectedFileId = payload.file.file_id;
-          await loadSession(state.selectedSessionId);
+          if (state.selectedSessionId !== operationSessionId) return;
+          applyFileManifest(payload.file);
+          renderFiles();
+          if (movingSelectedFile) {
+            state.selectedFileId = payload.file.file_id;
+            applyOpenedFile(state.selectedFile);
+          }
           setFileOperationStatus(targetScope, `${file.filename} moved to ${scopeLabel(targetScope)} files.`, "ok");
         } catch (error) {
           setFileOperationStatus(sourceScope, error.message, "error");
@@ -1882,14 +1951,11 @@
           zone.classList.toggle("is-pending", pending);
           zone.setAttribute("aria-busy", pending ? "true" : "false");
         }
-        dom.sessionFileInput.disabled = pending;
-        dom.groupFileInput.disabled = pending;
-        for (const button of dom.fileWorkspaceDialog.querySelectorAll('[data-file-action="move"]')) button.disabled = pending;
         renderFileWorkspaceMode();
       }
 
       function startFileDrag(event, file, card) {
-        if (!event.dataTransfer || state.fileOperationPending) {
+        if (!event.dataTransfer || state.fileOperationPending || state.fileViewMode === "guard") {
           event.preventDefault();
           return;
         }
@@ -1945,7 +2011,7 @@
 
       function updateFileDropTarget(event, zone) {
         const kind = fileDragKind(event.dataTransfer);
-        if (!kind || state.fileOperationPending) return;
+        if (!kind || state.fileOperationPending || state.fileViewMode === "guard") return;
         event.preventDefault();
         event.dataTransfer.dropEffect = kind === "internal" ? "move" : "copy";
         clearFileDropHighlights();
@@ -1976,43 +2042,59 @@
       }
 
       async function openFile(fileId) {
+        if (state.fileOperationPending || state.fileViewMode === "guard") return;
+        const operationSessionId = state.selectedSessionId;
+        const openGeneration = ++state.fileOpenGeneration;
         setBusy(true);
         try {
           const payload = await api(`/admin/api/files/${encodeURIComponent(fileId)}`);
-          const file = payload.file;
-          state.selectedFileId = file.file_id;
-          state.selectedFile = file;
-          state.fileBaselineContent = file.content || "";
-          state.fileOpenedSha256 = file.sha256 || "";
-          state.fileDraft = state.fileBaselineContent;
-          state.fileViewMode = "preview";
-          state.pendingFileContinuation = null;
-          state.fileDeleteTarget = null;
-          dom.fileWorkspaceTitle.textContent = file.filename || `file-${file.file_id}`;
-          dom.fileWorkspaceMeta.replaceChildren(
-            spanCls("mono", `#${file.file_id}`),
-            dotSep(),
-            spanCls("", file.scope_type === "group" ? `group ${file.group_id}` : `session ${file.session_id}`),
-            dotSep(),
-            spanCls("", formatBytes(file.size_bytes)),
-            dotSep(),
-            spanCls("", file.mime_type || "text/plain"),
-            dotSep(),
-            spanCls("", formatUnixDate(file.created_at))
-          );
-          renderFilePreview(file);
-          renderFileWorkspaceMode();
-          for (const button of dom.fileWorkspaceDialog.querySelectorAll(".file-button")) {
-            button.classList.toggle("is-active", button.dataset.fileId === String(file.file_id));
-          }
+          if (
+            openGeneration !== state.fileOpenGeneration
+            || state.selectedSessionId !== operationSessionId
+            || !dom.fileWorkspaceDialog.open
+          ) return;
+          applyOpenedFile(payload.file);
           dom.fileWorkspaceGrid.classList.add("show-detail");
           if (window.matchMedia("(max-width: 520px)").matches) dom.fileWorkspaceBack.focus();
           else dom.fileWorkspaceDetailPane.focus();
         } catch (error) {
+          if (
+            openGeneration !== state.fileOpenGeneration
+            || state.selectedSessionId !== operationSessionId
+            || !dom.fileWorkspaceDialog.open
+          ) return;
           showFilePreviewError(error.message);
           setStatus(error.message, "error");
         } finally {
-          setBusy(false);
+          if (openGeneration === state.fileOpenGeneration) setBusy(false);
+        }
+      }
+
+      function applyOpenedFile(file) {
+        state.selectedFileId = file.file_id;
+        state.selectedFile = file;
+        state.fileBaselineContent = file.content || "";
+        state.fileOpenedSha256 = file.sha256 || "";
+        state.fileDraft = state.fileBaselineContent;
+        state.fileViewMode = "preview";
+        state.pendingFileContinuation = null;
+        state.fileDeleteTarget = null;
+        dom.fileWorkspaceTitle.textContent = file.filename || `file-${file.file_id}`;
+        dom.fileWorkspaceMeta.replaceChildren(
+          spanCls("mono", `#${file.file_id}`),
+          dotSep(),
+          spanCls("", file.scope_type === "group" ? `group ${file.group_id}` : `session ${file.session_id}`),
+          dotSep(),
+          spanCls("", formatBytes(file.size_bytes)),
+          dotSep(),
+          spanCls("", file.mime_type || "text/plain"),
+          dotSep(),
+          spanCls("", formatUnixDate(file.created_at))
+        );
+        renderFilePreview(file);
+        renderFileWorkspaceMode();
+        for (const button of dom.fileWorkspaceDialog.querySelectorAll(".file-button")) {
+          button.classList.toggle("is-active", button.dataset.fileId === String(file.file_id));
         }
       }
 
@@ -2097,6 +2179,13 @@
         dom.fileEditButton.hidden = mode !== "preview";
         dom.fileDeleteButton.hidden = mode !== "preview";
         const pending = state.fileOperationPending;
+        const interactionsLocked = pending || mode === "guard";
+        dom.sessionFileInput.disabled = interactionsLocked;
+        dom.groupFileInput.disabled = interactionsLocked;
+        dom.fileWorkspaceBack.disabled = interactionsLocked;
+        dom.fileWorkspaceClose.disabled = interactionsLocked;
+        for (const button of dom.fileWorkspaceDialog.querySelectorAll(".file-button")) button.disabled = interactionsLocked;
+        for (const button of dom.fileWorkspaceDialog.querySelectorAll('[data-file-action="move"]')) button.disabled = interactionsLocked;
         dom.fileCopyButton.disabled = pending || !state.selectedFile || mode === "delete";
         dom.fileDownloadButton.disabled = pending || !state.selectedFile || mode === "delete";
         dom.fileEditButton.disabled = pending || !state.selectedFile || !isEditableTextFile(state.selectedFile);
@@ -2133,6 +2222,7 @@
         if (!isFileDraftDirty()) {
           return Promise.resolve().then(continuation);
         }
+        if (state.pendingFileContinuation) return Promise.resolve();
         state.pendingFileContinuation = { action, continuation, focusTarget };
         state.fileViewMode = "guard";
         renderFileWorkspaceMode();
@@ -2184,21 +2274,20 @@
           return false;
         }
         const fileId = state.selectedFile.file_id;
+        const operationSessionId = state.selectedSessionId;
         const pending = continuePending ? state.pendingFileContinuation : null;
         setFileEditorStatus("Saving...", "");
         try {
           state.fileOperationPending = true;
           setFileOperationPending(true);
-          const payload = await api(`/admin/api/sessions/${encodeURIComponent(state.selectedSessionId)}/files/${encodeURIComponent(fileId)}`, {
+          const payload = await api(`/admin/api/sessions/${encodeURIComponent(operationSessionId)}/files/${encodeURIComponent(fileId)}`, {
             method: "PATCH",
             body: JSON.stringify({ content: draft, expected_sha256: state.fileOpenedSha256 }),
           });
-          state.fileBaselineContent = draft;
-          state.fileOpenedSha256 = payload.file.sha256;
-          state.fileDraft = draft;
-          state.pendingFileContinuation = null;
-          await loadSession(state.selectedSessionId);
-          await openFile(fileId);
+          if (state.selectedSessionId !== operationSessionId) return false;
+          applyFileManifest(payload.file);
+          renderFiles();
+          applyOpenedFile({ ...state.selectedFile, ...payload.file, content: draft });
           setStatus(`${payload.file.filename || "File"} saved.`, "ok");
           if (pending?.continuation) await pending.continuation();
           return true;
@@ -2242,15 +2331,18 @@
       async function deleteOpenFile() {
         const file = state.fileDeleteTarget;
         if (!file || state.fileOperationPending) return;
+        const operationSessionId = state.selectedSessionId;
         setFileDeleteStatus(`Deleting ${file.filename || `file-${file.file_id}`}...`, "");
         try {
           state.fileOperationPending = true;
           setFileOperationPending(true);
-          await api(`/admin/api/sessions/${encodeURIComponent(state.selectedSessionId)}/files/${encodeURIComponent(file.file_id)}`, {
+          await api(`/admin/api/sessions/${encodeURIComponent(operationSessionId)}/files/${encodeURIComponent(file.file_id)}`, {
             method: "DELETE",
           });
-          await loadSession(state.selectedSessionId);
+          if (state.selectedSessionId !== operationSessionId) return;
+          removeFileManifest(file.file_id);
           resetFilePreview();
+          renderFiles();
           showFileListPane();
           setStatus(`${file.filename || "File"} permanently deleted.`, "ok");
         } catch (error) {
@@ -3161,11 +3253,17 @@
         }
         if (groupMatch && method === "DELETE") {
           const groupId = decodeURIComponent(groupMatch[1]);
+          const destinationGroupId = body.destination_group_id || "uncategorized";
           demo.groups = demo.groups.filter((item) => item.group_id !== groupId);
           for (const session of demo.sessions) {
             if (session.group_id === groupId) {
-              session.group_id = body.destination_group_id || "uncategorized";
+              session.group_id = destinationGroupId;
               session.group = demo.groups.find((group) => group.group_id === session.group_id);
+            }
+          }
+          for (const file of demo.files) {
+            if (file.scope_type === "group" && file.group_id === groupId) {
+              file.group_id = destinationGroupId;
             }
           }
           return Promise.resolve({ ok: true, group: { group_id: groupId, deleted_at: Date.now() } });
