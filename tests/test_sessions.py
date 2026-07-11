@@ -9,7 +9,7 @@ import pytest
 
 from app.session_package import render_session_transcript
 from app.time_format import DISPLAY_TIMEZONE_SETTING_KEY
-from app.storage import Store
+from app.storage import MAX_SESSION_FILE_BYTES, SessionFileConflictError, Store
 from scripts.session_audit import build_viewer_payload
 
 
@@ -454,6 +454,147 @@ def test_mcp_session_files_upload_list_download_and_show_in_overview(tmp_path, m
     assert overview["files"]["group"][0]["filename"] == "context.md"
     assert invalid["ok"] is False
     assert invalid["error"] == "Unknown session group: missing"
+
+
+def test_store_moves_session_files_without_changing_identity_or_metadata(tmp_path) -> None:
+    store = Store(tmp_path / "bridge.sqlite3")
+    store.create_session_group("Ideas", "#22c55e", "ideas")
+    store.create_session("s1", "First", "manual-context", group_id="ideas")
+    store.create_session("s2", "Peer", "manual-context", group_id="ideas")
+    saved = store.save_session_file("s1", "plan.md", "# Plan", created_by="test-owner")
+    immutable_metadata = (
+        saved.file_id,
+        saved.filename,
+        saved.mime_type,
+        saved.content,
+        saved.sha256,
+        saved.size_bytes,
+        saved.created_by,
+        saved.created_at,
+    )
+
+    moved_to_group = store.move_session_file(saved.file_id, scope_type="group", group_id="ideas")
+    assert moved_to_group.scope_type == "group"
+    assert moved_to_group.session_id is None
+    assert moved_to_group.group_id == "ideas"
+    assert (
+        moved_to_group.file_id,
+        moved_to_group.filename,
+        moved_to_group.mime_type,
+        moved_to_group.content,
+        moved_to_group.sha256,
+        moved_to_group.size_bytes,
+        moved_to_group.created_by,
+        moved_to_group.created_at,
+    ) == immutable_metadata
+    assert store.move_session_file(saved.file_id, scope_type="group", group_id="ideas") == moved_to_group
+    assert store.list_session_files(session_id="s1") == []
+    assert [item["file_id"] for item in store.list_session_files(group_id="ideas")] == [saved.file_id]
+
+    moved_to_session = store.move_session_file(saved.file_id, scope_type="session", session_id="s1")
+    assert moved_to_session.scope_type == "session"
+    assert moved_to_session.session_id == "s1"
+    assert moved_to_session.group_id is None
+    assert [item["file_id"] for item in store.list_session_files(session_id="s1")] == [saved.file_id]
+    assert store.list_session_files(session_id="s2") == []
+    assert store.list_session_files(group_id="ideas") == []
+
+
+def test_store_rejects_invalid_file_moves_without_partial_updates(tmp_path) -> None:
+    store = Store(tmp_path / "bridge.sqlite3")
+    store.create_session_group("Ideas", "#22c55e", "ideas")
+    store.create_session_group("Archive", "#64748b", "archive", group_id="archive-test")
+    store.delete_session_group("archive-test")
+    store.create_session("s1", "First", "manual-context", group_id="ideas")
+    saved = store.save_session_file("s1", "plan.md", "# Plan")
+
+    invalid_moves = (
+        {"scope_type": "other", "session_id": "s1"},
+        {"scope_type": "session"},
+        {"scope_type": "session", "session_id": "missing"},
+        {"scope_type": "session", "session_id": "s1", "group_id": "ideas"},
+        {"scope_type": "group"},
+        {"scope_type": "group", "group_id": "missing"},
+        {"scope_type": "group", "group_id": "archive-test"},
+        {"scope_type": "group", "group_id": "ideas", "session_id": "s1"},
+    )
+    for target in invalid_moves:
+        with pytest.raises(ValueError):
+            store.move_session_file(saved.file_id, **target)
+        assert store.get_session_file(saved.file_id) == saved
+
+    with pytest.raises(ValueError, match="Unknown file_id: 99999"):
+        store.move_session_file(99999, scope_type="session", session_id="s1")
+    assert store.get_session_file(saved.file_id) == saved
+
+
+def test_store_edits_session_file_with_hash_guard_and_atomic_validation(tmp_path) -> None:
+    store = Store(tmp_path / "bridge.sqlite3")
+    store.create_session("s1", "First", "manual-context")
+    saved = store.save_session_file("s1", "plan.md", "Old content", created_by="test-owner")
+
+    edited = store.update_session_file(saved.file_id, "New content", expected_sha256=saved.sha256)
+
+    assert edited.file_id == saved.file_id
+    assert edited.created_at == saved.created_at
+    assert edited.created_by == saved.created_by
+    assert edited.filename == saved.filename
+    assert edited.mime_type == saved.mime_type
+    assert edited.content == "New content"
+    assert edited.sha256 != saved.sha256
+    assert edited.size_bytes == len("New content".encode("utf-8"))
+
+    with pytest.raises(SessionFileConflictError, match="changed since it was opened"):
+        store.update_session_file(saved.file_id, "Stale overwrite", expected_sha256=saved.sha256)
+    assert store.get_session_file(saved.file_id) == edited
+
+    with pytest.raises(ValueError, match="content must not be empty"):
+        store.update_session_file(edited.file_id, "", expected_sha256=edited.sha256)
+    assert store.get_session_file(saved.file_id) == edited
+
+    with pytest.raises(ValueError, match="bytes or fewer"):
+        store.update_session_file(
+            edited.file_id,
+            "x" * (MAX_SESSION_FILE_BYTES + 1),
+            expected_sha256=edited.sha256,
+        )
+    assert store.get_session_file(saved.file_id) == edited
+
+
+def test_store_hard_deletes_file_and_preserves_existing_payload_keys(tmp_path, monkeypatch) -> None:
+    main = _load_main(tmp_path, monkeypatch)
+    main.store.create_session("s1", "File test", "manual-context")
+    uploaded = main.upload_session_file("s1", "plan.md", "# Plan")
+    file_id = uploaded["file"]["file_id"]
+    expected_manifest_keys = {
+        "file_id",
+        "scope_type",
+        "session_id",
+        "group_id",
+        "filename",
+        "mime_type",
+        "sha256",
+        "size_bytes",
+        "created_by",
+        "created_at",
+    }
+
+    assert set(uploaded["file"]) == expected_manifest_keys
+    assert set(main.list_session_files(session_id="s1")["files"][0]) == expected_manifest_keys
+    assert set(main.download_session_file(file_id)["file"]) == expected_manifest_keys | {"content"}
+
+    deleted = main.store.delete_session_file(file_id)
+
+    assert deleted.file_id == file_id
+    assert main.store.get_session_file(file_id) is None
+    with pytest.raises(ValueError, match=f"Unknown file_id: {file_id}"):
+        main.store.delete_session_file(file_id)
+    assert main.list_session_files(session_id="s1")["files"] == []
+    assert main.get_session_overview("s1")["files"]["session"] == []
+    assert main.download_session_file(file_id) == {"ok": False, "error": f"Unknown file_id: {file_id}"}
+
+    replacement = main.upload_session_file("s1", "plan.md", "Replacement")
+    assert replacement["file"]["file_id"] != file_id
 
 
 def test_display_timezone_setting_controls_mcp_timestamps(tmp_path, monkeypatch) -> None:
