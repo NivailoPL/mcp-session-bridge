@@ -392,6 +392,12 @@
       font-size: 1.4rem; font-weight: 700; letter-spacing: -.015em; line-height: 1.15;
       overflow-wrap: anywhere;
     }
+    .session-id-line { display: flex; align-items: center; gap: .5rem; min-width: 0; }
+    .session-id {
+      min-width: 0; color: var(--faint-ink); font-family: "Geist Mono", ui-monospace, monospace;
+      font-size: .74rem; overflow-wrap: anywhere;
+    }
+    .session-id-copy { min-height: 1.7rem; padding: .2rem .55rem; font-size: .7rem; flex: 0 0 auto; }
     .meta { display: flex; flex-wrap: wrap; align-items: center; gap: .45rem; color: var(--muted); font-size: .8rem; font-variant-numeric: tabular-nums; }
     .meta .sep { width: 3px; height: 3px; border-radius: 50%; background: var(--faint-ink); }
     .meta .mono { font-size: .74rem; color: var(--faint-ink); }
@@ -879,6 +885,10 @@
             <span id="sessionTitleIcon" class="session-title-icon" aria-hidden="true"></span>
             <h2 id="sessionTitle">Select a session</h2>
           </div>
+          <div id="sessionIdLine" class="session-id-line" hidden>
+            <span id="sessionId" class="session-id"></span>
+            <button id="copySessionIdButton" type="button" class="ghost session-id-copy">Copy ID</button>
+          </div>
           <div id="sessionMeta" class="meta">Conversation history correction panel.</div>
         </div>
         <div class="top-actions">
@@ -1195,6 +1205,7 @@
         aiSettingsForm: document.getElementById("aiSettingsForm"),
         aiSettingsStatus: document.getElementById("aiSettingsStatus"),
         copyButton: document.getElementById("copyButton"),
+        copySessionIdButton: document.getElementById("copySessionIdButton"),
         demoBanner: document.getElementById("demoBanner"),
         exchangeList: document.getElementById("exchangeList"),
         editGroupButton: document.getElementById("editGroupButton"),
@@ -1256,6 +1267,8 @@
         sessionFileInput: document.getElementById("sessionFileInput"),
         sessionFileStatus: document.getElementById("sessionFileStatus"),
         sessionList: document.getElementById("sessionList"),
+        sessionId: document.getElementById("sessionId"),
+        sessionIdLine: document.getElementById("sessionIdLine"),
         sessionMeta: document.getElementById("sessionMeta"),
         sessionTitle: document.getElementById("sessionTitle"),
         sessionTitleIcon: document.getElementById("sessionTitleIcon"),
@@ -1370,6 +1383,16 @@
           setStatus("Transcript copied to clipboard.", "ok");
         } catch (error) {
           setStatus(`Could not copy: ${error.message}`, "error");
+        }
+      });
+      dom.copySessionIdButton.addEventListener("click", async () => {
+        const sessionId = state.selectedSession && state.selectedSession.session_id;
+        if (!sessionId) return;
+        try {
+          await navigator.clipboard.writeText(sessionId);
+          setStatus("Session ID copied to clipboard.", "ok");
+        } catch (error) {
+          setStatus(`Could not copy session ID: ${error.message}`, "error");
         }
       });
       applyLayoutButtons();
@@ -2621,6 +2644,8 @@
           dom.sessionTitle.textContent = "Select a session";
           dom.sessionTitleIcon.classList.remove("show");
           dom.sessionTitleIcon.replaceChildren();
+          dom.sessionIdLine.hidden = true;
+          dom.sessionId.textContent = "";
           dom.sessionMeta.textContent = "Conversation history correction panel.";
           dom.exchangeList.append(emptyState("No session selected", "Select a session from the list on the left to review and correct its exchanges."));
           return;
@@ -2632,8 +2657,9 @@
         const fileCount = Number((state.files.session || []).length) + Number((state.files.group || []).length);
         dom.sessionTitle.textContent = state.selectedSession.title || state.selectedSession.session_id;
         renderSessionTitleIcon(group);
+        dom.sessionId.textContent = state.selectedSession.session_id;
+        dom.sessionIdLine.hidden = false;
         renderMeta([
-          { mono: true, text: state.selectedSession.session_id },
           { text: `group ${group ? group.name : state.selectedSession.group_id || "uncategorized"}` },
           { text: `${formatNumber(state.selectedSession.token_count || 0)} tokens` },
           { text: `${fileCount} files` },
