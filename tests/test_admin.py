@@ -1,3 +1,4 @@
+import base64
 import importlib
 import json
 import re
@@ -26,6 +27,156 @@ def test_admin_viewer_group_ui_contract() -> None:
     assert 'spanCls("group-file-identity")' in viewer
     assert 'setStatus(`Selected ${sessionId}.`, "ok");' not in viewer
     assert 'spanCls("file-meta", "No files")' not in viewer
+
+
+def test_admin_viewer_file_workspace_shell_contract() -> None:
+    viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
+
+    assert 'id="filesPanel"' not in viewer
+    assert 'id="fileDialog"' not in viewer
+    assert viewer.count('<dialog id="fileWorkspaceDialog"') == 1
+
+    rail = viewer[viewer.index('<nav id="turnNav"'):viewer.index("</nav>", viewer.index('<nav id="turnNav"'))]
+    assert 'id="fileWorkspaceOpen"' in rail
+    assert 'id="fileWorkspaceCount"' in rail
+    assert 'aria-haspopup="dialog"' in rail
+
+    assert 'dom.turnNav.classList.toggle("show", Boolean(state.selectedSession));' in viewer
+    assert 'button.disabled = !hasTurns;' in viewer
+    assert 'class="file-workspace-grid"' in viewer
+    assert 'id="fileWorkspaceListPane"' in viewer
+    assert 'id="fileWorkspaceDetailPane"' in viewer
+    assert 'id="fileWorkspaceBack"' in viewer
+    assert 'spanCls("file-format-badge", fileFormatLabel(file))' in viewer
+
+    assert 'dom.fileWorkspaceContent.innerHTML = renderMarkdown(content || "\u2014");' in viewer
+    assert 'dom.fileWorkspaceContent.replaceChildren(preNode(content));' in viewer
+    assert 'dom.fileWorkspaceOpen.focus();' in viewer
+
+
+def test_admin_viewer_file_upload_and_move_contract() -> None:
+    viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
+
+    # Each scope remains fully usable without drag-and-drop.
+    assert 'id="sessionFileInput"' in viewer
+    assert 'id="groupFileInput"' in viewer
+    assert viewer.count('class="file-drop-zone"') == 2
+    assert 'aria-describedby="sessionFileStatus"' in viewer
+    assert 'aria-describedby="groupFileStatus"' in viewer
+    assert 'data-file-action="move"' in viewer
+    assert 'runFileContinuation("move", () => moveFile(fileId, targetScope, moveButton), moveButton);' in viewer
+
+    # Browser preflight happens on bytes before the JSON/base64 request is built.
+    assert 'const MAX_FILE_BYTES = 1_000_000;' in viewer
+    assert 'new Set([".md", ".markdown", ".txt", ".json", ".yaml", ".yml", ".csv", ".tsv"])' in viewer
+    assert 'new TextDecoder("utf-8", { fatal: true })' in viewer
+    assert 'bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf' in viewer
+    assert 'content_base64: bytesToBase64(prepared.bytes)' in viewer
+
+    # DnD is an enhancement with explicit internal-vs-OS discrimination.
+    assert 'const INTERNAL_FILE_DRAG_TYPE = "application/x-mcp-session-file";' in viewer
+    assert 'types.includes(INTERNAL_FILE_DRAG_TYPE)' in viewer
+    assert 'types.includes("Files")' in viewer
+    assert 'event.dataTransfer.getData(INTERNAL_FILE_DRAG_TYPE)' in viewer
+    assert 'event.dataTransfer.files' in viewer
+    assert 'dropEffect = kind === "internal" ? "move" : "copy"' in viewer
+
+    # Current-scope moves are local no-ops; successful responses commit manifests locally.
+    assert 'if (sourceScope === targetScope)' in viewer
+    assert 'Already in ${scopeLabel(targetScope)} files.' in viewer
+    assert 'function applyFileManifest(file)' in viewer
+    assert 'function removeFileManifest(fileId)' in viewer
+    assert 'Number(right.created_at || 0) - Number(left.created_at || 0)' in viewer
+    assert 'const operationSessionId = state.selectedSessionId;' in viewer
+    assert 'encodeURIComponent(operationSessionId)' in viewer
+    assert 'if (state.selectedSessionId !== operationSessionId) return;' in viewer
+    assert 'const movingSelectedFile = state.selectedFile && String(state.selectedFile.file_id) === String(fileId);' in viewer
+    assert 'window.requestAnimationFrame(() => focusTarget.focus());' in viewer
+
+    # Demo mode uses the same create/move paths and mutates its in-memory manifests.
+    assert 'const demoCreate = path.match(/^\\/admin\\/api\\/sessions\\/(.+)\\/files$/);' in viewer
+    assert 'const demoFileMutation = path.match(/^\\/admin\\/api\\/sessions\\/(.+)\\/files\\/(\\d+)$/);' in viewer
+    assert 'created_by: "demo"' in viewer
+    assert 'moveDemoFile(entry, demoFile, body.scope_type);' in viewer
+
+
+def test_admin_viewer_file_edit_delete_and_dirty_guard_contract() -> None:
+    viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
+
+    # Preview, edit, guard, conflict, and delete all live inside one workspace.
+    assert viewer.count('<dialog id="fileWorkspaceDialog"') == 1
+    workspace = viewer[
+        viewer.index('<dialog id="fileWorkspaceDialog"'):
+        viewer.index('<dialog id="aiSettingsDialog"')
+    ]
+    assert workspace.count("<dialog") == 1
+    assert 'id="fileEditButton"' in workspace
+    assert 'id="fileEditor"' in workspace
+    assert 'id="fileGuardPane"' in workspace
+    assert 'id="fileDeletePane"' in workspace
+    assert 'id="fileDeleteWarning"' in workspace
+
+    # Dirty means draft differs from the content opened from this exact hash.
+    assert "fileBaselineContent: \"\"" in viewer
+    assert "fileOpenedSha256: \"\"" in viewer
+    assert "fileDraft: \"\"" in viewer
+    assert "state.fileDraft !== state.fileBaselineContent" in viewer
+    assert "expected_sha256: state.fileOpenedSha256" in viewer
+    assert 'method: "PATCH"' in viewer
+
+    # One continuation guard owns every draft-losing action, including Escape.
+    for action in ("close", "back", "select", "move", "delete"):
+        assert f'runFileContinuation("{action}"' in viewer
+    assert 'dom.fileWorkspaceDialog.addEventListener("cancel"' in viewer
+    assert "event.preventDefault();" in viewer
+    assert "state.pendingFileContinuation" in viewer
+    assert "if (state.pendingFileContinuation) return Promise.resolve();" in viewer
+    assert 'const interactionsLocked = pending || mode === "guard";' in viewer
+    assert 'for (const button of dom.fileWorkspaceDialog.querySelectorAll(".file-button"))' in viewer
+    assert 'id="fileGuardSave"' in workspace
+    assert 'id="fileGuardDiscard"' in workspace
+    assert 'id="fileGuardKeepEditing"' in workspace
+
+    # Invalid/conflicting saves retain the editor buffer and give recovery help.
+    assert "File content cannot be empty." in viewer
+    assert "File content is larger than 1 MB." in viewer
+    assert "Your draft is still here." in viewer
+    assert "Reload the latest file or copy your draft" in viewer
+
+    # Permanent delete is accessible, inline, explicit, and server-confirmed.
+    assert "Delete ${file.filename" in viewer
+    assert "permanent" in workspace.lower()
+    assert "fileOpenGeneration: 0" in viewer
+    assert "sessionLoadGeneration: 0" in viewer
+    assert "function invalidateFileOpen()" in viewer
+    assert "const openGeneration = ++state.fileOpenGeneration;" in viewer
+    assert "openGeneration !== state.fileOpenGeneration" in viewer
+    assert "const loadGeneration = ++state.sessionLoadGeneration;" in viewer
+    assert "loadGeneration !== state.sessionLoadGeneration" in viewer
+    assert 'runFileContinuation("session", continueSelection, item);' in viewer
+    assert 'Wait for the file operation to finish.' in viewer
+    assert "!dom.fileWorkspaceDialog.open" in viewer
+    assert "no recovery" in workspace.lower()
+    assert "Models may still have references in conversation context" in workspace
+    assert "may no longer find or download the file" in workspace
+    assert 'method: "DELETE"' in viewer
+
+    # Demo mode exercises the same PATCH edit and DELETE endpoints.
+    assert "updateDemoFileContent(demoFile, body.content);" in viewer
+    assert "demo.files = demo.files.filter" in viewer
+
+
+def test_admin_viewer_demo_group_delete_reassigns_group_files() -> None:
+    viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
+
+    delete_branch = viewer[
+        viewer.index('if (groupMatch && method === "DELETE")'):
+        viewer.index('if (path === "/admin/api/sessions")')
+    ]
+    assert 'const destinationGroupId = body.destination_group_id || "uncategorized";' in delete_branch
+    assert "for (const file of demo.files)" in delete_branch
+    assert 'file.scope_type === "group" && file.group_id === groupId' in delete_branch
+    assert "file.group_id = destinationGroupId;" in delete_branch
 
 
 def test_admin_api_requires_login_and_csrf_for_mutations(tmp_path, monkeypatch) -> None:
@@ -303,6 +454,359 @@ def test_admin_can_view_session_and_group_files(tmp_path, monkeypatch) -> None:
     assert invalid.status_code == 400
 
     assert session_file.file_id != group_file.file_id
+
+
+def _admin_client(main):
+    client = TestClient(main.app, base_url="http://127.0.0.1:8787")
+    client.post(
+        "/admin/login",
+        data={"username": "owner", "password": "secret-admin-password", "next": "/admin/sessions"},
+        follow_redirects=False,
+    )
+    return client, client.get("/admin/api/me").json()["csrf_token"]
+
+
+def _encoded_file(content: bytes, *, filename: str = "notes.md", scope_type: str = "session") -> dict:
+    return {
+        "scope_type": scope_type,
+        "filename": filename,
+        "content_base64": base64.b64encode(content).decode("ascii"),
+    }
+
+
+def test_admin_file_mutations_require_login_and_csrf(tmp_path, monkeypatch) -> None:
+    main = _load_main(tmp_path, monkeypatch)
+    main.store.create_session("s1", "File mutations", "manual-context")
+    saved = main.store.save_session_file("s1", "existing.md", "old")
+    anonymous = TestClient(main.app, base_url="http://127.0.0.1:8787")
+    calls = [
+        ("POST", "/admin/api/sessions/s1/files", _encoded_file(b"hello")),
+        ("PATCH", f"/admin/api/sessions/s1/files/{saved.file_id}", {"content": "new", "expected_sha256": saved.sha256}),
+        ("DELETE", f"/admin/api/sessions/s1/files/{saved.file_id}", None),
+    ]
+    for method, path, payload in calls:
+        assert anonymous.request(method, path, json=payload).status_code == 401
+
+    client, csrf = _admin_client(main)
+    for method, path, payload in calls:
+        assert client.request(method, path, json=payload).status_code == 403
+    assert csrf
+
+
+def test_admin_uploads_bounded_utf8_files_to_selected_session_or_group(tmp_path, monkeypatch) -> None:
+    main = _load_main(tmp_path, monkeypatch)
+    main.store.create_session_group("Tests", "#22c55e", "science")
+    main.store.create_session("s1", "File mutations", "manual-context", group_id="tests")
+    client, csrf = _admin_client(main)
+    headers = {"x-csrf-token": csrf}
+
+    uploaded = client.post(
+        "/admin/api/sessions/s1/files",
+        json=_encoded_file(b"\xef\xbb\xbf# Hello", filename="README.MD"),
+        headers=headers,
+    )
+    assert uploaded.status_code == 200
+    session_file = uploaded.json()["file"]
+    assert session_file["scope_type"] == "session"
+    assert session_file["session_id"] == "s1"
+    assert session_file["mime_type"] == "text/markdown"
+    assert session_file["created_by"] == "owner"
+    assert main.store.get_session_file(session_file["file_id"]).content == "# Hello"
+
+    group_upload = client.post(
+        "/admin/api/sessions/s1/files",
+        json=_encoded_file(b"a,b\n1,2", filename="data.csv", scope_type="group"),
+        headers=headers,
+    )
+    assert group_upload.status_code == 200
+    assert group_upload.json()["file"]["group_id"] == "tests"
+    assert group_upload.json()["file"]["mime_type"] == "text/csv"
+
+    bad_payloads = [
+        {"scope_type": "session", "filename": "bad.md", "content_base64": "%%%"},
+        _encoded_file(b"\xff", filename="bad.md"),
+        _encoded_file(b"hello", filename="bad.exe"),
+        _encoded_file(b"", filename="empty.md"),
+        {"scope_type": "session", "files": [_encoded_file(b"one"), _encoded_file(b"two")]},
+    ]
+    for payload in bad_payloads:
+        assert client.post("/admin/api/sessions/s1/files", json=payload, headers=headers).status_code == 400
+
+    assert client.post(
+        "/admin/api/sessions/s1/files",
+        json=_encoded_file(b"x" * 1_000_001),
+        headers=headers,
+    ).status_code == 400
+
+    oversized = b'{"padding":"' + b"x" * 1_500_000 + b'"}'
+    misleading = client.build_request(
+        "POST",
+        "/admin/api/sessions/s1/files",
+        content=oversized,
+        headers={**headers, "content-type": "application/json", "content-length": "1"},
+    )
+    assert client.send(misleading).status_code == 413
+    absent = client.build_request(
+        "POST",
+        "/admin/api/sessions/s1/files",
+        content=oversized,
+        headers={**headers, "content-type": "application/json"},
+    )
+    del absent.headers["content-length"]
+    assert client.send(absent).status_code == 413
+    assert len(main.store.list_session_files(session_id="s1")) == 1
+
+
+def test_admin_group_upload_uses_session_current_group_atomically(tmp_path, monkeypatch) -> None:
+    main = _load_main(tmp_path, monkeypatch)
+    main.store.create_session_group("First", "#22c55e", "science")
+    main.store.create_session_group("Second", "#3b82f6", "ideas")
+    main.store.create_session("s1", "File mutations", "manual-context", group_id="first")
+    client, csrf = _admin_client(main)
+    original_selected_session = main.admin._selected_session
+
+    def select_then_move(request):
+        selected, error = original_selected_session(request)
+        main.store.set_session_group("s1", "second")
+        return selected, error
+
+    monkeypatch.setattr(main.admin, "_selected_session", select_then_move)
+
+    uploaded = client.post(
+        "/admin/api/sessions/s1/files",
+        json=_encoded_file(b"Current context", filename="context.md", scope_type="group"),
+        headers={"x-csrf-token": csrf},
+    )
+
+    assert uploaded.status_code == 200
+    assert uploaded.json()["file"]["group_id"] == "second"
+    assert main.store.list_session_files(group_id="first") == []
+
+
+def test_admin_edits_moves_and_deletes_only_visible_files(tmp_path, monkeypatch) -> None:
+    main = _load_main(tmp_path, monkeypatch)
+    main.store.create_session_group("Tests", "#22c55e", "science")
+    main.store.create_session_group("Other", "#ef4444", "camera")
+    main.store.create_session("s1", "File mutations", "manual-context", group_id="tests")
+    main.store.create_session("s2", "Other session", "manual-context", group_id="other")
+    saved = main.store.save_session_file("s1", "notes.md", "old")
+    unrelated = main.store.save_session_file("s2", "private.md", "untouched")
+    client, csrf = _admin_client(main)
+    headers = {"x-csrf-token": csrf}
+    path = f"/admin/api/sessions/s1/files/{saved.file_id}"
+
+    assert client.patch(
+        path,
+        json={"content": "new", "expected_sha256": saved.sha256, "scope_type": "group"},
+        headers=headers,
+    ).status_code == 400
+
+    edited = client.patch(
+        path,
+        json={"content": "new", "expected_sha256": saved.sha256},
+        headers=headers,
+    )
+    assert edited.status_code == 200
+    assert edited.json()["file"]["file_id"] == saved.file_id
+    assert edited.json()["file"]["sha256"] != saved.sha256
+    assert "content" not in edited.json()["file"]
+
+    stale = client.patch(
+        path,
+        json={"content": "stale write", "expected_sha256": saved.sha256},
+        headers=headers,
+    )
+    assert stale.status_code == 409
+    assert "content" not in stale.text
+
+    moved = client.patch(path, json={"scope_type": "group"}, headers=headers)
+    assert moved.status_code == 200
+    assert moved.json()["file"]["group_id"] == "tests"
+    assert client.patch(path, json={"scope_type": "group"}, headers=headers).status_code == 200
+    moved_back = client.patch(path, json={"scope_type": "session"}, headers=headers)
+    assert moved_back.status_code == 200
+    assert moved_back.json()["file"]["session_id"] == "s1"
+
+    assert client.patch(
+        path,
+        json={"scope_type": "group", "group_id": "other"},
+        headers=headers,
+    ).status_code == 400
+    assert client.patch(
+        f"/admin/api/sessions/s1/files/{unrelated.file_id}",
+        json={"scope_type": "group"},
+        headers=headers,
+    ).status_code == 404
+
+    deleted = client.delete(path, headers=headers)
+    assert deleted.status_code == 200
+    assert deleted.json()["file"]["file_id"] == saved.file_id
+    assert "content" not in deleted.json()["file"]
+    assert client.delete(path, headers=headers).status_code == 404
+    assert client.get(f"/admin/api/files/{saved.file_id}").status_code == 404
+    assert main.store.get_session_file(unrelated.file_id).content == "untouched"
+
+
+def test_admin_file_mutations_conflict_if_file_moves_after_visibility_check(tmp_path, monkeypatch) -> None:
+    main = _load_main(tmp_path, monkeypatch)
+    main.store.create_session_group("First", "#22c55e", "science")
+    main.store.create_session_group("Second", "#ef4444", "camera")
+    main.store.create_session("s1", "First", "manual-context", group_id="first")
+    main.store.create_session("s2", "Second", "manual-context", group_id="second")
+    edit_file = main.store.save_session_file("s1", "edit.md", "Original")
+    move_file = main.store.save_session_file("s1", "move.md", "Original")
+    delete_file = main.store.save_session_file("s1", "delete.md", "Original")
+    pending_moves = {edit_file.file_id, move_file.file_id, delete_file.file_id}
+    original_get = main.store.get_session_file
+
+    def move_after_visibility_check(file_id):
+        saved = original_get(file_id)
+        if file_id in pending_moves:
+            pending_moves.remove(file_id)
+            main.store.move_session_file(file_id, scope_type="session", session_id="s2")
+        return saved
+
+    monkeypatch.setattr(main.store, "get_session_file", move_after_visibility_check)
+    client, csrf = _admin_client(main)
+    headers = {"x-csrf-token": csrf}
+
+    assert client.patch(
+        f"/admin/api/sessions/s1/files/{edit_file.file_id}",
+        json={"content": "Changed", "expected_sha256": edit_file.sha256},
+        headers=headers,
+    ).status_code == 409
+    assert client.patch(
+        f"/admin/api/sessions/s1/files/{move_file.file_id}",
+        json={"scope_type": "group"},
+        headers=headers,
+    ).status_code == 409
+    assert client.delete(
+        f"/admin/api/sessions/s1/files/{delete_file.file_id}",
+        headers=headers,
+    ).status_code == 409
+
+    monkeypatch.setattr(main.store, "get_session_file", original_get)
+    for saved in (edit_file, move_file, delete_file):
+        current = main.store.get_session_file(saved.file_id)
+        assert current is not None
+        assert current.session_id == "s2"
+        assert current.content == "Original"
+
+
+def test_admin_rejects_oversized_or_malformed_patch_lengths_without_mutation(tmp_path, monkeypatch) -> None:
+    main = _load_main(tmp_path, monkeypatch)
+    main.store.create_session("s1", "File mutations", "manual-context")
+    saved = main.store.save_session_file("s1", "notes.md", "Original")
+    client, csrf = _admin_client(main)
+    headers = {"x-csrf-token": csrf, "content-type": "application/json"}
+    path = f"/admin/api/sessions/s1/files/{saved.file_id}"
+    oversized = (
+        b'{"content":"'
+        + b"x" * 6_100_000
+        + f'","expected_sha256":"{saved.sha256}"}}'.encode()
+    )
+
+    misleading = client.build_request(
+        "PATCH",
+        path,
+        content=oversized,
+        headers={**headers, "content-length": "1"},
+    )
+    assert client.send(misleading).status_code == 413
+
+    absent = client.build_request("PATCH", path, content=oversized, headers=headers)
+    del absent.headers["content-length"]
+    assert client.send(absent).status_code == 413
+
+    malformed = client.build_request(
+        "PATCH",
+        path,
+        content=b"{}",
+        headers={**headers, "content-length": "not-a-number"},
+    )
+    assert client.send(malformed).status_code == 400
+    assert main.store.get_session_file(saved.file_id) == saved
+
+
+def test_admin_file_workspace_stays_consistent_with_mcp_reads(tmp_path, monkeypatch) -> None:
+    main = _load_main(tmp_path, monkeypatch)
+    main.store.create_session_group("Ideas", "#22c55e", "science")
+    main.store.create_session("s1", "Owner session", "manual-context", group_id="ideas")
+    main.store.create_session("s2", "Peer session", "manual-context", group_id="ideas")
+    client, csrf = _admin_client(main)
+    headers = {"x-csrf-token": csrf}
+
+    uploaded = client.post(
+        "/admin/api/sessions/s1/files",
+        json=_encoded_file(b"First draft", filename="plan.md"),
+        headers=headers,
+    )
+    assert uploaded.status_code == 200
+    original = uploaded.json()["file"]
+    file_id = original["file_id"]
+    manifest_keys = {
+        "file_id",
+        "scope_type",
+        "session_id",
+        "group_id",
+        "filename",
+        "mime_type",
+        "sha256",
+        "size_bytes",
+        "created_by",
+        "created_at",
+    }
+    assert set(original) == manifest_keys
+    assert [item["file_id"] for item in client.get("/admin/api/sessions/s1").json()["files"]["session"]] == [file_id]
+    assert main.get_session_overview("s2")["files"]["group"] == []
+
+    path = f"/admin/api/sessions/s1/files/{file_id}"
+    moved_to_group = client.patch(path, json={"scope_type": "group"}, headers=headers)
+    assert moved_to_group.status_code == 200
+    assert moved_to_group.json()["file"]["file_id"] == file_id
+    for session_id in ("s1", "s2"):
+        assert [item["file_id"] for item in client.get(f"/admin/api/sessions/{session_id}").json()["files"]["group"]] == [file_id]
+        assert [item["file_id"] for item in main.get_session_overview(session_id)["files"]["group"]] == [file_id]
+    assert [item["file_id"] for item in main.list_session_files(group_id="ideas")["files"]] == [file_id]
+
+    moved_to_session = client.patch(path, json={"scope_type": "session"}, headers=headers)
+    assert moved_to_session.status_code == 200
+    assert moved_to_session.json()["file"]["file_id"] == file_id
+    assert main.get_session_overview("s2")["files"]["group"] == []
+    assert [item["file_id"] for item in main.get_session_overview("s1")["files"]["session"]] == [file_id]
+
+    edited = client.patch(
+        path,
+        json={"content": "Updated draft", "expected_sha256": original["sha256"]},
+        headers=headers,
+    )
+    assert edited.status_code == 200
+    current = edited.json()["file"]
+    assert set(current) == manifest_keys
+    assert current["file_id"] == file_id
+    assert current["sha256"] != original["sha256"]
+    assert current["size_bytes"] == len("Updated draft".encode("utf-8"))
+    assert main.download_session_file(file_id)["file"]["content"] == "Updated draft"
+
+    stale = client.patch(
+        path,
+        json={"content": "Stale overwrite", "expected_sha256": original["sha256"]},
+        headers=headers,
+    )
+    assert stale.status_code == 409
+    assert main.download_session_file(file_id)["file"]["content"] == "Updated draft"
+
+    assert client.patch(path, json={"scope_type": "group"}, headers=headers).status_code == 200
+    assert [item["file_id"] for item in main.get_session_overview("s2")["files"]["group"]] == [file_id]
+    deleted = client.delete(path, headers=headers)
+    assert deleted.status_code == 200
+    assert deleted.json()["file"]["file_id"] == file_id
+    for session_id in ("s1", "s2"):
+        admin_files = client.get(f"/admin/api/sessions/{session_id}").json()["files"]
+        assert admin_files == {"session": [], "group": []}
+        assert main.get_session_overview(session_id)["files"] == {"session": [], "group": []}
+    assert main.list_session_files(session_id="s1", group_id="ideas")["files"] == []
+    assert main.download_session_file(file_id) == {"ok": False, "error": f"Unknown file_id: {file_id}"}
 
 
 def _load_main(tmp_path: Path, monkeypatch):

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import binascii
 import hashlib
 import hmac
 import html
@@ -19,7 +20,16 @@ from starlette.responses import HTMLResponse, JSONResponse, RedirectResponse, Re
 
 from app.security import token_urlsafe, verify_password
 from app.settings import Settings
-from app.storage import ExchangeRecord, SessionFileRecord, SessionGroupRecord, SessionRecord, Store
+from app.storage import (
+    MAX_SESSION_FILE_BYTES,
+    ExchangeRecord,
+    SessionFileConflictError,
+    SessionFileRecord,
+    SessionGroupRecord,
+    SessionRecord,
+    Store,
+    session_file_payload,
+)
 from app.time_format import (
     DEFAULT_DISPLAY_TIMEZONE_NAME,
     DISPLAY_TIMEZONE_SETTING_KEY,
@@ -36,6 +46,18 @@ AI_RENAME_MODEL_SETTING = "ai_rename.model"
 AI_RENAME_DEFAULT_MODEL = "gpt-5.4-nano"
 AI_RENAME_ENDPOINT = "https://api.openai.com/v1/chat/completions"
 SESSION_TITLE_MAX_CHARS = 72
+ADMIN_FILE_UPLOAD_MAX_BODY_BYTES = ((MAX_SESSION_FILE_BYTES + 2) // 3 * 4) + 16_384
+ADMIN_FILE_EDIT_MAX_BODY_BYTES = (MAX_SESSION_FILE_BYTES * 6) + 16_384
+ADMIN_FILE_EXTENSIONS = {
+    ".md": "text/markdown",
+    ".markdown": "text/markdown",
+    ".txt": "text/plain",
+    ".json": "application/json",
+    ".yaml": "application/yaml",
+    ".yml": "application/yaml",
+    ".csv": "text/csv",
+    ".tsv": "text/tab-separated-values",
+}
 
 
 class AdminHandlers:
@@ -274,14 +296,18 @@ class AdminHandlers:
         ]
         session_payload = _session_payload(session)
         session_payload["token_count"] = sum(exchange["total_token_count"] for exchange in exchange_payloads)
+        files = self.store.list_session_files(
+            session_id=session.session_id,
+            group_id=session.group_id,
+        )
         return JSONResponse(
             {
                 "ok": True,
                 "display_timezone": display_timezone,
                 "session": session_payload,
                 "files": {
-                    "session": self.store.list_session_files(session_id=session.session_id),
-                    "group": self.store.list_session_files(group_id=session.group_id),
+                    "session": [file for file in files if file["scope_type"] == "session"],
+                    "group": [file for file in files if file["scope_type"] == "group"],
                 },
                 "exchanges": exchange_payloads,
             },
@@ -350,17 +376,195 @@ class AdminHandlers:
         _, error = self._require_admin(request)
         if error:
             return error
-        try:
-            file_id = int(request.path_params["file_id"])
-        except (KeyError, TypeError, ValueError):
-            return self._json_error("Invalid file_id.", status_code=400)
+        file_id, path_error = _path_file_id(request)
+        if path_error:
+            return path_error
         saved = self.store.get_session_file(file_id)
         if saved is None:
             return self._json_error(f"Unknown file_id: {file_id}", status_code=404)
         return JSONResponse(
-            {"ok": True, "file": _session_file_payload(saved, include_content=True)},
+            {"ok": True, "file": session_file_payload(saved, include_content=True)},
             headers=self._no_store_headers(),
         )
+
+    async def api_upload_file(self, request: Request) -> Response:
+        admin_session, error = self._require_admin_mutation(request)
+        if error:
+            return error
+        selected, selection_error = self._selected_session(request)
+        if selection_error:
+            return selection_error
+
+        payload, parse_error = await _bounded_json_body(
+            request,
+            max_bytes=ADMIN_FILE_UPLOAD_MAX_BODY_BYTES,
+        )
+        if parse_error:
+            return parse_error
+        allowed_keys = {"scope_type", "filename", "content_base64"}
+        if set(payload) != allowed_keys:
+            return self._json_error(
+                "Upload requires exactly scope_type, filename, and content_base64.",
+                status_code=400,
+            )
+
+        scope_type = payload.get("scope_type")
+        filename = payload.get("filename")
+        encoded = payload.get("content_base64")
+        if scope_type not in {"session", "group"}:
+            return self._json_error("scope_type must be session or group.", status_code=400)
+        if not isinstance(filename, str):
+            return self._json_error("filename must be a string.", status_code=400)
+        mime_type = _admin_upload_mime_type(filename)
+        if mime_type is None:
+            return self._json_error("Unsupported file extension.", status_code=400)
+        if not isinstance(encoded, str):
+            return self._json_error("content_base64 must be a string.", status_code=400)
+        try:
+            raw = base64.b64decode(encoded, validate=True)
+        except (ValueError, binascii.Error):
+            return self._json_error("content_base64 must be valid base64.", status_code=400)
+        if len(raw) > MAX_SESSION_FILE_BYTES:
+            return self._json_error(
+                f"File content must be at most {MAX_SESSION_FILE_BYTES} UTF-8 bytes.",
+                status_code=400,
+            )
+        try:
+            content = raw.decode("utf-8-sig")
+        except UnicodeDecodeError:
+            return self._json_error("File content must be valid UTF-8.", status_code=400)
+
+        try:
+            if scope_type == "session":
+                saved = self.store.save_session_file(
+                    selected.session_id,
+                    filename,
+                    content,
+                    mime_type=mime_type,
+                    created_by=admin_session["username"],
+                )
+            else:
+                saved = self.store.save_group_file_for_session(
+                    selected.session_id,
+                    filename,
+                    content,
+                    mime_type=mime_type,
+                    created_by=admin_session["username"],
+                )
+        except ValueError as exc:
+            return self._value_error(exc)
+        return JSONResponse(
+            {"ok": True, "file": session_file_payload(saved)},
+            headers=self._no_store_headers(),
+        )
+
+    async def api_mutate_file(self, request: Request) -> Response:
+        _, error = self._require_admin_mutation(request)
+        if error:
+            return error
+        selected, selection_error = self._selected_session(request)
+        if selection_error:
+            return selection_error
+        file_id, path_error = _path_file_id(request)
+        if path_error:
+            return path_error
+        saved = self.store.get_session_file(file_id)
+        if saved is None or not _file_visible_to_session(saved, selected):
+            return self._json_error(f"Unknown file_id: {file_id}", status_code=404)
+
+        payload, parse_error = await _bounded_json_body(
+            request,
+            max_bytes=ADMIN_FILE_EDIT_MAX_BODY_BYTES,
+        )
+        if parse_error:
+            return parse_error
+
+        edit_keys = {"content", "expected_sha256"}
+        move_keys = {"scope_type"}
+        try:
+            if set(payload) == edit_keys:
+                if not isinstance(payload["content"], str):
+                    return self._json_error("content must be a string.", status_code=400)
+                if not isinstance(payload["expected_sha256"], str):
+                    return self._json_error("expected_sha256 must be a string.", status_code=400)
+                updated = self.store.update_session_file(
+                    file_id,
+                    payload["content"],
+                    expected_sha256=payload["expected_sha256"],
+                    visible_session_id=selected.session_id,
+                    visible_group_id=selected.group_id,
+                )
+            elif set(payload) == move_keys:
+                scope_type = payload["scope_type"]
+                if scope_type == "session":
+                    updated = self.store.move_session_file(
+                        file_id,
+                        scope_type="session",
+                        session_id=selected.session_id,
+                        visible_session_id=selected.session_id,
+                        visible_group_id=selected.group_id,
+                    )
+                elif scope_type == "group":
+                    updated = self.store.move_session_file(
+                        file_id,
+                        scope_type="group",
+                        group_id=selected.group_id,
+                        visible_session_id=selected.session_id,
+                        visible_group_id=selected.group_id,
+                    )
+                else:
+                    return self._json_error("scope_type must be session or group.", status_code=400)
+            else:
+                return self._json_error(
+                    "Provide exactly one edit (content and expected_sha256) or one move (scope_type).",
+                    status_code=400,
+                )
+        except SessionFileConflictError as exc:
+            return self._json_error(str(exc), status_code=409)
+        except ValueError as exc:
+            return self._value_error(exc)
+        return JSONResponse(
+            {"ok": True, "file": session_file_payload(updated)},
+            headers=self._no_store_headers(),
+        )
+
+    async def api_delete_file(self, request: Request) -> Response:
+        _, error = self._require_admin_mutation(request)
+        if error:
+            return error
+        selected, selection_error = self._selected_session(request)
+        if selection_error:
+            return selection_error
+        file_id, path_error = _path_file_id(request)
+        if path_error:
+            return path_error
+        saved = self.store.get_session_file(file_id)
+        if saved is None or not _file_visible_to_session(saved, selected):
+            return self._json_error(f"Unknown file_id: {file_id}", status_code=404)
+        try:
+            deleted = self.store.delete_session_file(
+                file_id,
+                visible_session_id=selected.session_id,
+                visible_group_id=selected.group_id,
+            )
+        except SessionFileConflictError as exc:
+            return self._json_error(str(exc), status_code=409)
+        except ValueError as exc:
+            return self._value_error(exc)
+        return JSONResponse(
+            {"ok": True, "file": session_file_payload(deleted)},
+            headers=self._no_store_headers(),
+        )
+
+    def _selected_session(
+        self,
+        request: Request,
+    ) -> tuple[SessionRecord | None, JSONResponse | None]:
+        session_id = request.path_params.get("session_id", "")
+        selected = self.store.get_session(session_id)
+        if selected is None:
+            return None, self._json_error(f"Unknown session_id: {session_id}", status_code=404)
+        return selected, None
 
     async def api_update_exchange(self, request: Request) -> Response:
         session, error = self._require_admin_mutation(request)
@@ -645,24 +849,6 @@ def _session_group_payload(group: SessionGroupRecord) -> dict[str, Any]:
     }
 
 
-def _session_file_payload(file: SessionFileRecord, include_content: bool = False) -> dict[str, Any]:
-    payload = {
-        "file_id": file.file_id,
-        "scope_type": file.scope_type,
-        "session_id": file.session_id,
-        "group_id": file.group_id,
-        "filename": file.filename,
-        "mime_type": file.mime_type,
-        "sha256": file.sha256,
-        "size_bytes": file.size_bytes,
-        "created_by": file.created_by,
-        "created_at": file.created_at,
-    }
-    if include_content:
-        payload["content"] = file.content
-    return payload
-
-
 def _secret_preview(value: str) -> str:
     if len(value) <= 8:
         return "configured"
@@ -768,6 +954,37 @@ def _estimate_token_count(text: str) -> int:
     return max(lexical_count, char_estimate)
 
 
+async def _bounded_json_body(
+    request: Request,
+    *,
+    max_bytes: int,
+) -> tuple[dict[str, Any], JSONResponse | None]:
+    content_length = request.headers.get("content-length")
+    if content_length:
+        try:
+            if int(content_length) > max_bytes:
+                return {}, AdminHandlers._json_error("Request body is too large.", status_code=413)
+        except ValueError:
+            return {}, AdminHandlers._json_error("Invalid Content-Length.", status_code=400)
+
+    body = bytearray()
+    try:
+        async for chunk in request.stream():
+            body.extend(chunk)
+            if len(body) > max_bytes:
+                return {}, AdminHandlers._json_error("Request body is too large.", status_code=413)
+    except Exception:
+        return {}, AdminHandlers._json_error("Request body must be JSON.", status_code=400)
+
+    try:
+        payload = json.loads(bytes(body))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return {}, AdminHandlers._json_error("Request body must be JSON.", status_code=400)
+    if not isinstance(payload, dict):
+        return {}, AdminHandlers._json_error("Request body must be a JSON object.", status_code=400)
+    return payload, None
+
+
 async def _json_body(request: Request, allow_empty: bool = False) -> tuple[dict[str, Any], JSONResponse | None]:
     try:
         payload = await request.json()
@@ -778,6 +995,23 @@ async def _json_body(request: Request, allow_empty: bool = False) -> tuple[dict[
     if not isinstance(payload, dict):
         return {}, AdminHandlers._json_error("Request body must be a JSON object.", status_code=400)
     return payload, None
+
+
+def _path_file_id(request: Request) -> tuple[int, JSONResponse | None]:
+    try:
+        return int(request.path_params["file_id"]), None
+    except (KeyError, TypeError, ValueError):
+        return 0, AdminHandlers._json_error("Invalid file_id.", status_code=400)
+
+
+def _admin_upload_mime_type(filename: str) -> str | None:
+    return ADMIN_FILE_EXTENSIONS.get(Path(filename).suffix.lower())
+
+
+def _file_visible_to_session(file: SessionFileRecord, session: SessionRecord) -> bool:
+    if file.scope_type == "session":
+        return file.session_id == session.session_id
+    return file.scope_type == "group" and file.group_id == session.group_id
 
 
 def _path_exchange_id(request: Request) -> tuple[int, JSONResponse | None]:

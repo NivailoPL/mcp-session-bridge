@@ -9,7 +9,7 @@ import pytest
 
 from app.session_package import render_session_transcript
 from app.time_format import DISPLAY_TIMEZONE_SETTING_KEY
-from app.storage import Store
+from app.storage import MAX_SESSION_FILE_BYTES, SessionFileConflictError, Store
 from scripts.session_audit import build_viewer_payload
 
 
@@ -339,6 +339,10 @@ def test_public_tools_hide_context_pack_tools(tmp_path, monkeypatch) -> None:
     assert "get_session_transcript" not in tool_names
     assert "save_context_summary" not in tool_names
     assert "export_session_markdown" not in tool_names
+    assert "move_session_file" not in tool_names
+    assert "edit_session_file" not in tool_names
+    assert "update_session_file" not in tool_names
+    assert "delete_session_file" not in tool_names
 
 
 def test_get_last_speaker_reports_continuity_decision(tmp_path, monkeypatch) -> None:
@@ -456,6 +460,240 @@ def test_mcp_session_files_upload_list_download_and_show_in_overview(tmp_path, m
     assert invalid["error"] == "Unknown session group: missing"
 
 
+def test_mcp_overview_reads_session_and_group_files_in_one_snapshot(tmp_path, monkeypatch) -> None:
+    main = _load_main(tmp_path, monkeypatch)
+    main.store.create_session_group("Ideas", "#22c55e", "ideas")
+    main.store.create_session("s1", "File test", "manual-context", group_id="ideas")
+    main.store.save_session_file("s1", "plan.md", "# Plan")
+    main.store.save_group_file("ideas", "context.md", "Shared context")
+    calls: list[dict[str, str | None]] = []
+    original_list = main.store.list_session_files
+
+    def tracked_list(**kwargs):
+        calls.append(kwargs)
+        return original_list(**kwargs)
+
+    monkeypatch.setattr(main.store, "list_session_files", tracked_list)
+
+    overview = main.get_session_overview("s1")
+
+    assert calls == [{"session_id": "s1", "group_id": "ideas"}]
+    assert [file["filename"] for file in overview["files"]["session"]] == ["plan.md"]
+    assert [file["filename"] for file in overview["files"]["group"]] == ["context.md"]
+
+
+def test_list_session_files_does_not_select_content_bodies(tmp_path) -> None:
+    store = Store(tmp_path / "bridge.sqlite3")
+    store.create_session("s1", "File test", "manual-context")
+    store.save_session_file("s1", "large.md", "x" * 100_000)
+    statements: list[str] = []
+    original_connect = store._connect
+
+    def traced_connect():
+        connection = original_connect()
+        connection.set_trace_callback(statements.append)
+        return connection
+
+    store._connect = traced_connect  # type: ignore[method-assign]
+
+    listed = store.list_session_files(session_id="s1")
+
+    select = next(
+        statement
+        for statement in statements
+        if statement.lstrip().upper().startswith("SELECT") and "FROM session_files" in statement
+    )
+    projection = select.split("FROM session_files", 1)[0].lower()
+    assert "content" not in projection
+    assert "*" not in projection
+    assert listed[0]["filename"] == "large.md"
+
+
+def test_store_moves_session_files_without_changing_identity_or_metadata(tmp_path) -> None:
+    store = Store(tmp_path / "bridge.sqlite3")
+    store.create_session_group("Ideas", "#22c55e", "ideas")
+    store.create_session("s1", "First", "manual-context", group_id="ideas")
+    store.create_session("s2", "Peer", "manual-context", group_id="ideas")
+    saved = store.save_session_file("s1", "plan.md", "# Plan", created_by="test-owner")
+    immutable_metadata = (
+        saved.file_id,
+        saved.filename,
+        saved.mime_type,
+        saved.content,
+        saved.sha256,
+        saved.size_bytes,
+        saved.created_by,
+        saved.created_at,
+    )
+
+    moved_to_group = store.move_session_file(saved.file_id, scope_type="group", group_id="ideas")
+    assert moved_to_group.scope_type == "group"
+    assert moved_to_group.session_id is None
+    assert moved_to_group.group_id == "ideas"
+    assert (
+        moved_to_group.file_id,
+        moved_to_group.filename,
+        moved_to_group.mime_type,
+        moved_to_group.content,
+        moved_to_group.sha256,
+        moved_to_group.size_bytes,
+        moved_to_group.created_by,
+        moved_to_group.created_at,
+    ) == immutable_metadata
+    assert store.move_session_file(saved.file_id, scope_type="group", group_id="ideas") == moved_to_group
+    assert store.list_session_files(session_id="s1") == []
+    assert [item["file_id"] for item in store.list_session_files(group_id="ideas")] == [saved.file_id]
+
+    moved_to_session = store.move_session_file(saved.file_id, scope_type="session", session_id="s1")
+    assert moved_to_session.scope_type == "session"
+    assert moved_to_session.session_id == "s1"
+    assert moved_to_session.group_id is None
+    assert [item["file_id"] for item in store.list_session_files(session_id="s1")] == [saved.file_id]
+    assert store.list_session_files(session_id="s2") == []
+    assert store.list_session_files(group_id="ideas") == []
+
+
+def test_store_file_mutations_recheck_admin_visibility_atomically(tmp_path) -> None:
+    store = Store(tmp_path / "bridge.sqlite3")
+    store.create_session_group("Ideas", "#22c55e", "ideas")
+    store.create_session_group("Other", "#ef4444", "camera")
+    store.create_session("s1", "First", "manual-context", group_id="ideas")
+    store.create_session("s2", "Other", "manual-context", group_id="other")
+    edit_file = store.save_session_file("s1", "edit.md", "Original")
+    move_file = store.save_session_file("s1", "move.md", "Original")
+    delete_file = store.save_session_file("s1", "delete.md", "Original")
+
+    for saved in (edit_file, move_file, delete_file):
+        assert store.get_session_file(saved.file_id) == saved
+        store.move_session_file(saved.file_id, scope_type="session", session_id="s2")
+
+    with pytest.raises(SessionFileConflictError, match="no longer visible"):
+        store.update_session_file(
+            edit_file.file_id,
+            "Changed",
+            expected_sha256=edit_file.sha256,
+            visible_session_id="s1",
+            visible_group_id="ideas",
+        )
+    with pytest.raises(SessionFileConflictError, match="no longer visible"):
+        store.move_session_file(
+            move_file.file_id,
+            scope_type="group",
+            group_id="ideas",
+            visible_session_id="s1",
+            visible_group_id="ideas",
+        )
+    with pytest.raises(SessionFileConflictError, match="no longer visible"):
+        store.delete_session_file(
+            delete_file.file_id,
+            visible_session_id="s1",
+            visible_group_id="ideas",
+        )
+
+    for saved in (edit_file, move_file, delete_file):
+        current = store.get_session_file(saved.file_id)
+        assert current is not None
+        assert current.session_id == "s2"
+        assert current.content == "Original"
+
+
+def test_store_rejects_invalid_file_moves_without_partial_updates(tmp_path) -> None:
+    store = Store(tmp_path / "bridge.sqlite3")
+    store.create_session_group("Ideas", "#22c55e", "ideas")
+    store.create_session_group("Archive", "#64748b", "archive", group_id="archive-test")
+    store.delete_session_group("archive-test")
+    store.create_session("s1", "First", "manual-context", group_id="ideas")
+    saved = store.save_session_file("s1", "plan.md", "# Plan")
+
+    invalid_moves = (
+        {"scope_type": "other", "session_id": "s1"},
+        {"scope_type": "session"},
+        {"scope_type": "session", "session_id": "missing"},
+        {"scope_type": "session", "session_id": "s1", "group_id": "ideas"},
+        {"scope_type": "group"},
+        {"scope_type": "group", "group_id": "missing"},
+        {"scope_type": "group", "group_id": "archive-test"},
+        {"scope_type": "group", "group_id": "ideas", "session_id": "s1"},
+    )
+    for target in invalid_moves:
+        with pytest.raises(ValueError):
+            store.move_session_file(saved.file_id, **target)
+        assert store.get_session_file(saved.file_id) == saved
+
+    with pytest.raises(ValueError, match="Unknown file_id: 99999"):
+        store.move_session_file(99999, scope_type="session", session_id="s1")
+    assert store.get_session_file(saved.file_id) == saved
+
+
+def test_store_edits_session_file_with_hash_guard_and_atomic_validation(tmp_path) -> None:
+    store = Store(tmp_path / "bridge.sqlite3")
+    store.create_session("s1", "First", "manual-context")
+    saved = store.save_session_file("s1", "plan.md", "Old content", created_by="test-owner")
+
+    edited = store.update_session_file(saved.file_id, "New content", expected_sha256=saved.sha256)
+
+    assert edited.file_id == saved.file_id
+    assert edited.created_at == saved.created_at
+    assert edited.created_by == saved.created_by
+    assert edited.filename == saved.filename
+    assert edited.mime_type == saved.mime_type
+    assert edited.content == "New content"
+    assert edited.sha256 != saved.sha256
+    assert edited.size_bytes == len("New content".encode("utf-8"))
+
+    with pytest.raises(SessionFileConflictError, match="changed since it was opened"):
+        store.update_session_file(saved.file_id, "Stale overwrite", expected_sha256=saved.sha256)
+    assert store.get_session_file(saved.file_id) == edited
+
+    with pytest.raises(ValueError, match="content must not be empty"):
+        store.update_session_file(edited.file_id, "", expected_sha256=edited.sha256)
+    assert store.get_session_file(saved.file_id) == edited
+
+    with pytest.raises(ValueError, match="bytes or fewer"):
+        store.update_session_file(
+            edited.file_id,
+            "x" * (MAX_SESSION_FILE_BYTES + 1),
+            expected_sha256=edited.sha256,
+        )
+    assert store.get_session_file(saved.file_id) == edited
+
+
+def test_store_hard_deletes_file_and_preserves_existing_payload_keys(tmp_path, monkeypatch) -> None:
+    main = _load_main(tmp_path, monkeypatch)
+    main.store.create_session("s1", "File test", "manual-context")
+    uploaded = main.upload_session_file("s1", "plan.md", "# Plan")
+    file_id = uploaded["file"]["file_id"]
+    expected_manifest_keys = {
+        "file_id",
+        "scope_type",
+        "session_id",
+        "group_id",
+        "filename",
+        "mime_type",
+        "sha256",
+        "size_bytes",
+        "created_by",
+        "created_at",
+    }
+
+    assert set(uploaded["file"]) == expected_manifest_keys
+    assert set(main.list_session_files(session_id="s1")["files"][0]) == expected_manifest_keys
+    assert set(main.download_session_file(file_id)["file"]) == expected_manifest_keys | {"content"}
+
+    deleted = main.store.delete_session_file(file_id)
+
+    assert deleted.file_id == file_id
+    assert main.store.get_session_file(file_id) is None
+    with pytest.raises(ValueError, match=f"Unknown file_id: {file_id}"):
+        main.store.delete_session_file(file_id)
+    assert main.list_session_files(session_id="s1")["files"] == []
+    assert main.get_session_overview("s1")["files"]["session"] == []
+    assert main.download_session_file(file_id) == {"ok": False, "error": f"Unknown file_id: {file_id}"}
+
+    replacement = main.upload_session_file("s1", "plan.md", "Replacement")
+    assert replacement["file"]["file_id"] != file_id
+
+
 def test_display_timezone_setting_controls_mcp_timestamps(tmp_path, monkeypatch) -> None:
     main = _load_main(tmp_path, monkeypatch)
     main.store.set_app_setting(DISPLAY_TIMEZONE_SETTING_KEY, "Europe/Paris")
@@ -488,6 +726,25 @@ def test_project_prompt_documents_manual_context_and_chunk_protocol() -> None:
     assert "`download_session_file`" in prompt
     assert "`get_session_package`" not in prompt
     assert "context pack" not in prompt.lower()
+
+
+def test_public_docs_describe_explicit_mutable_file_context() -> None:
+    readme = Path("README.md").read_text(encoding="utf-8").lower()
+    limitations = Path("docs/limitations.md").read_text(encoding="utf-8").lower()
+    instructions = Path("docs/model-instructions.md").read_text(encoding="utf-8").lower()
+    prompt = Path("docs/project-prompt-template.md").read_text(encoding="utf-8").lower()
+
+    assert "admin ui" in readme
+    assert "`upload_session_file`" in readme
+    assert "`upload_group_file`" in readme
+    assert "does not automatically ingest" in limitations
+    assert "external files or directories" in limitations
+
+    for model_doc in (instructions, prompt):
+        assert "current file manifest is authoritative" in model_doc
+        assert "not automatically notified" in model_doc
+        assert "`list_session_files`" in model_doc
+        assert "`download_session_file`" in model_doc
 
 
 def test_server_instructions_are_publication_ready(tmp_path, monkeypatch) -> None:

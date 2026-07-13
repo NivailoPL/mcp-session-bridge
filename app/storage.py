@@ -90,6 +90,14 @@ SESSION_GROUP_ICON_KEYS = {
 }
 
 MAX_SESSION_FILE_BYTES = 1_000_000
+SESSION_FILE_MANIFEST_COLUMNS = """
+    file_id, scope_type, session_id, group_id, filename, mime_type,
+    sha256, size_bytes, created_by, created_at
+"""
+
+
+class SessionFileConflictError(ValueError):
+    """Raised when a guarded file edit targets content that has changed."""
 
 
 @dataclass(frozen=True)
@@ -885,6 +893,54 @@ class Store:
             row = conn.execute("SELECT * FROM session_files WHERE file_id = ?", (cursor.lastrowid,)).fetchone()
         return _session_file_from_row(row)
 
+    def save_group_file_for_session(
+        self,
+        session_id: str,
+        filename: str,
+        content: str,
+        *,
+        mime_type: str = "text/markdown",
+        created_by: str = "model",
+    ) -> SessionFileRecord:
+        resolved_session_id = session_id.strip()
+        resolved_filename = _validate_file_name(filename)
+        resolved_content, size_bytes, digest = _validate_file_content(content)
+        resolved_mime_type = _validate_mime_type(mime_type)
+        now = int(time.time())
+        with self._lock, self._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            session = conn.execute(
+                "SELECT group_id FROM sessions WHERE session_id = ?",
+                (resolved_session_id,),
+            ).fetchone()
+            if session is None:
+                raise ValueError(f"Unknown session_id: {resolved_session_id}")
+            group_id = session["group_id"]
+            self._require_active_group(conn, group_id)
+            cursor = conn.execute(
+                """
+                INSERT INTO session_files (
+                    scope_type, session_id, group_id, filename, mime_type, content,
+                    sha256, size_bytes, created_by, created_at
+                ) VALUES ('group', NULL, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    group_id,
+                    resolved_filename,
+                    resolved_mime_type,
+                    resolved_content,
+                    digest,
+                    size_bytes,
+                    created_by.strip() or "model",
+                    now,
+                ),
+            )
+            row = conn.execute(
+                "SELECT * FROM session_files WHERE file_id = ?",
+                (cursor.lastrowid,),
+            ).fetchone()
+        return _session_file_from_row(row)
+
     def list_session_files(
         self,
         *,
@@ -902,19 +958,161 @@ class Store:
         where = f"WHERE {' OR '.join(clauses)}" if clauses else ""
         with self._lock, self._connect() as conn:
             rows = conn.execute(
-                f"""
-                SELECT * FROM session_files
+                f"""SELECT {SESSION_FILE_MANIFEST_COLUMNS}
+                FROM session_files
                 {where}
                 ORDER BY created_at DESC, file_id DESC
                 """,
                 values,
             ).fetchall()
-        return [_session_file_payload(_session_file_from_row(row), include_content=False) for row in rows]
+        return [_session_file_manifest_from_row(row) for row in rows]
 
     def get_session_file(self, file_id: int) -> SessionFileRecord | None:
         with self._lock, self._connect() as conn:
             row = conn.execute("SELECT * FROM session_files WHERE file_id = ?", (file_id,)).fetchone()
         return _session_file_from_row(row) if row else None
+
+    def update_session_file(
+        self,
+        file_id: int,
+        content: str,
+        *,
+        expected_sha256: str,
+        visible_session_id: str | None = None,
+        visible_group_id: str | None = None,
+    ) -> SessionFileRecord:
+        resolved_content, size_bytes, digest = _validate_file_content(content)
+        resolved_expected_sha256 = expected_sha256.strip().lower()
+        with self._lock, self._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            row = conn.execute(
+                "SELECT * FROM session_files WHERE file_id = ?",
+                (file_id,),
+            ).fetchone()
+            if row is None:
+                raise ValueError(f"Unknown file_id: {file_id}")
+            _require_file_visible_to_session(
+                conn,
+                row,
+                session_id=visible_session_id,
+                group_id=visible_group_id,
+            )
+            if row["sha256"] != resolved_expected_sha256:
+                raise SessionFileConflictError(
+                    f"File {file_id} changed since it was opened"
+                )
+            conn.execute(
+                """
+                UPDATE session_files
+                SET content = ?, sha256 = ?, size_bytes = ?
+                WHERE file_id = ?
+                """,
+                (resolved_content, digest, size_bytes, file_id),
+            )
+            updated = conn.execute(
+                "SELECT * FROM session_files WHERE file_id = ?",
+                (file_id,),
+            ).fetchone()
+        return _session_file_from_row(updated)
+
+    def move_session_file(
+        self,
+        file_id: int,
+        *,
+        scope_type: str,
+        session_id: str | None = None,
+        group_id: str | None = None,
+        visible_session_id: str | None = None,
+        visible_group_id: str | None = None,
+    ) -> SessionFileRecord:
+        resolved_scope_type = scope_type.strip().lower()
+        resolved_session_id = session_id.strip() if session_id else ""
+        resolved_group_id = group_id.strip() if group_id else ""
+        if resolved_scope_type not in {"session", "group"}:
+            raise ValueError("scope_type must be session or group")
+        if resolved_scope_type == "session":
+            if not resolved_session_id:
+                raise ValueError("session_id is required for session scope")
+            if resolved_group_id:
+                raise ValueError("group_id is not allowed for session scope")
+        else:
+            if not resolved_group_id:
+                raise ValueError("group_id is required for group scope")
+            if resolved_session_id:
+                raise ValueError("session_id is not allowed for group scope")
+
+        with self._lock, self._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            row = conn.execute(
+                "SELECT * FROM session_files WHERE file_id = ?",
+                (file_id,),
+            ).fetchone()
+            if row is None:
+                raise ValueError(f"Unknown file_id: {file_id}")
+            _require_file_visible_to_session(
+                conn,
+                row,
+                session_id=visible_session_id,
+                group_id=visible_group_id,
+            )
+
+            if resolved_scope_type == "session":
+                if conn.execute(
+                    "SELECT 1 FROM sessions WHERE session_id = ?",
+                    (resolved_session_id,),
+                ).fetchone() is None:
+                    raise ValueError(f"Unknown session_id: {resolved_session_id}")
+                target_session_id = resolved_session_id
+                target_group_id = None
+            else:
+                self._require_active_group(conn, resolved_group_id)
+                target_session_id = None
+                target_group_id = resolved_group_id
+
+            if (
+                row["scope_type"] == resolved_scope_type
+                and row["session_id"] == target_session_id
+                and row["group_id"] == target_group_id
+            ):
+                return _session_file_from_row(row)
+
+            conn.execute(
+                """
+                UPDATE session_files
+                SET scope_type = ?, session_id = ?, group_id = ?
+                WHERE file_id = ?
+                """,
+                (resolved_scope_type, target_session_id, target_group_id, file_id),
+            )
+            updated = conn.execute(
+                "SELECT * FROM session_files WHERE file_id = ?",
+                (file_id,),
+            ).fetchone()
+        return _session_file_from_row(updated)
+
+    def delete_session_file(
+        self,
+        file_id: int,
+        *,
+        visible_session_id: str | None = None,
+        visible_group_id: str | None = None,
+    ) -> SessionFileRecord:
+        with self._lock, self._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            row = conn.execute(
+                "SELECT * FROM session_files WHERE file_id = ?",
+                (file_id,),
+            ).fetchone()
+            if row is None:
+                raise ValueError(f"Unknown file_id: {file_id}")
+            _require_file_visible_to_session(
+                conn,
+                row,
+                session_id=visible_session_id,
+                group_id=visible_group_id,
+            )
+            conn.execute("DELETE FROM session_files WHERE file_id = ?", (file_id,))
+        return _session_file_from_row(row)
 
     def get_session(self, session_id: str) -> SessionRecord | None:
         with self._lock, self._connect() as conn:
@@ -1380,7 +1578,51 @@ def _session_file_from_row(row: sqlite3.Row) -> SessionFileRecord:
     )
 
 
-def _session_file_payload(file: SessionFileRecord, include_content: bool = False) -> dict[str, Any]:
+def _session_file_manifest_from_row(row: sqlite3.Row) -> dict[str, Any]:
+    return {
+        "file_id": row["file_id"],
+        "scope_type": row["scope_type"],
+        "session_id": row["session_id"],
+        "group_id": row["group_id"],
+        "filename": row["filename"],
+        "mime_type": row["mime_type"],
+        "sha256": row["sha256"],
+        "size_bytes": row["size_bytes"],
+        "created_by": row["created_by"],
+        "created_at": row["created_at"],
+    }
+
+
+def _require_file_visible_to_session(
+    conn: sqlite3.Connection,
+    row: sqlite3.Row,
+    *,
+    session_id: str | None,
+    group_id: str | None,
+) -> None:
+    if session_id is None and group_id is None:
+        return
+    resolved_session_id = (session_id or "").strip()
+    resolved_group_id = (group_id or "").strip()
+    selected = conn.execute(
+        "SELECT group_id FROM sessions WHERE session_id = ?",
+        (resolved_session_id,),
+    ).fetchone()
+    visible = (
+        selected is not None
+        and selected["group_id"] == resolved_group_id
+        and (
+            (row["scope_type"] == "session" and row["session_id"] == resolved_session_id)
+            or (row["scope_type"] == "group" and row["group_id"] == resolved_group_id)
+        )
+    )
+    if not visible:
+        raise SessionFileConflictError(
+            f"File {row['file_id']} is no longer visible to session {resolved_session_id}"
+        )
+
+
+def session_file_payload(file: SessionFileRecord, include_content: bool = False) -> dict[str, Any]:
     payload = {
         "file_id": file.file_id,
         "scope_type": file.scope_type,

@@ -25,11 +25,11 @@ Read `response_display_timezone` from `get_session_overview` when you need to kn
 
 If the user asks you to save a summary, plan, note, or reusable context, prepare the user-facing response, save it with `save_exchange`, then save the durable text with `upload_session_file` or `upload_group_file`.
 
-## What The Bridge Is Not
+## File Context And Reconciliation
 
-MCP Session Bridge is not an automatic file-context delivery system. It does not automatically provide the user's external notes, project files, PDFs, or other knowledge material to the model.
+MCP Session Bridge is not an automatic file-context delivery system. It does not automatically ingest or provide the user's external notes, project files, directories, PDFs, or other knowledge material to the model.
 
-The user supplies those materials manually in the chat. The bridge supplies conversation history, session groups, and text files that a model explicitly saves with `upload_session_file` or `upload_group_file`. Use `list_session_files` and `download_session_file` when those uploaded files are relevant.
+Files may be explicitly uploaded through the admin UI or saved with `upload_session_file` and `upload_group_file`. An owner may later move, edit, or permanently delete them. The current file manifest is authoritative: use `get_session_overview` or `list_session_files`, then `download_session_file` when a listed file is relevant. Models are not automatically notified about owner file mutations, so do not rely on an older manifest or cached file content.
 
 ## Response Storage
 
