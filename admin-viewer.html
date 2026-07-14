@@ -1156,7 +1156,7 @@
                 <label class="field">Rerank candidates<input id="rerankCandidates" type="number" min="1" max="500"></label>
               </div>
             </details>
-            <div class="index-card"><div><b>Vector index</b><p id="indexStatus" class="meta"></p></div><div class="edit-actions">
+            <div class="index-card"><div><b>Vector index</b><p id="indexStatus" class="meta"></p><p id="indexEstimate" class="meta"></p></div><div class="edit-actions">
               <button id="indexRebuild" type="button" class="ghost">Build / rebuild</button>
               <button id="indexCancel" type="button" class="ghost">Stop</button>
               <button id="indexDelete" type="button" class="danger">Delete index</button>
@@ -1410,7 +1410,7 @@
         "ragOptions", "cohereEnabled", "sourceConversations", "sourceSessionFiles",
         "sourceGroupFiles", "ragGroupList", "chunkSize", "chunkOverlap", "embeddingModel",
         "embeddingDimensions", "rebuildThreshold", "rebuildMaxWait", "bm25Candidates",
-        "vectorCandidates", "resultLimit", "cohereModel", "rerankCandidates", "indexStatus",
+        "vectorCandidates", "resultLimit", "cohereModel", "rerankCandidates", "indexStatus", "indexEstimate",
         "indexRebuild", "indexCancel", "indexDelete", "searchDialog", "searchClose",
         "contextSearchForm", "contextSearchInput", "contextSearchSubmit", "contextSearchStop",
         "contextSearchStatus", "searchResults", "localSearchResults", "searchDetail"
@@ -1577,6 +1577,9 @@
         dom.aiKeyRemoveButton.addEventListener("click", () => removeProviderKey("openai"));
         settingsDom.cohereKeyRemoveButton.addEventListener("click", () => removeProviderKey("cohere"));
         settingsDom.ragEnabled.addEventListener("change", renderRagVisibility);
+        const searchPanel = document.querySelector('[data-settings-panel="search"]');
+        searchPanel.addEventListener("input", () => scheduleIndexEstimate());
+        searchPanel.addEventListener("change", () => scheduleIndexEstimate());
         settingsDom.indexRebuild.addEventListener("click", () => runIndexAction("rebuild"));
         settingsDom.indexCancel.addEventListener("click", () => runIndexAction("cancel"));
         settingsDom.indexDelete.addEventListener("click", () => runIndexAction("delete"));
@@ -1596,6 +1599,7 @@
         fillSettingsForm();
         selectSettingsTab("general");
         dom.aiSettingsDialog.showModal();
+        scheduleIndexEstimate(0);
         dom.aiModelInput.focus();
       }
 
@@ -1672,6 +1676,49 @@
           `${index.status}${progress}${dirty}${paused}${index.last_error ? ` · ${index.last_error}` : ""}`;
         settingsDom.indexCancel.disabled = !["queued", "building"].includes(index.status);
         settingsDom.indexDelete.disabled = ["queued", "building"].includes(index.status);
+      }
+
+      let indexEstimateTimer = null;
+      let indexEstimateRequest = 0;
+
+      function scheduleIndexEstimate(delay = 450) {
+        window.clearTimeout(indexEstimateTimer);
+        const requestId = ++indexEstimateRequest;
+        if (!settingsDom.ragEnabled.checked) {
+          settingsDom.indexEstimate.textContent = "";
+          return;
+        }
+        settingsDom.indexEstimate.textContent = "Calculating full rebuild estimate…";
+        indexEstimateTimer = window.setTimeout(() => refreshIndexEstimate(requestId), delay);
+      }
+
+      async function refreshIndexEstimate(requestId) {
+        if (demo.enabled) {
+          settingsDom.indexEstimate.textContent = "A live server is required for the build estimate.";
+          return;
+        }
+        try {
+          const result = await api("/admin/api/search/index/estimate", {
+            method: "POST", body: JSON.stringify(searchFormPayload()),
+          });
+          if (requestId !== indexEstimateRequest) return;
+          const estimate = result.estimate;
+          const count = (value) => Number(value || 0).toLocaleString();
+          const cost = estimate.estimated_cost_usd == null
+            ? `price unavailable for ${estimate.embedding_model}`
+            : `about $${estimate.estimated_cost_usd < 0.01
+              ? estimate.estimated_cost_usd.toFixed(4) : estimate.estimated_cost_usd.toFixed(2)}`;
+          const overlap = estimate.overlap_token_count
+            ? `, including ${count(estimate.overlap_token_count)} repeated overlap tokens` : "";
+          settingsDom.indexEstimate.textContent =
+            `Estimated full rebuild: ${count(estimate.embedding_token_count)} embedding tokens${overlap} · ` +
+            `${count(estimate.chunk_count)} chunks from ${count(estimate.document_count)} documents · ${cost}. ` +
+            "Cohere rerank is charged only when Hybrid search runs.";
+        } catch (error) {
+          if (requestId === indexEstimateRequest) {
+            settingsDom.indexEstimate.textContent = `Estimate unavailable: ${error.message}`;
+          }
+        }
       }
 
       async function saveGeneralSettings() {

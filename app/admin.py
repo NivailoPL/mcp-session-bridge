@@ -311,6 +311,27 @@ class AdminHandlers:
         )
         return JSONResponse({"ok": True, "index": index}, headers=self._no_store_headers())
 
+    async def api_search_index_estimate(self, request: Request) -> Response:
+        _, error = self._require_admin(request)
+        if error:
+            return error
+        payload, parse_error = await _json_body(request)
+        if parse_error:
+            return parse_error
+        try:
+            config = SearchConfig.from_dict(payload)
+            known_groups = {item["group_id"] for item in self.store.list_session_groups()}
+            unknown = set(config.included_group_ids) - known_groups
+            if unknown:
+                raise ValueError(f"Unknown group ids: {', '.join(sorted(unknown))}")
+            estimate = await asyncio.to_thread(self.search.estimate_index, config)
+        except (TypeError, ValueError) as exc:
+            return self._json_error(str(exc), status_code=400)
+        return JSONResponse(
+            {"ok": True, "estimate": estimate},
+            headers=self._no_store_headers(),
+        )
+
     async def api_rebuild_search_index(self, request: Request) -> Response:
         _, error = self._require_admin_mutation(request)
         if error:

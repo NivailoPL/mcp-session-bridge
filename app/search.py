@@ -22,6 +22,12 @@ OPENAI_KEY_SETTING = "providers.openai.api_key"
 COHERE_KEY_SETTING = "providers.cohere.api_key"
 RENAME_MODEL_SETTING = "general.rename_model"
 
+EMBEDDING_PRICES_USD_PER_MILLION = {
+    "text-embedding-3-small": 0.02,
+    "text-embedding-3-large": 0.13,
+}
+EMBEDDING_PRICING_URL = "https://developers.openai.com/api/docs/guides/embeddings#embedding-models"
+
 _TOKEN_RE = re.compile(r"\w+", re.UNICODE)
 _HIGHLIGHT_OPEN = "\u0002"
 _HIGHLIGHT_CLOSE = "\u0003"
@@ -443,6 +449,54 @@ class SearchService:
                 (source_revision,),
             )
         return {"changed": changed, "deleted": deleted, "total": len(sources)}
+
+    def estimate_index(self, config: SearchConfig | None = None) -> dict[str, Any]:
+        """Estimate one full vector rebuild without making a provider request."""
+        config = (config or self.get_config()).validate()
+        self.sync_documents()
+        documents: list[sqlite3.Row] = []
+        if config.included_group_ids:
+            source_kinds = config.source_kinds()
+            group_marks = ",".join("?" for _ in config.included_group_ids)
+            kind_marks = ",".join("?" for _ in source_kinds)
+            with self._connect() as conn:
+                documents = conn.execute(
+                    f"""SELECT content FROM search_documents
+                        WHERE group_id IN ({group_marks}) AND source_kind IN ({kind_marks})
+                        ORDER BY document_id""",
+                    [*config.included_group_ids, *source_kinds],
+                ).fetchall()
+
+        encoding = tiktoken.get_encoding("cl100k_base")
+        source_tokens = 0
+        embedding_tokens = 0
+        chunk_count = 0
+        for document in documents:
+            content = document["content"]
+            source_tokens += len(encoding.encode(content))
+            chunks = chunk_text(
+                content,
+                chunk_size=config.chunk_size,
+                overlap=config.chunk_overlap,
+            )
+            chunk_count += len(chunks)
+            # Count the normalized chunk strings that will be sent to the embeddings API.
+            embedding_tokens += sum(len(encoding.encode(chunk.text)) for chunk in chunks)
+
+        price = EMBEDDING_PRICES_USD_PER_MILLION.get(config.embedding_model)
+        estimated_cost = None if price is None else embedding_tokens * price / 1_000_000
+        return {
+            "document_count": len(documents),
+            "chunk_count": chunk_count,
+            "source_token_count": source_tokens,
+            "embedding_token_count": embedding_tokens,
+            "overlap_token_count": max(0, embedding_tokens - source_tokens),
+            "embedding_model": config.embedding_model,
+            "price_usd_per_million_tokens": price,
+            "estimated_cost_usd": estimated_cost,
+            "pricing_url": EMBEDDING_PRICING_URL,
+            "cohere_included": False,
+        }
 
     def basic_search(self, query: str, *, limit: int = 20,
                      group_ids: Sequence[str] | None = None,

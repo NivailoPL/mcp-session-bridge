@@ -839,6 +839,19 @@ def test_admin_search_settings_keys_and_basic_search_api(tmp_path, monkeypatch) 
     assert set(settings.json()["settings"]) == {"general", "search", "api", "groups", "index"}
     assert settings.json()["settings"]["search"]["enabled"] is False
 
+    estimate_config = {
+        **settings.json()["settings"]["search"],
+        "enabled": True,
+        "included_group_ids": ["uncategorized"],
+    }
+    estimate = client.post(
+        "/admin/api/search/index/estimate", json=estimate_config, headers=headers
+    )
+    assert estimate.status_code == 200
+    assert estimate.json()["estimate"]["document_count"] == 1
+    assert estimate.json()["estimate"]["embedding_token_count"] > 0
+    assert estimate.json()["estimate"]["estimated_cost_usd"] is not None
+
     with main.admin.search._connect() as conn:
         conn.execute("UPDATE search_index_state SET status='building' WHERE singleton=1")
     blocked_search_settings = {
@@ -896,6 +909,9 @@ def test_admin_viewer_rag_settings_and_search_overlay_contract() -> None:
     assert 'id="indexRebuild"' in viewer
     assert 'id="indexCancel"' in viewer
     assert 'id="indexDelete"' in viewer
+    assert 'id="indexEstimate"' in viewer
+    assert "Estimated full rebuild" in viewer
+    assert "Cohere rerank is charged only when Hybrid search runs." in viewer
 
     assert 'data-search-mode="basic"' in viewer
     assert 'data-search-mode="hybrid"' in viewer
