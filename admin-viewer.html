@@ -814,9 +814,17 @@
     .developer-settings summary { cursor: pointer; color: var(--muted); font-size: .82rem; }
     .settings-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: .75rem; padding-top: .85rem; }
     .provider-card, .index-card { display: grid; gap: .65rem; padding: .9rem; border: 1px solid var(--stroke); border-radius: var(--r-card); background: rgba(255,255,255,.025); }
-    .index-card { grid-template-columns: minmax(0,1fr) auto; align-items: center; }
+    .index-card { grid-template-columns: minmax(0,1fr); }
     .index-card-main { min-width: 0; }
     .index-card p { margin: .25rem 0 0; }
+    .index-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .55rem; margin-top: .2rem; padding-top: .8rem; border-top: 1px solid var(--stroke-soft); }
+    .index-actions .danger { margin-left: auto; }
+    button.index-build-button { border-color: rgba(52,211,153,.36); color: #a7f3d0; background: rgba(52,211,153,.14); }
+    button.index-build-button:hover { border-color: rgba(52,211,153,.58); background: rgba(52,211,153,.22); }
+    button.index-build-button:disabled { opacity: .8; }
+    .index-build-spinner { width: .9rem; height: .9rem; border: 2px solid rgba(167,243,208,.35); border-top-color: #a7f3d0; border-radius: 50%; animation: index-spin .8s linear infinite; }
+    .index-build-spinner[hidden] { display: none; }
+    @keyframes index-spin { to { transform: rotate(360deg); } }
     .index-estimate { display: grid; gap: .65rem; margin-top: .8rem; padding-top: .8rem; border-top: 1px solid var(--stroke-soft); }
     .index-estimate[hidden] { display: none; }
     .index-estimate-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: .35rem 1rem; }
@@ -1179,9 +1187,9 @@
                 </div>
                 <p class="index-estimate-note"><b>Cohere rerank:</b> not included in the rebuild cost; it is charged only when Hybrid search runs. <a id="indexEstimatePricing" href="#" target="_blank" rel="noreferrer">OpenAI pricing</a></p>
               </section>
-            </div><div class="edit-actions">
-              <button id="indexRebuild" type="button" class="ghost">Build / rebuild</button>
-              <button id="indexCancel" type="button" class="ghost">Stop</button>
+            </div><div class="index-actions">
+              <button id="indexRebuild" type="button" class="index-build-button"><span id="indexRebuildSpinner" class="index-build-spinner" aria-hidden="true" hidden></span><span id="indexRebuildLabel">Build index</span></button>
+              <button id="indexCancel" type="button" class="ghost" hidden>Stop</button>
               <button id="indexDelete" type="button" class="danger">Delete index</button>
             </div></div>
           </div>
@@ -1436,7 +1444,7 @@
         "vectorCandidates", "resultLimit", "cohereModel", "rerankCandidates", "indexStatus", "indexEstimate",
         "indexEstimateState", "indexEstimateMetrics", "indexEstimateDocuments", "indexEstimateChunks",
         "indexEstimateTokens", "indexEstimateOverlap", "indexEstimateCost", "indexEstimateModel", "indexEstimatePricing",
-        "indexRebuild", "indexCancel", "indexDelete", "searchDialog", "searchClose",
+        "indexRebuild", "indexRebuildSpinner", "indexRebuildLabel", "indexCancel", "indexDelete", "searchDialog", "searchClose",
         "contextSearchForm", "contextSearchInput", "contextSearchSubmit", "contextSearchStop",
         "contextSearchStatus", "searchResults", "localSearchResults", "searchDetail"
       ].map((id) => [id, document.getElementById(id)]));
@@ -1693,14 +1701,21 @@
 
       function renderIndexStatus(index) {
         if (!index) return;
+        const building = ["queued", "building"].includes(index.status);
         const progress = index.status === "building"
           ? ` · ${index.processed_count || 0}/${index.document_count || 0} documents` : "";
         const dirty = index.dirty_document_count ? ` · ${index.dirty_document_count} pending` : "";
         const paused = index.auto_rebuild_suppressed ? " · automatic rebuild paused" : "";
         settingsDom.indexStatus.textContent =
           `${index.status}${progress}${dirty}${paused}${index.last_error ? ` · ${index.last_error}` : ""}`;
-        settingsDom.indexCancel.disabled = !["queued", "building"].includes(index.status);
-        settingsDom.indexDelete.disabled = ["queued", "building"].includes(index.status);
+        settingsDom.indexRebuild.disabled = building;
+        settingsDom.indexRebuild.setAttribute("aria-busy", String(building));
+        settingsDom.indexRebuildSpinner.hidden = !building;
+        settingsDom.indexRebuildLabel.textContent = building
+          ? "Building…" : index.active_generation == null ? "Build index" : "Rebuild index";
+        settingsDom.indexCancel.hidden = !building;
+        settingsDom.indexCancel.disabled = !building;
+        settingsDom.indexDelete.disabled = building;
       }
 
       let indexEstimateTimer = null;
