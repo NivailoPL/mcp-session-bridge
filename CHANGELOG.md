@@ -11,6 +11,10 @@ This project follows a lightweight changelog format inspired by Keep a Changelog
 - Replaced the admin page's top file strip and nested detail overlay with one always-available file workspace opened from the conversation rail.
 - Added explicit admin uploads, OS drag-and-drop, and session/group drag-and-drop moves while preserving each file's identity.
 - Added text and Markdown editing with stale-write protection, plus a clearly warned permanent-delete flow.
+- Added an admin-only context search overlay with local BM25 and optional Hybrid vector search.
+- Added General, Search, and API tabs to the settings overlay, including encrypted OpenAI and Cohere credentials.
+- Added configurable conversation/session-file/group-file ingestion, token chunking, overlap, candidate limits, and refresh thresholds.
+- Added cancellable, generation-safe vector index builds with explicit group consent for external processing and a separate local-only result lane.
 
 ### Quality of Life
 
@@ -20,6 +24,7 @@ This project follows a lightweight changelog format inspired by Keep a Changelog
 ### Security
 
 - Admin file mutations require an authenticated owner session and CSRF protection, enforce bounded UTF-8 text uploads, and do not expose new MCP mutation tools.
+- Unselected groups never enter embedding or reranking provider payloads; Basic search remains entirely local and RAG is disabled by default.
 
 ## [0.2.0] - 2026-07-07
 

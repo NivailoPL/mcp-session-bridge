@@ -818,3 +818,90 @@ def _load_main(tmp_path: Path, monkeypatch):
 
     sys.modules.pop("app.main", None)
     return importlib.import_module("app.main")
+
+def test_admin_search_settings_keys_and_basic_search_api(tmp_path, monkeypatch) -> None:
+    main = _load_main(tmp_path, monkeypatch)
+    main.store.create_session("search-session", "Searchable session", "manual-context")
+    main.store.save_exchange(
+        "search-session", "Codex", "The admin search contains a kumquat marker.", "Confirmed."
+    )
+    client = TestClient(main.app, base_url="http://127.0.0.1:8787")
+    client.post(
+        "/admin/login",
+        data={"username": "owner", "password": "secret-admin-password", "next": "/admin/sessions"},
+        follow_redirects=False,
+    )
+    csrf = client.get("/admin/api/me").json()["csrf_token"]
+    headers = {"x-csrf-token": csrf}
+
+    settings = client.get("/admin/api/settings")
+    assert settings.status_code == 200
+    assert set(settings.json()["settings"]) == {"general", "search", "api", "groups", "index"}
+    assert settings.json()["settings"]["search"]["enabled"] is False
+
+    with main.admin.search._connect() as conn:
+        conn.execute("UPDATE search_index_state SET status='building' WHERE singleton=1")
+    blocked_search_settings = {
+        **settings.json()["settings"]["search"],
+        "enabled": True,
+        "included_group_ids": ["uncategorized"],
+    }
+    blocked = client.put(
+        "/admin/api/settings/search", json=blocked_search_settings, headers=headers
+    )
+    assert blocked.status_code == 409
+    with main.admin.search._connect() as conn:
+        conn.execute("UPDATE search_index_state SET status='empty' WHERE singleton=1")
+
+    key_value = "sk-test-secret-value"
+    updated_keys = client.put(
+        "/admin/api/settings/api",
+        json={"openai": key_value, "cohere": "cohere-test-secret"},
+        headers=headers,
+    )
+    assert updated_keys.status_code == 200
+    key_payload = updated_keys.json()["settings"]["api"]
+    assert key_payload["openai"]["configured"] is True
+    assert key_payload["cohere"]["configured"] is True
+    assert key_value not in updated_keys.text
+    assert key_value not in (main.store.get_app_setting("providers.openai.api_key") or "")
+
+    search = client.post("/admin/api/search", json={"query": "kumquat", "mode": "basic"})
+    assert search.status_code == 200
+    result = search.json()["results"][0]
+    assert result["session_id"] == "search-session"
+    assert result["pipeline"] == ["BM25"]
+    assert result["group"]["group_id"] == "uncategorized"
+
+    removed = client.delete("/admin/api/settings/api/cohere/key", headers=headers)
+    assert removed.status_code == 200
+    assert removed.json()["settings"]["api"]["cohere"]["configured"] is False
+
+def test_admin_viewer_rag_settings_and_search_overlay_contract() -> None:
+    viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
+
+    assert 'id="searchInput"' not in viewer
+    assert 'id="searchOpenButton"' in viewer
+    assert viewer.count('<dialog id="searchDialog"') == 1
+    assert viewer.count('<dialog id="aiSettingsDialog"') == 1
+    for tab in ("general", "search", "api"):
+        assert f'data-settings-tab="{tab}"' in viewer
+        assert f'data-settings-panel="{tab}"' in viewer
+
+    assert 'id="ragEnabled"' in viewer
+    assert 'id="cohereEnabled"' in viewer
+    assert 'id="ragGroupList"' in viewer
+    assert 'Groups allowed for external processing' in viewer
+    assert 'Only checked groups may leave this server' in viewer
+    assert 'id="indexRebuild"' in viewer
+    assert 'id="indexCancel"' in viewer
+    assert 'id="indexDelete"' in viewer
+
+    assert 'data-search-mode="basic"' in viewer
+    assert 'data-search-mode="hybrid"' in viewer
+    assert 'id="localSearchResults"' in viewer
+    assert 'new AbortController()' in viewer
+    assert 'state.searchController?.abort()' in viewer
+    assert "function appendHighlightedText" in viewer
+    assert "mark.textContent =" in viewer
+    assert 'snippet.innerHTML' not in viewer
