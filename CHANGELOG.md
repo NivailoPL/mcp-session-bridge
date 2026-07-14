@@ -6,6 +6,14 @@ This project follows a lightweight changelog format inspired by Keep a Changelog
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-07-14
+
+### Highlights
+
+- The admin dashboard now has one coherent file workspace for uploading, moving, reading, editing, and deleting session and group context without leaving the active conversation.
+- Owners can search their complete context locally with BM25 or opt into private, group-scoped Hybrid retrieval backed by OpenAI embeddings and optional Cohere reranking.
+- Search configuration, provider credentials, index lifecycle, privacy boundaries, processing estimates, and build status now live in one dedicated Settings experience.
+
 ### New Features
 
 - Replaced the admin page's top file strip and nested detail overlay with one always-available file workspace opened from the conversation rail.
@@ -15,16 +23,28 @@ This project follows a lightweight changelog format inspired by Keep a Changelog
 - Added General, Search, and API tabs to the settings overlay, including encrypted OpenAI and Cohere credentials.
 - Added configurable conversation/session-file/group-file ingestion, token chunking, overlap, candidate limits, and refresh thresholds.
 - Added cancellable, generation-safe vector index builds with explicit group consent for external processing and a separate local-only result lane.
+- Added optional Cohere reranking after BM25 and vector candidates are combined with reciprocal-rank fusion.
+- Added local rebuild estimates for document count, chunk count, embedding tokens, overlap overhead, and model-specific OpenAI cost.
 
 ### Quality of Life
 
 - File formats now have prominent labels, and the workspace remains usable with the keyboard, file picker, or touch-sized controls when a session has no messages yet.
 - Admin and MCP read surfaces now reconcile against the same current file manifest after owner uploads, moves, edits, or deletes.
+- Search moved from the old inline field into a dedicated overlay with Basic and Hybrid modes, cancellable requests, source metadata, highlighted snippets, and a focused result detail view.
+- Vector index controls now use a dedicated action bar with contextual Build, Rebuild, Stop, and Delete states, animated progress, completion time, and a clear ready indicator.
+- Settings, Files, Search, and group overlays can be dismissed by clicking their backdrop; the file workspace still protects unsaved drafts before closing.
+
+### Reliability and Operations
+
+- Vector rebuilds run on the server independently of the Settings window and atomically promote a completed generation, keeping the previous index available if a rebuild is stopped or fails.
+- Source revisions track conversation and file changes, while configurable message and maximum-wait thresholds control when automatic rebuilds are scheduled.
+- Provider failures are retried, Cohere failures fall back to Hybrid ordering with a warning, and interrupted builds preserve the last usable generation.
 
 ### Security
 
 - Admin file mutations require an authenticated owner session and CSRF protection, enforce bounded UTF-8 text uploads, and do not expose new MCP mutation tools.
 - Unselected groups never enter embedding or reranking provider payloads; Basic search remains entirely local and RAG is disabled by default.
+- Search remains an admin-only capability in this release; no context-search tools are exposed to connected models.
 
 ## [0.2.0] - 2026-07-07
 

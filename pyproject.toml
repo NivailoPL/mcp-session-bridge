@@ -1,6 +1,6 @@
 [project]
 name = "mcp-session-bridge"
-version = "0.1.0"
+version = "0.3.0"
 description = "Auth-first remote MCP spike for shared AI session context."
 requires-python = ">=3.12"
 dependencies = [
