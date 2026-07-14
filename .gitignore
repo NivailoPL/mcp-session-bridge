@@ -12,3 +12,7 @@ session-viewer-data*.json
 examples/output/
 secrets/*
 !secrets/.gitkeep
+
+# Local assistant artifacts
+.claude/settings.local.json
+docs/ideation/
