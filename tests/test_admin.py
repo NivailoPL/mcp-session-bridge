@@ -2,9 +2,12 @@ import base64
 import importlib
 import json
 import re
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 
+import pytest
 from starlette.testclient import TestClient
 
 from app.security import password_hash
@@ -52,6 +55,58 @@ def test_admin_viewer_file_workspace_shell_contract() -> None:
     assert 'dom.fileWorkspaceContent.innerHTML = renderMarkdown(content || "\u2014");' in viewer
     assert 'dom.fileWorkspaceContent.replaceChildren(preNode(content));' in viewer
     assert 'dom.fileWorkspaceOpen.focus();' in viewer
+
+
+def test_admin_viewer_markdown_table_contract() -> None:
+    viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
+
+    assert 'function parseMarkdownTable(lines, startIndex)' in viewer
+    assert 'function splitMarkdownTableRow(line)' in viewer
+    assert 'class="markdown-table-wrap"' in viewer
+    assert '<thead><tr>${headerHtml}</tr></thead>' in viewer
+    assert '<tbody>${bodyHtml}</tbody>' in viewer
+    assert 'rows.push(header.map((_, index) => cells[index] || ""));' in viewer
+    assert 'if (cells.length < 2) break;' not in viewer
+    assert 'isMarkdownTableStart(line, nextLine)' in viewer
+    assert '.markdown-table-wrap {' in viewer
+    assert '.markdown-body table {' in viewer
+    assert '.markdown-body th, .markdown-body td {' in viewer
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="Node.js is required for the browser renderer smoke test")
+def test_admin_viewer_markdown_table_rendering() -> None:
+    viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
+    renderer = viewer[viewer.index("function renderMarkdown"):viewer.index("function svgNode")]
+    markdown = "\n".join(
+        [
+            "| Name | Score | Note |",
+            "| :--- | ---: | :---: |",
+            "| **Ada** | 42 | `a|b` |",
+            "| <script>alert(1)</script> | 7 | left \\| right |",
+            "| Only one |",
+            "After",
+        ]
+    )
+    node = shutil.which("node")
+    assert node is not None
+    completed = subprocess.run(
+        [node, "-e", f'{renderer}\nprocess.stdout.write(renderMarkdown(process.argv[1]));', markdown],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    html = completed.stdout
+
+    assert '<div class="markdown-table-wrap"><table>' in html
+    assert '<th class="align-right">Score</th>' in html
+    assert '<th class="align-center">Note</th>' in html
+    assert '<td><strong>Ada</strong></td>' in html
+    assert '<code>a|b</code>' in html
+    assert '&lt;script&gt;alert(1)&lt;/script&gt;' in html
+    assert 'left | right' in html
+    assert '<tr><td>Only one</td><td class="align-right"></td><td class="align-center"></td></tr>' in html
+    assert '<p>After</p>' in html
+    assert "<script>" not in html
 
 
 def test_admin_viewer_file_upload_and_move_contract() -> None:

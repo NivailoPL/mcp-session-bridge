@@ -733,6 +733,22 @@
       background: rgba(255, 255, 255, .08);
     }
     .markdown-body pre code { display: block; padding: 0; background: transparent; border-radius: 0; font-size: 1em; }
+    .markdown-table-wrap {
+      max-width: 100%; margin: .85rem 0; overflow-x: auto;
+      border: 1px solid var(--stroke-soft); border-radius: 8px;
+      background: rgba(0, 0, 0, .14);
+    }
+    .markdown-body table { width: max-content; min-width: 100%; border-collapse: collapse; font-size: .9em; }
+    .markdown-body th, .markdown-body td {
+      max-width: 28rem; padding: .55rem .7rem; border-right: 1px solid var(--stroke-soft);
+      border-bottom: 1px solid var(--stroke-soft); text-align: left; vertical-align: top;
+      overflow-wrap: anywhere;
+    }
+    .markdown-body th { font-weight: 700; background: rgba(255, 255, 255, .055); }
+    .markdown-body th:last-child, .markdown-body td:last-child { border-right: 0; }
+    .markdown-body tbody tr:last-child td { border-bottom: 0; }
+    .markdown-body .align-center { text-align: center; }
+    .markdown-body .align-right { text-align: right; }
     .markdown-body a { color: color-mix(in oklab, var(--m, var(--accent)) 72%, #fff); text-decoration: underline; text-underline-offset: .16em; }
     .chat.bubbles .message.is-user .markdown-body,
     .chat.bubbles .message.is-user .markdown-body a { color: #fff; }
@@ -4169,6 +4185,13 @@
             continue;
           }
 
+          const table = parseMarkdownTable(lines, i);
+          if (table) {
+            html.push(table.html);
+            i = table.nextIndex;
+            continue;
+          }
+
           const heading = line.match(/^(#{1,4})\s+(.+)$/);
           if (heading) {
             const level = heading[1].length;
@@ -4197,14 +4220,92 @@
 
           const paragraph = [line];
           i += 1;
-          while (i < lines.length && lines[i].trim() && !isMarkdownBlockStart(lines[i])) paragraph.push(lines[i++]);
+          while (i < lines.length && lines[i].trim() && !isMarkdownBlockStart(lines[i], lines[i + 1])) paragraph.push(lines[i++]);
           html.push(`<p>${paragraph.map(renderInline).join("<br>")}</p>`);
         }
         return html.join("");
       }
 
-      function isMarkdownBlockStart(line) {
-        return /^```/.test(line) || /^(#{1,4})\s+/.test(line) || /^>\s?/.test(line) || /^\s*(?:[-*+]|\d+[.)])\s+/.test(line);
+      function parseMarkdownTable(lines, startIndex) {
+        if (!isMarkdownTableStart(lines[startIndex], lines[startIndex + 1])) return null;
+
+        const header = splitMarkdownTableRow(lines[startIndex]);
+        const delimiters = splitMarkdownTableRow(lines[startIndex + 1]);
+        const alignments = delimiters.map(tableAlignment);
+        const rows = [];
+        let nextIndex = startIndex + 2;
+
+        while (nextIndex < lines.length && lines[nextIndex].trim() && lines[nextIndex].includes("|")) {
+          const cells = splitMarkdownTableRow(lines[nextIndex]);
+          rows.push(header.map((_, index) => cells[index] || ""));
+          nextIndex += 1;
+        }
+
+        const cellClass = (index) => alignments[index] === "left" ? "" : ` class="align-${alignments[index]}"`;
+        const headerHtml = header.map((cell, index) => `<th${cellClass(index)}>${renderInline(cell)}</th>`).join("");
+        const bodyHtml = rows.map((row) => (
+          `<tr>${row.map((cell, index) => `<td${cellClass(index)}>${renderInline(cell)}</td>`).join("")}</tr>`
+        )).join("");
+
+        return {
+          html: `<div class="markdown-table-wrap"><table><thead><tr>${headerHtml}</tr></thead><tbody>${bodyHtml}</tbody></table></div>`,
+          nextIndex,
+        };
+      }
+
+      function isMarkdownTableStart(line, nextLine) {
+        if (!line || !nextLine || !line.includes("|")) return false;
+        const header = splitMarkdownTableRow(line);
+        const delimiters = splitMarkdownTableRow(nextLine);
+        return header.length >= 2
+          && delimiters.length === header.length
+          && delimiters.every((cell) => /^:?-{3,}:?$/.test(cell));
+      }
+
+      function splitMarkdownTableRow(line) {
+        const source = String(line);
+        const cells = [];
+        let cell = "";
+        let inCode = false;
+
+        for (let index = 0; index < source.length; index += 1) {
+          const char = source[index];
+          const nextChar = source[index + 1];
+          if (char === "\\" && nextChar === "|") {
+            cell += "|";
+            index += 1;
+            continue;
+          }
+          if (char === "`") {
+            inCode = !inCode;
+            cell += char;
+            continue;
+          }
+          if (char === "|" && !inCode) {
+            cells.push(cell.trim());
+            cell = "";
+            continue;
+          }
+          cell += char;
+        }
+        cells.push(cell.trim());
+
+        if (cells[0] === "") cells.shift();
+        if (cells[cells.length - 1] === "") cells.pop();
+        return cells;
+      }
+
+      function tableAlignment(delimiter) {
+        if (delimiter.startsWith(":") && delimiter.endsWith(":")) return "center";
+        return delimiter.endsWith(":") ? "right" : "left";
+      }
+
+      function isMarkdownBlockStart(line, nextLine) {
+        return isMarkdownTableStart(line, nextLine)
+          || /^```/.test(line)
+          || /^(#{1,4})\s+/.test(line)
+          || /^>\s?/.test(line)
+          || /^\s*(?:[-*+]|\d+[.)])\s+/.test(line);
       }
 
       function renderInline(text) {
