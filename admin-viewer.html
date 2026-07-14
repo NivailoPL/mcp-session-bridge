@@ -817,6 +817,10 @@
     .index-card { grid-template-columns: minmax(0,1fr); }
     .index-card-main { min-width: 0; }
     .index-card p { margin: .25rem 0 0; }
+    .index-ready-check { display: inline-grid; place-items: center; width: 1rem; height: 1rem; border: 1px solid rgba(52,211,153,.38); border-radius: 50%; color: var(--ok); background: rgba(52,211,153,.11); font-size: .66rem; font-weight: 900; }
+    .index-ready-check[hidden], .index-built-at[hidden] { display: none; }
+    .index-built-at::before { content: ""; width: 3px; height: 3px; border-radius: 50%; background: var(--faint-ink); }
+    .index-built-at { display: inline-flex; align-items: center; gap: .45rem; }
     .index-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .55rem; margin-top: .2rem; padding-top: .8rem; border-top: 1px solid var(--stroke-soft); }
     .index-actions .danger { margin-left: auto; }
     button.index-build-button { border-color: rgba(52,211,153,.36); color: #a7f3d0; background: rgba(52,211,153,.14); }
@@ -1177,7 +1181,7 @@
                 <label class="field">Rerank candidates<input id="rerankCandidates" type="number" min="1" max="500"></label>
               </div>
             </details>
-            <div class="index-card"><div class="index-card-main"><b>Vector index</b><p id="indexStatus" class="meta"></p>
+            <div class="index-card"><div class="index-card-main"><b>Vector index</b><p id="indexStatus" class="meta"><span id="indexReadyCheck" class="index-ready-check" aria-label="Ready" hidden>✓</span><span id="indexStatusText"></span><span id="indexBuiltAt" class="index-built-at" hidden></span></p>
               <section id="indexEstimate" class="index-estimate" aria-label="Estimated full rebuild" aria-live="polite" hidden>
                 <div class="index-estimate-head"><b>Estimated full rebuild</b><span id="indexEstimateState" class="index-estimate-state"></span></div>
                 <div id="indexEstimateMetrics" class="index-estimate-grid">
@@ -1441,7 +1445,7 @@
         "ragOptions", "cohereEnabled", "sourceConversations", "sourceSessionFiles",
         "sourceGroupFiles", "ragGroupList", "chunkSize", "chunkOverlap", "embeddingModel",
         "embeddingDimensions", "rebuildThreshold", "rebuildMaxWait", "bm25Candidates",
-        "vectorCandidates", "resultLimit", "cohereModel", "rerankCandidates", "indexStatus", "indexEstimate",
+        "vectorCandidates", "resultLimit", "cohereModel", "rerankCandidates", "indexStatus", "indexStatusText", "indexReadyCheck", "indexBuiltAt", "indexEstimate",
         "indexEstimateState", "indexEstimateMetrics", "indexEstimateDocuments", "indexEstimateChunks",
         "indexEstimateTokens", "indexEstimateOverlap", "indexEstimateCost", "indexEstimateModel", "indexEstimatePricing",
         "indexRebuild", "indexRebuildSpinner", "indexRebuildLabel", "indexCancel", "indexDelete", "searchDialog", "searchClose",
@@ -1458,6 +1462,10 @@
       dom.aiSettingsClose.addEventListener("click", () => dom.aiSettingsDialog.close());
       bindSettingsEvents();
       bindContextSearchEvents();
+      bindDialogBackdropClose(dom.groupDialog, dom.groupDialogClose);
+      bindDialogBackdropClose(dom.fileWorkspaceDialog, dom.fileWorkspaceClose);
+      bindDialogBackdropClose(dom.aiSettingsDialog, dom.aiSettingsClose);
+      bindDialogBackdropClose(settingsDom.searchDialog, settingsDom.searchClose);
       dom.groupCancelButton.addEventListener("click", () => dom.groupDialog.close());
       dom.groupDialogClose.addEventListener("click", () => dom.groupDialog.close());
       dom.groupDeleteButton.addEventListener("click", () => {
@@ -1702,12 +1710,17 @@
       function renderIndexStatus(index) {
         if (!index) return;
         const building = ["queued", "building"].includes(index.status);
+        const ready = index.status === "ready";
         const progress = index.status === "building"
           ? ` · ${index.processed_count || 0}/${index.document_count || 0} documents` : "";
         const dirty = index.dirty_document_count ? ` · ${index.dirty_document_count} pending` : "";
         const paused = index.auto_rebuild_suppressed ? " · automatic rebuild paused" : "";
-        settingsDom.indexStatus.textContent =
+        settingsDom.indexStatusText.textContent =
           `${index.status}${progress}${dirty}${paused}${index.last_error ? ` · ${index.last_error}` : ""}`;
+        settingsDom.indexReadyCheck.hidden = !ready;
+        settingsDom.indexBuiltAt.hidden = !(ready && index.completed_at);
+        settingsDom.indexBuiltAt.textContent = ready && index.completed_at
+          ? `Built ${formatDate(new Date(index.completed_at * 1000).toISOString())}` : "";
         settingsDom.indexRebuild.disabled = building;
         settingsDom.indexRebuild.setAttribute("aria-busy", String(building));
         settingsDom.indexRebuildSpinner.hidden = !building;
@@ -1732,6 +1745,16 @@
         settingsDom.indexEstimateMetrics.hidden = true;
         settingsDom.indexEstimateState.textContent = "Calculating…";
         indexEstimateTimer = window.setTimeout(() => refreshIndexEstimate(requestId), delay);
+      }
+
+      function bindDialogBackdropClose(dialog, closeButton) {
+        dialog.addEventListener("click", (event) => {
+          if (event.target !== dialog) return;
+          const bounds = dialog.getBoundingClientRect();
+          const outside = event.clientX < bounds.left || event.clientX > bounds.right
+            || event.clientY < bounds.top || event.clientY > bounds.bottom;
+          if (outside) closeButton.click();
+        });
       }
 
       async function refreshIndexEstimate(requestId) {

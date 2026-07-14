@@ -907,6 +907,9 @@ def test_admin_viewer_rag_settings_and_search_overlay_contract() -> None:
     assert 'Groups allowed for external processing' in viewer
     assert 'Only checked groups may leave this server' in viewer
     assert 'id="indexRebuild"' in viewer
+    assert 'id="indexReadyCheck"' in viewer
+    assert 'id="indexBuiltAt"' in viewer
+    assert "index.completed_at * 1000" in viewer
     assert 'id="indexRebuildSpinner"' in viewer
     assert 'id="indexRebuildLabel"' in viewer
     assert 'id="indexCancel"' in viewer
@@ -924,6 +927,11 @@ def test_admin_viewer_rag_settings_and_search_overlay_contract() -> None:
     assert '>OpenAI cost</span>' in viewer
     assert "Estimated full rebuild" in viewer
     assert "not included in the rebuild cost" in viewer
+    assert "function bindDialogBackdropClose" in viewer
+    assert "if (outside) closeButton.click()" in viewer
+    for dialog_name in ("groupDialog", "fileWorkspaceDialog", "aiSettingsDialog"):
+        assert f"bindDialogBackdropClose(dom.{dialog_name}" in viewer
+    assert "bindDialogBackdropClose(settingsDom.searchDialog" in viewer
 
     assert 'data-search-mode="basic"' in viewer
     assert 'data-search-mode="hybrid"' in viewer
