@@ -232,6 +232,11 @@ async def admin_api_search_index(request: Request) -> Response:
     return await admin.api_search_index(request)
 
 
+@mcp.custom_route("/admin/api/search/index/estimate", methods=["POST"])
+async def admin_api_search_index_estimate(request: Request) -> Response:
+    return await admin.api_search_index_estimate(request)
+
+
 @mcp.custom_route("/admin/api/search/index/rebuild", methods=["POST"])
 async def admin_api_rebuild_search_index(request: Request) -> Response:
     return await admin.api_rebuild_search_index(request)

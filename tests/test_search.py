@@ -92,6 +92,37 @@ def test_chunk_text_honors_token_budget_and_overlap():
     assert chunks[0].token_ids[-8:] == chunks[1].token_ids[:8]
 
 
+def test_index_estimate_respects_group_consent_overlap_and_model_price(tmp_path):
+    store = make_store(tmp_path)
+    public_text = " ".join(f"public-{index}" for index in range(120))
+    private_text = " ".join(f"private-{index}" for index in range(500))
+    store.save_exchange("public-session", "test", public_text, "public reply")
+    store.save_exchange("private-session", "test", private_text, "private reply")
+    service = SearchService(store)
+    config = SearchConfig(
+        enabled=True,
+        included_group_ids=("uncategorized",),
+        chunk_size=64,
+        chunk_overlap=16,
+        embedding_model="text-embedding-3-small",
+    )
+
+    estimate = service.estimate_index(config)
+
+    assert estimate["document_count"] == 1
+    assert estimate["chunk_count"] > 1
+    assert estimate["embedding_token_count"] > estimate["source_token_count"]
+    assert estimate["overlap_token_count"] > 0
+    assert estimate["price_usd_per_million_tokens"] == 0.02
+    assert estimate["estimated_cost_usd"] == pytest.approx(
+        estimate["embedding_token_count"] * 0.02 / 1_000_000
+    )
+    assert estimate["cohere_included"] is False
+
+    custom = SearchConfig.from_dict({**config.to_dict(), "embedding_model": "custom-model"})
+    assert service.estimate_index(custom)["estimated_cost_usd"] is None
+
+
 def test_search_config_validation_and_privacy_partition():
     with pytest.raises(ValueError, match="overlap"):
         SearchConfig(chunk_size=100, chunk_overlap=100).validate()
