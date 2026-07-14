@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import asyncio
+import logging
 import re
 import secrets
 import time
+from contextlib import asynccontextmanager, suppress
 from datetime import UTC, datetime
 from typing import Any
 
@@ -39,6 +42,7 @@ SERVER_INSTRUCTIONS = (
 
 settings = load_settings()
 store = Store(settings.db_path)
+logger = logging.getLogger(__name__)
 
 
 class BridgeTokenVerifier(TokenVerifier):
@@ -60,6 +64,26 @@ class BridgeTokenVerifier(TokenVerifier):
         )
 
 
+async def _search_index_monitor() -> None:
+    while True:
+        await asyncio.sleep(30)
+        try:
+            await asyncio.to_thread(admin.maybe_schedule_search_rebuild)
+        except Exception:
+            logger.exception("Automatic search index refresh check failed")
+
+
+@asynccontextmanager
+async def app_lifespan(_: FastMCP[Any]):
+    monitor = asyncio.create_task(_search_index_monitor())
+    try:
+        yield {}
+    finally:
+        monitor.cancel()
+        with suppress(asyncio.CancelledError):
+            await monitor
+
+
 mcp = FastMCP(
     name="MCP Session Bridge",
     instructions=SERVER_INSTRUCTIONS,
@@ -72,6 +96,7 @@ mcp = FastMCP(
     streamable_http_path=settings.resource_path,
     json_response=True,
     stateless_http=True,
+    lifespan=app_lifespan,
     transport_security=TransportSecuritySettings(
         enable_dns_rebinding_protection=True,
         allowed_hosts=settings.transport_allowed_hosts,
@@ -171,6 +196,56 @@ async def admin_api_update_ai_settings(request: Request) -> Response:
 @mcp.custom_route("/admin/api/ai-settings/key", methods=["DELETE"])
 async def admin_api_delete_ai_key(request: Request) -> Response:
     return await admin.api_delete_ai_key(request)
+
+@mcp.custom_route("/admin/api/settings", methods=["GET"])
+async def admin_api_settings(request: Request) -> Response:
+    return await admin.api_settings(request)
+
+
+@mcp.custom_route("/admin/api/settings/general", methods=["PUT"])
+async def admin_api_update_general_settings(request: Request) -> Response:
+    return await admin.api_update_general_settings(request)
+
+
+@mcp.custom_route("/admin/api/settings/search", methods=["PUT"])
+async def admin_api_update_search_settings(request: Request) -> Response:
+    return await admin.api_update_search_settings(request)
+
+
+@mcp.custom_route("/admin/api/settings/api", methods=["PUT"])
+async def admin_api_update_provider_settings(request: Request) -> Response:
+    return await admin.api_update_provider_settings(request)
+
+
+@mcp.custom_route("/admin/api/settings/api/{provider}/key", methods=["DELETE"])
+async def admin_api_delete_provider_key(request: Request) -> Response:
+    return await admin.api_delete_provider_key(request)
+
+
+@mcp.custom_route("/admin/api/search", methods=["POST"])
+async def admin_api_search(request: Request) -> Response:
+    return await admin.api_search(request)
+
+
+@mcp.custom_route("/admin/api/search/index", methods=["GET"])
+async def admin_api_search_index(request: Request) -> Response:
+    return await admin.api_search_index(request)
+
+
+@mcp.custom_route("/admin/api/search/index/rebuild", methods=["POST"])
+async def admin_api_rebuild_search_index(request: Request) -> Response:
+    return await admin.api_rebuild_search_index(request)
+
+
+@mcp.custom_route("/admin/api/search/index/cancel", methods=["POST"])
+async def admin_api_cancel_search_index(request: Request) -> Response:
+    return await admin.api_cancel_search_index(request)
+
+
+@mcp.custom_route("/admin/api/search/index", methods=["DELETE"])
+async def admin_api_delete_search_index(request: Request) -> Response:
+    return await admin.api_delete_search_index(request)
+
 
 
 @mcp.custom_route("/admin/api/sessions", methods=["GET"])

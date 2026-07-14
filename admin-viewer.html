@@ -784,6 +784,59 @@
       background: rgba(255, 255, 255, .03);
       color: #d4d8e2; font-size: .9rem; line-height: 1.65; overflow-wrap: anywhere;
     }
+    .search-launcher { justify-content: flex-start; gap: .55rem; width: 100%; }
+    .search-launcher svg { width: 16px; height: 16px; }
+    .settings-dialog { width: min(58rem, calc(100vw - 2rem)); max-width: none; max-height: min(48rem, calc(100vh - 2rem)); }
+    .settings-shell { display: grid; grid-template-columns: 10rem minmax(0, 1fr); min-height: 31rem; }
+    .settings-tabs { display: grid; align-content: start; gap: .35rem; padding: 1rem; border-right: 1px solid var(--stroke-soft); }
+    .settings-tabs button { justify-content: flex-start; border-color: transparent; background: transparent; }
+    .settings-tabs button.is-active { color: var(--accent-ink); border-color: rgba(122,125,240,.32); background: var(--accent-soft); }
+    .settings-content { min-width: 0; overflow: auto; padding: 1.2rem; }
+    .settings-panel, .settings-stack { display: grid; gap: 1rem; }
+    .settings-section-head h4, .settings-section-head p { margin: 0; }
+    .settings-section-head h4 { font-size: 1.05rem; }
+    .settings-section-head p { margin-top: .3rem; color: var(--muted); font-size: .82rem; line-height: 1.5; }
+    .settings-status { min-height: 1.2rem; margin: 0 0 .8rem; color: var(--muted); font-size: .78rem; }
+    .settings-status.is-error { color: var(--danger); }
+    .settings-status.is-ok { color: var(--ok); }
+    .settings-switch { display: flex; align-items: flex-start; gap: .7rem; padding: .8rem; border: 1px solid var(--stroke); border-radius: var(--r-card); background: rgba(255,255,255,.025); }
+    .settings-switch input { width: auto; margin-top: .2rem; accent-color: var(--accent); }
+    .settings-switch span { display: grid; gap: .15rem; }
+    .settings-switch small { color: var(--muted); line-height: 1.45; }
+    .settings-fieldset { display: flex; flex-wrap: wrap; gap: .75rem 1rem; padding: .85rem; border: 1px solid var(--stroke); border-radius: var(--r-card); }
+    .settings-fieldset legend { padding: 0 .35rem; color: var(--muted); font-size: .75rem; }
+    .rag-group-list { display: grid; grid-template-columns: repeat(auto-fill,minmax(13rem,1fr)); gap: .5rem; width: 100%; }
+    .rag-group-option { display: flex; align-items: center; gap: .55rem; min-width: 0; padding: .55rem; border-radius: 8px; background: rgba(255,255,255,.03); }
+    .rag-group-option input { width: auto; accent-color: var(--accent); }
+    .rag-group-option svg { width: 16px; height: 16px; color: var(--g); }
+    .rag-group-option span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .developer-settings { border: 1px solid var(--stroke); border-radius: var(--r-card); padding: .75rem; }
+    .developer-settings summary { cursor: pointer; color: var(--muted); font-size: .82rem; }
+    .settings-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: .75rem; padding-top: .85rem; }
+    .provider-card, .index-card { display: grid; gap: .65rem; padding: .9rem; border: 1px solid var(--stroke); border-radius: var(--r-card); background: rgba(255,255,255,.025); }
+    .index-card { grid-template-columns: minmax(0,1fr) auto; align-items: center; }
+    .index-card p { margin: .25rem 0 0; }
+    .search-dialog { width: min(72rem, calc(100vw - 2rem)); height: min(48rem, calc(100vh - 2rem)); max-width: none; max-height: none; }
+    .search-dialog[open] { display: grid; grid-template-rows: auto auto auto minmax(0,1fr); }
+    .search-command { display: grid; grid-template-columns: minmax(12rem,1fr) auto auto auto; gap: .6rem; padding: .9rem 1rem; border-bottom: 1px solid var(--stroke-soft); }
+    .search-dialog > .settings-status { padding: .55rem 1rem; margin: 0; border-bottom: 1px solid var(--stroke-soft); }
+    .search-workspace { display: grid; grid-template-columns: minmax(18rem,25rem) minmax(0,1fr); min-height: 0; }
+    .search-results-pane, .search-detail { min-width: 0; overflow: auto; padding: 1rem; }
+    .search-results-pane { border-right: 1px solid var(--stroke-soft); }
+    .search-results { display: grid; gap: .55rem; }
+    .search-results + .search-results { margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--stroke-soft); }
+    .search-lane-title { margin: 0 0 .6rem; color: var(--faint-ink); font-size: .68rem; text-transform: uppercase; letter-spacing: .13em; }
+    .search-result-card { display: grid; gap: .45rem; width: 100%; padding: .75rem; text-align: left; background: rgba(255,255,255,.025); }
+    .search-result-card.is-active { border-color: var(--accent); background: var(--accent-soft); }
+    .search-result-title { display: flex; align-items: center; gap: .45rem; min-width: 0; }
+    .search-result-title b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .search-result-meta, .search-badges { display: flex; flex-wrap: wrap; gap: .35rem; color: var(--muted); font-size: .7rem; }
+    .search-badge { padding: .12rem .35rem; border: 1px solid var(--stroke); border-radius: 999px; color: var(--accent-ink); }
+    .search-result-card p { margin: 0; color: var(--muted); font-size: .78rem; line-height: 1.45; }
+    .search-result-card mark, .search-detail mark { border-radius: 2px; background: rgba(246,200,95,.28); color: inherit; }
+    .search-detail { display: grid; align-content: start; gap: .9rem; }
+    .search-detail h4, .search-detail p { margin: 0; }
+    .search-detail-snippet { padding: 1rem; border: 1px solid var(--stroke); border-radius: var(--r-card); background: rgba(255,255,255,.025); white-space: pre-wrap; line-height: 1.6; }
 
     /* ---------- responsive ---------- */
     @media (max-width: 920px) {
@@ -793,6 +846,7 @@
       .topbar { flex-direction: column; align-items: stretch; }
       .top-actions { justify-content: flex-start; }
       #fileWorkspaceDialog { width: calc(100vw - 1rem); height: calc(100vh - 1rem); }
+      .settings-dialog, .search-dialog { width: calc(100vw - 1rem); height: calc(100vh - 1rem); max-height: none; }
       .exchange-grid, .field-grid { grid-template-columns: 1fr; }
       .turn + .turn { border-left: 0; border-top: 1px solid var(--stroke-soft); }
       .chat.bubbles .message { max-width: 92%; }
@@ -806,6 +860,15 @@
       .file-workspace-back { display: inline-flex; }
       .file-workspace-list, .file-workspace-detail { height: 100%; border-right: 0; }
       .dialog-actions { gap: .25rem; }
+      .settings-shell { grid-template-columns: 1fr; min-height: 0; overflow: auto; }
+      .settings-tabs { grid-template-columns: repeat(3, 1fr); border-right: 0; border-bottom: 1px solid var(--stroke-soft); }
+      .settings-tabs button { justify-content: center; }
+      .settings-content { overflow: visible; }
+      .settings-grid, .index-card { grid-template-columns: 1fr; }
+      .search-command { grid-template-columns: 1fr 1fr; }
+      .search-command input { grid-column: 1 / -1; }
+      .search-workspace { grid-template-columns: 1fr; overflow: auto; }
+      .search-results-pane { border-right: 0; border-bottom: 1px solid var(--stroke-soft); }
     }
 
     @media (prefers-reduced-motion: reduce) {
@@ -853,10 +916,10 @@
       </div>
 
       <section class="toolbar">
-        <div class="search-wrap">
+        <button id="searchOpenButton" type="button" class="ghost search-launcher" aria-haspopup="dialog" aria-controls="searchDialog">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
-          <input id="searchInput" type="search" placeholder="Search sessions...">
-        </div>
+          Search context
+        </button>
         <label class="toggle">
           <input id="showDeletedToggle" type="checkbox" checked>
           <span>Show deleted exchanges</span>
@@ -1049,26 +1112,87 @@
     </div>
   </dialog>
 
-  <dialog id="aiSettingsDialog">
-    <form id="aiSettingsForm" method="dialog">
-      <div class="dialog-head">
-        <h3>AI rename settings</h3>
-        <button type="button" class="ghost" id="aiSettingsClose">Close</button>
+  <dialog id="aiSettingsDialog" class="settings-dialog" aria-labelledby="settingsHeading">
+    <div class="dialog-head">
+      <div><h3 id="settingsHeading">Settings</h3><p class="meta">Admin configuration for models and context search.</p></div>
+      <button type="button" class="ghost" id="aiSettingsClose">Close</button>
+    </div>
+    <div class="settings-shell">
+      <nav class="settings-tabs" aria-label="Settings sections">
+        <button type="button" data-settings-tab="general" class="is-active">General</button>
+        <button type="button" data-settings-tab="search">Search</button>
+        <button type="button" data-settings-tab="api">API</button>
+      </nav>
+      <div class="settings-content">
+        <p id="aiSettingsStatus" class="settings-status" aria-live="polite"></p>
+        <section data-settings-panel="general" class="settings-panel">
+          <div class="settings-section-head"><div><h4>General</h4><p>Defaults used by admin automation.</p></div></div>
+          <label class="field">AI rename model<input id="aiModelInput" type="text" maxlength="96" autocomplete="off"></label>
+          <div class="edit-actions"><button type="button" class="primary" id="generalSettingsSave">Save General</button></div>
+        </section>
+        <section data-settings-panel="search" class="settings-panel" hidden>
+          <div class="settings-section-head"><div><h4>RAG search</h4><p>BM25 stays local. Only checked groups may leave this server for embeddings or reranking.</p></div></div>
+          <label class="settings-switch"><input id="ragEnabled" type="checkbox"><span><b>Enable RAG search</b><small>Build and use the vector index for Hybrid mode.</small></span></label>
+          <div id="ragOptions" class="settings-stack">
+            <label class="settings-switch"><input id="cohereEnabled" type="checkbox"><span><b>Enable Cohere Rerank</b><small>Applied only to externally approved Hybrid candidates.</small></span></label>
+            <fieldset class="settings-fieldset"><legend>Sources</legend>
+              <label class="toggle"><input id="sourceConversations" type="checkbox"> Conversations</label>
+              <label class="toggle"><input id="sourceSessionFiles" type="checkbox"> Session files</label>
+              <label class="toggle"><input id="sourceGroupFiles" type="checkbox"> Group files</label>
+            </fieldset>
+            <fieldset class="settings-fieldset"><legend>Groups allowed for external processing</legend><div id="ragGroupList" class="rag-group-list"></div></fieldset>
+            <details class="developer-settings"><summary>Developer settings</summary>
+              <div class="settings-grid">
+                <label class="field">Chunk size (tokens)<input id="chunkSize" type="number" min="64" max="4000"></label>
+                <label class="field">Overlap (tokens)<input id="chunkOverlap" type="number" min="0" max="3999"></label>
+                <label class="field">Embedding model<input id="embeddingModel" type="text"></label>
+                <label class="field">Dimensions<input id="embeddingDimensions" type="number" min="1" max="4096"></label>
+                <label class="field">New messages threshold<input id="rebuildThreshold" type="number" min="1" max="10000"></label>
+                <label class="field">Maximum wait (minutes)<input id="rebuildMaxWait" type="number" min="1" max="10080"></label>
+                <label class="field">BM25 candidates<input id="bm25Candidates" type="number" min="1" max="500"></label>
+                <label class="field">Vector candidates<input id="vectorCandidates" type="number" min="1" max="500"></label>
+                <label class="field">Results<input id="resultLimit" type="number" min="1" max="500"></label>
+                <label class="field">Cohere model<input id="cohereModel" type="text"></label>
+                <label class="field">Rerank candidates<input id="rerankCandidates" type="number" min="1" max="500"></label>
+              </div>
+            </details>
+            <div class="index-card"><div><b>Vector index</b><p id="indexStatus" class="meta"></p></div><div class="edit-actions">
+              <button id="indexRebuild" type="button" class="ghost">Build / rebuild</button>
+              <button id="indexCancel" type="button" class="ghost">Stop</button>
+              <button id="indexDelete" type="button" class="danger">Delete index</button>
+            </div></div>
+          </div>
+          <div class="edit-actions"><button type="button" class="primary" id="searchSettingsSave">Save Search</button></div>
+        </section>
+        <section data-settings-panel="api" class="settings-panel" hidden>
+          <div class="settings-section-head"><div><h4>Provider API keys</h4><p>Keys are encrypted at rest and never returned to this browser.</p></div></div>
+          <div class="provider-card"><label class="field">OpenAI API key<input id="aiKeyInput" type="password" autocomplete="off" placeholder="Leave blank to keep current key"></label><p id="openaiKeyStatus" class="meta"></p><button type="button" class="danger" id="aiKeyRemoveButton">Remove OpenAI key</button></div>
+          <div class="provider-card"><label class="field">Cohere API key<input id="cohereKeyInput" type="password" autocomplete="off" placeholder="Leave blank to keep current key"></label><p id="cohereKeyStatus" class="meta"></p><button type="button" class="danger" id="cohereKeyRemoveButton">Remove Cohere key</button></div>
+          <div class="edit-actions"><button type="button" class="primary" id="apiSettingsSave">Save API keys</button></div>
+        </section>
       </div>
-      <div class="dialog-body">
-        <div id="aiSettingsStatus" class="meta"></div>
-        <label class="field">Model
-          <input id="aiModelInput" type="text" maxlength="96" autocomplete="off">
-        </label>
-        <label class="field">API key
-          <input id="aiKeyInput" type="password" autocomplete="off" placeholder="Leave blank to keep current key">
-        </label>
-        <div class="edit-actions">
-          <button type="submit" class="primary">Save settings</button>
-          <button type="button" class="danger" id="aiKeyRemoveButton">Remove key</button>
-        </div>
+    </div>
+  </dialog>
+
+  <dialog id="searchDialog" class="search-dialog" aria-labelledby="searchHeading">
+    <div class="dialog-head">
+      <div><h3 id="searchHeading">Search context</h3><p class="meta">Search every conversation and text file in the admin database.</p></div>
+      <button type="button" class="ghost" id="searchClose">Close</button>
+    </div>
+    <form id="contextSearchForm" class="search-command">
+      <input id="contextSearchInput" type="search" maxlength="1000" placeholder="What are you looking for?" autocomplete="off">
+      <div class="seg" role="radiogroup" aria-label="Search mode">
+        <button type="button" data-search-mode="basic" class="is-active">Basic (BM25)</button>
+        <button type="button" data-search-mode="hybrid">Hybrid</button>
       </div>
+      <button id="contextSearchSubmit" type="submit" class="primary">Search</button>
+      <button id="contextSearchStop" type="button" class="ghost" hidden>Stop</button>
     </form>
+    <p id="contextSearchStatus" class="settings-status" aria-live="polite">Enter a query to search local context.</p>
+    <div class="search-workspace">
+      <section id="searchResultsPane" class="search-results-pane"><div id="searchResults" class="search-results"></div><div id="localSearchResults" class="search-results"></div></section>
+      <section id="searchDetail" class="search-detail"><div class="file-workspace-placeholder">Select a result to inspect its source and snippet.</div></section>
+    </div>
   </dialog>
 
   <script type="application/json" id="demo-data">{"ok":true,"schema":"mcp-session-bridge.viewer.v1","generated_at":1780321400,"generated_at_iso":"2026-06-01T13:43:20.000Z","session_count":4,"turn_count":22,"sessions":[{"session_id":"demo-2026-06-01-empty-followup","title":"Short follow-up session","title_is_auto":false,"context_pack_id":"manual-context","created_at":1780316600,"updated_at":1780317350,"exchange_count":1,"deleted_exchange_count":0},{"session_id":"demo-2026-06-01-incident-debugging","title":"Debugging a virtual environment issue","title_is_auto":false,"context_pack_id":"local-development","created_at":1780311200,"updated_at":1780313270,"exchange_count":3,"deleted_exchange_count":0},{"session_id":"demo-2026-06-01-ui-review","title":"Admin viewer UI review","title_is_auto":false,"context_pack_id":"viewer-design-refresh","created_at":1780305600,"updated_at":1780308330,"exchange_count":4,"deleted_exchange_count":1},{"session_id":"demo-2026-06-01-product-planning","title":"Product planning with Claude and GPT","title_is_auto":false,"context_pack_id":"public-release-notes","created_at":1780301400,"updated_at":1780303470,"exchange_count":3,"deleted_exchange_count":0}],"transcripts":{"demo-2026-06-01-product-planning":{"session_id":"demo-2026-06-01-product-planning","title":"Product planning with Claude and GPT","exchange_count":3,"turn_count":6,"char_count":2104,"sha256":"synthetic-preview-only","context_pack_id":"public-release-notes","turn_sequence":["USER","Claude","USER","GPT-5","USER","Claude"],"turns":[{"turn":1,"speaker":"USER","exchange_id":100,"created_at":"2026-06-01T08:10:00.000Z","created_at_display":null,"chars":103,"content":"We are preparing MCP Session Bridge for a public v0.1 release. What should the README make clear first?"},{"turn":2,"speaker":"Claude","exchange_id":100,"created_at":"2026-06-01T08:11:30.000Z","created_at_display":"Monday June 1, 2026 at 08:11","chars":226,"content":"Lead with the core promise: this is a small remote MCP server for shared, multi-model conversation memory. The README should show the quickest useful path, then explain tools, security assumptions, and the current limitations."},{"turn":3,"speaker":"USER","exchange_id":101,"created_at":"2026-06-01T08:21:00.000Z","created_at_display":null,"chars":50,"content":"Can you turn that into a concise launch checklist?"},{"turn":4,"speaker":"GPT-5","exchange_id":101,"created_at":"2026-06-01T08:22:30.000Z","created_at_display":"Monday June 1, 2026 at 08:22","chars":191,"content":"Yes. Suggested checklist: README quickstart, .env.example, MIT license, security policy, contributing notes, changelog, demo script, examples, and a CI workflow that runs tests plus the demo."},{"turn":5,"speaker":"USER","exchange_id":102,"created_at":"2026-06-01T08:32:00.000Z","created_at_display":null,"chars":80,"content":"The docs feel a little dense. What would make them easier for a new contributor?"},{"turn":6,"speaker":"Claude","exchange_id":102,"created_at":"2026-06-01T08:33:30.000Z","created_at_display":"Monday June 1, 2026 at 08:33","chars":199,"content":"Split the mental model from the operational steps. A first-time reader should find installation, client setup, model instructions, deployment, security, limitations, and operations as separate paths."}]},"demo-2026-06-01-ui-review":{"session_id":"demo-2026-06-01-ui-review","title":"Admin viewer UI review","exchange_count":4,"turn_count":8,"char_count":2480,"sha256":"synthetic-preview-only","context_pack_id":"viewer-design-refresh","turn_sequence":["USER","USER","USER","Claude","USER","GPT-5","USER","Claude"],"turns":[{"turn":1,"speaker":"USER","exchange_id":103,"created_at":"2026-06-01T09:20:00.000Z","created_at_display":null,"chars":113,"content":"The current admin panel works, but it feels a bit plain. I want it to stay practical while looking more polished."},{"turn":2,"speaker":"USER","exchange_id":103,"created_at":"2026-06-01T09:21:30.000Z","created_at_display":"Monday June 1, 2026 at 09:21","chars":196,"content":"The best direction is a calmer operational dashboard: stronger spacing rhythm, clearer active selection, better exchange cards, and more deliberate typography. Keep it dense enough for repeat use."},{"turn":3,"speaker":"USER","exchange_id":104,"created_at":"2026-06-01T09:31:00.000Z","created_at_display":null,"chars":66,"content":"Should the redesign use a big hero or decorative visual treatment?"},{"turn":4,"speaker":"Claude","exchange_id":104,"created_at":"2026-06-01T09:32:30.000Z","created_at_display":"Monday June 1, 2026 at 09:32","chars":150,"content":"No. This is an admin tool, so the first screen should be the working surface itself: session list, summary, transcript corrections, and clear actions."},{"turn":5,"speaker":"USER","exchange_id":105,"created_at":"2026-06-01T09:42:00.000Z","created_at_display":null,"chars":44,"content":"What UI states should the redesign preserve?"},{"turn":6,"speaker":"GPT-5","exchange_id":105,"created_at":"2026-06-01T09:43:30.000Z","created_at_display":"Monday June 1, 2026 at 09:43","chars":157,"content":"Keep loading, empty, selected, editing, deleted, error, and success states. Also preserve responsive behavior for narrow screens and long transcript content."},{"turn":7,"speaker":"USER","exchange_id":106,"created_at":"2026-06-01T09:53:00.000Z","created_at_display":null,"chars":74,"content":"The delete and restore actions need better affordance. Any recommendation?"},{"turn":8,"speaker":"Claude","exchange_id":106,"created_at":"2026-06-01T09:54:30.000Z","created_at_display":"Monday June 1, 2026 at 09:54","chars":166,"content":"Use restrained destructive styling for delete, a clear restored/saved status message, and make deleted exchanges visually distinct without making the text unreadable."}]},"demo-2026-06-01-incident-debugging":{"session_id":"demo-2026-06-01-incident-debugging","title":"Debugging a virtual environment issue","exchange_count":3,"turn_count":6,"char_count":1920,"sha256":"synthetic-preview-only","context_pack_id":"local-development","turn_sequence":["USER","USER","USER","GPT-5","USER","Claude"],"turns":[{"turn":1,"speaker":"USER","exchange_id":107,"created_at":"2026-06-01T10:53:20.000Z","created_at_display":null,"chars":70,"content":"uv run sometimes hangs on my mounted workspace. Is the project broken?"},{"turn":2,"speaker":"USER","exchange_id":107,"created_at":"2026-06-01T10:54:50.000Z","created_at_display":"Monday June 1, 2026 at 10:54","chars":192,"content":"The project is likely fine. The symptom points to the mounted filesystem and virtual environment metadata rather than app logic. Rebuilding .venv on the host where tests run is the safer path."},{"turn":3,"speaker":"USER","exchange_id":108,"created_at":"2026-06-01T11:04:20.000Z","created_at_display":null,"chars":41,"content":"What should we document for contributors?"},{"turn":4,"speaker":"GPT-5","exchange_id":108,"created_at":"2026-06-01T11:05:50.000Z","created_at_display":"Monday June 1, 2026 at 11:05","chars":171,"content":"Tell contributors to run uv sync locally on their own machine, avoid committing .venv, and rebuild the environment if packages look inconsistent after moving the checkout."},{"turn":5,"speaker":"USER","exchange_id":109,"created_at":"2026-06-01T11:15:20.000Z","created_at_display":null,"chars":33,"content":"Could this affect GitHub Actions?"},{"turn":6,"speaker":"Claude","exchange_id":109,"created_at":"2026-06-01T11:16:50.000Z","created_at_display":"Monday June 1, 2026 at 11:16","chars":160,"content":"No, GitHub Actions creates a fresh checkout and a fresh Python environment. That makes CI a useful independent signal for whether the project itself is healthy."}]},"demo-2026-06-01-empty-followup":{"session_id":"demo-2026-06-01-empty-followup","title":"Short follow-up session","exchange_count":1,"turn_count":2,"char_count":937,"sha256":"synthetic-preview-only","context_pack_id":"manual-context","turn_sequence":["USER","USER"],"turns":[{"turn":1,"speaker":"USER","exchange_id":110,"created_at":"2026-06-01T12:23:20.000Z","created_at_display":null,"chars":59,"content":"Give me a tiny explanation of what MCP Session Bridge does."},{"turn":2,"speaker":"USER","exchange_id":110,"created_at":"2026-06-01T12:24:50.000Z","created_at_display":"Monday June 1, 2026 at 12:24","chars":209,"content":"It gives multiple model clients one shared transcript store, so Claude, ChatGPT, Codex, or another MCP client can pick up the same conversation history through tools instead of relying on a single chat window."}]}}}</script>
@@ -1181,9 +1305,13 @@
         fileOpenGeneration: 0,
         sessionLoadGeneration: 0,
         aiSettings: { configured: false, api_key_preview: "", model: "gpt-5.4-nano", title_max_chars: 72 },
+        settings: null,
+        searchMode: "basic",
+        searchResults: [],
+        selectedSearchResult: null,
+        searchController: null,
         renamingSessionId: "",
         manualRenameSessionId: "",
-        query: "",
         showDeleted: true,
         editingExchangeId: null,
         busy: false,
@@ -1202,7 +1330,6 @@
         aiSettingsButton: document.getElementById("aiSettingsButton"),
         aiSettingsClose: document.getElementById("aiSettingsClose"),
         aiSettingsDialog: document.getElementById("aiSettingsDialog"),
-        aiSettingsForm: document.getElementById("aiSettingsForm"),
         aiSettingsStatus: document.getElementById("aiSettingsStatus"),
         copyButton: document.getElementById("copyButton"),
         copySessionIdButton: document.getElementById("copySessionIdButton"),
@@ -1261,7 +1388,7 @@
         scrollNextButton: document.getElementById("scrollNextButton"),
         scrollPrevButton: document.getElementById("scrollPrevButton"),
         scrollTopButton: document.getElementById("scrollTopButton"),
-        searchInput: document.getElementById("searchInput"),
+        searchOpenButton: document.getElementById("searchOpenButton"),
         sessionGroupSelect: document.getElementById("sessionGroupSelect"),
         sessionFileList: document.getElementById("sessionFileList"),
         sessionFileInput: document.getElementById("sessionFileInput"),
@@ -1277,6 +1404,17 @@
         timezoneSelect: document.getElementById("timezoneSelect"),
         turnNav: document.getElementById("turnNav"),
       };
+      const settingsDom = Object.fromEntries([
+        "generalSettingsSave", "apiSettingsSave", "searchSettingsSave", "cohereKeyInput",
+        "cohereKeyRemoveButton", "openaiKeyStatus", "cohereKeyStatus", "ragEnabled",
+        "ragOptions", "cohereEnabled", "sourceConversations", "sourceSessionFiles",
+        "sourceGroupFiles", "ragGroupList", "chunkSize", "chunkOverlap", "embeddingModel",
+        "embeddingDimensions", "rebuildThreshold", "rebuildMaxWait", "bm25Candidates",
+        "vectorCandidates", "resultLimit", "cohereModel", "rerankCandidates", "indexStatus",
+        "indexRebuild", "indexCancel", "indexDelete", "searchDialog", "searchClose",
+        "contextSearchForm", "contextSearchInput", "contextSearchSubmit", "contextSearchStop",
+        "contextSearchStatus", "searchResults", "localSearchResults", "searchDetail"
+      ].map((id) => [id, document.getElementById(id)]));
 
       dom.addGroupButton.addEventListener("click", () => openGroupDialog());
       dom.editGroupButton.addEventListener("click", () => {
@@ -1285,11 +1423,8 @@
       });
       dom.aiSettingsButton.addEventListener("click", () => openAiSettingsDialog());
       dom.aiSettingsClose.addEventListener("click", () => dom.aiSettingsDialog.close());
-      dom.aiSettingsForm.addEventListener("submit", async (event) => {
-        event.preventDefault();
-        await saveAiSettings();
-      });
-      dom.aiKeyRemoveButton.addEventListener("click", () => removeAiKey());
+      bindSettingsEvents();
+      bindContextSearchEvents();
       dom.groupCancelButton.addEventListener("click", () => dom.groupDialog.close());
       dom.groupDialogClose.addEventListener("click", () => dom.groupDialog.close());
       dom.groupDeleteButton.addEventListener("click", () => {
@@ -1357,10 +1492,7 @@
       dom.scrollPrevButton.addEventListener("click", () => scrollTranscript("prev"));
       dom.scrollNextButton.addEventListener("click", () => scrollTranscript("next"));
       dom.scrollBottomButton.addEventListener("click", () => scrollTranscript("bottom"));
-      dom.searchInput.addEventListener("input", () => {
-        state.query = dom.searchInput.value.trim().toLowerCase();
-        renderSessions();
-      });
+      dom.searchOpenButton.addEventListener("click", () => openContextSearch());
       dom.showDeletedToggle.addEventListener("change", () => {
         state.showDeleted = dom.showDeletedToggle.checked;
         renderExchanges();
@@ -1411,7 +1543,7 @@
           state.displayTimezone = me.display_timezone || state.displayTimezone;
           dom.identity.textContent = state.userDisplayName;
           populateTimezoneSelect();
-          await loadAiSettings();
+          await loadSettings();
           await refreshAll();
         } catch (error) {
           if (error.status === 401) {
@@ -1424,64 +1556,376 @@
         }
       }
 
-      async function loadAiSettings() {
-        try {
-          const payload = await api("/admin/api/ai-settings");
-          state.aiSettings = payload.settings || state.aiSettings;
-        } catch (error) {
-          state.aiSettings = { configured: false, api_key_preview: "", model: "gpt-5.4-nano", title_max_chars: 72 };
+      async function loadSettings() {
+        const payload = await api("/admin/api/settings");
+        state.settings = payload.settings;
+        const openai = state.settings.api.openai;
+        state.aiSettings = {
+          configured: openai.configured, api_key_preview: openai.preview,
+          model: state.settings.general.rename_model, title_max_chars: 72,
+        };
+      }
+
+      function bindSettingsEvents() {
+        document.querySelector(".settings-tabs").addEventListener("click", (event) => {
+          const button = event.target.closest("[data-settings-tab]");
+          if (button) selectSettingsTab(button.dataset.settingsTab);
+        });
+        settingsDom.generalSettingsSave.addEventListener("click", () => saveGeneralSettings());
+        settingsDom.searchSettingsSave.addEventListener("click", () => saveSearchSettings());
+        settingsDom.apiSettingsSave.addEventListener("click", () => saveApiSettings());
+        dom.aiKeyRemoveButton.addEventListener("click", () => removeProviderKey("openai"));
+        settingsDom.cohereKeyRemoveButton.addEventListener("click", () => removeProviderKey("cohere"));
+        settingsDom.ragEnabled.addEventListener("change", renderRagVisibility);
+        settingsDom.indexRebuild.addEventListener("click", () => runIndexAction("rebuild"));
+        settingsDom.indexCancel.addEventListener("click", () => runIndexAction("cancel"));
+        settingsDom.indexDelete.addEventListener("click", () => runIndexAction("delete"));
+      }
+
+      function selectSettingsTab(name) {
+        for (const button of document.querySelectorAll("[data-settings-tab]")) {
+          button.classList.toggle("is-active", button.dataset.settingsTab === name);
+        }
+        for (const panel of document.querySelectorAll("[data-settings-panel]")) {
+          panel.hidden = panel.dataset.settingsPanel !== name;
         }
       }
 
-      function openAiSettingsDialog() {
-        dom.aiModelInput.value = state.aiSettings.model || "gpt-5.4-nano";
-        dom.aiKeyInput.value = "";
-        renderAiSettingsStatus();
+      async function openAiSettingsDialog() {
+        try { await loadSettings(); } catch (error) { setStatus(error.message, "error"); return; }
+        fillSettingsForm();
+        selectSettingsTab("general");
         dom.aiSettingsDialog.showModal();
         dom.aiModelInput.focus();
       }
 
-      function renderAiSettingsStatus() {
-        const keyText = state.aiSettings.configured
-          ? `API key configured: ${state.aiSettings.api_key_preview || "configured"}`
-          : "API key is not configured. AI rename buttons are disabled.";
-        dom.aiSettingsStatus.textContent = `${keyText} Title limit: ${state.aiSettings.title_max_chars || 72} characters.`;
-        dom.aiKeyRemoveButton.disabled = !state.aiSettings.configured || state.busy;
+      function fillSettingsForm() {
+        const settings = state.settings;
+        const search = settings.search;
+        dom.aiModelInput.value = settings.general.rename_model || "gpt-5.4-nano";
+        dom.aiKeyInput.value = "";
+        settingsDom.cohereKeyInput.value = "";
+        settingsDom.ragEnabled.checked = search.enabled;
+        settingsDom.cohereEnabled.checked = search.cohere_rerank_enabled;
+        settingsDom.sourceConversations.checked = search.include_conversations;
+        settingsDom.sourceSessionFiles.checked = search.include_session_files;
+        settingsDom.sourceGroupFiles.checked = search.include_group_files;
+        const values = {
+          chunkSize: search.chunk_size, chunkOverlap: search.chunk_overlap,
+          embeddingModel: search.embedding_model, embeddingDimensions: search.embedding_dimensions,
+          rebuildThreshold: search.rebuild_message_threshold, rebuildMaxWait: search.rebuild_max_wait_minutes,
+          bm25Candidates: search.bm25_candidates, vectorCandidates: search.vector_candidates,
+          resultLimit: search.result_limit, cohereModel: search.cohere_model,
+          rerankCandidates: search.rerank_candidates,
+        };
+        for (const [name, value] of Object.entries(values)) settingsDom[name].value = value;
+        renderRagGroups(search.included_group_ids || []);
+        renderRagVisibility();
+        renderSettingsStatus();
       }
 
-      async function saveAiSettings() {
-        const payload = { model: dom.aiModelInput.value.trim() || "gpt-5.4-nano" };
-        if (dom.aiKeyInput.value.trim()) payload.api_key = dom.aiKeyInput.value.trim();
-        setBusy(true);
-        try {
-          const result = await api("/admin/api/ai-settings", { method: "PUT", body: JSON.stringify(payload) });
-          state.aiSettings = result.settings || state.aiSettings;
-          dom.aiKeyInput.value = "";
-          renderAiSettingsStatus();
-          renderSessions();
-          setStatus("AI rename settings saved.", "ok");
-        } catch (error) {
-          setStatus(error.message, "error");
-        } finally {
-          setBusy(false);
+      function renderRagGroups(selected) {
+        const selectedIds = new Set(selected);
+        settingsDom.ragGroupList.replaceChildren();
+        for (const group of state.settings.groups || []) {
+          const label = document.createElement("label");
+          label.className = "rag-group-option";
+          label.style.setProperty("--g", group.color || "#8b93a7");
+          const input = document.createElement("input");
+          input.type = "checkbox";
+          input.value = group.group_id;
+          input.checked = selectedIds.has(group.group_id);
+          const icon = document.createElement("span");
+          icon.innerHTML = iconSvg(group.icon_key || "folder");
+          const name = document.createElement("span");
+          name.textContent = group.name;
+          label.append(input, icon, name);
+          settingsDom.ragGroupList.append(label);
         }
       }
 
-      async function removeAiKey() {
-        if (!window.confirm("Remove the saved AI API key?")) return;
-        setBusy(true);
+      function renderRagVisibility() {
+        settingsDom.ragOptions.hidden = !settingsDom.ragEnabled.checked;
+      }
+
+      function renderSettingsStatus(message = "", kind = "") {
+        const settings = state.settings;
+        if (!settings) return;
+        dom.aiSettingsStatus.textContent = message;
+        dom.aiSettingsStatus.className = `settings-status${kind ? ` is-${kind}` : ""}`;
+        settingsDom.openaiKeyStatus.textContent = settings.api.openai.configured
+          ? `Configured: ${settings.api.openai.preview || "saved"}` : "Not configured.";
+        settingsDom.cohereKeyStatus.textContent = settings.api.cohere.configured
+          ? `Configured: ${settings.api.cohere.preview || "saved"}` : "Not configured.";
+        dom.aiKeyRemoveButton.disabled = !settings.api.openai.configured;
+        settingsDom.cohereKeyRemoveButton.disabled = !settings.api.cohere.configured;
+        renderIndexStatus(settings.index);
+      }
+
+      function renderIndexStatus(index) {
+        if (!index) return;
+        const progress = index.status === "building"
+          ? ` · ${index.processed_count || 0}/${index.document_count || 0} documents` : "";
+        const dirty = index.dirty_document_count ? ` · ${index.dirty_document_count} pending` : "";
+        const paused = index.auto_rebuild_suppressed ? " · automatic rebuild paused" : "";
+        settingsDom.indexStatus.textContent =
+          `${index.status}${progress}${dirty}${paused}${index.last_error ? ` · ${index.last_error}` : ""}`;
+        settingsDom.indexCancel.disabled = !["queued", "building"].includes(index.status);
+        settingsDom.indexDelete.disabled = ["queued", "building"].includes(index.status);
+      }
+
+      async function saveGeneralSettings() {
+        await saveSettingsRequest("/admin/api/settings/general", {
+          rename_model: dom.aiModelInput.value.trim() || "gpt-5.4-nano",
+        }, "General settings saved.");
+      }
+
+      function searchFormPayload() {
+        const number = (node) => Number.parseInt(node.value, 10);
+        return {
+          enabled: settingsDom.ragEnabled.checked,
+          cohere_rerank_enabled: settingsDom.cohereEnabled.checked,
+          include_conversations: settingsDom.sourceConversations.checked,
+          include_session_files: settingsDom.sourceSessionFiles.checked,
+          include_group_files: settingsDom.sourceGroupFiles.checked,
+          included_group_ids: [...settingsDom.ragGroupList.querySelectorAll("input:checked")].map((input) => input.value),
+          chunk_size: number(settingsDom.chunkSize), chunk_overlap: number(settingsDom.chunkOverlap),
+          embedding_model: settingsDom.embeddingModel.value.trim(),
+          embedding_dimensions: number(settingsDom.embeddingDimensions),
+          rebuild_message_threshold: number(settingsDom.rebuildThreshold),
+          rebuild_max_wait_minutes: number(settingsDom.rebuildMaxWait),
+          bm25_candidates: number(settingsDom.bm25Candidates),
+          vector_candidates: number(settingsDom.vectorCandidates),
+          result_limit: number(settingsDom.resultLimit),
+          cohere_model: settingsDom.cohereModel.value.trim(),
+          rerank_candidates: number(settingsDom.rerankCandidates),
+        };
+      }
+
+      async function saveSearchSettings() {
+        await saveSettingsRequest("/admin/api/settings/search", searchFormPayload(), "Search settings saved.");
+      }
+
+      async function saveApiSettings() {
+        const payload = {};
+        if (dom.aiKeyInput.value.trim()) payload.openai = dom.aiKeyInput.value.trim();
+        if (settingsDom.cohereKeyInput.value.trim()) payload.cohere = settingsDom.cohereKeyInput.value.trim();
+        if (!Object.keys(payload).length) { renderSettingsStatus("Enter a new key to save.", "error"); return; }
+        await saveSettingsRequest("/admin/api/settings/api", payload, "API keys saved.");
+        dom.aiKeyInput.value = "";
+        settingsDom.cohereKeyInput.value = "";
+      }
+
+      async function saveSettingsRequest(path, payload, success) {
         try {
-          const result = await api("/admin/api/ai-settings/key", { method: "DELETE" });
-          state.aiSettings = result.settings || state.aiSettings;
-          renderAiSettingsStatus();
+          const result = await api(path, { method: "PUT", body: JSON.stringify(payload) });
+          state.settings = result.settings;
+          const openai = state.settings.api.openai;
+          state.aiSettings = {
+            configured: openai.configured, api_key_preview: openai.preview,
+            model: state.settings.general.rename_model, title_max_chars: 72,
+          };
+          fillSettingsForm();
+          renderSettingsStatus(success, "ok");
           renderSessions();
-          setStatus("AI API key removed.", "ok");
         } catch (error) {
-          setStatus(error.message, "error");
-        } finally {
-          setBusy(false);
+          renderSettingsStatus(error.message, "error");
         }
       }
+
+      async function removeProviderKey(provider) {
+        if (!window.confirm(`Remove the saved ${provider} API key?`)) return;
+        try {
+          const result = await api(`/admin/api/settings/api/${provider}/key`, { method: "DELETE" });
+          state.settings = result.settings;
+          await loadSettings();
+          fillSettingsForm();
+          renderSettingsStatus(`${provider} key removed.`, "ok");
+        } catch (error) {
+          renderSettingsStatus(error.message, "error");
+        }
+      }
+
+      async function runIndexAction(action) {
+        if (action === "delete" && !window.confirm("Delete the complete vector index? BM25 will keep working.")) return;
+        const options = action === "delete" ? { method: "DELETE" } : { method: "POST" };
+        const path = action === "rebuild" ? "/admin/api/search/index/rebuild"
+          : action === "cancel" ? "/admin/api/search/index/cancel" : "/admin/api/search/index";
+        try {
+          const result = await api(path, options);
+          state.settings.index = result.index;
+          renderIndexStatus(result.index);
+          renderSettingsStatus(action === "rebuild" ? "Index build started." : `Index ${action} requested.`, "ok");
+          if (action === "rebuild") pollIndexStatus();
+        } catch (error) {
+          renderSettingsStatus(error.message, "error");
+        }
+      }
+
+      async function pollIndexStatus() {
+        if (!dom.aiSettingsDialog.open) return;
+        try {
+          const result = await api("/admin/api/search/index");
+          state.settings.index = result.index;
+          renderIndexStatus(result.index);
+          if (["queued", "building"].includes(result.index.status)) window.setTimeout(pollIndexStatus, 1000);
+        } catch (error) {
+          renderSettingsStatus(error.message, "error");
+        }
+      }
+      function bindContextSearchEvents() {
+        settingsDom.searchClose.addEventListener("click", () => settingsDom.searchDialog.close());
+        settingsDom.contextSearchForm.addEventListener("submit", (event) => { event.preventDefault(); runContextSearch(); });
+        settingsDom.contextSearchStop.addEventListener("click", () => state.searchController?.abort());
+        settingsDom.searchDialog.querySelector("[role=\"radiogroup\"]").addEventListener("click", (event) => {
+          const button = event.target.closest("[data-search-mode]");
+          if (!button) return;
+          state.searchMode = button.dataset.searchMode;
+          for (const item of settingsDom.searchDialog.querySelectorAll("[data-search-mode]")) item.classList.toggle("is-active", item === button);
+        });
+      }
+
+      async function openContextSearch() {
+        if (!state.settings) {
+          try { await loadSettings(); } catch (error) { setStatus(error.message, "error"); return; }
+        }
+        const hybrid = settingsDom.searchDialog.querySelector('[data-search-mode="hybrid"]');
+        hybrid.disabled = !state.settings.search.enabled || !state.settings.api.openai.configured || state.settings.index.active_generation == null || state.settings.index.needs_rebuild;
+        hybrid.title = hybrid.disabled ? "Enable RAG, configure OpenAI, and build the vector index first." : "";
+        if (hybrid.disabled && state.searchMode === "hybrid") state.searchMode = "basic";
+        for (const item of settingsDom.searchDialog.querySelectorAll("[data-search-mode]")) item.classList.toggle("is-active", item.dataset.searchMode === state.searchMode);
+        settingsDom.searchDialog.showModal();
+        settingsDom.contextSearchInput.focus();
+      }
+
+      async function runContextSearch() {
+        const query = settingsDom.contextSearchInput.value.trim();
+        if (!query) return;
+        state.searchController = new AbortController();
+        settingsDom.contextSearchSubmit.disabled = true;
+        settingsDom.contextSearchStop.hidden = false;
+        settingsDom.contextSearchStatus.textContent = `Searching with ${state.searchMode === "basic" ? "local BM25" : "Hybrid"}…`;
+        try {
+          const result = await api("/admin/api/search", {
+            method: "POST", body: JSON.stringify({ query, mode: state.searchMode }), signal: state.searchController.signal,
+          });
+          state.searchResults = [...result.results, ...result.local_only_results];
+          renderSearchLane(settingsDom.searchResults, "Results", result.results);
+          renderSearchLane(settingsDom.localSearchResults, "Local-only matches", result.local_only_results);
+          settingsDom.contextSearchStatus.textContent = result.warning || `Found ${state.searchResults.length} result${state.searchResults.length === 1 ? "" : "s"}.`;
+          if (state.searchResults[0]) selectSearchResult(state.searchResults[0]);
+          else {
+            const empty = document.createElement("div");
+            empty.className = "file-workspace-placeholder";
+            empty.textContent = "No matching context.";
+            settingsDom.searchDetail.replaceChildren(empty);
+          }
+        } catch (error) {
+          if (error.name === "AbortError") {
+            settingsDom.contextSearchStatus.textContent = "Stopped waiting for search results.";
+          } else {
+            settingsDom.contextSearchStatus.textContent = state.searchMode === "hybrid"
+              ? `${error.message} Basic search is still available.`
+              : error.message;
+          }
+        } finally {
+          state.searchController = null;
+          settingsDom.contextSearchSubmit.disabled = false;
+          settingsDom.contextSearchStop.hidden = true;
+        }
+      }
+
+      function renderSearchLane(container, title, results) {
+        container.replaceChildren();
+        if (!results.length) return;
+        const heading = document.createElement("h4");
+        heading.className = "search-lane-title";
+        heading.textContent = title;
+        container.append(heading);
+        for (const result of results) {
+          const card = document.createElement("button");
+          card.type = "button";
+          card.className = "search-result-card";
+          card.dataset.documentKey = result.document_key;
+          const titleRow = document.createElement("div");
+          titleRow.className = "search-result-title";
+          const icon = document.createElement("span");
+          icon.innerHTML = iconSvg(result.group?.icon_key || "folder");
+          const name = document.createElement("b");
+          name.textContent = result.title;
+          titleRow.append(icon, name);
+          const meta = document.createElement("div");
+          meta.className = "search-result-meta";
+          meta.textContent = `${result.group?.name || result.group_id} · ${result.source_kind.replaceAll("_", " ")} · ${formatDate(new Date(result.timestamp * 1000).toISOString())}`;
+          const snippet = document.createElement("p");
+          appendHighlightedText(snippet, result.snippet, result.highlights || []);
+          const badges = document.createElement("div");
+          badges.className = "search-badges";
+          for (const label of result.pipeline || []) badges.append(spanCls("search-badge", label));
+          card.append(titleRow, meta, snippet, badges);
+          card.addEventListener("click", () => selectSearchResult(result));
+          container.append(card);
+        }
+      }
+
+      function appendHighlightedText(container, text, ranges) {
+        let cursor = 0;
+        for (const range of ranges) {
+          container.append(document.createTextNode(text.slice(cursor, range.start)));
+          const mark = document.createElement("mark");
+          mark.textContent = text.slice(range.start, range.end);
+          container.append(mark);
+          cursor = range.end;
+        }
+        container.append(document.createTextNode(text.slice(cursor)));
+      }
+
+      function selectSearchResult(result) {
+        state.selectedSearchResult = result;
+        for (const card of settingsDom.searchDialog.querySelectorAll(".search-result-card")) card.classList.toggle("is-active", card.dataset.documentKey === result.document_key);
+        const title = document.createElement("h4");
+        title.textContent = result.title;
+        const meta = document.createElement("p");
+        meta.className = "meta";
+        meta.textContent = `${result.group?.name || result.group_id} · ${result.subtitle || result.source_kind}`;
+        const snippet = document.createElement("div");
+        snippet.className = "search-detail-snippet";
+        appendHighlightedText(snippet, result.snippet, result.highlights || []);
+        settingsDom.searchDetail.replaceChildren(title, meta, snippet);
+        if (result.session_id || result.source_kind === "group_file") {
+          const open = document.createElement("button");
+          open.type = "button";
+          open.className = "primary";
+          open.textContent = result.source_kind.endsWith("_file") ? "Preview full file" : "Open conversation";
+          open.addEventListener("click", () => openSearchResult(result));
+          settingsDom.searchDetail.append(open);
+        }
+      }
+
+      async function openSearchResult(result) {
+        if (result.source_kind === "group_file") {
+          const payload = await api(`/admin/api/files/${encodeURIComponent(result.source_id)}`);
+          const title = document.createElement("h4");
+          title.textContent = payload.file.filename;
+          const meta = document.createElement("p");
+          meta.className = "meta";
+          meta.textContent = `${formatBytes(payload.file.size_bytes)} · ${payload.file.mime_type || "text/plain"}`;
+          settingsDom.searchDetail.replaceChildren(title, meta, preNode(payload.file.content || ""));
+          return;
+        }
+        settingsDom.searchDialog.close();
+        state.activeGroupId = "all";
+        await loadSession(result.session_id);
+        if (result.source_kind === "session_file") {
+          openFileWorkspace();
+          await openFile(Number(result.source_id));
+        } else {
+          const exchange = document.querySelector(`[data-exchange-id="${CSS.escape(String(result.source_id))}"]`);
+          if (exchange) exchange.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+      }
+
+
 
       async function refreshAll() {
         await loadGroups();
@@ -1620,10 +2064,7 @@
       function filteredSessions() {
         return state.sessions.filter((session) => {
           if (state.activeGroupId !== "all" && session.group_id !== state.activeGroupId) return false;
-          if (!state.query) return true;
-          const group = session.group || {};
-          return [session.session_id, session.title, session.context_pack_id, group.name, session.group_id]
-            .filter(Boolean).join(" ").toLowerCase().includes(state.query);
+          return true;
         });
       }
 
@@ -2722,7 +3163,7 @@
           localStorage.setItem("mcp-admin:timezone", state.displayTimezone);
           refreshDemoTimestamps();
           populateTimezoneSelect();
-          await loadAiSettings();
+          await loadSettings();
           await refreshAll();
           setStatus(`Timezone set to ${state.displayTimezone}.`, "ok");
         } catch (error) {
@@ -2956,6 +3397,7 @@
       function renderExchange(exchange) {
         const article = document.createElement("article");
         article.className = `exchange${exchange.is_deleted ? " is-deleted" : ""}`;
+        article.dataset.exchangeId = String(exchange.exchange_id);
         if (state.editingExchangeId === exchange.exchange_id) article.classList.add("is-editing");
 
         // head
@@ -3246,6 +3688,65 @@
           refreshDemoTimestamps();
           return Promise.resolve({ ok: true, display_timezone: state.displayTimezone });
         }
+        if (path === "/admin/api/settings" && method === "GET") {
+          if (!state.settings) {
+            state.settings = {
+              general: { rename_model: state.aiSettings.model },
+              api: {
+                openai: { configured: state.aiSettings.configured, preview: state.aiSettings.api_key_preview },
+                cohere: { configured: false, preview: "" },
+              },
+              search: {
+                enabled: false, cohere_rerank_enabled: false,
+                include_conversations: true, include_session_files: true, include_group_files: true,
+                included_group_ids: [], chunk_size: 600, chunk_overlap: 100,
+                embedding_model: "text-embedding-3-small", embedding_dimensions: 1536,
+                rebuild_message_threshold: 20, rebuild_max_wait_minutes: 15,
+                bm25_candidates: 50, vector_candidates: 50, result_limit: 20,
+                cohere_model: "rerank-v4.0-fast", rerank_candidates: 50,
+              },
+              groups: demo.groups,
+              index: {
+                status: "empty", active_generation: null, document_count: 0, chunk_count: 0,
+                processed_count: 0, dirty_document_count: 0, source_document_count: demo.sessions.length,
+                last_error: null, cancel_requested: false,
+              },
+            };
+          }
+          state.settings.groups = demo.groups;
+          return Promise.resolve({ ok: true, settings: state.settings });
+        }
+        if (path === "/admin/api/settings/general" && method === "PUT") {
+          state.settings.general.rename_model = body.rename_model;
+          state.aiSettings.model = body.rename_model;
+          return Promise.resolve({ ok: true, settings: state.settings });
+        }
+        if (path === "/admin/api/settings/search" && method === "PUT") {
+          state.settings.search = { ...state.settings.search, ...body };
+          return Promise.resolve({ ok: true, settings: state.settings, index: state.settings.index });
+        }
+        if (path === "/admin/api/settings/api" && method === "PUT") {
+          if (body.openai) state.settings.api.openai = { configured: true, preview: "sk-...demo" };
+          if (body.cohere) state.settings.api.cohere = { configured: true, preview: "coh...demo" };
+          return Promise.resolve({ ok: true, settings: state.settings });
+        }
+        const demoProviderDelete = path.match(/^\/admin\/api\/settings\/api\/(openai|cohere)\/key$/);
+        if (demoProviderDelete && method === "DELETE") {
+          state.settings.api[demoProviderDelete[1]] = { configured: false, preview: "" };
+          return Promise.resolve({ ok: true, settings: state.settings });
+        }
+        if (path === "/admin/api/search/index" && method === "GET") {
+          return Promise.resolve({ ok: true, index: state.settings.index });
+        }
+        if (path.startsWith("/admin/api/search/index") && ["POST", "DELETE"].includes(method)) {
+          state.settings.index.status = path.endsWith("rebuild") ? "ready" : "empty";
+          state.settings.index.active_generation = path.endsWith("rebuild") ? 1 : null;
+          return Promise.resolve({ ok: true, index: state.settings.index });
+        }
+        if (path === "/admin/api/search" && method === "POST") {
+          return Promise.resolve({ ok: true, mode: body.mode, results: [], local_only_results: [], warning: null });
+        }
+
         if (path === "/admin/api/ai-settings" && method === "GET") {
           return Promise.resolve({ ok: true, settings: state.aiSettings });
         }

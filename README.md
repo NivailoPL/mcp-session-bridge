@@ -11,7 +11,8 @@ It is intentionally narrow. Files enter the bridge only through an explicit uplo
 - Stores sessions, transcript exchanges, OAuth records, and admin events in SQLite.
 - Returns long transcripts in chunks so clients do not need one oversized tool result.
 - Saves explicitly uploaded session and group text files for reusable context.
-- Includes an offline transcript viewer and an authenticated admin UI for transcript correction and file management.
+- Includes an offline transcript viewer and an authenticated admin UI for transcript correction, file management, and full-database search.
+- Provides local BM25 search plus optional OpenAI embeddings and Cohere reranking for admin-only Hybrid search.
 - Ships a local demo script for understanding the core workflow without setting up a remote MCP client.
 
 ![Turn system diagram](docs/assets/turn-system.png)
@@ -101,6 +102,17 @@ Typical model flow:
 
 Session groups and uploaded files are runtime data in the SQLite database. User-created groups and their files are not stored in tracked repo configuration. The admin panel at `/admin/sessions` can create, edit, delete, filter by, and move sessions between groups. Its file workspace can explicitly upload text files, move them between session and group scope, edit text content, and permanently delete files. These owner actions change what models can find through the current overview and file manifest; they do not add MCP move, edit, or delete tools.
 
+### Admin Search
+
+The Search button in the admin panel opens an overlay over the complete bridge database:
+
+- **Basic** uses SQLite FTS5/BM25 locally and does not send context to an external provider.
+- **Hybrid** combines BM25 with OpenAI embeddings and can optionally rerank approved candidates with Cohere.
+- Search sources can include conversations, session files, and group files.
+- Each group must be explicitly selected before its content can be embedded or reranked. Unselected groups remain available only in the separate local BM25 lane.
+
+Settings are split into General, Search, and API tabs. Provider keys are encrypted with the bridge secret, are returned only as masked previews, and are shared with the existing AI rename feature where applicable. Vector indexing is disabled by default; the owner can build, stop, rebuild, or delete the index and configure chunking plus refresh thresholds. This search is admin-only and does not add search tools to MCP clients.
+
 `get_session_overview` returns `response_display_timezone` for the configured bridge display timezone. `save_exchange` returns `assistant_created_at_display` and `assistant_created_at_timezone`; use that returned display timestamp as the user-visible response timestamp. The bridge renders response display timestamps in the configured bridge display timezone, UTC by default, so clients should not convert that value into their own local timezone.
 
 ## Documentation
@@ -164,7 +176,8 @@ Then open `http://127.0.0.1:8799/session-viewer.html`.
 | `app/oauth.py` | OAuth dynamic registration, login, token exchange, and refresh. |
 | `app/storage.py` | SQLite schema and persistence for sessions, transcripts, and tokens. |
 | `app/session_package.py` | Transcript rendering and chunking. |
-| `app/admin.py` | Admin login and transcript correction API. |
+| `app/admin.py` | Admin login, settings, transcript correction, and search API. |
+| `app/search.py` | FTS5/BM25 search, vector indexing, provider clients, and Hybrid ranking. |
 | `scripts/demo_session.py` | Local demo transcript generator. |
 | `scripts/session_audit.py` | CLI for session inspection and viewer export. |
 | `docs/project-prompt-template.md` | Copyable project prompt for model clients. |

@@ -18,6 +18,13 @@ from cryptography.fernet import Fernet, InvalidToken
 from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 
+from app.search import (
+    COHERE_KEY_SETTING,
+    OPENAI_KEY_SETTING,
+    RENAME_MODEL_SETTING,
+    SearchConfig,
+    SearchService,
+)
 from app.security import token_urlsafe, verify_password
 from app.settings import Settings
 from app.storage import (
@@ -65,6 +72,7 @@ class AdminHandlers:
         self.settings = settings
         self.store = store
         self.html_path = html_path
+        self.search = SearchService(store)
 
     async def index(self, request: Request) -> Response:
         return RedirectResponse("/admin/sessions", status_code=303)
@@ -157,6 +165,181 @@ class AdminHandlers:
             {"ok": True, "settings": self._ai_settings_payload()},
             headers=self._no_store_headers(),
         )
+    async def api_settings(self, request: Request) -> Response:
+        _, error = self._require_admin(request)
+        if error:
+            return error
+        return JSONResponse(
+            {"ok": True, "settings": await asyncio.to_thread(self._settings_payload)},
+            headers=self._no_store_headers(),
+        )
+
+    async def api_update_general_settings(self, request: Request) -> Response:
+        _, error = self._require_admin_mutation(request)
+        if error:
+            return error
+        payload, parse_error = await _json_body(request)
+        if parse_error:
+            return parse_error
+        model = str(payload.get("rename_model", "")).strip() or AI_RENAME_DEFAULT_MODEL
+        if len(model) > 96:
+            return self._json_error("rename_model must be 96 characters or fewer.", status_code=400)
+        self.store.set_app_setting(RENAME_MODEL_SETTING, model)
+        self.store.set_app_setting(AI_RENAME_MODEL_SETTING, model)
+        return JSONResponse({"ok": True, "settings": await asyncio.to_thread(self._settings_payload)},
+                            headers=self._no_store_headers())
+
+    async def api_update_search_settings(self, request: Request) -> Response:
+        _, error = self._require_admin_mutation(request)
+        if error:
+            return error
+        payload, parse_error = await _json_body(request)
+        if parse_error:
+            return parse_error
+        try:
+            config = SearchConfig.from_dict(payload)
+            known_groups = {item["group_id"] for item in self.store.list_session_groups()}
+            unknown = set(config.included_group_ids) - known_groups
+            if unknown:
+                raise ValueError(f"Unknown group ids: {', '.join(sorted(unknown))}")
+            previous = self.search.get_config()
+            index = self.search.index_status(sync=False)
+            build_sensitive_change = (
+                config.enabled != previous.enabled
+                or config.index_signature() != previous.index_signature()
+            )
+            if index["status"] in {"queued", "building"} and build_sensitive_change:
+                return self._json_error(
+                    "Stop the active vector build before changing RAG sources or group consent.",
+                    status_code=409,
+                )
+            self.search.set_config(config)
+            index = await asyncio.to_thread(
+                self.search.maybe_start_rebuild, self._read_provider_key("openai")
+            )
+        except (TypeError, ValueError) as exc:
+            return self._json_error(str(exc), status_code=400)
+        return JSONResponse(
+            {
+                "ok": True,
+                "settings": await asyncio.to_thread(self._settings_payload),
+                "index": index,
+            },
+            headers=self._no_store_headers(),
+        )
+
+    async def api_update_provider_settings(self, request: Request) -> Response:
+        _, error = self._require_admin_mutation(request)
+        if error:
+            return error
+        payload, parse_error = await _json_body(request)
+        if parse_error:
+            return parse_error
+        for provider, setting_key in (("openai", OPENAI_KEY_SETTING), ("cohere", COHERE_KEY_SETTING)):
+            if provider not in payload:
+                continue
+            value = str(payload.get(provider, "")).strip()
+            if not value:
+                return self._json_error(f"{provider} key must not be empty.", status_code=400)
+            self.store.set_app_setting(setting_key, self._encrypt_secret(value))
+            if provider == "openai":
+                self.store.set_app_setting(AI_RENAME_API_KEY_SETTING, self._encrypt_secret(value))
+        return JSONResponse({"ok": True, "settings": await asyncio.to_thread(self._settings_payload)},
+                            headers=self._no_store_headers())
+
+    async def api_delete_provider_key(self, request: Request) -> Response:
+        _, error = self._require_admin_mutation(request)
+        if error:
+            return error
+        provider = request.path_params.get("provider", "")
+        keys = {"openai": OPENAI_KEY_SETTING, "cohere": COHERE_KEY_SETTING}
+        if provider not in keys:
+            return self._json_error("Unknown provider.", status_code=404)
+        self.store.delete_app_setting(keys[provider])
+        if provider == "openai":
+            self.store.delete_app_setting(AI_RENAME_API_KEY_SETTING)
+            self.search.cancel_rebuild()
+        return JSONResponse({"ok": True, "settings": await asyncio.to_thread(self._settings_payload)},
+                            headers=self._no_store_headers())
+
+    async def api_search(self, request: Request) -> Response:
+        _, error = self._require_admin(request)
+        if error:
+            return error
+        payload, parse_error = await _json_body(request)
+        if parse_error:
+            return parse_error
+        query = str(payload.get("query", "")).strip()
+        mode = str(payload.get("mode", "basic")).strip().lower()
+        if not query:
+            return self._json_error("query must not be empty.", status_code=400)
+        if len(query) > 1000:
+            return self._json_error("query must be 1000 characters or fewer.", status_code=400)
+        config = self.search.get_config()
+        try:
+            if mode == "basic":
+                results = await asyncio.to_thread(
+                    self.search.basic_search, query, limit=config.result_limit,
+                    source_kinds=config.source_kinds(),
+                )
+                data = {"results": results, "local_only_results": [], "warning": None}
+            elif mode == "hybrid":
+                data = await asyncio.to_thread(
+                    self.search.hybrid_search, query,
+                    openai_api_key=self._read_provider_key("openai"),
+                    cohere_api_key=self._read_provider_key("cohere"),
+                    config=config,
+                )
+            else:
+                return self._json_error("mode must be basic or hybrid.", status_code=400)
+        except ValueError as exc:
+            return self._json_error(str(exc), status_code=400)
+        except Exception as exc:
+            return self._json_error(f"Search failed: {exc}", status_code=502)
+        group_map = {item["group_id"]: item for item in self.store.list_session_groups()}
+        for lane in ("results", "local_only_results"):
+            for result in data[lane]:
+                result["group"] = group_map.get(result["group_id"])
+        return JSONResponse({"ok": True, "mode": mode, **data}, headers=self._no_store_headers())
+
+    async def api_search_index(self, request: Request) -> Response:
+        _, error = self._require_admin(request)
+        if error:
+            return error
+        index = await asyncio.to_thread(
+            self.search.maybe_start_rebuild, self._read_provider_key("openai")
+        )
+        return JSONResponse({"ok": True, "index": index}, headers=self._no_store_headers())
+
+    async def api_rebuild_search_index(self, request: Request) -> Response:
+        _, error = self._require_admin_mutation(request)
+        if error:
+            return error
+        try:
+            index = self.search.start_rebuild(
+                self._read_provider_key("openai"), self.search.get_config()
+            )
+        except (ValueError, RuntimeError) as exc:
+            return self._json_error(str(exc), status_code=400)
+        return JSONResponse({"ok": True, "index": index}, status_code=202,
+                            headers=self._no_store_headers())
+
+    async def api_cancel_search_index(self, request: Request) -> Response:
+        _, error = self._require_admin_mutation(request)
+        if error:
+            return error
+        return JSONResponse({"ok": True, "index": self.search.cancel_rebuild()},
+                            headers=self._no_store_headers())
+
+    async def api_delete_search_index(self, request: Request) -> Response:
+        _, error = self._require_admin_mutation(request)
+        if error:
+            return error
+        status = self.search.index_status(sync=False)
+        if status["status"] in {"queued", "building"}:
+            return self._json_error("Stop the active build before deleting the index.", status_code=409)
+        return JSONResponse({"ok": True, "index": self.search.delete_vector_index()},
+                            headers=self._no_store_headers())
 
     async def api_update_ai_settings(self, request: Request) -> Response:
         _, error = self._require_admin_mutation(request)
@@ -171,13 +354,16 @@ class AdminHandlers:
             api_key = str(payload.get("api_key", "")).strip()
             if not api_key:
                 return self._json_error("api_key must not be empty.", status_code=400)
-            self.store.set_app_setting(AI_RENAME_API_KEY_SETTING, self._encrypt_secret(api_key))
+            encrypted = self._encrypt_secret(api_key)
+            self.store.set_app_setting(AI_RENAME_API_KEY_SETTING, encrypted)
+            self.store.set_app_setting(OPENAI_KEY_SETTING, encrypted)
 
         if "model" in payload:
             model = str(payload.get("model", "")).strip() or AI_RENAME_DEFAULT_MODEL
             if len(model) > 96:
                 return self._json_error("model must be 96 characters or fewer.", status_code=400)
             self.store.set_app_setting(AI_RENAME_MODEL_SETTING, model)
+            self.store.set_app_setting(RENAME_MODEL_SETTING, model)
 
         return JSONResponse(
             {"ok": True, "settings": self._ai_settings_payload()},
@@ -189,6 +375,8 @@ class AdminHandlers:
         if error:
             return error
         self.store.delete_app_setting(AI_RENAME_API_KEY_SETTING)
+        self.store.delete_app_setting(OPENAI_KEY_SETTING)
+        self.search.cancel_rebuild()
         return JSONResponse(
             {"ok": True, "settings": self._ai_settings_payload()},
             headers=self._no_store_headers(),
@@ -699,15 +887,47 @@ class AdminHandlers:
             "model": model,
             "title_max_chars": SESSION_TITLE_MAX_CHARS,
         }
-
-    def _read_ai_api_key(self) -> str:
-        encrypted = self.store.get_app_setting(AI_RENAME_API_KEY_SETTING)
+    def _read_provider_key(self, provider: str) -> str:
+        setting_key = OPENAI_KEY_SETTING if provider == "openai" else COHERE_KEY_SETTING
+        encrypted = self.store.get_app_setting(setting_key)
+        if not encrypted and provider == "openai":
+            encrypted = self.store.get_app_setting(AI_RENAME_API_KEY_SETTING)
         if not encrypted:
             return ""
         try:
             return self._decrypt_secret(encrypted)
         except (InvalidToken, ValueError):
             return ""
+
+    def maybe_schedule_search_rebuild(self) -> dict[str, Any] | None:
+        """Refresh source state and queue a due vector rebuild without blocking callers."""
+        config = self.search.get_config()
+        api_key = self._read_provider_key("openai")
+        if not config.enabled or not api_key:
+            return None
+        return self.search.maybe_start_rebuild(api_key)
+
+    def _settings_payload(self) -> dict[str, Any]:
+        openai_key = self._read_provider_key("openai")
+        cohere_key = self._read_provider_key("cohere")
+        rename_model = (
+            self.store.get_app_setting(RENAME_MODEL_SETTING)
+            or self.store.get_app_setting(AI_RENAME_MODEL_SETTING)
+            or AI_RENAME_DEFAULT_MODEL
+        )
+        return {
+            "general": {"rename_model": rename_model},
+            "api": {
+                "openai": {"configured": bool(openai_key), "preview": _secret_preview(openai_key) if openai_key else ""},
+                "cohere": {"configured": bool(cohere_key), "preview": _secret_preview(cohere_key) if cohere_key else ""},
+            },
+            "search": self.search.get_config().to_dict(),
+            "groups": self.store.list_session_groups(),
+            "index": self.search.index_status(),
+        }
+
+    def _read_ai_api_key(self) -> str:
+        return self._read_provider_key("openai")
 
     def _encrypt_secret(self, value: str) -> str:
         return self._fernet().encrypt(value.encode("utf-8")).decode("ascii")
