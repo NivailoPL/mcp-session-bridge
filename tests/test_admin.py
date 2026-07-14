@@ -371,7 +371,7 @@ def test_admin_can_manage_session_groups_and_move_sessions(tmp_path, monkeypatch
 
     groups = client.get("/admin/api/session-groups")
     assert groups.status_code == 200
-    assert {group["group_id"] for group in groups.json()["groups"]} >= {"uncategorized", "brainstorming", "health"}
+    assert {group["group_id"] for group in groups.json()["groups"]} == {"uncategorized"}
 
     created = client.post(
         "/admin/api/session-groups",
@@ -399,9 +399,18 @@ def test_admin_can_manage_session_groups_and_move_sessions(tmp_path, monkeypatch
     assert updated.status_code == 200
     assert updated.json()["group"]["name"] == "Idea Lab"
 
+    health = client.post(
+        "/admin/api/session-groups",
+        json={"name": "Health", "color": "#ef4444", "icon_key": "medical_plus"},
+        headers={"x-csrf-token": csrf_token},
+    )
+    assert health.status_code == 200
+    assert health.json()["group"]["group_id"] == "health"
+    assert health.json()["group"]["is_system"] is False
+
     system_edit = client.patch(
-        "/admin/api/session-groups/health",
-        json={"name": "Wellness"},
+        "/admin/api/session-groups/uncategorized",
+        json={"name": "Inbox"},
         headers={"x-csrf-token": csrf_token},
     )
     assert system_edit.status_code == 400

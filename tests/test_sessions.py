@@ -1,5 +1,6 @@
 import asyncio
 import importlib
+import sqlite3
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -71,7 +72,9 @@ def test_store_manages_session_groups_and_reassigns_deleted_group(tmp_path) -> N
     store = Store(tmp_path / "bridge.sqlite3")
 
     groups = store.list_session_groups()
-    assert [group["group_id"] for group in groups[:3]] == ["uncategorized", "brainstorming", "health"]
+    assert [group["group_id"] for group in groups] == ["uncategorized"]
+    store.create_session_group("Brainstorming", "#3b82f6", "brain", group_id="brainstorming")
+    store.create_session_group("Health", "#ef4444", "medical_plus", group_id="health")
 
     ideas = store.create_session_group("Ideas", "#22c55e", "ideas")
     session = store.create_session("s1", "Grouped", "manual-context", group_id=ideas.group_id)
@@ -87,9 +90,9 @@ def test_store_manages_session_groups_and_reassigns_deleted_group(tmp_path) -> N
     assert updated.icon_key == "brain"
 
     with pytest.raises(ValueError, match="System session groups cannot be edited"):
-        store.update_session_group("health", name="Wellness")
+        store.update_session_group("uncategorized", name="Inbox")
     with pytest.raises(ValueError, match="System session groups cannot be deleted"):
-        store.delete_session_group("health")
+        store.delete_session_group("uncategorized", destination_group_id="health")
     with pytest.raises(ValueError, match="session group name already exists"):
         store.create_session_group("idea lab", "#22c55e", "ideas", group_id="idea-lab-2")
     with pytest.raises(ValueError, match="Unknown session group"):
@@ -104,6 +107,42 @@ def test_store_manages_session_groups_and_reassigns_deleted_group(tmp_path) -> N
     assert store.get_session("s1").group_id == "health"
     assert "ideas" not in {group["group_id"] for group in store.list_session_groups()}
     assert "ideas" in {group["group_id"] for group in store.list_session_groups(include_deleted=True)}
+
+
+def test_store_demotes_legacy_non_default_system_groups(tmp_path) -> None:
+    db_path = tmp_path / "bridge.sqlite3"
+    store = Store(db_path)
+
+    with sqlite3.connect(db_path) as conn:
+        now = 1_700_000_000
+        conn.executemany(
+            """
+            INSERT OR REPLACE INTO session_groups (
+                group_id, name, color, icon_key, sort_order, is_system,
+                created_at, updated_at, deleted_at
+            ) VALUES (?, ?, ?, ?, ?, 1, ?, ?, NULL)
+            """,
+            (
+                ("brainstorming", "Brainstorming", "#3b82f6", "brain", 10, now, now),
+                ("health", "Health", "#ef4444", "medical_plus", 20, now, now),
+            ),
+        )
+    store.create_session("legacy-session", "Legacy group", "manual-context", group_id="brainstorming")
+
+    reopened = Store(db_path)
+    groups = {group["group_id"]: group for group in reopened.list_session_groups()}
+
+    assert groups["uncategorized"]["is_system"] is True
+    assert groups["brainstorming"]["is_system"] is False
+    assert groups["health"]["is_system"] is False
+    assert reopened.get_session("legacy-session").group_id == "brainstorming"
+
+    updated = reopened.update_session_group("health", name="Wellness")
+    deleted = reopened.delete_session_group("brainstorming")
+
+    assert updated.name == "Wellness"
+    assert deleted.deleted_at is not None
+    assert reopened.get_session("legacy-session").group_id == "uncategorized"
 
 
 def test_store_soft_deletes_exchange_and_hides_it_from_transcript(tmp_path) -> None:

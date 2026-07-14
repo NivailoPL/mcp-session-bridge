@@ -23,20 +23,6 @@ SYSTEM_SESSION_GROUPS = (
         "icon_key": "folder",
         "sort_order": 0,
     },
-    {
-        "group_id": "brainstorming",
-        "name": "Brainstorming",
-        "color": "#3b82f6",
-        "icon_key": "brain",
-        "sort_order": 10,
-    },
-    {
-        "group_id": "health",
-        "name": "Health",
-        "color": "#ef4444",
-        "icon_key": "medical_plus",
-        "sort_order": 20,
-    },
 )
 
 SESSION_GROUP_ICON_KEYS = {
@@ -383,6 +369,7 @@ class Store:
             self._ensure_column(conn, "exchanges", "deleted_reason", "TEXT")
             self._ensure_column(conn, "exchanges", "edited_at", "INTEGER")
             self._seed_system_session_groups(conn)
+            self._demote_legacy_system_session_groups(conn)
             conn.execute(
                 """
                 UPDATE sessions
@@ -1434,6 +1421,17 @@ class Store:
                     now,
                 ),
             )
+
+    @staticmethod
+    def _demote_legacy_system_session_groups(conn: sqlite3.Connection) -> None:
+        conn.execute(
+            """
+            UPDATE session_groups
+            SET is_system = 0, updated_at = ?
+            WHERE group_id <> ? AND is_system = 1
+            """,
+            (int(time.time()), UNCATEGORIZED_GROUP_ID),
+        )
 
     @staticmethod
     def _require_active_group(conn: sqlite3.Connection, group_id: str) -> sqlite3.Row:
