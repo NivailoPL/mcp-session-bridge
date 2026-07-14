@@ -15,6 +15,92 @@ def test_env_example_contains_required_public_settings() -> None:
     assert "woj" + "tek" not in text.lower()
 
 
+def test_gitignore_blocks_runtime_data_secrets_and_backups() -> None:
+    patterns = {
+        line.strip()
+        for line in Path(".gitignore").read_text(encoding="utf-8").splitlines()
+        if line.strip() and not line.lstrip().startswith("#")
+    }
+
+    assert {
+        ".env",
+        ".env.*",
+        "!.env.example",
+        "data/",
+        "backups/",
+        "*.sqlite",
+        "*.sqlite-*",
+        "*.sqlite3",
+        "*.sqlite3-*",
+        "*.db",
+        "*.db-*",
+        "*.pem",
+        "*.key",
+        "*.p12",
+        "secrets/*",
+        "session-viewer-data*.json",
+        "examples/output/",
+    } <= patterns
+
+    if Path(".git").exists():
+        ignored_examples = (
+            ".env.production",
+            "data/context-packs/private.md",
+            "data/bridge.sqlite3-wal",
+            "backups/bridge.sqlite3",
+            "secrets/provider-token.txt",
+            "examples/output/demo.sqlite3",
+            "provider.pem",
+        )
+        for path in ignored_examples:
+            result = subprocess.run(
+                ["git", "check-ignore", "--no-index", "--quiet", "--", path],
+                check=False,
+            )
+            assert result.returncode == 0, f"Expected Git to ignore {path}"
+
+        env_example = subprocess.run(
+            ["git", "check-ignore", "--no-index", "--quiet", "--", ".env.example"],
+            check=False,
+        )
+        assert env_example.returncode == 1
+
+
+def test_git_does_not_track_runtime_data_or_secrets() -> None:
+    if not Path(".git").exists():
+        return
+
+    tracked = subprocess.run(
+        ["git", "ls-files"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.splitlines()
+
+    allowed = {".env.example", "secrets/.gitkeep"}
+    forbidden_directories = ("data/", "backups/", "secrets/", "examples/output/")
+    forbidden_extensions = (".sqlite", ".sqlite3", ".db", ".pem", ".key", ".p12")
+
+    violations = []
+    for path in tracked:
+        if path in allowed:
+            continue
+        lower_path = path.lower()
+        basename = Path(path).name.lower()
+        if (
+            basename == ".env"
+            or basename.startswith(".env.")
+            or lower_path.startswith(forbidden_directories)
+            or any(
+                lower_path.endswith(extension) or f"{extension}-" in lower_path
+                for extension in forbidden_extensions
+            )
+        ):
+            violations.append(path)
+
+    assert violations == [], f"Sensitive runtime paths are tracked by Git: {violations}"
+
+
 def test_demo_session_script_creates_expected_files(tmp_path) -> None:
     output_dir = tmp_path / "demo-output"
     env = {**os.environ, "PYTHONPATH": str(Path.cwd())}

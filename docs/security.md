@@ -6,13 +6,24 @@ MCP Session Bridge stores conversation transcripts and OAuth credentials. Treat 
 
 Do not commit:
 
-- `.env`
-- SQLite databases
-- session summaries that contain private data
+- `.env` or environment-specific variants such as `.env.local`
+- anything under `data/`, including SQLite databases, WAL/SHM files, context packs, search documents, vector chunks, and legacy session summaries
+- local database or backup files created elsewhere in the repository
 - generated viewer exports
-- files under `secrets/`
+- private keys, certificates, and files under `secrets/`
 
-The repository `.gitignore` excludes these by default.
+The repository `.gitignore` excludes these by default. `.env.example` is the only environment file intended for source control and must contain placeholders only.
+
+OpenAI and Cohere API keys saved through the admin UI are encrypted before they are stored in SQLite. Conversation text, uploaded files, BM25 documents, vector chunks, and embeddings are runtime data and are not separately encrypted by the application, so protect the database and every backup with host-level access controls.
+
+Before pushing a release, review both the staged file list and ignored runtime files:
+
+```bash
+git diff --cached --name-only
+git status --short --ignored
+```
+
+Never use `git add -f` for a runtime data or secret path. Keep production backups outside the repository and restrict the runtime data directory to the service account.
 
 ## OAuth And Tokens
 
@@ -50,4 +61,4 @@ Deleted exchanges remain in SQLite with `deleted_at` and `deleted_reason`, but a
 
 ## Reporting Issues
 
-Before publishing broadly, add a `SECURITY.md` file with a contact address for vulnerability reports. Until then, do not ask users to disclose security issues in public issues.
+Follow the private reporting process in [`SECURITY.md`](../SECURITY.md). Do not disclose credentials, transcripts, uploaded files, or database extracts in public issues.

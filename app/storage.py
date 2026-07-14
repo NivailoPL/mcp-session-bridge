@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import sqlite3
 import time
@@ -205,14 +206,30 @@ class Store:
     def __init__(self, db_path: Path):
         self.db_path = db_path
         self._lock = Lock()
-        self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        self.db_path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        self._harden_runtime_permissions()
         self._init_schema()
+        self._harden_runtime_permissions()
+
+    def _harden_runtime_permissions(self) -> None:
+        if os.name == "nt":
+            return
+
+        self.db_path.parent.chmod(0o700)
+        for path in (
+            self.db_path,
+            Path(f"{self.db_path}-wal"),
+            Path(f"{self.db_path}-shm"),
+        ):
+            if path.exists():
+                path.chmod(0o600)
 
     def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA journal_mode=WAL")
         conn.execute("PRAGMA foreign_keys=ON")
+        self._harden_runtime_permissions()
         return conn
 
     def _init_schema(self) -> None:
