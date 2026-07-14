@@ -815,7 +815,20 @@
     .settings-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: .75rem; padding-top: .85rem; }
     .provider-card, .index-card { display: grid; gap: .65rem; padding: .9rem; border: 1px solid var(--stroke); border-radius: var(--r-card); background: rgba(255,255,255,.025); }
     .index-card { grid-template-columns: minmax(0,1fr) auto; align-items: center; }
+    .index-card-main { min-width: 0; }
     .index-card p { margin: .25rem 0 0; }
+    .index-estimate { display: grid; gap: .65rem; margin-top: .8rem; padding-top: .8rem; border-top: 1px solid var(--stroke-soft); }
+    .index-estimate[hidden] { display: none; }
+    .index-estimate-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: .35rem 1rem; }
+    .index-estimate-head b { font-size: .78rem; }
+    .index-estimate-state { color: var(--muted); font-size: .74rem; }
+    .index-estimate-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: .55rem; }
+    .index-estimate-stat { display: grid; gap: .18rem; min-width: 0; padding: .65rem .7rem; border: 1px solid var(--stroke-soft); border-radius: 9px; background: rgba(255,255,255,.025); }
+    .index-estimate-stat > span { color: var(--faint-ink); font-size: .63rem; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; }
+    .index-estimate-stat strong { overflow: hidden; font-size: .96rem; font-variant-numeric: tabular-nums; text-overflow: ellipsis; white-space: nowrap; }
+    .index-estimate-stat small { color: var(--muted); font-size: .7rem; line-height: 1.4; }
+    .index-estimate-note { color: var(--muted); font-size: .72rem; line-height: 1.45; }
+    .index-estimate-note a { color: var(--accent-ink); }
     .search-dialog { width: min(72rem, calc(100vw - 2rem)); height: min(48rem, calc(100vh - 2rem)); max-width: none; max-height: none; }
     .search-dialog[open] { display: grid; grid-template-rows: auto auto auto minmax(0,1fr); }
     .search-command { display: grid; grid-template-columns: minmax(12rem,1fr) auto auto auto; gap: .6rem; padding: .9rem 1rem; border-bottom: 1px solid var(--stroke-soft); }
@@ -864,7 +877,7 @@
       .settings-tabs { grid-template-columns: repeat(3, 1fr); border-right: 0; border-bottom: 1px solid var(--stroke-soft); }
       .settings-tabs button { justify-content: center; }
       .settings-content { overflow: visible; }
-      .settings-grid, .index-card { grid-template-columns: 1fr; }
+      .settings-grid, .index-card, .index-estimate-grid { grid-template-columns: 1fr; }
       .search-command { grid-template-columns: 1fr 1fr; }
       .search-command input { grid-column: 1 / -1; }
       .search-workspace { grid-template-columns: 1fr; overflow: auto; }
@@ -1156,7 +1169,17 @@
                 <label class="field">Rerank candidates<input id="rerankCandidates" type="number" min="1" max="500"></label>
               </div>
             </details>
-            <div class="index-card"><div><b>Vector index</b><p id="indexStatus" class="meta"></p><p id="indexEstimate" class="meta"></p></div><div class="edit-actions">
+            <div class="index-card"><div class="index-card-main"><b>Vector index</b><p id="indexStatus" class="meta"></p>
+              <section id="indexEstimate" class="index-estimate" aria-label="Estimated full rebuild" aria-live="polite" hidden>
+                <div class="index-estimate-head"><b>Estimated full rebuild</b><span id="indexEstimateState" class="index-estimate-state"></span></div>
+                <div id="indexEstimateMetrics" class="index-estimate-grid">
+                  <div class="index-estimate-stat"><span>Scope</span><strong id="indexEstimateDocuments"></strong><small id="indexEstimateChunks"></small></div>
+                  <div class="index-estimate-stat"><span>Tokens</span><strong id="indexEstimateTokens"></strong><small id="indexEstimateOverlap"></small></div>
+                  <div class="index-estimate-stat"><span>OpenAI cost</span><strong id="indexEstimateCost"></strong><small id="indexEstimateModel"></small></div>
+                </div>
+                <p class="index-estimate-note"><b>Cohere rerank:</b> not included in the rebuild cost; it is charged only when Hybrid search runs. <a id="indexEstimatePricing" href="#" target="_blank" rel="noreferrer">OpenAI pricing</a></p>
+              </section>
+            </div><div class="edit-actions">
               <button id="indexRebuild" type="button" class="ghost">Build / rebuild</button>
               <button id="indexCancel" type="button" class="ghost">Stop</button>
               <button id="indexDelete" type="button" class="danger">Delete index</button>
@@ -1411,6 +1434,8 @@
         "sourceGroupFiles", "ragGroupList", "chunkSize", "chunkOverlap", "embeddingModel",
         "embeddingDimensions", "rebuildThreshold", "rebuildMaxWait", "bm25Candidates",
         "vectorCandidates", "resultLimit", "cohereModel", "rerankCandidates", "indexStatus", "indexEstimate",
+        "indexEstimateState", "indexEstimateMetrics", "indexEstimateDocuments", "indexEstimateChunks",
+        "indexEstimateTokens", "indexEstimateOverlap", "indexEstimateCost", "indexEstimateModel", "indexEstimatePricing",
         "indexRebuild", "indexCancel", "indexDelete", "searchDialog", "searchClose",
         "contextSearchForm", "contextSearchInput", "contextSearchSubmit", "contextSearchStop",
         "contextSearchStatus", "searchResults", "localSearchResults", "searchDetail"
@@ -1685,16 +1710,19 @@
         window.clearTimeout(indexEstimateTimer);
         const requestId = ++indexEstimateRequest;
         if (!settingsDom.ragEnabled.checked) {
-          settingsDom.indexEstimate.textContent = "";
+          settingsDom.indexEstimate.hidden = true;
           return;
         }
-        settingsDom.indexEstimate.textContent = "Calculating full rebuild estimate…";
+        settingsDom.indexEstimate.hidden = false;
+        settingsDom.indexEstimateMetrics.hidden = true;
+        settingsDom.indexEstimateState.textContent = "Calculating…";
         indexEstimateTimer = window.setTimeout(() => refreshIndexEstimate(requestId), delay);
       }
 
       async function refreshIndexEstimate(requestId) {
         if (demo.enabled) {
-          settingsDom.indexEstimate.textContent = "A live server is required for the build estimate.";
+          settingsDom.indexEstimateMetrics.hidden = true;
+          settingsDom.indexEstimateState.textContent = "A live server is required.";
           return;
         }
         try {
@@ -1706,17 +1734,22 @@
           const count = (value) => Number(value || 0).toLocaleString();
           const cost = estimate.estimated_cost_usd == null
             ? `price unavailable for ${estimate.embedding_model}`
-            : `about $${estimate.estimated_cost_usd < 0.01
+            : `~$${estimate.estimated_cost_usd < 0.01
               ? estimate.estimated_cost_usd.toFixed(4) : estimate.estimated_cost_usd.toFixed(2)}`;
-          const overlap = estimate.overlap_token_count
-            ? `, including ${count(estimate.overlap_token_count)} repeated overlap tokens` : "";
-          settingsDom.indexEstimate.textContent =
-            `Estimated full rebuild: ${count(estimate.embedding_token_count)} embedding tokens${overlap} · ` +
-            `${count(estimate.chunk_count)} chunks from ${count(estimate.document_count)} documents · ${cost}. ` +
-            "Cohere rerank is charged only when Hybrid search runs.";
+          settingsDom.indexEstimateState.textContent = "Based on current settings";
+          settingsDom.indexEstimateDocuments.textContent = `${count(estimate.document_count)} documents`;
+          settingsDom.indexEstimateChunks.textContent = `${count(estimate.chunk_count)} chunks`;
+          settingsDom.indexEstimateTokens.textContent = count(estimate.embedding_token_count);
+          settingsDom.indexEstimateOverlap.textContent = estimate.overlap_token_count
+            ? `${count(estimate.overlap_token_count)} repeated by overlap` : "No overlap overhead";
+          settingsDom.indexEstimateCost.textContent = cost;
+          settingsDom.indexEstimateModel.textContent = estimate.embedding_model;
+          settingsDom.indexEstimatePricing.href = estimate.pricing_url;
+          settingsDom.indexEstimateMetrics.hidden = false;
         } catch (error) {
           if (requestId === indexEstimateRequest) {
-            settingsDom.indexEstimate.textContent = `Estimate unavailable: ${error.message}`;
+            settingsDom.indexEstimateMetrics.hidden = true;
+            settingsDom.indexEstimateState.textContent = `Unavailable: ${error.message}`;
           }
         }
       }
