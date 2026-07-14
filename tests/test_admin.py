@@ -910,8 +910,14 @@ def test_admin_viewer_rag_settings_and_search_overlay_contract() -> None:
     assert 'id="indexCancel"' in viewer
     assert 'id="indexDelete"' in viewer
     assert 'id="indexEstimate"' in viewer
+    assert 'id="indexEstimateDocuments"' in viewer
+    assert 'id="indexEstimateTokens"' in viewer
+    assert 'id="indexEstimateCost"' in viewer
+    assert '>Scope</span>' in viewer
+    assert '>Tokens</span>' in viewer
+    assert '>OpenAI cost</span>' in viewer
     assert "Estimated full rebuild" in viewer
-    assert "Cohere rerank is charged only when Hybrid search runs." in viewer
+    assert "not included in the rebuild cost" in viewer
 
     assert 'data-search-mode="basic"' in viewer
     assert 'data-search-mode="hybrid"' in viewer
