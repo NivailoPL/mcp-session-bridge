@@ -907,8 +907,14 @@ def test_admin_viewer_rag_settings_and_search_overlay_contract() -> None:
     assert 'Groups allowed for external processing' in viewer
     assert 'Only checked groups may leave this server' in viewer
     assert 'id="indexRebuild"' in viewer
+    assert 'id="indexRebuildSpinner"' in viewer
+    assert 'id="indexRebuildLabel"' in viewer
     assert 'id="indexCancel"' in viewer
     assert 'id="indexDelete"' in viewer
+    assert 'class="index-actions"' in viewer
+    assert "@keyframes index-spin" in viewer
+    assert 'settingsDom.indexCancel.hidden = !building' in viewer
+    assert '? "Building…"' in viewer
     assert 'id="indexEstimate"' in viewer
     assert 'id="indexEstimateDocuments"' in viewer
     assert 'id="indexEstimateTokens"' in viewer
