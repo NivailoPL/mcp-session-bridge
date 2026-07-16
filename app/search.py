@@ -367,6 +367,7 @@ class SearchService:
                        CASE WHEN f.scope_type = 'session' THEN s.group_id ELSE f.group_id END AS effective_group_id,
                        f.filename, f.content, f.created_by, f.created_at, s.title AS session_title
                 FROM session_files f LEFT JOIN sessions s ON s.session_id = f.session_id
+                WHERE f.content <> ''
                 """
             ).fetchall()
         documents: list[dict[str, Any]] = []

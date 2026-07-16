@@ -9,6 +9,7 @@ dependencies = [
     "mcp[cli]>=1.27.1",
     "python-dotenv>=1.2.0",
     "python-multipart>=0.0.29",
+    "pypdf>=6.12.2,<7",
     "pyyaml>=6.0.2",
     "sqlite-vec==0.1.9",
     "tiktoken>=0.11.0",

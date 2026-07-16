@@ -793,7 +793,14 @@
     /* ---------- markdown view ---------- */
     .raw { max-width: 62rem; margin: 0 auto; border: 1px solid var(--stroke); border-radius: var(--r-card); background: rgba(0, 0, 0, .3); }
     .raw pre { margin: 0; padding: 1.25rem 1.4rem; white-space: pre-wrap; overflow-wrap: anywhere; font-family: "Geist Mono", ui-monospace, monospace; font-size: .8rem; line-height: 1.7; color: #c6cbd8; }
-    #fileWorkspaceContent.raw, .file-preview { max-height: min(68vh, 48rem); overflow: auto; }
+    #fileWorkspaceContent.raw, .file-preview, .pdf-preview { max-height: min(68vh, 48rem); overflow: auto; }
+    .pdf-preview { display: grid; gap: .75rem; min-height: 22rem; }
+    .pdf-toolbar { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; justify-content: center; gap: .45rem; flex-wrap: wrap; padding: .55rem; border: 1px solid var(--line); border-radius: .7rem; background: color-mix(in srgb, var(--panel) 94%, transparent); }
+    .pdf-toolbar .pdf-page-label { min-width: 6.5rem; text-align: center; font-variant-numeric: tabular-nums; }
+    .pdf-canvas-wrap { display: grid; place-items: start center; overflow: auto; min-height: 16rem; padding: .75rem; border: 1px solid var(--line); border-radius: .7rem; background: #4b5563; }
+    .pdf-canvas-wrap canvas { display: block; max-width: none; background: #fff; box-shadow: 0 .3rem 1.1rem rgba(0, 0, 0, .24); }
+    .pdf-status { margin: 0; color: var(--muted); text-align: center; }
+    .pdf-status.is-warning { color: var(--warn); }
     .file-preview {
       max-width: 62rem; margin: 0 auto; padding: 1.25rem 1.4rem;
       border: 1px solid var(--stroke); border-radius: var(--r-card);
@@ -1090,8 +1097,8 @@
         <section class="file-bucket" aria-labelledby="sessionFilesHeading">
           <div id="sessionFilesHeading" class="file-bucket-title">Session files</div>
           <label class="file-drop-zone" data-scope="session">
-            <span>Upload one text file here, or drop it from your computer.</span>
-            <input id="sessionFileInput" type="file" accept=".md,.markdown,.txt,.json,.yaml,.yml,.csv,.tsv" aria-describedby="sessionFileStatus">
+            <span>Upload one text file or PDF here, or drop it from your computer.</span>
+            <input id="sessionFileInput" type="file" accept=".md,.markdown,.txt,.json,.yaml,.yml,.csv,.tsv,.pdf" aria-describedby="sessionFileStatus">
           </label>
           <p id="sessionFileStatus" class="file-operation-status" aria-live="polite"></p>
           <div id="sessionFileList" class="file-list"></div>
@@ -1099,8 +1106,8 @@
         <section class="file-bucket" aria-labelledby="groupFilesHeading">
           <div id="groupFilesHeading" class="file-bucket-title">Group files</div>
           <label class="file-drop-zone" data-scope="group">
-            <span>Upload one shared text file here, or drop it from your computer.</span>
-            <input id="groupFileInput" type="file" accept=".md,.markdown,.txt,.json,.yaml,.yml,.csv,.tsv" aria-describedby="groupFileStatus">
+            <span>Upload one shared text file or PDF here, or drop it from your computer.</span>
+            <input id="groupFileInput" type="file" accept=".md,.markdown,.txt,.json,.yaml,.yml,.csv,.tsv,.pdf" aria-describedby="groupFileStatus">
           </label>
           <p id="groupFileStatus" class="file-operation-status" aria-live="polite"></p>
           <div id="groupFileList" class="file-list"></div>
@@ -1181,6 +1188,7 @@
               <label class="toggle"><input id="sourceSessionFiles" type="checkbox"> Session files</label>
               <label class="toggle"><input id="sourceGroupFiles" type="checkbox"> Group files</label>
             </fieldset>
+            <p class="meta"><b>PDF note:</b> OCR is not supported. Scanned or image-only PDFs without a text layer are preserved for preview/download but are not indexed.</p>
             <fieldset class="settings-fieldset"><legend>Groups allowed for external processing</legend><div id="ragGroupList" class="rag-group-list"></div></fieldset>
             <details class="developer-settings"><summary>Developer settings</summary>
               <div class="settings-grid">
@@ -1333,7 +1341,9 @@
       ];
       const INTERNAL_FILE_DRAG_TYPE = "application/x-mcp-session-file";
       const MAX_FILE_BYTES = 1_000_000;
-      const ALLOWED_FILE_EXTENSIONS = new Set([".md", ".markdown", ".txt", ".json", ".yaml", ".yml", ".csv", ".tsv"]);
+      const MAX_PDF_BYTES = 20_000_000;
+      const TEXT_FILE_EXTENSIONS = new Set([".md", ".markdown", ".txt", ".json", ".yaml", ".yml", ".csv", ".tsv"]);
+      const ALLOWED_FILE_EXTENSIONS = new Set([...TEXT_FILE_EXTENSIONS, ".pdf"]);
 
       const state = {
         csrfToken: "",
@@ -1354,6 +1364,12 @@
         fileDeleteTarget: null,
         fileOperationPending: false,
         fileOpenGeneration: 0,
+        pdfDocument: null,
+        pdfLoadingTask: null,
+        pdfAbortController: null,
+        pdfRenderTask: null,
+        pdfPageNumber: 1,
+        pdfScale: 1,
         sessionLoadGeneration: 0,
         aiSettings: { configured: false, api_key_preview: "", model: "gpt-5.4-nano", title_max_chars: 72 },
         settings: null,
@@ -1372,6 +1388,7 @@
         displayTimezone: localStorage.getItem("mcp-admin:timezone") || "UTC",
       };
       let statusTimer = 0;
+      let pdfJsPromise = null;
 
       const dom = {
         addGroupButton: document.getElementById("addGroupButton"),
@@ -1490,7 +1507,11 @@
       });
       dom.fileWorkspaceOpen.addEventListener("click", () => openFileWorkspace());
       dom.fileWorkspaceClose.addEventListener("click", () => runFileContinuation("close", () => dom.fileWorkspaceDialog.close(), dom.fileWorkspaceClose));
-      dom.fileWorkspaceBack.addEventListener("click", () => runFileContinuation("back", () => showFileListPane(), dom.fileWorkspaceBack));
+      dom.fileWorkspaceBack.addEventListener("click", () => runFileContinuation("back", () => {
+        invalidateFileOpen();
+        clearPdfPreview();
+        showFileListPane();
+      }, dom.fileWorkspaceBack));
       dom.fileWorkspaceDialog.addEventListener("cancel", (event) => {
         if (state.fileOperationPending) {
           event.preventDefault();
@@ -2464,10 +2485,18 @@
         const lowerName = String(file.name || "").toLowerCase();
         const extension = lowerName.includes(".") ? lowerName.slice(lowerName.lastIndexOf(".")) : "";
         if (!ALLOWED_FILE_EXTENSIONS.has(extension)) {
-          throw new Error("Unsupported format. Use MD, TXT, JSON, YAML, CSV, or TSV.");
+          throw new Error("Unsupported format. Use PDF, MD, TXT, JSON, YAML, CSV, or TSV.");
         }
         const bytes = new Uint8Array(await file.arrayBuffer());
-        if (bytes.byteLength > MAX_FILE_BYTES) throw new Error("File is larger than 1 MB.");
+        if (bytes.byteLength === 0) throw new Error("File is empty.");
+        if (extension === ".pdf") {
+          if (demo.enabled) throw new Error("PDF uploads are unavailable in offline demo mode.");
+          if (bytes.byteLength > MAX_PDF_BYTES) throw new Error("PDF is larger than 20 MB.");
+          const header = new TextDecoder("ascii").decode(bytes.slice(0, 8));
+          if (!header.startsWith("%PDF-")) throw new Error("File does not look like a valid PDF.");
+          return { file, bytes };
+        }
+        if (bytes.byteLength > MAX_FILE_BYTES) throw new Error("Text file is larger than 1 MB.");
         let normalized = bytes;
         if (bytes.byteLength >= 3 && bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) {
           normalized = bytes.slice(3);
@@ -2687,7 +2716,11 @@
           dotSep(),
           spanCls("", file.mime_type || "text/plain"),
           dotSep(),
-          spanCls("", formatUnixDate(file.created_at))
+          spanCls("", formatUnixDate(file.created_at)),
+          ...(file.content_kind === "pdf" ? [
+            dotSep(),
+            spanCls("", `${file.page_count || 0} page${Number(file.page_count) === 1 ? "" : "s"}`),
+          ] : [])
         );
         renderFilePreview(file);
         renderFileWorkspaceMode();
@@ -2704,7 +2737,7 @@
 
       function renderFilePreview(file) {
         const content = file.content || "";
-        dom.fileCopyButton.disabled = false;
+        clearPdfPreview();
         dom.fileDownloadButton.disabled = false;
         dom.fileEditButton.disabled = !isEditableTextFile(file);
         dom.fileDeleteButton.disabled = false;
@@ -2712,13 +2745,193 @@
         dom.fileWorkspaceContent.dataset.content = content;
         dom.fileWorkspaceContent.dataset.filename = file.filename || `file-${file.file_id}.txt`;
         dom.fileWorkspaceContent.dataset.mimeType = file.mime_type || "text/plain";
-        if (isMarkdownFile(file)) {
+        if (isPdfFile(file)) {
+          renderPdfPreview(file);
+        } else if (isMarkdownFile(file)) {
           dom.fileWorkspaceContent.className = "file-preview markdown-body";
           dom.fileWorkspaceContent.innerHTML = renderMarkdown(content || "—");
         } else {
           dom.fileWorkspaceContent.className = "raw";
           dom.fileWorkspaceContent.replaceChildren(preNode(content));
         }
+      }
+
+      function isPdfFile(file) {
+        return file?.content_kind === "pdf";
+      }
+
+      function loadPdfJs() {
+        if (!pdfJsPromise) {
+          pdfJsPromise = import("/admin/assets/pdfjs/pdf.min.mjs?v=6.1.200")
+            .then((pdfjs) => {
+              pdfjs.GlobalWorkerOptions.workerSrc = "/admin/assets/pdfjs/pdf.worker.min.mjs?v=6.1.200";
+              return pdfjs;
+            })
+            .catch((error) => {
+              pdfJsPromise = null;
+              throw error;
+            });
+        }
+        return pdfJsPromise;
+      }
+
+      function renderPdfPreview(file) {
+        void renderPdfPreviewAsync(file);
+      }
+
+      async function renderPdfPreviewAsync(file) {
+        const generation = state.fileOpenGeneration;
+        const abortController = new AbortController();
+        state.pdfAbortController = abortController;
+        dom.fileWorkspaceContent.className = "pdf-preview";
+        const toolbar = div("pdf-toolbar");
+        const previous = button("Previous", null, "ghost");
+        const pageLabel = spanCls("pdf-page-label", "Loading PDF…");
+        const next = button("Next", null, "ghost");
+        const zoomOut = button("−", null, "ghost");
+        const zoomIn = button("+", null, "ghost");
+        zoomOut.title = "Zoom out";
+        zoomIn.title = "Zoom in";
+        const canvasWrap = div("pdf-canvas-wrap");
+        const canvas = document.createElement("canvas");
+        const status = document.createElement("p");
+        status.className = "pdf-status";
+        status.textContent = "Loading PDF preview…";
+        canvasWrap.append(canvas);
+        toolbar.append(previous, pageLabel, next, zoomOut, zoomIn);
+        dom.fileWorkspaceContent.replaceChildren(toolbar, canvasWrap, status);
+
+        try {
+          const [pdfjs, response] = await Promise.all([
+            loadPdfJs(),
+            fetch(`/admin/api/files/${encodeURIComponent(file.file_id)}/raw`, {
+              credentials: "same-origin",
+              headers: { "accept": "application/pdf" },
+              signal: abortController.signal,
+            }),
+          ]);
+          if (!response.ok) throw new Error(`PDF download failed (${response.status})`);
+          const data = new Uint8Array(await response.arrayBuffer());
+          if (generation !== state.fileOpenGeneration || abortController.signal.aborted) return;
+          const loadingTask = pdfjs.getDocument({ data });
+          state.pdfLoadingTask = loadingTask;
+          const documentHandle = await loadingTask.promise;
+          if (state.pdfLoadingTask === loadingTask) state.pdfLoadingTask = null;
+          if (
+            generation !== state.fileOpenGeneration
+            || !state.selectedFile
+            || String(state.selectedFile.file_id) !== String(file.file_id)
+          ) {
+            await documentHandle.destroy();
+            return;
+          }
+          state.pdfDocument = documentHandle;
+          state.pdfPageNumber = 1;
+          state.pdfScale = 1;
+          let renderQueue = Promise.resolve();
+
+          const renderCurrentPage = async () => {
+            if (state.pdfDocument !== documentHandle) return;
+            const pageNumber = state.pdfPageNumber;
+            const scale = state.pdfScale;
+            const page = await documentHandle.getPage(pageNumber);
+            if (generation !== state.fileOpenGeneration || state.pdfDocument !== documentHandle) return;
+            const viewport = page.getViewport({ scale });
+            const ratio = window.devicePixelRatio || 1;
+            canvas.width = Math.floor(viewport.width * ratio);
+            canvas.height = Math.floor(viewport.height * ratio);
+            canvas.style.width = `${Math.floor(viewport.width)}px`;
+            canvas.style.height = `${Math.floor(viewport.height)}px`;
+            const context = canvas.getContext("2d");
+            const renderTask = page.render({
+              canvasContext: context,
+              viewport,
+              transform: ratio === 1 ? null : [ratio, 0, 0, ratio, 0, 0],
+            });
+            state.pdfRenderTask = renderTask;
+            try {
+              await renderTask.promise;
+            } catch (error) {
+              if (error?.name !== "RenderingCancelledException") throw error;
+            } finally {
+              if (state.pdfRenderTask === renderTask) state.pdfRenderTask = null;
+            }
+            if (generation !== state.fileOpenGeneration || state.pdfDocument !== documentHandle) return;
+            pageLabel.textContent = `Page ${pageNumber} of ${documentHandle.numPages}`;
+            previous.disabled = pageNumber <= 1;
+            next.disabled = pageNumber >= documentHandle.numPages;
+            zoomOut.disabled = state.pdfScale <= 0.5;
+            zoomIn.disabled = state.pdfScale >= 2.5;
+          };
+          const queueCurrentPage = () => {
+            renderQueue = renderQueue.catch(() => {}).then(renderCurrentPage);
+            return renderQueue;
+          };
+          const queueCurrentPageSafely = async () => {
+            try {
+              await queueCurrentPage();
+            } catch (error) {
+              if (
+                error?.name === "RenderingCancelledException"
+                || generation !== state.fileOpenGeneration
+                || state.pdfDocument !== documentHandle
+              ) return;
+              status.textContent = `Could not render PDF preview: ${error.message}`;
+              status.classList.add("is-warning");
+            }
+          };
+
+          previous.addEventListener("click", async () => {
+            if (state.pdfPageNumber <= 1) return;
+            state.pdfPageNumber -= 1;
+            await queueCurrentPageSafely();
+          });
+          next.addEventListener("click", async () => {
+            if (!state.pdfDocument || state.pdfPageNumber >= state.pdfDocument.numPages) return;
+            state.pdfPageNumber += 1;
+            await queueCurrentPageSafely();
+          });
+          zoomOut.addEventListener("click", async () => {
+            state.pdfScale = Math.max(0.5, Number((state.pdfScale - 0.25).toFixed(2)));
+            await queueCurrentPageSafely();
+          });
+          zoomIn.addEventListener("click", async () => {
+            state.pdfScale = Math.min(2.5, Number((state.pdfScale + 0.25).toFixed(2)));
+            await queueCurrentPageSafely();
+          });
+          if (file.extraction_status === "no_text") {
+            status.textContent = "Preview available, but no extractable text was found. OCR is not supported, so this PDF is not indexed.";
+            status.classList.add("is-warning");
+          } else {
+            status.textContent = "Original PDF preview. Copy uses extracted text; download returns the original file.";
+          }
+          await queueCurrentPage();
+        } catch (error) {
+          if (error?.name === "AbortError") return;
+          status.textContent = `Could not render PDF preview: ${error.message}`;
+          status.classList.add("is-warning");
+        }
+      }
+
+      function clearPdfPreview() {
+        if (state.pdfAbortController) {
+          state.pdfAbortController.abort();
+          state.pdfAbortController = null;
+        }
+        if (state.pdfLoadingTask) {
+          void state.pdfLoadingTask.destroy().catch(() => {});
+          state.pdfLoadingTask = null;
+        }
+        if (state.pdfRenderTask) {
+          state.pdfRenderTask.cancel();
+          state.pdfRenderTask = null;
+        }
+        if (state.pdfDocument) {
+          void state.pdfDocument.destroy().catch(() => {});
+          state.pdfDocument = null;
+        }
+        state.pdfPageNumber = 1;
+        state.pdfScale = 1;
       }
 
       function resetFilePreview() {
@@ -2749,7 +2962,7 @@
 
       function isEditableTextFile(file) {
         const filename = String(file?.filename || "").toLowerCase();
-        return [...ALLOWED_FILE_EXTENSIONS].some((extension) => filename.endsWith(extension));
+        return [...TEXT_FILE_EXTENSIONS].some((extension) => filename.endsWith(extension));
       }
 
       function isFileDraftDirty() {
@@ -2757,6 +2970,7 @@
       }
 
       function clearFileTransientState() {
+        clearPdfPreview();
         state.fileBaselineContent = "";
         state.fileOpenedSha256 = "";
         state.fileDraft = "";
@@ -2784,7 +2998,8 @@
         dom.fileWorkspaceClose.disabled = interactionsLocked;
         for (const button of dom.fileWorkspaceDialog.querySelectorAll(".file-button")) button.disabled = interactionsLocked;
         for (const button of dom.fileWorkspaceDialog.querySelectorAll('[data-file-action="move"]')) button.disabled = interactionsLocked;
-        dom.fileCopyButton.disabled = pending || !state.selectedFile || mode === "delete";
+        dom.fileCopyButton.disabled = pending || !state.selectedFile || mode === "delete"
+          || (isPdfFile(state.selectedFile) && !state.selectedFile.text_available);
         dom.fileDownloadButton.disabled = pending || !state.selectedFile || mode === "delete";
         dom.fileEditButton.disabled = pending || !state.selectedFile || !isEditableTextFile(state.selectedFile);
         dom.fileDeleteButton.disabled = pending || !state.selectedFile;
@@ -2959,6 +3174,17 @@
       }
 
       function downloadOpenFile() {
+        if (state.selectedFile && isPdfFile(state.selectedFile)) {
+          const filename = sanitizeDownloadName(state.selectedFile.filename || "session-file.pdf");
+          const link = document.createElement("a");
+          link.href = `/admin/api/files/${encodeURIComponent(state.selectedFile.file_id)}/raw?download=1`;
+          link.download = filename;
+          document.body.append(link);
+          link.click();
+          link.remove();
+          setStatus("Original PDF download started.", "ok");
+          return;
+        }
         const content = dom.fileWorkspaceContent.dataset.content || "";
         const filename = sanitizeDownloadName(dom.fileWorkspaceContent.dataset.filename || "session-file.txt");
         const mimeType = dom.fileWorkspaceContent.dataset.mimeType || "text/plain;charset=utf-8";

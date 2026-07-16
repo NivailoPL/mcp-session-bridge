@@ -11,12 +11,13 @@ import re
 import time
 import urllib.error
 import urllib.request
+import urllib.parse
 from pathlib import Path
 from typing import Any
 
 from cryptography.fernet import Fernet, InvalidToken
 from starlette.requests import Request
-from starlette.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
+from starlette.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
 
 from app.search import (
     COHERE_KEY_SETTING,
@@ -25,11 +26,19 @@ from app.search import (
     SearchConfig,
     SearchService,
 )
+from app.pdf_files import (
+    MAX_ADMIN_PDF_BYTES,
+    PdfWorkerBusyError,
+    decode_pdf_base64,
+    extract_pdf_text_isolated,
+    run_pdf_worker,
+)
 from app.security import token_urlsafe, verify_password
 from app.settings import Settings
 from app.storage import (
     MAX_SESSION_FILE_BYTES,
     ExchangeRecord,
+    PdfStorageQuotaError,
     SessionFileConflictError,
     SessionFileRecord,
     SessionGroupRecord,
@@ -53,7 +62,7 @@ AI_RENAME_MODEL_SETTING = "ai_rename.model"
 AI_RENAME_DEFAULT_MODEL = "gpt-5.4-nano"
 AI_RENAME_ENDPOINT = "https://api.openai.com/v1/chat/completions"
 SESSION_TITLE_MAX_CHARS = 72
-ADMIN_FILE_UPLOAD_MAX_BODY_BYTES = ((MAX_SESSION_FILE_BYTES + 2) // 3 * 4) + 16_384
+ADMIN_FILE_UPLOAD_MAX_BODY_BYTES = ((MAX_ADMIN_PDF_BYTES + 2) // 3 * 4) + 16_384
 ADMIN_FILE_EDIT_MAX_BODY_BYTES = (MAX_SESSION_FILE_BYTES * 6) + 16_384
 ADMIN_FILE_EXTENSIONS = {
     ".md": "text/markdown",
@@ -64,6 +73,7 @@ ADMIN_FILE_EXTENSIONS = {
     ".yml": "application/yaml",
     ".csv": "text/csv",
     ".tsv": "text/tab-separated-values",
+    ".pdf": "application/pdf",
 }
 
 
@@ -72,6 +82,7 @@ class AdminHandlers:
         self.settings = settings
         self.store = store
         self.html_path = html_path
+        self.pdfjs_dir = html_path.parent / "vendor" / "pdfjs"
         self.search = SearchService(store)
 
     async def index(self, request: Request) -> Response:
@@ -596,6 +607,48 @@ class AdminHandlers:
             headers=self._no_store_headers(),
         )
 
+    async def api_file_raw(self, request: Request) -> Response:
+        _, error = self._require_admin(request)
+        if error:
+            return error
+        file_id, path_error = _path_file_id(request)
+        if path_error:
+            return path_error
+        binary_record = await asyncio.to_thread(self.store.get_session_file_binary, file_id)
+        if binary_record is None:
+            return self._json_error(f"Unknown file_id: {file_id}", status_code=404)
+        filename, content_kind, binary_content = binary_record
+        if content_kind != "pdf" or binary_content is None:
+            return self._json_error("Raw binary content is available only for PDF files.", status_code=400)
+        disposition = "attachment" if request.query_params.get("download") == "1" else "inline"
+        encoded_filename = urllib.parse.quote(filename, safe="")
+        return Response(
+            binary_content,
+            media_type="application/pdf",
+            headers={
+                **self._no_store_headers(),
+                "Content-Disposition": f"{disposition}; filename*=UTF-8''{encoded_filename}",
+                "X-Content-Type-Options": "nosniff",
+            },
+        )
+
+    async def pdfjs_asset(self, request: Request) -> Response:
+        _, error = self._require_admin(request)
+        if error:
+            return error
+        asset_name = request.path_params.get("asset_name", "")
+        if asset_name not in {"pdf.min.mjs", "pdf.worker.min.mjs"}:
+            return Response(status_code=404)
+        asset_path = self.pdfjs_dir / asset_name
+        return FileResponse(
+            asset_path,
+            media_type="text/javascript",
+            headers={
+                "Cache-Control": "private, max-age=31536000, immutable",
+                "X-Content-Type-Options": "nosniff",
+            },
+        )
+
     async def api_upload_file(self, request: Request) -> Response:
         admin_session, error = self._require_admin_mutation(request)
         if error:
@@ -630,41 +683,89 @@ class AdminHandlers:
         if not isinstance(encoded, str):
             return self._json_error("content_base64 must be a string.", status_code=400)
         try:
-            raw = base64.b64decode(encoded, validate=True)
-        except (ValueError, binascii.Error):
-            return self._json_error("content_base64 must be valid base64.", status_code=400)
-        if len(raw) > MAX_SESSION_FILE_BYTES:
-            return self._json_error(
-                f"File content must be at most {MAX_SESSION_FILE_BYTES} UTF-8 bytes.",
-                status_code=400,
-            )
-        try:
-            content = raw.decode("utf-8-sig")
-        except UnicodeDecodeError:
-            return self._json_error("File content must be valid UTF-8.", status_code=400)
-
-        try:
-            if scope_type == "session":
-                saved = self.store.save_session_file(
+            if mime_type == "application/pdf":
+                saved = await run_pdf_worker(
+                    self._ingest_admin_pdf,
                     selected.session_id,
+                    scope_type,
                     filename,
-                    content,
-                    mime_type=mime_type,
-                    created_by=admin_session["username"],
+                    encoded,
+                    admin_session["username"],
                 )
             else:
-                saved = self.store.save_group_file_for_session(
-                    selected.session_id,
-                    filename,
-                    content,
-                    mime_type=mime_type,
-                    created_by=admin_session["username"],
-                )
+                try:
+                    raw = base64.b64decode(encoded, validate=True)
+                except (ValueError, binascii.Error):
+                    return self._json_error("content_base64 must be valid base64.", status_code=400)
+                if len(raw) > MAX_SESSION_FILE_BYTES:
+                    return self._json_error(
+                        f"File content must be at most {MAX_SESSION_FILE_BYTES} UTF-8 bytes.",
+                        status_code=400,
+                    )
+                try:
+                    content = raw.decode("utf-8-sig")
+                except UnicodeDecodeError:
+                    return self._json_error("File content must be valid UTF-8.", status_code=400)
+                if scope_type == "session":
+                    saved = self.store.save_session_file(
+                        selected.session_id,
+                        filename,
+                        content,
+                        mime_type=mime_type,
+                        created_by=admin_session["username"],
+                    )
+                else:
+                    saved = self.store.save_group_file_for_session(
+                        selected.session_id,
+                        filename,
+                        content,
+                        mime_type=mime_type,
+                        created_by=admin_session["username"],
+                    )
+        except PdfWorkerBusyError as exc:
+            return JSONResponse(
+                {"ok": False, "error": str(exc)},
+                status_code=503,
+                headers={**self._no_store_headers(), "Retry-After": "2"},
+            )
+        except PdfStorageQuotaError as exc:
+            return self._json_error(str(exc), status_code=507)
         except ValueError as exc:
             return self._value_error(exc)
         return JSONResponse(
             {"ok": True, "file": session_file_payload(saved)},
             headers=self._no_store_headers(),
+        )
+
+    def _ingest_admin_pdf(
+        self,
+        session_id: str,
+        scope_type: str,
+        filename: str,
+        encoded: str,
+        created_by: str,
+    ) -> SessionFileRecord:
+        raw = decode_pdf_base64(encoded, max_bytes=MAX_ADMIN_PDF_BYTES)
+        extraction = extract_pdf_text_isolated(raw)
+        pdf_kwargs = {
+            "extracted_text": extraction.content,
+            "page_count": extraction.page_count,
+            "extraction_status": extraction.extraction_status,
+            "extracted_text_bytes": extraction.extracted_text_bytes,
+            "created_by": created_by,
+        }
+        if scope_type == "session":
+            return self.store.save_session_pdf(
+                session_id,
+                filename,
+                raw,
+                **pdf_kwargs,
+            )
+        return self.store.save_group_pdf_for_session(
+            session_id,
+            filename,
+            raw,
+            **pdf_kwargs,
         )
 
     async def api_mutate_file(self, request: Request) -> Response:
@@ -1218,7 +1319,7 @@ async def _bounded_json_body(
         return {}, AdminHandlers._json_error("Request body must be JSON.", status_code=400)
 
     try:
-        payload = json.loads(bytes(body))
+        payload = await asyncio.to_thread(json.loads, body)
     except (UnicodeDecodeError, json.JSONDecodeError):
         return {}, AdminHandlers._json_error("Request body must be JSON.", status_code=400)
     if not isinstance(payload, dict):

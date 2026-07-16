@@ -4,6 +4,7 @@ import pytest
 
 from app.search import SearchConfig, SearchService, chunk_text, fts_query
 from app.storage import Store
+from tests.pdf_samples import make_pdf
 
 
 def make_store(tmp_path):
@@ -50,6 +51,33 @@ def test_basic_search_includes_session_and_group_files(tmp_path):
     assert session_hit["session_id"] == "public-session"
     assert group_hit["source_kind"] == "group_file"
     assert group_hit["group_id"] == "private"
+
+
+def test_search_indexes_extracted_pdf_text_and_skips_image_only_pdf(tmp_path):
+    store = make_store(tmp_path)
+    extracted = "--- Page 1 ---\nThe PDF contains a telescope checklist"
+    store.save_session_pdf(
+        "public-session",
+        "brief.pdf",
+        make_pdf("The PDF contains a telescope checklist"),
+        extracted_text=extracted,
+        page_count=1,
+        extraction_status="ready",
+        extracted_text_bytes=len(extracted.encode("utf-8")),
+    )
+    store.save_session_pdf(
+        "public-session",
+        "scan.pdf",
+        make_pdf(None),
+        extracted_text="",
+        page_count=1,
+        extraction_status="no_text",
+        extracted_text_bytes=0,
+    )
+    service = SearchService(store)
+
+    assert any(item["title"] == "brief.pdf" for item in service.basic_search("telescope"))
+    assert all(row["title"] != "scan.pdf" for row in service._source_rows())
 
 
 def test_group_move_is_reflected_on_next_search(tmp_path):

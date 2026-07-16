@@ -4,9 +4,17 @@ MCP Session Bridge v0.1 is intentionally small and conservative.
 
 ## Explicit File Context Only
 
-The bridge does not automatically ingest external files or directories, watch a project folder, or send local project material to models. A user or owner must explicitly upload supported text files through the admin UI, or a model must use `upload_session_file` or `upload_group_file` when asked.
+The bridge does not automatically ingest external files or directories, watch a project folder, or send local project material to models. A user or owner must explicitly upload supported text files or PDFs through the admin UI, or a model must use the matching text/PDF upload tool when asked.
 
 Uploaded files are mutable runtime context. An owner can move, edit, or permanently delete them in the admin UI, which can change what a model is able to find during a conversation. Models are not automatically notified when these mutations happen; the current overview and file manifest must be checked deliberately.
+
+## PDF Text Extraction Without OCR
+
+The bridge preserves the original PDF and extracts an existing text layer for MCP reads and RAG search. OCR is not supported. Scanned or image-only PDFs may still be uploaded, previewed, downloaded, moved, and deleted, but they are marked as having no extractable text and are not indexed for search. Encrypted/password-protected PDFs are rejected.
+
+PDF limits are 20 MB through the admin UI, 10 MB through MCP, 500 pages, and 5 MB of extracted UTF-8 text. Durable PDF storage has a 1 GB global default quota, configurable with `BRIDGE_PDF_STORAGE_MAX_BYTES`.
+
+The offline admin demo remains text-only and rejects PDF uploads explicitly.
 
 ## SQLite Storage
 

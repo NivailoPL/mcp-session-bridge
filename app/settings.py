@@ -29,6 +29,7 @@ class Settings:
     scope: str
     transport_allowed_hosts: list[str]
     transport_allowed_origins: list[str]
+    pdf_storage_max_bytes: int = 1_000_000_000
 
     @property
     def issuer_url(self) -> str:
@@ -81,6 +82,9 @@ def load_settings() -> Settings:
         transport_allowed_origins=_csv_env(
             "BRIDGE_TRANSPORT_ALLOWED_ORIGINS",
             "http://127.0.0.1:8787,http://localhost:8787,https://claude.ai,https://chatgpt.com,https://chat.openai.com",
+        ),
+        pdf_storage_max_bytes=int(
+            os.getenv("BRIDGE_PDF_STORAGE_MAX_BYTES", "1000000000")
         ),
     )
 

@@ -1,8 +1,8 @@
 # MCP Session Bridge
 
-MCP Session Bridge is a small remote MCP server for shared, multi-model conversation memory. It gives different LLM assistants one durable place to create sessions, save full user/model exchanges, read transcripts in bounded chunks, and keep session/group text files.
+MCP Session Bridge is a small remote MCP server for shared, multi-model conversation memory. It gives different LLM assistants one durable place to create sessions, save full user/model exchanges, read transcripts in bounded chunks, and keep session/group text files and PDFs.
 
-It is intentionally narrow. Files enter the bridge only through an explicit upload in the admin UI or the `upload_session_file` and `upload_group_file` MCP tools. The bridge does not watch, scan, or automatically ingest the user's external project files or directories.
+It is intentionally narrow. Files enter the bridge only through an explicit upload in the admin UI or the file/PDF MCP tools. The bridge does not watch, scan, or automatically ingest the user's external project files or directories.
 
 ## What It Does
 
@@ -10,7 +10,7 @@ It is intentionally narrow. Files enter the bridge only through an explicit uplo
 - Supports OAuth authorization-code + PKCE and dynamic client registration.
 - Stores sessions, transcript exchanges, OAuth records, and admin events in SQLite.
 - Returns long transcripts in chunks so clients do not need one oversized tool result.
-- Saves explicitly uploaded session and group text files for reusable context.
+- Saves explicitly uploaded session and group text files or PDFs for reusable context.
 - Includes an offline transcript viewer and an authenticated admin UI for transcript correction, file management, and full-database search.
 - Provides local BM25 search plus optional OpenAI embeddings and Cohere reranking for admin-only Hybrid search.
 - Ships a local demo script for understanding the core workflow without setting up a remote MCP client.
@@ -87,8 +87,10 @@ http://127.0.0.1:8787/mcp
 | `save_exchange` | Saves one full user/model exchange. |
 | `upload_session_file` | Saves a text file for one session. |
 | `upload_group_file` | Saves a text file for an entire session group. |
+| `upload_session_pdf` | Saves an original PDF for one session and extracts its text without OCR. |
+| `upload_group_pdf` | Saves an original PDF for an entire session group and extracts its text without OCR. |
 | `list_session_files` | Lists uploaded session/group files. |
-| `download_session_file` | Reads one uploaded text file by `file_id`. |
+| `download_session_file` | Reads text content by `file_id`; for PDFs it returns extracted text. |
 
 Typical model flow:
 
@@ -100,7 +102,7 @@ Typical model flow:
 5. Call `save_exchange` before showing the response to the user.
 6. If the user asks to save a summary, plan, note, or reusable context, use `upload_session_file` or `upload_group_file`.
 
-Session groups and uploaded files are runtime data in the SQLite database. User-created groups and their files are not stored in tracked repo configuration. The admin panel at `/admin/sessions` can create, edit, delete, filter by, and move sessions between groups. Its file workspace can explicitly upload text files, move them between session and group scope, edit text content, and permanently delete files. These owner actions change what models can find through the current overview and file manifest; they do not add MCP move, edit, or delete tools.
+Session groups and uploaded files are runtime data in the SQLite database. User-created groups and their files are not stored in tracked repo configuration. The admin panel at `/admin/sessions` can create, edit, delete, filter by, and move sessions between groups. Its file workspace can explicitly upload text files and PDFs, preview and download original PDFs, move files between session and group scope, edit text content, and permanently delete files. PDF editing and OCR are not supported. PDF storage has a 1 GB global default quota, configurable with `BRIDGE_PDF_STORAGE_MAX_BYTES`. These owner actions change what models can find through the current overview and file manifest; they do not add MCP move, edit, or delete tools.
 
 ### Admin Search
 

@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import importlib
 import sqlite3
 import sys
@@ -10,8 +11,16 @@ import pytest
 
 from app.session_package import render_session_transcript
 from app.time_format import DISPLAY_TIMEZONE_SETTING_KEY
-from app.storage import MAX_SESSION_FILE_BYTES, SessionFileConflictError, Store
+from app.storage import (
+    MAX_SESSION_FILE_BYTES,
+    PdfStorageQuotaError,
+    SessionFileConflictError,
+    Store,
+    session_file_payload,
+)
+from app.pdf_files import extract_pdf_text_isolated
 from scripts.session_audit import build_viewer_payload
+from tests.pdf_samples import make_pdf
 
 
 def test_store_saves_session_and_exchange(tmp_path) -> None:
@@ -143,6 +152,80 @@ def test_store_demotes_legacy_non_default_system_groups(tmp_path) -> None:
     assert updated.name == "Wellness"
     assert deleted.deleted_at is not None
     assert reopened.get_session("legacy-session").group_id == "uncategorized"
+
+
+def test_store_migrates_legacy_text_file_rows_before_saving_pdfs(tmp_path) -> None:
+    db_path = tmp_path / "bridge.sqlite3"
+    store = Store(db_path)
+    store.create_session("s1", "Legacy files", "manual-context")
+    with sqlite3.connect(db_path) as conn:
+        conn.execute("DROP TABLE session_files")
+        conn.execute(
+            """
+            CREATE TABLE session_files (
+                file_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                scope_type TEXT NOT NULL,
+                session_id TEXT,
+                group_id TEXT,
+                filename TEXT NOT NULL,
+                mime_type TEXT NOT NULL,
+                content TEXT NOT NULL,
+                sha256 TEXT NOT NULL,
+                size_bytes INTEGER NOT NULL,
+                created_by TEXT NOT NULL,
+                created_at INTEGER NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO session_files (
+                scope_type, session_id, group_id, filename, mime_type, content,
+                sha256, size_bytes, created_by, created_at
+            ) VALUES ('session', 's1', NULL, 'legacy.md', 'text/markdown',
+                      'Legacy text', 'legacy-hash', 11, 'owner', 1700000000)
+            """
+        )
+
+    reopened = Store(db_path)
+    legacy = reopened.get_session_file(1)
+    extraction = extract_pdf_text_isolated(make_pdf("Migrated PDF"))
+    saved_pdf = reopened.save_session_pdf(
+        "s1",
+        "new.pdf",
+        make_pdf("Migrated PDF"),
+        extracted_text=extraction.content,
+        page_count=extraction.page_count,
+        extraction_status=extraction.extraction_status,
+        extracted_text_bytes=extraction.extracted_text_bytes,
+    )
+
+    assert legacy is not None
+    assert legacy.content == "Legacy text"
+    assert legacy.content_kind == "text"
+    assert legacy.page_count is None
+    assert legacy.extraction_status == "not_applicable"
+    assert legacy.extracted_text_bytes == 0
+    assert session_file_payload(legacy, include_content=True) == {
+        "file_id": 1,
+        "scope_type": "session",
+        "session_id": "s1",
+        "group_id": None,
+        "filename": "legacy.md",
+        "mime_type": "text/markdown",
+        "sha256": "legacy-hash",
+        "size_bytes": 11,
+        "created_by": "owner",
+        "created_at": 1700000000,
+        "content_kind": "text",
+        "page_count": None,
+        "extraction_status": "not_applicable",
+        "extracted_text_bytes": 0,
+        "text_available": True,
+        "content": "Legacy text",
+    }
+    assert saved_pdf.content_kind == "pdf"
+    assert "Migrated PDF" in saved_pdf.content
 
 
 def test_store_soft_deletes_exchange_and_hides_it_from_transcript(tmp_path) -> None:
@@ -369,6 +452,8 @@ def test_public_tools_hide_context_pack_tools(tmp_path, monkeypatch) -> None:
     assert "list_session_groups" in tool_names
     assert "upload_session_file" in tool_names
     assert "upload_group_file" in tool_names
+    assert "upload_session_pdf" in tool_names
+    assert "upload_group_pdf" in tool_names
     assert "list_session_files" in tool_names
     assert "download_session_file" in tool_names
     assert "save_session_summary" not in tool_names
@@ -499,6 +584,125 @@ def test_mcp_session_files_upload_list_download_and_show_in_overview(tmp_path, m
     assert invalid["error"] == "Unknown session group: missing"
 
 
+def test_mcp_uploads_pdf_and_returns_extracted_text_without_original_bytes(tmp_path, monkeypatch) -> None:
+    main = _load_main(tmp_path, monkeypatch)
+    main.store.create_session_group("Ideas", "#22c55e", "ideas")
+    main.store.create_session("s1", "PDF test", "manual-context", group_id="ideas")
+    raw = make_pdf("PDF context for RAG")
+    encoded = __import__("base64").b64encode(raw).decode("ascii")
+
+    session_pdf = asyncio.run(main.upload_session_pdf("s1", "brief.pdf", encoded))
+    group_pdf = asyncio.run(main.upload_group_pdf("ideas", "shared.pdf", encoded))
+    downloaded = main.download_session_file(session_pdf["file"]["file_id"])
+
+    assert session_pdf["ok"] is True
+    assert session_pdf["file"]["content_kind"] == "pdf"
+    assert session_pdf["file"]["page_count"] == 1
+    assert session_pdf["file"]["extraction_status"] == "ready"
+    assert session_pdf["file"]["text_available"] is True
+    assert session_pdf["file"]["sha256"] == hashlib.sha256(raw).hexdigest()
+    assert session_pdf["file"]["size_bytes"] == len(raw)
+    assert group_pdf["file"]["scope_type"] == "group"
+    assert "PDF context for RAG" in downloaded["file"]["content"]
+    assert downloaded["file"]["extracted_text_bytes"] == len(
+        downloaded["file"]["content"].encode("utf-8")
+    )
+    assert "binary_content" not in downloaded["file"]
+    assert "content_base64" not in downloaded["file"]
+
+
+def test_mcp_accepts_image_only_pdf_but_marks_it_unindexed(tmp_path, monkeypatch) -> None:
+    main = _load_main(tmp_path, monkeypatch)
+    main.store.create_session("s1", "PDF test", "manual-context")
+    encoded = __import__("base64").b64encode(make_pdf(None)).decode("ascii")
+
+    uploaded = asyncio.run(main.upload_session_pdf("s1", "scan.pdf", encoded))
+    downloaded = main.download_session_file(uploaded["file"]["file_id"])
+
+    assert uploaded["ok"] is True
+    assert uploaded["file"]["extraction_status"] == "no_text"
+    assert uploaded["file"]["text_available"] is False
+    assert downloaded["file"]["content"] == ""
+
+
+def test_mcp_rejects_invalid_pdf_payloads(tmp_path, monkeypatch) -> None:
+    main = _load_main(tmp_path, monkeypatch)
+    main.store.create_session("s1", "PDF test", "manual-context")
+
+    malformed = asyncio.run(main.upload_session_pdf("s1", "bad.pdf", "%%%"))
+    not_pdf = asyncio.run(
+        main.upload_session_pdf(
+            "s1",
+            "bad.pdf",
+            __import__("base64").b64encode(b"not a pdf").decode("ascii"),
+        )
+    )
+    wrong_extension = asyncio.run(
+        main.upload_session_pdf(
+            "s1",
+            "bad.txt",
+            __import__("base64").b64encode(make_pdf()).decode("ascii"),
+        )
+    )
+
+    assert malformed["ok"] is False
+    assert "base64" in malformed["error"]
+    assert not_pdf["ok"] is False
+    assert "valid PDF" in not_pdf["error"]
+    assert wrong_extension["ok"] is False
+    assert "filename" in wrong_extension["error"]
+
+
+def test_mcp_pdf_upload_reports_worker_saturation(tmp_path, monkeypatch) -> None:
+    main = _load_main(tmp_path, monkeypatch)
+    main.store.create_session("s1", "PDF test", "manual-context")
+
+    async def busy_worker(*args, **kwargs):
+        raise main.PdfWorkerBusyError("PDF processing is busy; retry shortly")
+
+    monkeypatch.setattr(main, "run_pdf_worker", busy_worker)
+
+    result = asyncio.run(main.upload_session_pdf("s1", "brief.pdf", "unused"))
+
+    assert result == {
+        "ok": False,
+        "error": "PDF processing is busy; retry shortly",
+        "error_code": "pdf_worker_busy",
+        "retryable": True,
+        "retry_after_seconds": 2,
+    }
+
+
+def test_pdf_storage_quota_is_enforced_before_insert(tmp_path) -> None:
+    raw = make_pdf("Quota text")
+    extraction = extract_pdf_text_isolated(raw)
+    quota = len(raw) + extraction.extracted_text_bytes
+    store = Store(tmp_path / "bridge.sqlite3", pdf_storage_max_bytes=quota)
+    store.create_session("s1", "Quota", "manual-context")
+
+    store.save_session_pdf(
+        "s1",
+        "first.pdf",
+        raw,
+        extracted_text=extraction.content,
+        page_count=extraction.page_count,
+        extraction_status=extraction.extraction_status,
+        extracted_text_bytes=extraction.extracted_text_bytes,
+    )
+    with pytest.raises(PdfStorageQuotaError, match="quota exceeded"):
+        store.save_session_pdf(
+            "s1",
+            "second.pdf",
+            raw,
+            extracted_text=extraction.content,
+            page_count=extraction.page_count,
+            extraction_status=extraction.extraction_status,
+            extracted_text_bytes=extraction.extracted_text_bytes,
+        )
+
+    assert len(store.list_session_files(session_id="s1")) == 1
+
+
 def test_mcp_overview_reads_session_and_group_files_in_one_snapshot(tmp_path, monkeypatch) -> None:
     main = _load_main(tmp_path, monkeypatch)
     main.store.create_session_group("Ideas", "#22c55e", "ideas")
@@ -543,9 +747,18 @@ def test_list_session_files_does_not_select_content_bodies(tmp_path) -> None:
         if statement.lstrip().upper().startswith("SELECT") and "FROM session_files" in statement
     )
     projection = select.split("FROM session_files", 1)[0].lower()
-    assert "content" not in projection
+    assert " content," not in projection
+    assert "binary_content" not in projection
     assert "*" not in projection
     assert listed[0]["filename"] == "large.md"
+
+    store.get_session_file(listed[0]["file_id"])
+    detail_select = [
+        statement
+        for statement in statements
+        if statement.lstrip().upper().startswith("SELECT") and "FROM session_files" in statement
+    ][-1]
+    assert "binary_content" not in detail_select.split("FROM session_files", 1)[0].lower()
 
 
 def test_store_moves_session_files_without_changing_identity_or_metadata(tmp_path) -> None:
@@ -713,6 +926,11 @@ def test_store_hard_deletes_file_and_preserves_existing_payload_keys(tmp_path, m
         "size_bytes",
         "created_by",
         "created_at",
+        "content_kind",
+        "page_count",
+        "extraction_status",
+        "extracted_text_bytes",
+        "text_available",
     }
 
     assert set(uploaded["file"]) == expected_manifest_keys
@@ -762,6 +980,8 @@ def test_project_prompt_documents_manual_context_and_chunk_protocol() -> None:
     assert "`save_session_summary`" not in prompt
     assert "`upload_session_file`" in prompt
     assert "`upload_group_file`" in prompt
+    assert "`upload_session_pdf`" in prompt
+    assert "`upload_group_pdf`" in prompt
     assert "`download_session_file`" in prompt
     assert "`get_session_package`" not in prompt
     assert "context pack" not in prompt.lower()
@@ -776,6 +996,8 @@ def test_public_docs_describe_explicit_mutable_file_context() -> None:
     assert "admin ui" in readme
     assert "`upload_session_file`" in readme
     assert "`upload_group_file`" in readme
+    assert "`upload_session_pdf`" in readme
+    assert "ocr" in limitations
     assert "does not automatically ingest" in limitations
     assert "external files or directories" in limitations
 

@@ -13,6 +13,7 @@ from starlette.testclient import TestClient
 from app.security import password_hash
 from app.storage import SESSION_GROUP_ICON_KEYS
 from app.time_format import DISPLAY_TIMEZONE_SETTING_KEY
+from tests.pdf_samples import make_pdf
 
 
 def test_admin_viewer_group_ui_contract() -> None:
@@ -42,6 +43,11 @@ def test_admin_viewer_file_workspace_shell_contract() -> None:
     rail = viewer[viewer.index('<nav id="turnNav"'):viewer.index("</nav>", viewer.index('<nav id="turnNav"'))]
     assert 'id="fileWorkspaceOpen"' in rail
     assert 'id="fileWorkspaceCount"' in rail
+    assert "pdfJsPromise = null;" in viewer
+    assert "queueCurrentPageSafely" in viewer
+    assert "invalidateFileOpen();" in viewer
+    assert "clearPdfPreview();" in viewer
+    assert "PDF uploads are unavailable in offline demo mode." in viewer
     assert 'aria-haspopup="dialog"' in rail
 
     assert 'dom.turnNav.classList.toggle("show", Boolean(state.selectedSession));' in viewer
@@ -54,6 +60,13 @@ def test_admin_viewer_file_workspace_shell_contract() -> None:
 
     assert 'dom.fileWorkspaceContent.innerHTML = renderMarkdown(content || "\u2014");' in viewer
     assert 'dom.fileWorkspaceContent.replaceChildren(preNode(content));' in viewer
+    assert 'const MAX_PDF_BYTES = 20_000_000;' in viewer
+    assert 'import("/admin/assets/pdfjs/pdf.min.mjs?v=6.1.200")' in viewer
+    assert 'function renderPdfPreview(file)' in viewer
+    assert 'return file?.content_kind === "pdf";' in viewer
+    assert 'extraction_status === "no_text"' in viewer
+    assert "state.pdfAbortController.abort();" in viewer
+    assert "OCR is not supported" in viewer
     assert 'dom.fileWorkspaceOpen.focus();' in viewer
 
 
@@ -602,7 +615,7 @@ def test_admin_uploads_bounded_utf8_files_to_selected_session_or_group(tmp_path,
         headers=headers,
     ).status_code == 400
 
-    oversized = b'{"padding":"' + b"x" * 1_500_000 + b'"}'
+    oversized = b'{"padding":"' + b"x" * 26_700_000 + b'"}'
     misleading = client.build_request(
         "POST",
         "/admin/api/sessions/s1/files",
@@ -619,6 +632,89 @@ def test_admin_uploads_bounded_utf8_files_to_selected_session_or_group(tmp_path,
     del absent.headers["content-length"]
     assert client.send(absent).status_code == 413
     assert len(main.store.list_session_files(session_id="s1")) == 1
+
+
+def test_admin_uploads_previews_and_downloads_original_pdf(tmp_path, monkeypatch) -> None:
+    main = _load_main(tmp_path, monkeypatch)
+    main.store.create_session("s1", "PDF admin", "manual-context")
+    client, csrf = _admin_client(main)
+    raw = make_pdf("Admin PDF text")
+
+    uploaded = client.post(
+        "/admin/api/sessions/s1/files",
+        json=_encoded_file(raw, filename="brief.PDF"),
+        headers={"x-csrf-token": csrf},
+    )
+
+    assert uploaded.status_code == 200
+    manifest = uploaded.json()["file"]
+    assert manifest["mime_type"] == "application/pdf"
+    assert manifest["content_kind"] == "pdf"
+    assert manifest["page_count"] == 1
+    assert manifest["text_available"] is True
+
+    detail = client.get(f"/admin/api/files/{manifest['file_id']}")
+    assert detail.status_code == 200
+    assert "Admin PDF text" in detail.json()["file"]["content"]
+
+    original = client.get(f"/admin/api/files/{manifest['file_id']}/raw")
+    assert original.status_code == 200
+    assert original.content == raw
+    assert original.headers["content-type"] == "application/pdf"
+    assert original.headers["content-disposition"].startswith("inline;")
+
+    attachment = client.get(f"/admin/api/files/{manifest['file_id']}/raw?download=1")
+    assert attachment.headers["content-disposition"].startswith("attachment;")
+
+    group_upload = client.post(
+        "/admin/api/sessions/s1/files",
+        json=_encoded_file(raw, filename="shared.pdf", scope_type="group"),
+        headers={"x-csrf-token": csrf},
+    )
+    assert group_upload.status_code == 200
+    assert group_upload.json()["file"]["scope_type"] == "group"
+    assert group_upload.json()["file"]["group_id"] == "uncategorized"
+
+
+def test_admin_pdf_raw_requires_login_and_pdf_cannot_be_edited(tmp_path, monkeypatch) -> None:
+    main = _load_main(tmp_path, monkeypatch)
+    main.store.create_session("s1", "PDF admin", "manual-context")
+    client, csrf = _admin_client(main)
+    uploaded = client.post(
+        "/admin/api/sessions/s1/files",
+        json=_encoded_file(make_pdf(), filename="brief.pdf"),
+        headers={"x-csrf-token": csrf},
+    ).json()["file"]
+
+    anonymous = TestClient(main.app, base_url="http://127.0.0.1:8787")
+    assert anonymous.get(f"/admin/api/files/{uploaded['file_id']}/raw").status_code == 401
+    missing = client.get("/admin/api/files/999999/raw")
+    assert missing.status_code == 404
+    assert missing.json() == {"ok": False, "error": "Unknown file_id: 999999"}
+    text_file = main.store.save_session_file("s1", "notes.md", "Text only")
+    text_raw = client.get(f"/admin/api/files/{text_file.file_id}/raw")
+    assert text_raw.status_code == 400
+    assert text_raw.json() == {
+        "ok": False,
+        "error": "Raw binary content is available only for PDF files.",
+    }
+    edited = client.patch(
+        f"/admin/api/sessions/s1/files/{uploaded['file_id']}",
+        json={"content": "replacement", "expected_sha256": uploaded["sha256"]},
+        headers={"x-csrf-token": csrf},
+    )
+    assert edited.status_code == 400
+    assert "cannot be edited" in edited.json()["error"]
+
+    assert anonymous.get(
+        "/admin/assets/pdfjs/pdf.min.mjs",
+        follow_redirects=False,
+    ).status_code == 303
+    asset = client.get("/admin/assets/pdfjs/pdf.min.mjs")
+    assert asset.status_code == 200
+    assert asset.headers["content-type"].startswith("text/javascript")
+    assert "immutable" in asset.headers["cache-control"]
+    assert client.get("/admin/assets/pdfjs/not-allowed.mjs").status_code == 404
 
 
 def test_admin_group_upload_uses_session_current_group_atomically(tmp_path, monkeypatch) -> None:
@@ -819,6 +915,11 @@ def test_admin_file_workspace_stays_consistent_with_mcp_reads(tmp_path, monkeypa
         "size_bytes",
         "created_by",
         "created_at",
+        "content_kind",
+        "page_count",
+        "extraction_status",
+        "extracted_text_bytes",
+        "text_available",
     }
     assert set(original) == manifest_keys
     assert [item["file_id"] for item in client.get("/admin/api/sessions/s1").json()["files"]["session"]] == [file_id]

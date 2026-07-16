@@ -19,10 +19,18 @@ from starlette.responses import JSONResponse, Response
 
 from app.admin import AdminHandlers
 from app.oauth import OAuthHandlers
+from app.pdf_files import (
+    MAX_MCP_PDF_BYTES,
+    PdfWorkerBusyError,
+    decode_pdf_base64,
+    extract_pdf_text_isolated,
+    run_pdf_worker,
+)
+from app.request_limits import RequestBodyLimitMiddleware
 from app.security import hash_secret
 from app.session_package import render_session_overview, render_session_transcript_chunk
 from app.settings import ROOT, load_settings
-from app.storage import Store, session_file_payload
+from app.storage import PdfStorageQuotaError, Store, session_file_payload
 from app.time_format import (
     DEFAULT_DISPLAY_TIMEZONE_NAME,
     DISPLAY_TIMEZONE_SETTING_KEY,
@@ -41,8 +49,12 @@ SERVER_INSTRUCTIONS = (
 )
 
 settings = load_settings()
-store = Store(settings.db_path)
+store = Store(
+    settings.db_path,
+    pdf_storage_max_bytes=settings.pdf_storage_max_bytes,
+)
 logger = logging.getLogger(__name__)
+MCP_REQUEST_MAX_BODY_BYTES = ((MAX_MCP_PDF_BYTES + 2) // 3 * 4) + 262_144
 
 
 class BridgeTokenVerifier(TokenVerifier):
@@ -276,6 +288,16 @@ async def admin_api_ai_rename_session(request: Request) -> Response:
 @mcp.custom_route("/admin/api/files/{file_id}", methods=["GET"])
 async def admin_api_file(request: Request) -> Response:
     return await admin.api_file(request)
+
+
+@mcp.custom_route("/admin/api/files/{file_id}/raw", methods=["GET"])
+async def admin_api_file_raw(request: Request) -> Response:
+    return await admin.api_file_raw(request)
+
+
+@mcp.custom_route("/admin/assets/pdfjs/{asset_name}", methods=["GET"])
+async def admin_pdfjs_asset(request: Request) -> Response:
+    return await admin.pdfjs_asset(request)
 
 
 @mcp.custom_route("/admin/api/sessions/{session_id}/files", methods=["POST"])
@@ -588,8 +610,92 @@ def upload_group_file(
 
 
 @mcp.tool()
+async def upload_session_pdf(
+    session_id: str,
+    filename: str,
+    content_base64: str,
+) -> dict[str, Any]:
+    """Upload an existing .pdf for one session as base64 (10 MB, 500 pages max). Encrypted PDFs are rejected. OCR is unavailable; image-only PDFs succeed with text_available=false. Retry temporary pdf_worker_busy errors."""
+    token = get_access_token()
+    created_by = token.client_id if token else "unknown"
+    try:
+        saved = await run_pdf_worker(
+            _ingest_session_pdf,
+            session_id,
+            filename,
+            content_base64,
+            created_by,
+        )
+    except PdfWorkerBusyError as exc:
+        return {
+            "ok": False,
+            "error": str(exc),
+            "error_code": "pdf_worker_busy",
+            "retryable": True,
+            "retry_after_seconds": 2,
+        }
+    except PdfStorageQuotaError as exc:
+        return {
+            "ok": False,
+            "error": str(exc),
+            "error_code": "pdf_storage_quota",
+            "retryable": False,
+        }
+    except ValueError as exc:
+        return {
+            "ok": False,
+            "error": str(exc),
+            "error_code": "invalid_pdf",
+            "retryable": False,
+        }
+    return {"ok": True, "file": session_file_payload(saved)}
+
+
+@mcp.tool()
+async def upload_group_pdf(
+    group_id: str,
+    filename: str,
+    content_base64: str,
+) -> dict[str, Any]:
+    """Upload an existing .pdf for a session group as base64 (10 MB, 500 pages max). Encrypted PDFs are rejected. OCR is unavailable; image-only PDFs succeed with text_available=false. Retry temporary pdf_worker_busy errors."""
+    token = get_access_token()
+    created_by = token.client_id if token else "unknown"
+    try:
+        saved = await run_pdf_worker(
+            _ingest_group_pdf,
+            group_id,
+            filename,
+            content_base64,
+            created_by,
+        )
+    except PdfWorkerBusyError as exc:
+        return {
+            "ok": False,
+            "error": str(exc),
+            "error_code": "pdf_worker_busy",
+            "retryable": True,
+            "retry_after_seconds": 2,
+        }
+    except PdfStorageQuotaError as exc:
+        return {
+            "ok": False,
+            "error": str(exc),
+            "error_code": "pdf_storage_quota",
+            "retryable": False,
+        }
+    except ValueError as exc:
+        return {
+            "ok": False,
+            "error": str(exc),
+            "error_code": "invalid_pdf",
+            "retryable": False,
+        }
+    return {"ok": True, "file": session_file_payload(saved)}
+
+
+@mcp.tool()
 def list_session_files(session_id: str = "", group_id: str = "") -> dict[str, Any]:
-    """List uploaded text files, optionally filtered by session_id and/or group_id."""
+    """List uploaded text and PDF files, optionally filtered by session_id and/or group_id."""
     return {
         "ok": True,
         "files": store.list_session_files(
@@ -601,11 +707,51 @@ def list_session_files(session_id: str = "", group_id: str = "") -> dict[str, An
 
 @mcp.tool()
 def download_session_file(file_id: int) -> dict[str, Any]:
-    """Download one uploaded text file by file_id."""
+    """Read text content by file_id; for PDFs this returns extracted text, never original bytes."""
     saved = store.get_session_file(file_id)
     if saved is None:
         return {"ok": False, "error": f"Unknown file_id: {file_id}"}
     return {"ok": True, "file": session_file_payload(saved, include_content=True)}
+
+
+def _ingest_session_pdf(
+    session_id: str,
+    filename: str,
+    content_base64: str,
+    created_by: str,
+):
+    raw = decode_pdf_base64(content_base64, max_bytes=MAX_MCP_PDF_BYTES)
+    extraction = extract_pdf_text_isolated(raw)
+    return store.save_session_pdf(
+        session_id,
+        filename,
+        raw,
+        extracted_text=extraction.content,
+        page_count=extraction.page_count,
+        extraction_status=extraction.extraction_status,
+        extracted_text_bytes=extraction.extracted_text_bytes,
+        created_by=created_by,
+    )
+
+
+def _ingest_group_pdf(
+    group_id: str,
+    filename: str,
+    content_base64: str,
+    created_by: str,
+):
+    raw = decode_pdf_base64(content_base64, max_bytes=MAX_MCP_PDF_BYTES)
+    extraction = extract_pdf_text_isolated(raw)
+    return store.save_group_pdf(
+        group_id,
+        filename,
+        raw,
+        extracted_text=extraction.content,
+        page_count=extraction.page_count,
+        extraction_status=extraction.extraction_status,
+        extracted_text_bytes=extraction.extracted_text_bytes,
+        created_by=created_by,
+    )
 
 
 def _new_session_id(title: str, title_is_auto: bool = False) -> str:
@@ -642,4 +788,8 @@ def _group_payload(group: Any) -> dict[str, Any] | None:
     }
 
 
-app = mcp.streamable_http_app()
+app = RequestBodyLimitMiddleware(
+    mcp.streamable_http_app(),
+    path=settings.resource_path,
+    max_bytes=MCP_REQUEST_MAX_BODY_BYTES,
+)

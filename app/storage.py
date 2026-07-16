@@ -79,12 +79,18 @@ SESSION_GROUP_ICON_KEYS = {
 MAX_SESSION_FILE_BYTES = 1_000_000
 SESSION_FILE_MANIFEST_COLUMNS = """
     file_id, scope_type, session_id, group_id, filename, mime_type,
-    sha256, size_bytes, created_by, created_at
+    sha256, size_bytes, created_by, created_at, content_kind, page_count,
+    extraction_status, extracted_text_bytes
 """
+SESSION_FILE_RECORD_COLUMNS = f"{SESSION_FILE_MANIFEST_COLUMNS}, content"
 
 
 class SessionFileConflictError(ValueError):
     """Raised when a guarded file edit targets content that has changed."""
+
+
+class PdfStorageQuotaError(ValueError):
+    """Raised when saving a PDF would exceed the configured durable quota."""
 
 
 @dataclass(frozen=True)
@@ -186,11 +192,16 @@ class SessionFileRecord:
     size_bytes: int
     created_by: str
     created_at: int
+    content_kind: str
+    page_count: int | None
+    extraction_status: str
+    extracted_text_bytes: int
 
 
 class Store:
-    def __init__(self, db_path: Path):
+    def __init__(self, db_path: Path, *, pdf_storage_max_bytes: int = 1_000_000_000):
         self.db_path = db_path
+        self.pdf_storage_max_bytes = pdf_storage_max_bytes
         self._lock = Lock()
         self.db_path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
         self._harden_runtime_permissions()
@@ -335,10 +346,15 @@ class Store:
                     filename TEXT NOT NULL,
                     mime_type TEXT NOT NULL,
                     content TEXT NOT NULL,
+                    binary_content BLOB,
                     sha256 TEXT NOT NULL,
                     size_bytes INTEGER NOT NULL,
                     created_by TEXT NOT NULL,
                     created_at INTEGER NOT NULL,
+                    content_kind TEXT NOT NULL DEFAULT 'text',
+                    page_count INTEGER,
+                    extraction_status TEXT NOT NULL DEFAULT 'not_applicable',
+                    extracted_text_bytes INTEGER NOT NULL DEFAULT 0,
                     FOREIGN KEY(session_id) REFERENCES sessions(session_id) ON DELETE CASCADE
                 );
 
@@ -368,6 +384,21 @@ class Store:
             self._ensure_column(conn, "exchanges", "deleted_at", "INTEGER")
             self._ensure_column(conn, "exchanges", "deleted_reason", "TEXT")
             self._ensure_column(conn, "exchanges", "edited_at", "INTEGER")
+            self._ensure_column(conn, "session_files", "binary_content", "BLOB")
+            self._ensure_column(conn, "session_files", "content_kind", "TEXT NOT NULL DEFAULT 'text'")
+            self._ensure_column(conn, "session_files", "page_count", "INTEGER")
+            self._ensure_column(
+                conn,
+                "session_files",
+                "extraction_status",
+                "TEXT NOT NULL DEFAULT 'not_applicable'",
+            )
+            self._ensure_column(
+                conn,
+                "session_files",
+                "extracted_text_bytes",
+                "INTEGER NOT NULL DEFAULT 0",
+            )
             self._seed_system_session_groups(conn)
             self._demote_legacy_system_session_groups(conn)
             conn.execute(
@@ -857,7 +888,10 @@ class Store:
                     now,
                 ),
             )
-            row = conn.execute("SELECT * FROM session_files WHERE file_id = ?", (cursor.lastrowid,)).fetchone()
+            row = conn.execute(
+                f"SELECT {SESSION_FILE_RECORD_COLUMNS} FROM session_files WHERE file_id = ?",
+                (cursor.lastrowid,),
+            ).fetchone()
         return _session_file_from_row(row)
 
     def save_group_file(
@@ -894,7 +928,10 @@ class Store:
                     now,
                 ),
             )
-            row = conn.execute("SELECT * FROM session_files WHERE file_id = ?", (cursor.lastrowid,)).fetchone()
+            row = conn.execute(
+                f"SELECT {SESSION_FILE_RECORD_COLUMNS} FROM session_files WHERE file_id = ?",
+                (cursor.lastrowid,),
+            ).fetchone()
         return _session_file_from_row(row)
 
     def save_group_file_for_session(
@@ -940,9 +977,172 @@ class Store:
                 ),
             )
             row = conn.execute(
-                "SELECT * FROM session_files WHERE file_id = ?",
+                f"SELECT {SESSION_FILE_RECORD_COLUMNS} FROM session_files WHERE file_id = ?",
                 (cursor.lastrowid,),
             ).fetchone()
+        return _session_file_from_row(row)
+
+    def save_session_pdf(
+        self,
+        session_id: str,
+        filename: str,
+        binary_content: bytes,
+        *,
+        extracted_text: str,
+        page_count: int,
+        extraction_status: str,
+        extracted_text_bytes: int,
+        created_by: str = "model",
+    ) -> SessionFileRecord:
+        resolved_session_id = session_id.strip()
+        values = _validate_pdf_file(
+            filename,
+            binary_content,
+            extracted_text=extracted_text,
+            page_count=page_count,
+            extraction_status=extraction_status,
+            extracted_text_bytes=extracted_text_bytes,
+        )
+        with self._lock, self._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            if conn.execute(
+                "SELECT 1 FROM sessions WHERE session_id = ?",
+                (resolved_session_id,),
+            ).fetchone() is None:
+                raise ValueError(f"Unknown session_id: {resolved_session_id}")
+            return self._insert_pdf_file(
+                conn,
+                scope_type="session",
+                session_id=resolved_session_id,
+                group_id=None,
+                values=values,
+                created_by=created_by,
+            )
+
+    def save_group_pdf(
+        self,
+        group_id: str,
+        filename: str,
+        binary_content: bytes,
+        *,
+        extracted_text: str,
+        page_count: int,
+        extraction_status: str,
+        extracted_text_bytes: int,
+        created_by: str = "model",
+    ) -> SessionFileRecord:
+        resolved_group_id = group_id.strip() or UNCATEGORIZED_GROUP_ID
+        values = _validate_pdf_file(
+            filename,
+            binary_content,
+            extracted_text=extracted_text,
+            page_count=page_count,
+            extraction_status=extraction_status,
+            extracted_text_bytes=extracted_text_bytes,
+        )
+        with self._lock, self._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            self._require_active_group(conn, resolved_group_id)
+            return self._insert_pdf_file(
+                conn,
+                scope_type="group",
+                session_id=None,
+                group_id=resolved_group_id,
+                values=values,
+                created_by=created_by,
+            )
+
+    def save_group_pdf_for_session(
+        self,
+        session_id: str,
+        filename: str,
+        binary_content: bytes,
+        *,
+        extracted_text: str,
+        page_count: int,
+        extraction_status: str,
+        extracted_text_bytes: int,
+        created_by: str = "model",
+    ) -> SessionFileRecord:
+        resolved_session_id = session_id.strip()
+        values = _validate_pdf_file(
+            filename,
+            binary_content,
+            extracted_text=extracted_text,
+            page_count=page_count,
+            extraction_status=extraction_status,
+            extracted_text_bytes=extracted_text_bytes,
+        )
+        with self._lock, self._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            session = conn.execute(
+                "SELECT group_id FROM sessions WHERE session_id = ?",
+                (resolved_session_id,),
+            ).fetchone()
+            if session is None:
+                raise ValueError(f"Unknown session_id: {resolved_session_id}")
+            group_id = session["group_id"]
+            self._require_active_group(conn, group_id)
+            return self._insert_pdf_file(
+                conn,
+                scope_type="group",
+                session_id=None,
+                group_id=group_id,
+                values=values,
+                created_by=created_by,
+            )
+
+    def _insert_pdf_file(
+        self,
+        conn: sqlite3.Connection,
+        *,
+        scope_type: str,
+        session_id: str | None,
+        group_id: str | None,
+        values: dict[str, Any],
+        created_by: str,
+    ) -> SessionFileRecord:
+        current_bytes = conn.execute(
+            """
+            SELECT COALESCE(SUM(size_bytes + extracted_text_bytes), 0)
+            FROM session_files
+            WHERE content_kind = 'pdf'
+            """
+        ).fetchone()[0]
+        incoming_bytes = values["size_bytes"] + values["extracted_text_bytes"]
+        if current_bytes + incoming_bytes > self.pdf_storage_max_bytes:
+            raise PdfStorageQuotaError(
+                f"PDF storage quota exceeded ({self.pdf_storage_max_bytes} bytes)"
+            )
+        cursor = conn.execute(
+            """
+            INSERT INTO session_files (
+                scope_type, session_id, group_id, filename, mime_type, content,
+                binary_content, sha256, size_bytes, created_by, created_at,
+                content_kind, page_count, extraction_status, extracted_text_bytes
+            ) VALUES (?, ?, ?, ?, 'application/pdf', ?, ?, ?, ?, ?, ?,
+                      'pdf', ?, ?, ?)
+            """,
+            (
+                scope_type,
+                session_id,
+                group_id,
+                values["filename"],
+                values["extracted_text"],
+                values["binary_content"],
+                values["sha256"],
+                values["size_bytes"],
+                created_by.strip() or "model",
+                int(time.time()),
+                values["page_count"],
+                values["extraction_status"],
+                values["extracted_text_bytes"],
+            ),
+        )
+        row = conn.execute(
+            f"SELECT {SESSION_FILE_RECORD_COLUMNS} FROM session_files WHERE file_id = ?",
+            (cursor.lastrowid,),
+        ).fetchone()
         return _session_file_from_row(row)
 
     def list_session_files(
@@ -973,8 +1173,25 @@ class Store:
 
     def get_session_file(self, file_id: int) -> SessionFileRecord | None:
         with self._lock, self._connect() as conn:
-            row = conn.execute("SELECT * FROM session_files WHERE file_id = ?", (file_id,)).fetchone()
+            row = conn.execute(
+                f"SELECT {SESSION_FILE_RECORD_COLUMNS} FROM session_files WHERE file_id = ?",
+                (file_id,),
+            ).fetchone()
         return _session_file_from_row(row) if row else None
+
+    def get_session_file_binary(self, file_id: int) -> tuple[str, str, bytes | None] | None:
+        with self._lock, self._connect() as conn:
+            row = conn.execute(
+                """
+                SELECT filename, content_kind, binary_content
+                FROM session_files
+                WHERE file_id = ?
+                """,
+                (file_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        return row["filename"], row["content_kind"], row["binary_content"]
 
     def update_session_file(
         self,
@@ -990,7 +1207,7 @@ class Store:
         with self._lock, self._connect() as conn:
             conn.execute("BEGIN IMMEDIATE")
             row = conn.execute(
-                "SELECT * FROM session_files WHERE file_id = ?",
+                f"SELECT {SESSION_FILE_RECORD_COLUMNS} FROM session_files WHERE file_id = ?",
                 (file_id,),
             ).fetchone()
             if row is None:
@@ -1005,6 +1222,8 @@ class Store:
                 raise SessionFileConflictError(
                     f"File {file_id} changed since it was opened"
                 )
+            if row["content_kind"] == "pdf":
+                raise ValueError("PDF files cannot be edited")
             conn.execute(
                 """
                 UPDATE session_files
@@ -1014,7 +1233,7 @@ class Store:
                 (resolved_content, digest, size_bytes, file_id),
             )
             updated = conn.execute(
-                "SELECT * FROM session_files WHERE file_id = ?",
+                f"SELECT {SESSION_FILE_RECORD_COLUMNS} FROM session_files WHERE file_id = ?",
                 (file_id,),
             ).fetchone()
         return _session_file_from_row(updated)
@@ -1048,7 +1267,7 @@ class Store:
         with self._lock, self._connect() as conn:
             conn.execute("BEGIN IMMEDIATE")
             row = conn.execute(
-                "SELECT * FROM session_files WHERE file_id = ?",
+                f"SELECT {SESSION_FILE_RECORD_COLUMNS} FROM session_files WHERE file_id = ?",
                 (file_id,),
             ).fetchone()
             if row is None:
@@ -1089,7 +1308,7 @@ class Store:
                 (resolved_scope_type, target_session_id, target_group_id, file_id),
             )
             updated = conn.execute(
-                "SELECT * FROM session_files WHERE file_id = ?",
+                f"SELECT {SESSION_FILE_RECORD_COLUMNS} FROM session_files WHERE file_id = ?",
                 (file_id,),
             ).fetchone()
         return _session_file_from_row(updated)
@@ -1104,7 +1323,7 @@ class Store:
         with self._lock, self._connect() as conn:
             conn.execute("BEGIN IMMEDIATE")
             row = conn.execute(
-                "SELECT * FROM session_files WHERE file_id = ?",
+                f"SELECT {SESSION_FILE_RECORD_COLUMNS} FROM session_files WHERE file_id = ?",
                 (file_id,),
             ).fetchone()
             if row is None:
@@ -1590,6 +1809,10 @@ def _session_file_from_row(row: sqlite3.Row) -> SessionFileRecord:
         size_bytes=row["size_bytes"],
         created_by=row["created_by"],
         created_at=row["created_at"],
+        content_kind=row["content_kind"],
+        page_count=row["page_count"],
+        extraction_status=row["extraction_status"],
+        extracted_text_bytes=row["extracted_text_bytes"],
     )
 
 
@@ -1605,6 +1828,11 @@ def _session_file_manifest_from_row(row: sqlite3.Row) -> dict[str, Any]:
         "size_bytes": row["size_bytes"],
         "created_by": row["created_by"],
         "created_at": row["created_at"],
+        "content_kind": row["content_kind"],
+        "page_count": row["page_count"],
+        "extraction_status": row["extraction_status"],
+        "extracted_text_bytes": row["extracted_text_bytes"],
+        "text_available": row["content_kind"] != "pdf" or row["extraction_status"] == "ready",
     }
 
 
@@ -1649,6 +1877,11 @@ def session_file_payload(file: SessionFileRecord, include_content: bool = False)
         "size_bytes": file.size_bytes,
         "created_by": file.created_by,
         "created_at": file.created_at,
+        "content_kind": file.content_kind,
+        "page_count": file.page_count,
+        "extraction_status": file.extraction_status,
+        "extracted_text_bytes": file.extracted_text_bytes,
+        "text_available": file.content_kind != "pdf" or file.extraction_status == "ready",
     }
     if include_content:
         payload["content"] = file.content
@@ -1750,6 +1983,44 @@ def _validate_file_content(value: str) -> tuple[str, int, str]:
     if size_bytes > MAX_SESSION_FILE_BYTES:
         raise ValueError(f"content must be {MAX_SESSION_FILE_BYTES} bytes or fewer")
     return content, size_bytes, hashlib.sha256(content.encode("utf-8")).hexdigest()
+
+
+def _validate_pdf_file(
+    filename: str,
+    binary_content: bytes,
+    *,
+    extracted_text: str,
+    page_count: int,
+    extraction_status: str,
+    extracted_text_bytes: int,
+) -> dict[str, Any]:
+    resolved_filename = _validate_file_name(filename)
+    if not resolved_filename.lower().endswith(".pdf"):
+        raise ValueError("PDF filename must end with .pdf")
+    if not isinstance(binary_content, bytes) or not binary_content:
+        raise ValueError("PDF binary content must not be empty")
+    if page_count < 1:
+        raise ValueError("PDF page_count must be positive")
+    if extraction_status not in {"ready", "no_text"}:
+        raise ValueError("PDF extraction_status must be ready or no_text")
+    resolved_text = extracted_text if isinstance(extracted_text, str) else str(extracted_text)
+    actual_text_bytes = len(resolved_text.encode("utf-8"))
+    if extracted_text_bytes != actual_text_bytes:
+        raise ValueError("PDF extracted_text_bytes does not match extracted_text")
+    if extraction_status == "ready" and not resolved_text:
+        raise ValueError("Ready PDF extraction must contain text")
+    if extraction_status == "no_text" and resolved_text:
+        raise ValueError("No-text PDF extraction must not contain text")
+    return {
+        "filename": resolved_filename,
+        "binary_content": binary_content,
+        "extracted_text": resolved_text,
+        "sha256": hashlib.sha256(binary_content).hexdigest(),
+        "size_bytes": len(binary_content),
+        "page_count": page_count,
+        "extraction_status": extraction_status,
+        "extracted_text_bytes": extracted_text_bytes,
+    }
 
 
 def _validate_mime_type(value: str) -> str:

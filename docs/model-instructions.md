@@ -31,6 +31,8 @@ MCP Session Bridge is not an automatic file-context delivery system. It does not
 
 Files may be explicitly uploaded through the admin UI or saved with `upload_session_file` and `upload_group_file`. An owner may later move, edit, or permanently delete them. The current file manifest is authoritative: use `get_session_overview` or `list_session_files`, then `download_session_file` when a listed file is relevant. Models are not automatically notified about owner file mutations, so do not rely on an older manifest or cached file content.
 
+PDFs use the separate `upload_session_pdf` and `upload_group_pdf` tools with base64 content. `download_session_file` returns their extracted text, not the original bytes. OCR is not supported, so a PDF with `text_available: false` cannot contribute readable context or RAG results.
+
 ## Response Storage
 
 `save_exchange` should receive the full latest user message and the full assistant response exactly as the model is about to show it. This is what allows future models to continue from the transcript without reconstructing missing context.
