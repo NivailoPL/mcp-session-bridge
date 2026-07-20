@@ -33,6 +33,21 @@ from app.pdf_files import (
     extract_pdf_text_isolated,
     run_pdf_worker,
 )
+from app.output_probe import (
+    MAX_PROBE_TARGET_CHARS,
+    MAX_TRANSCRIPT_CHUNK_CHARS,
+    MAX_TRANSCRIPT_CHUNK_LINES,
+    MIN_PROBE_TARGET_CHARS,
+    MIN_TRANSCRIPT_CHUNK_CHARS,
+    MIN_TRANSCRIPT_CHUNK_LINES,
+    PROBE_SAFETY_MARGIN,
+    TRANSCRIPT_CHUNK_MAX_CHARS_SETTING,
+    TRANSCRIPT_CHUNK_MAX_LINES_SETTING,
+    probe_recommendations,
+    public_probe_run,
+    transcript_chunk_limits,
+    validate_transcript_chunk_limits,
+)
 from app.security import token_urlsafe, verify_password
 from app.settings import Settings
 from app.storage import (
@@ -199,6 +214,27 @@ class AdminHandlers:
         self.store.set_app_setting(AI_RENAME_MODEL_SETTING, model)
         return JSONResponse({"ok": True, "settings": await asyncio.to_thread(self._settings_payload)},
                             headers=self._no_store_headers())
+
+    async def api_update_transcript_settings(self, request: Request) -> Response:
+        _, error = self._require_admin_mutation(request)
+        if error:
+            return error
+        payload, parse_error = await _json_body(request)
+        if parse_error:
+            return parse_error
+        try:
+            chunk_max_chars, chunk_max_lines = validate_transcript_chunk_limits(
+                payload.get("chunk_max_chars"),
+                payload.get("chunk_max_lines"),
+            )
+        except ValueError as exc:
+            return self._json_error(str(exc), status_code=400)
+        self.store.set_app_setting(TRANSCRIPT_CHUNK_MAX_CHARS_SETTING, str(chunk_max_chars))
+        self.store.set_app_setting(TRANSCRIPT_CHUNK_MAX_LINES_SETTING, str(chunk_max_lines))
+        return JSONResponse(
+            {"ok": True, "settings": await asyncio.to_thread(self._settings_payload)},
+            headers=self._no_store_headers(),
+        )
 
     async def api_update_search_settings(self, request: Request) -> Response:
         _, error = self._require_admin_mutation(request)
@@ -1037,6 +1073,12 @@ class AdminHandlers:
             or self.store.get_app_setting(AI_RENAME_MODEL_SETTING)
             or AI_RENAME_DEFAULT_MODEL
         )
+        chunk_max_chars, chunk_max_lines = transcript_chunk_limits(
+            self.store,
+            self.settings.transcript_chunk_max_chars,
+            self.settings.transcript_chunk_max_lines,
+        )
+        output_probe_runs = self.store.list_output_probe_runs(limit=50)
         return {
             "general": {"rename_model": rename_model},
             "api": {
@@ -1046,6 +1088,21 @@ class AdminHandlers:
             "search": self.search.get_config().to_dict(),
             "groups": self.store.list_session_groups(),
             "index": self.search.index_status(),
+            "transcript": {
+                "chunk_max_chars": chunk_max_chars,
+                "chunk_max_lines": chunk_max_lines,
+                "default_chunk_max_chars": self.settings.transcript_chunk_max_chars,
+                "default_chunk_max_lines": self.settings.transcript_chunk_max_lines,
+                "min_chunk_max_chars": MIN_TRANSCRIPT_CHUNK_CHARS,
+                "max_chunk_max_chars": MAX_TRANSCRIPT_CHUNK_CHARS,
+                "min_chunk_max_lines": MIN_TRANSCRIPT_CHUNK_LINES,
+                "max_chunk_max_lines": MAX_TRANSCRIPT_CHUNK_LINES,
+                "min_probe_target_chars": MIN_PROBE_TARGET_CHARS,
+                "max_probe_target_chars": MAX_PROBE_TARGET_CHARS,
+                "safety_margin_percent": round(PROBE_SAFETY_MARGIN * 100),
+                "runs": [public_probe_run(run) for run in output_probe_runs],
+                "recommendations": probe_recommendations(output_probe_runs),
+            },
         }
 
     def _read_ai_api_key(self) -> str:

@@ -301,6 +301,32 @@ class Store:
                     updated_at INTEGER NOT NULL
                 );
 
+                CREATE TABLE IF NOT EXISTS output_probe_runs (
+                    run_id TEXT PRIMARY KEY,
+                    harness_label TEXT NOT NULL,
+                    content_profile TEXT NOT NULL,
+                    target_chars INTEGER NOT NULL,
+                    payload_char_count INTEGER NOT NULL,
+                    server_result_json_chars INTEGER NOT NULL,
+                    block_count INTEGER NOT NULL,
+                    block_size INTEGER NOT NULL,
+                    blocks_json TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    result_class TEXT,
+                    observed_canaries_json TEXT NOT NULL DEFAULT '[]',
+                    matched_checkpoints_json TEXT NOT NULL DEFAULT '[]',
+                    last_complete_block_index INTEGER,
+                    last_complete_canary TEXT,
+                    noticed_truncation INTEGER NOT NULL DEFAULT 0,
+                    notes TEXT NOT NULL DEFAULT '',
+                    created_by TEXT NOT NULL,
+                    created_at INTEGER NOT NULL,
+                    reported_at INTEGER
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_output_probe_runs_created
+                    ON output_probe_runs(created_at DESC, run_id DESC);
+
                 CREATE TABLE IF NOT EXISTS session_groups (
                     group_id TEXT PRIMARY KEY,
                     name TEXT NOT NULL,
@@ -446,7 +472,6 @@ class Store:
                     record.secret_expires_at,
                 ),
             )
-
     def get_client(self, client_id: str) -> ClientRecord | None:
         with self._lock, self._connect() as conn:
             row = conn.execute("SELECT * FROM clients WHERE client_id = ?", (client_id,)).fetchone()
@@ -667,6 +692,111 @@ class Store:
                 (key, value, updated_at),
             )
         return {"key": key, "value": value, "updated_at": updated_at}
+
+    def create_output_probe_run(self, run: dict[str, Any]) -> dict[str, Any]:
+        created_at = int(time.time())
+        with self._lock, self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO output_probe_runs (
+                    run_id, harness_label, content_profile, target_chars,
+                    payload_char_count, server_result_json_chars, block_count,
+                    block_size, blocks_json, status, created_by, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
+                """,
+                (
+                    run["run_id"],
+                    run["harness_label"],
+                    run["content_profile"],
+                    run["target_chars"],
+                    run["payload_char_count"],
+                    run["server_result_json_chars"],
+                    run["block_count"],
+                    run["block_size"],
+                    json.dumps(run["blocks"], separators=(",", ":")),
+                    run["created_by"],
+                    created_at,
+                ),
+            )
+            conn.execute(
+                """
+                DELETE FROM output_probe_runs
+                WHERE run_id NOT IN (
+                    SELECT run_id FROM output_probe_runs
+                    ORDER BY created_at DESC, run_id DESC
+                    LIMIT 500
+                )
+                """
+            )
+        saved = self.get_output_probe_run(str(run["run_id"]))
+        if saved is None:
+            raise RuntimeError("output probe run was not persisted")
+        return saved
+
+    def get_output_probe_run(self, run_id: str) -> dict[str, Any] | None:
+        with self._lock, self._connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM output_probe_runs WHERE run_id = ?", (run_id,)
+            ).fetchone()
+        return _output_probe_row(row) if row else None
+
+    def list_output_probe_runs(self, limit: int = 50) -> list[dict[str, Any]]:
+        safe_limit = max(1, min(int(limit), 200))
+        with self._lock, self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT
+                    run_id, harness_label, content_profile, target_chars,
+                    payload_char_count, server_result_json_chars, block_count,
+                    block_size, '[]' AS blocks_json, status, result_class,
+                    '[]' AS observed_canaries_json, matched_checkpoints_json,
+                    last_complete_block_index, NULL AS last_complete_canary,
+                    noticed_truncation, notes, created_by, created_at, reported_at
+                FROM output_probe_runs
+                ORDER BY created_at DESC, run_id DESC
+                LIMIT ?
+                """,
+                (safe_limit,),
+            ).fetchall()
+        return [_output_probe_row(row) for row in rows]
+
+    def report_output_probe_run(
+        self,
+        run_id: str,
+        *,
+        result_class: str,
+        observed_canaries: list[str],
+        matched_checkpoints: list[str],
+        last_complete_block_index: int,
+        last_complete_canary: str,
+        noticed_truncation: bool,
+        notes: str,
+    ) -> dict[str, Any] | None:
+        reported_at = int(time.time())
+        with self._lock, self._connect() as conn:
+            cursor = conn.execute(
+                """
+                UPDATE output_probe_runs
+                SET status = 'reported', result_class = ?, observed_canaries_json = ?,
+                    matched_checkpoints_json = ?, last_complete_block_index = ?,
+                    last_complete_canary = ?, noticed_truncation = ?, notes = ?, reported_at = ?
+                WHERE run_id = ? AND status = 'pending'
+                """,
+                (
+                    result_class,
+                    json.dumps(observed_canaries, separators=(",", ":")),
+                    json.dumps(matched_checkpoints, separators=(",", ":")),
+                    last_complete_block_index,
+                    last_complete_canary,
+                    int(noticed_truncation),
+                    notes,
+                    reported_at,
+                    run_id,
+                ),
+            )
+        if cursor.rowcount == 0:
+            return None
+        return self.get_output_probe_run(run_id)
 
     def list_session_groups(self, include_deleted: bool = False) -> list[dict[str, Any]]:
         deleted_clause = "" if include_deleted else "WHERE deleted_at IS NULL"
@@ -2028,3 +2158,28 @@ def _validate_mime_type(value: str) -> str:
     if len(mime_type) > 120 or not re.fullmatch(r"[a-zA-Z0-9.+-]+/[a-zA-Z0-9.+-]+", mime_type):
         raise ValueError("mime_type must look like type/subtype")
     return mime_type.lower()
+
+
+def _output_probe_row(row: sqlite3.Row) -> dict[str, Any]:
+    return {
+        "run_id": row["run_id"],
+        "harness_label": row["harness_label"],
+        "content_profile": row["content_profile"],
+        "target_chars": row["target_chars"],
+        "payload_char_count": row["payload_char_count"],
+        "server_result_json_chars": row["server_result_json_chars"],
+        "block_count": row["block_count"],
+        "block_size": row["block_size"],
+        "blocks": json.loads(row["blocks_json"]),
+        "status": row["status"],
+        "result_class": row["result_class"],
+        "observed_canaries": json.loads(row["observed_canaries_json"]),
+        "matched_checkpoints": json.loads(row["matched_checkpoints_json"]),
+        "last_complete_block_index": row["last_complete_block_index"],
+        "last_complete_canary": row["last_complete_canary"],
+        "noticed_truncation": bool(row["noticed_truncation"]),
+        "notes": row["notes"],
+        "created_by": row["created_by"],
+        "created_at": row["created_at"],
+        "reported_at": row["reported_at"],
+    }

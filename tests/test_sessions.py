@@ -1,6 +1,7 @@
 import asyncio
 import hashlib
 import importlib
+import json
 import sqlite3
 import sys
 from datetime import datetime
@@ -456,6 +457,8 @@ def test_public_tools_hide_context_pack_tools(tmp_path, monkeypatch) -> None:
     assert "upload_group_pdf" in tool_names
     assert "list_session_files" in tool_names
     assert "download_session_file" in tool_names
+    assert "run_output_probe" in tool_names
+    assert "submit_output_probe_observation" in tool_names
     assert "save_session_summary" not in tool_names
     assert "list_session_summaries" not in tool_names
     assert "list_context_packs" not in tool_names
@@ -467,6 +470,119 @@ def test_public_tools_hide_context_pack_tools(tmp_path, monkeypatch) -> None:
     assert "edit_session_file" not in tool_names
     assert "update_session_file" not in tool_names
     assert "delete_session_file" not in tool_names
+
+
+def test_output_probe_round_trip_records_verified_result(tmp_path, monkeypatch) -> None:
+    main = _load_main(tmp_path, monkeypatch)
+
+    started = main.run_output_probe(
+        harness_label="chatgpt-web",
+        target_chars=12_000,
+        content_profile="transcript_markdown",
+    )
+    stored = main.store.get_output_probe_run(started["run_id"])
+
+    assert started["ok"] is True
+    assert len(started["probe_payload"]) == 12_000
+    assert stored is not None
+    assert stored["status"] == "pending"
+    assert started["server_result_json_chars"] > started["payload_char_count"]
+    assert started["server_result_json_chars"] == len(
+        json.dumps(started, ensure_ascii=False, separators=(",", ":"))
+    )
+
+    checkpoint_canaries = [
+        block["canary"]
+        for block in stored["blocks"]
+        if block["checkpoint_labels"]
+    ]
+    last = stored["blocks"][-1]
+    reported = main.submit_output_probe_observation(
+        run_id=started["run_id"],
+        observed_checkpoint_canaries=checkpoint_canaries,
+        last_complete_block_index=last["index"],
+        last_complete_canary=last["canary"],
+    )
+
+    assert reported["ok"] is True
+    assert reported["result_class"] == "complete"
+    assert reported["recommended_chunk_chars"] == 9_000
+    completed = main.store.get_output_probe_run(started["run_id"])
+    assert completed is not None
+    assert completed["status"] == "reported"
+    assert completed["result_class"] == "complete"
+
+
+def test_output_probe_rejects_invalid_requests_and_unseen_canaries(tmp_path, monkeypatch) -> None:
+    main = _load_main(tmp_path, monkeypatch)
+
+    assert main.run_output_probe("", 12_000)["ok"] is False
+    assert main.run_output_probe("chatgpt-web", 4_095)["ok"] is False
+    assert main.run_output_probe("chatgpt-web", 12_000, "bible")["ok"] is False
+
+    started = main.run_output_probe("chatgpt-web", 12_000)
+    failed = main.submit_output_probe_observation(
+        started["run_id"],
+        ["INVENTED-CANARY"],
+        1,
+        "INVENTED-CANARY",
+        noticed_truncation=True,
+    )
+
+    assert failed["result_class"] == "verification_failed"
+    assert failed["recommended_chunk_chars"] is None
+    stored = main.store.get_output_probe_run(started["run_id"])
+    assert stored is not None
+    assert stored["noticed_truncation"] is True
+
+
+def test_output_probe_report_is_immutable_and_retry_is_idempotent(tmp_path, monkeypatch) -> None:
+    main = _load_main(tmp_path, monkeypatch)
+    started = main.run_output_probe("chatgpt-web", 12_000)
+    stored = main.store.get_output_probe_run(started["run_id"])
+    assert stored is not None
+    checkpoints = [
+        block["canary"] for block in stored["blocks"] if block["checkpoint_labels"]
+    ]
+    last = stored["blocks"][-1]
+
+    first = main.submit_output_probe_observation(
+        started["run_id"], checkpoints, last["index"], last["canary"]
+    )
+    retry = main.submit_output_probe_observation(
+        started["run_id"], ["INVENTED-CANARY"], 1, "INVENTED-CANARY"
+    )
+
+    assert first["already_reported"] is False
+    assert retry["already_reported"] is True
+    assert retry["result_class"] == "complete"
+    persisted = main.store.get_output_probe_run(started["run_id"])
+    assert persisted is not None
+    assert persisted["result_class"] == "complete"
+    assert persisted["observed_canaries"] == checkpoints
+
+
+def test_runtime_transcript_chunk_setting_overrides_environment(tmp_path, monkeypatch) -> None:
+    main = _load_main(tmp_path, monkeypatch, max_lines=180, max_chars=12_000)
+    session = main.store.create_session("runtime-chunks", "Runtime chunks", "manual-context")
+    main.store.save_exchange(
+        session.session_id,
+        "Claude",
+        "A" * 2_400,
+        "B" * 2_400,
+    )
+
+    main.store.set_app_setting("transcript.chunk_max_chars", "1000")
+    main.store.set_app_setting("transcript.chunk_max_lines", "500")
+    overview = main.get_session_overview(session.session_id)
+    chunks = [
+        main.get_session_transcript_chunk(session.session_id, index)
+        for index in range(1, overview["transcript_chunk_count"] + 1)
+    ]
+
+    assert overview["chunk_max_chars"] == 1000
+    assert overview["chunk_max_lines"] == 500
+    assert all(chunk["chunk_char_count"] <= 1000 for chunk in chunks)
 
 
 def test_get_last_speaker_reports_continuity_decision(tmp_path, monkeypatch) -> None:

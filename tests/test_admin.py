@@ -1001,8 +1001,47 @@ def test_admin_search_settings_keys_and_basic_search_api(tmp_path, monkeypatch) 
 
     settings = client.get("/admin/api/settings")
     assert settings.status_code == 200
-    assert set(settings.json()["settings"]) == {"general", "search", "api", "groups", "index"}
+    assert set(settings.json()["settings"]) == {
+        "general", "search", "api", "groups", "index", "transcript"
+    }
     assert settings.json()["settings"]["search"]["enabled"] is False
+    assert settings.json()["settings"]["transcript"]["chunk_max_chars"] == 12000
+    assert settings.json()["settings"]["transcript"]["chunk_max_lines"] == 180
+
+    transcript_update = client.put(
+        "/admin/api/settings/transcript",
+        json={"chunk_max_chars": 64_000, "chunk_max_lines": 600},
+        headers=headers,
+    )
+    assert transcript_update.status_code == 200
+    assert transcript_update.json()["settings"]["transcript"]["chunk_max_chars"] == 64_000
+    assert main.store.get_app_setting("transcript.chunk_max_chars") == "64000"
+
+    invalid_transcript_update = client.put(
+        "/admin/api/settings/transcript",
+        json={"chunk_max_chars": 999, "chunk_max_lines": 600},
+        headers=headers,
+    )
+    assert invalid_transcript_update.status_code == 400
+
+    started_probe = main.run_output_probe("chatgpt-web", 12_000, "transcript_markdown")
+    stored_probe = main.store.get_output_probe_run(started_probe["run_id"])
+    assert stored_probe is not None
+    checkpoint_canaries = [
+        block["canary"] for block in stored_probe["blocks"] if block["checkpoint_labels"]
+    ]
+    last_probe_block = stored_probe["blocks"][-1]
+    main.submit_output_probe_observation(
+        started_probe["run_id"],
+        checkpoint_canaries,
+        last_probe_block["index"],
+        last_probe_block["canary"],
+    )
+    probe_settings = client.get("/admin/api/settings").json()["settings"]["transcript"]
+    assert probe_settings["runs"][0]["result_class"] == "complete"
+    assert probe_settings["recommendations"][0]["recommended_chunk_chars"] == 9_000
+    assert "blocks" not in probe_settings["runs"][0]
+    assert "observed_canaries" not in probe_settings["runs"][0]
 
     estimate_config = {
         **settings.json()["settings"]["search"],
@@ -1062,9 +1101,19 @@ def test_admin_viewer_rag_settings_and_search_overlay_contract() -> None:
     assert 'id="searchOpenButton"' in viewer
     assert viewer.count('<dialog id="searchDialog"') == 1
     assert viewer.count('<dialog id="aiSettingsDialog"') == 1
-    for tab in ("general", "search", "api"):
+    for tab in ("general", "search", "api", "transcript"):
         assert f'data-settings-tab="{tab}"' in viewer
         assert f'data-settings-panel="{tab}"' in viewer
+
+    assert 'id="transcriptChunkMaxChars"' in viewer
+    assert 'id="transcriptChunkMaxLines"' in viewer
+    assert 'id="probeHarnessLabel"' in viewer
+    assert 'id="probeTargetChars"' in viewer
+    assert 'id="probeContentProfile"' in viewer
+    assert 'id="probePromptCopy"' in viewer
+    assert 'id="probeResults"' in viewer
+    assert 'function renderOutputProbeResults' in viewer
+    assert 'run_output_probe' in viewer
 
     assert 'id="ragEnabled"' in viewer
     assert 'id="cohereEnabled"' in viewer

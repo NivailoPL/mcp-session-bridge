@@ -83,6 +83,16 @@ It supports:
 - soft-deleting exchanges from the active transcript
 - restoring soft-deleted exchanges
 
+## Calibrate MCP Tool-Result Size
+
+Open **Settings → Transcript** in the admin UI. Enter a label for the harness being measured, choose a payload size and profile, then copy the generated instruction into that harness. The model must call `run_output_probe` through MCP and immediately follow it with `submit_output_probe_observation` using only canaries it can actually see.
+
+The result history distinguishes checkpoint-complete delivery, tail truncation, removed head or middle content, non-contiguous delivery, verification failure, and pending runs. A pending run was created by the server but never acknowledged by the model; it may mean that the harness rejected or made the result unusable. A complete result validates the sampled checkpoints and final closed block rather than every unsampled character.
+
+Recommendations use 75% of the largest verified payload for each harness/profile. When every MCP client shares one chunk configuration, use the smallest verified recommendation. Saving the global maximum characters and lines changes subsequent `get_session_overview` and `get_session_transcript_chunk` calls immediately. The first limit reached creates the next chunk.
+
+The exact payload character count and the bridge's compact serialized-result character count are recorded separately. These are empirical transport measurements, not promises about a model tokenizer or future harness versions, so rerun calibration after material client changes.
+
 ## Backups
 
 Back up at least:

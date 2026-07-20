@@ -31,6 +31,10 @@ BRIDGE_TRANSCRIPT_CHUNK_MAX_LINES=180
 BRIDGE_TRANSCRIPT_CHUNK_MAX_CHARS=12000
 ```
 
+The owner can override both values at runtime in **Settings → Transcript**. The first limit reached wins. Runtime values are stored in SQLite and take effect for subsequent overview/chunk calls without restarting the service.
+
+Harness capacity is empirical and can change without notice. The output-probe tools verify unpredictable markers at the start, quarters, middle, end, and last fully closed block. A `complete` result is therefore strong evidence of intact delivery at those sampled positions and at the tail, not a byte-for-byte proof for every unsampled character. The bridge also cannot prove why a harness rejected a result when the model never submits an observation; such runs remain pending. Character counts are exact for the generated payload, while token counts are deliberately not treated as exact because clients and models can use different tokenizers and wrappers.
+
 ## Continuity Check
 
 `get_last_speaker` lets a model skip re-fetching transcript chunks when it saved the last turn and is still in the same chat window. This is a best-effort optimization keyed on the self-declared `model_name`: the bridge cannot verify a model's real identity or whether it runs in the same window, so a wrong `model_name` or a fresh window can produce a misleading skip. When in doubt, fetch the chunks. `save_exchange` is still required on every turn.

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import re
 import secrets
@@ -25,6 +26,14 @@ from app.pdf_files import (
     decode_pdf_base64,
     extract_pdf_text_isolated,
     run_pdf_worker,
+)
+from app.output_probe import (
+    MAX_PROBE_TARGET_CHARS,
+    MIN_PROBE_TARGET_CHARS,
+    build_output_probe,
+    classify_probe_observation,
+    recommended_chunk_chars,
+    transcript_chunk_limits as resolve_transcript_chunk_limits,
 )
 from app.request_limits import RequestBodyLimitMiddleware
 from app.security import hash_secret
@@ -219,6 +228,11 @@ async def admin_api_update_general_settings(request: Request) -> Response:
     return await admin.api_update_general_settings(request)
 
 
+@mcp.custom_route("/admin/api/settings/transcript", methods=["PUT"])
+async def admin_api_update_transcript_settings(request: Request) -> Response:
+    return await admin.api_update_transcript_settings(request)
+
+
 @mcp.custom_route("/admin/api/settings/search", methods=["PUT"])
 async def admin_api_update_search_settings(request: Request) -> Response:
     return await admin.api_update_search_settings(request)
@@ -388,6 +402,156 @@ def read_probe(key: str) -> dict[str, Any]:
     return {"found": True, **value}
 
 
+def _current_transcript_chunk_limits() -> tuple[int, int]:
+    return resolve_transcript_chunk_limits(
+        store,
+        settings.transcript_chunk_max_chars,
+        settings.transcript_chunk_max_lines,
+    )
+
+
+@mcp.tool()
+def run_output_probe(
+    harness_label: str,
+    target_chars: int = 100_000,
+    content_profile: str = "transcript_markdown",
+) -> dict[str, Any]:
+    """Return a large checkpointed payload to measure one MCP tool result. After reading it, immediately call submit_output_probe_observation and never guess missing canaries."""
+    label = " ".join(harness_label.strip().split())
+    if not label:
+        return {"ok": False, "error": "harness_label must not be empty"}
+    if len(label) > 80:
+        return {"ok": False, "error": "harness_label must be 80 characters or fewer"}
+    if isinstance(target_chars, bool) or not isinstance(target_chars, int):
+        return {"ok": False, "error": "target_chars must be an integer"}
+    if not MIN_PROBE_TARGET_CHARS <= target_chars <= MAX_PROBE_TARGET_CHARS:
+        return {
+            "ok": False,
+            "error": (
+                f"target_chars must be between {MIN_PROBE_TARGET_CHARS} "
+                f"and {MAX_PROBE_TARGET_CHARS}"
+            ),
+        }
+
+    run_id = f"probe-{int(time.time())}-{secrets.token_hex(6)}"
+    try:
+        probe = build_output_probe(run_id, target_chars, content_profile)
+    except ValueError as exc:
+        return {"ok": False, "error": str(exc)}
+    token = get_access_token()
+    result = {
+        "ok": True,
+        "run_id": run_id,
+        "harness_label": label,
+        "content_profile": content_profile,
+        "target_chars": target_chars,
+        "payload_char_count": probe["payload_char_count"],
+        "block_count": probe["block_count"],
+        "block_size": probe["block_size"],
+        "server_result_json_chars": 0,
+        "report_instructions": (
+            "Immediately call submit_output_probe_observation. Pass every CHECKPOINT canary you can "
+            "actually see, plus the index and canary from the last block with a complete END marker. "
+            "Do not infer missing values."
+        ),
+        "probe_payload": probe["payload"],
+    }
+    for _ in range(4):
+        serialized_chars = len(json.dumps(result, ensure_ascii=False, separators=(",", ":")))
+        if serialized_chars == result["server_result_json_chars"]:
+            break
+        result["server_result_json_chars"] = serialized_chars
+    store.create_output_probe_run(
+        {
+            **result,
+            "blocks": probe["blocks"],
+            "created_by": token.client_id if token else "unknown",
+        }
+    )
+    return result
+
+
+@mcp.tool()
+def submit_output_probe_observation(
+    run_id: str,
+    observed_checkpoint_canaries: list[str],
+    last_complete_block_index: int,
+    last_complete_canary: str,
+    noticed_truncation: bool = False,
+    notes: str = "",
+) -> dict[str, Any]:
+    """Validate canaries seen in run_output_probe and save the harness result. Report only values actually visible in the prior tool result."""
+    run = store.get_output_probe_run(run_id.strip())
+    if run is None:
+        return {"ok": False, "error": f"Unknown output probe run_id: {run_id}"}
+    if not isinstance(observed_checkpoint_canaries, list) or not all(
+        isinstance(value, str) for value in observed_checkpoint_canaries
+    ):
+        return {"ok": False, "error": "observed_checkpoint_canaries must be a list of strings"}
+    resolved_notes = notes.strip()
+    if len(resolved_notes) > 500:
+        return {"ok": False, "error": "notes must be 500 characters or fewer"}
+    try:
+        observation = classify_probe_observation(
+            run["blocks"],
+            observed_checkpoint_canaries,
+            last_complete_block_index,
+            last_complete_canary,
+        )
+    except ValueError as exc:
+        return {"ok": False, "error": str(exc)}
+    saved = store.report_output_probe_run(
+        run["run_id"],
+        result_class=observation["result_class"],
+        observed_canaries=observed_checkpoint_canaries,
+        matched_checkpoints=observation["matched_checkpoints"],
+        last_complete_block_index=last_complete_block_index,
+        last_complete_canary=last_complete_canary,
+        noticed_truncation=noticed_truncation,
+        notes=resolved_notes,
+    )
+    if saved is None:
+        saved = store.get_output_probe_run(run["run_id"])
+        if saved is None:
+            return {"ok": False, "error": f"Output probe run disappeared: {run_id}"}
+        saved_observation = classify_probe_observation(
+            saved["blocks"],
+            saved["observed_canaries"],
+            saved["last_complete_block_index"],
+            saved["last_complete_canary"],
+        )
+        return {
+            "ok": True,
+            "already_reported": True,
+            "run_id": saved["run_id"],
+            "result_class": saved["result_class"],
+            "matched_checkpoints": saved["matched_checkpoints"],
+            "last_complete_valid": saved_observation["last_complete_valid"],
+            "payload_char_count": saved["payload_char_count"],
+            "server_result_json_chars": saved["server_result_json_chars"],
+            "recommended_chunk_chars": (
+                recommended_chunk_chars(saved["payload_char_count"])
+                if saved["result_class"] == "complete"
+                else None
+            ),
+        }
+    return {
+        "ok": True,
+        "already_reported": False,
+        "run_id": run["run_id"],
+        "result_class": observation["result_class"],
+        "matched_checkpoints": observation["matched_checkpoints"],
+        "last_complete_valid": observation["last_complete_valid"],
+        "payload_char_count": run["payload_char_count"],
+        "server_result_json_chars": run["server_result_json_chars"],
+        "recommended_chunk_chars": (
+            recommended_chunk_chars(run["payload_char_count"])
+            if observation["result_class"] == "complete"
+            else None
+        ),
+    }
+
+
 @mcp.tool()
 def list_session_groups() -> dict[str, Any]:
     """List available local session groups so a model can choose a valid group_id before creating a session."""
@@ -462,6 +626,7 @@ def get_session_overview(session_id: str) -> dict[str, Any]:
         "session": [file for file in listed_files if file["scope_type"] == "session"],
         "group": [file for file in listed_files if file["scope_type"] == "group"],
     }
+    chunk_max_chars, chunk_max_lines = _current_transcript_chunk_limits()
     return {
         "ok": True,
         "context_source": "manual",
@@ -470,8 +635,8 @@ def get_session_overview(session_id: str) -> dict[str, Any]:
         **render_session_overview(
             session,
             exchanges,
-            max_lines=settings.transcript_chunk_max_lines,
-            max_chars=settings.transcript_chunk_max_chars,
+            max_lines=chunk_max_lines,
+            max_chars=chunk_max_chars,
             timezone_name=display_timezone,
         ),
     }
@@ -485,13 +650,14 @@ def get_session_transcript_chunk(session_id: str, chunk_index: int = 1) -> dict[
         return {"ok": False, "error": f"Unknown session_id: {session_id}"}
     exchanges = store.list_exchanges(session.session_id)
     display_timezone = _display_timezone_name()
+    chunk_max_chars, chunk_max_lines = _current_transcript_chunk_limits()
     try:
         chunk = render_session_transcript_chunk(
             session,
             exchanges,
             chunk_index=chunk_index,
-            max_lines=settings.transcript_chunk_max_lines,
-            max_chars=settings.transcript_chunk_max_chars,
+            max_lines=chunk_max_lines,
+            max_chars=chunk_max_chars,
             timezone_name=display_timezone,
         )
     except ValueError as exc:
