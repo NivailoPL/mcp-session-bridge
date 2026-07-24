@@ -1301,6 +1301,26 @@ class Store:
             ).fetchall()
         return [_session_file_manifest_from_row(row) for row in rows]
 
+    def list_session_files_for_session(self, session_id: str) -> list[dict[str, Any]]:
+        resolved_session_id = session_id.strip()
+        with self._lock, self._connect() as conn:
+            session = conn.execute(
+                "SELECT group_id FROM sessions WHERE session_id = ?",
+                (resolved_session_id,),
+            ).fetchone()
+            if session is None:
+                raise ValueError(f"Unknown session_id: {resolved_session_id}")
+            rows = conn.execute(
+                f"""SELECT {SESSION_FILE_MANIFEST_COLUMNS}
+                FROM session_files
+                WHERE (scope_type = 'session' AND session_id = ?)
+                   OR (scope_type = 'group' AND group_id = ?)
+                ORDER BY created_at DESC, file_id DESC
+                """,
+                (resolved_session_id, session["group_id"]),
+            ).fetchall()
+        return [_session_file_manifest_from_row(row) for row in rows]
+
     def get_session_file(self, file_id: int) -> SessionFileRecord | None:
         with self._lock, self._connect() as conn:
             row = conn.execute(
@@ -1308,6 +1328,33 @@ class Store:
                 (file_id,),
             ).fetchone()
         return _session_file_from_row(row) if row else None
+
+    def get_session_file_for_session(
+        self,
+        session_id: str,
+        file_id: int,
+    ) -> SessionFileRecord | None:
+        resolved_session_id = session_id.strip()
+        with self._lock, self._connect() as conn:
+            session = conn.execute(
+                "SELECT group_id FROM sessions WHERE session_id = ?",
+                (resolved_session_id,),
+            ).fetchone()
+            if session is None:
+                raise ValueError(f"Unknown session_id: {resolved_session_id}")
+            row = conn.execute(
+                f"SELECT {SESSION_FILE_RECORD_COLUMNS} FROM session_files WHERE file_id = ?",
+                (file_id,),
+            ).fetchone()
+            if row is None:
+                return None
+            _require_file_visible_to_session(
+                conn,
+                row,
+                session_id=resolved_session_id,
+                group_id=session["group_id"],
+            )
+        return _session_file_from_row(row)
 
     def get_session_file_binary(self, file_id: int) -> tuple[str, str, bytes | None] | None:
         with self._lock, self._connect() as conn:

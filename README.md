@@ -82,7 +82,6 @@ http://127.0.0.1:8787/mcp
 | `submit_output_probe_observation` | Validates the canaries visible to the model and records the harness result. |
 | `list_session_groups` | Lists local session groups and their valid `group_id` values. |
 | `create_session` | Creates a new conversation session. |
-| `list_sessions` | Lists saved sessions. |
 | `get_session_overview` | Returns session metadata and transcript chunk information. |
 | `get_last_speaker` | Reports who saved the last turn so a continuing model can skip re-fetching chunks. |
 | `get_session_transcript_chunk` | Returns one bounded transcript chunk. |
@@ -91,18 +90,22 @@ http://127.0.0.1:8787/mcp
 | `upload_group_file` | Saves a text file for an entire session group. |
 | `upload_session_pdf` | Saves an original PDF for one session and extracts its text without OCR. |
 | `upload_group_pdf` | Saves an original PDF for an entire session group and extracts its text without OCR. |
-| `list_session_files` | Lists uploaded session/group files. |
-| `download_session_file` | Reads text content by `file_id`; for PDFs it returns extracted text. |
+| `list_session_files` | Requires `session_id` and lists only that session's files plus files from its current group. |
+| `download_session_file` | Requires `session_id` and `file_id`, and reads the file only when it is visible to that session; PDFs return extracted text. |
 
 Typical model flow:
 
-1. Establish the right `session_id` with `create_session` or `list_sessions`.
+1. Use the `session_id` supplied explicitly by the user, or call `create_session` for a new conversation. If no ID is available for a continuing conversation, ask the user; sessions cannot be enumerated through MCP and must never be guessed.
    For a new session, call `list_session_groups` first and pass a valid `group_id` when the user names a group. Omit `group_id` to use `uncategorized`.
 2. Call `get_session_overview`, then `get_last_speaker` with your own `model_name`.
 3. If `get_last_speaker` reports that you saved the last turn and you are still in the same chat window, you may skip the chunk fetch; otherwise fetch every `get_session_transcript_chunk` from `1` through `transcript_chunk_count`.
 4. Prepare the response.
 5. Call `save_exchange` before showing the response to the user.
 6. If the user asks to save a summary, plan, note, or reusable context, use `upload_session_file` or `upload_group_file`.
+
+For file reads, call `list_session_files(session_id=...)` and `download_session_file(session_id=..., file_id=...)`. The bridge derives the current group from the session record; clients cannot select a separate group for reads.
+
+Sessions are unlisted to reduce accidental discovery. This is a privacy boundary, not access control: any connected client that already knows a valid `session_id` retains the existing transcript and file handoff capabilities for that session.
 
 Session groups and uploaded files are runtime data in the SQLite database. User-created groups and their files are not stored in tracked repo configuration. The admin panel at `/admin/sessions` can create, edit, delete, filter by, and move sessions between groups. Its file workspace can explicitly upload text files and PDFs, preview and download original PDFs, move files between session and group scope, edit text content, and permanently delete files. PDF editing and OCR are not supported. PDF storage has a 1 GB global default quota, configurable with `BRIDGE_PDF_STORAGE_MAX_BYTES`. These owner actions change what models can find through the current overview and file manifest; they do not add MCP move, edit, or delete tools.
 

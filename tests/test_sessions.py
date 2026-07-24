@@ -459,6 +459,7 @@ def test_public_tools_hide_context_pack_tools(tmp_path, monkeypatch) -> None:
     assert "download_session_file" in tool_names
     assert "run_output_probe" in tool_names
     assert "submit_output_probe_observation" in tool_names
+    assert "list_sessions" not in tool_names
     assert "save_session_summary" not in tool_names
     assert "list_session_summaries" not in tool_names
     assert "list_context_packs" not in tool_names
@@ -470,6 +471,22 @@ def test_public_tools_hide_context_pack_tools(tmp_path, monkeypatch) -> None:
     assert "edit_session_file" not in tool_names
     assert "update_session_file" not in tool_names
     assert "delete_session_file" not in tool_names
+
+
+def test_public_file_tools_require_session_scoping(tmp_path, monkeypatch) -> None:
+    main = _load_main(tmp_path, monkeypatch)
+
+    async def tools_by_name():
+        return {tool.name: tool for tool in await main.mcp.list_tools()}
+
+    tools = asyncio.run(tools_by_name())
+    list_schema = tools["list_session_files"].inputSchema
+    download_schema = tools["download_session_file"].inputSchema
+
+    assert set(list_schema["required"]) == {"session_id"}
+    assert set(list_schema["properties"]) == {"session_id"}
+    assert set(download_schema["required"]) == {"session_id", "file_id"}
+    assert set(download_schema["properties"]) == {"session_id", "file_id"}
 
 
 def test_output_probe_round_trip_records_verified_result(tmp_path, monkeypatch) -> None:
@@ -675,15 +692,36 @@ def test_session_overview_and_transcript_chunks_round_trip(tmp_path, monkeypatch
     assert chunks[-1]["next_chunk_index"] is None
 
 
-def test_mcp_session_files_upload_list_download_and_show_in_overview(tmp_path, monkeypatch) -> None:
+def test_mcp_session_files_are_visible_only_through_their_session(tmp_path, monkeypatch) -> None:
     main = _load_main(tmp_path, monkeypatch)
     main.store.create_session_group("Ideas", "#22c55e", "ideas")
+    main.store.create_session_group("Health", "#ef4444", "medical_plus", group_id="health")
     main.store.create_session("s1", "File test", "manual-context", group_id="ideas")
+    main.store.create_session("s2", "Other session", "manual-context", group_id="ideas")
+    main.store.create_session("s3", "Health session", "manual-context", group_id="health")
 
     session_file = main.upload_session_file("s1", "plan.md", "# Plan\n\nDo the thing.")
+    other_session_file = main.upload_session_file("s2", "private.md", "Other session context.")
     group_file = main.upload_group_file("ideas", "context.md", "Shared group context.")
-    listed = main.list_session_files(session_id="s1", group_id="ideas")
-    downloaded = main.download_session_file(session_file["file"]["file_id"])
+    other_group_file = main.upload_group_file("health", "health.md", "Shared health context.")
+    listed = main.list_session_files(session_id="s1")
+    downloaded = main.download_session_file(
+        session_id="s1",
+        file_id=session_file["file"]["file_id"],
+    )
+    downloaded_group = main.download_session_file(
+        session_id="s1",
+        file_id=group_file["file"]["file_id"],
+    )
+    hidden_session = main.download_session_file(
+        session_id="s1",
+        file_id=other_session_file["file"]["file_id"],
+    )
+    hidden_group = main.download_session_file(
+        session_id="s1",
+        file_id=other_group_file["file"]["file_id"],
+    )
+    missing = main.download_session_file(session_id="s1", file_id=999_999)
     overview = main.get_session_overview("s1")
     invalid = main.upload_group_file("missing", "x.md", "Nope.")
 
@@ -694,10 +732,30 @@ def test_mcp_session_files_upload_list_download_and_show_in_overview(tmp_path, m
     assert group_file["file"]["scope_type"] == "group"
     assert {file["filename"] for file in listed["files"]} == {"plan.md", "context.md"}
     assert downloaded["file"]["content"] == "# Plan\n\nDo the thing."
+    assert downloaded_group["file"]["content"] == "Shared group context."
+    assert hidden_session == hidden_group == missing
+    assert hidden_session == {"ok": False, "error": "File is unavailable for this session."}
     assert overview["files"]["session"][0]["filename"] == "plan.md"
     assert overview["files"]["group"][0]["filename"] == "context.md"
     assert invalid["ok"] is False
     assert invalid["error"] == "Unknown session group: missing"
+
+    main.store.set_session_group("s1", "health")
+
+    moved_listing = main.list_session_files(session_id="s1")
+    assert {file["filename"] for file in moved_listing["files"]} == {"plan.md", "health.md"}
+    assert main.download_session_file(
+        session_id="s1",
+        file_id=group_file["file"]["file_id"],
+    ) == missing
+    assert main.download_session_file(
+        session_id="s1",
+        file_id=other_group_file["file"]["file_id"],
+    )["file"]["content"] == "Shared health context."
+    assert main.list_session_files(session_id="missing") == {
+        "ok": False,
+        "error": "Unknown session_id: missing",
+    }
 
 
 def test_mcp_uploads_pdf_and_returns_extracted_text_without_original_bytes(tmp_path, monkeypatch) -> None:
@@ -709,7 +767,10 @@ def test_mcp_uploads_pdf_and_returns_extracted_text_without_original_bytes(tmp_p
 
     session_pdf = asyncio.run(main.upload_session_pdf("s1", "brief.pdf", encoded))
     group_pdf = asyncio.run(main.upload_group_pdf("ideas", "shared.pdf", encoded))
-    downloaded = main.download_session_file(session_pdf["file"]["file_id"])
+    downloaded = main.download_session_file(
+        session_id="s1",
+        file_id=session_pdf["file"]["file_id"],
+    )
 
     assert session_pdf["ok"] is True
     assert session_pdf["file"]["content_kind"] == "pdf"
@@ -733,7 +794,10 @@ def test_mcp_accepts_image_only_pdf_but_marks_it_unindexed(tmp_path, monkeypatch
     encoded = __import__("base64").b64encode(make_pdf(None)).decode("ascii")
 
     uploaded = asyncio.run(main.upload_session_pdf("s1", "scan.pdf", encoded))
-    downloaded = main.download_session_file(uploaded["file"]["file_id"])
+    downloaded = main.download_session_file(
+        session_id="s1",
+        file_id=uploaded["file"]["file_id"],
+    )
 
     assert uploaded["ok"] is True
     assert uploaded["file"]["extraction_status"] == "no_text"
@@ -1051,7 +1115,9 @@ def test_store_hard_deletes_file_and_preserves_existing_payload_keys(tmp_path, m
 
     assert set(uploaded["file"]) == expected_manifest_keys
     assert set(main.list_session_files(session_id="s1")["files"][0]) == expected_manifest_keys
-    assert set(main.download_session_file(file_id)["file"]) == expected_manifest_keys | {"content"}
+    assert set(main.download_session_file(session_id="s1", file_id=file_id)["file"]) == (
+        expected_manifest_keys | {"content"}
+    )
 
     deleted = main.store.delete_session_file(file_id)
 
@@ -1061,7 +1127,10 @@ def test_store_hard_deletes_file_and_preserves_existing_payload_keys(tmp_path, m
         main.store.delete_session_file(file_id)
     assert main.list_session_files(session_id="s1")["files"] == []
     assert main.get_session_overview("s1")["files"]["session"] == []
-    assert main.download_session_file(file_id) == {"ok": False, "error": f"Unknown file_id: {file_id}"}
+    assert main.download_session_file(session_id="s1", file_id=file_id) == {
+        "ok": False,
+        "error": "File is unavailable for this session.",
+    }
 
     replacement = main.upload_session_file("s1", "plan.md", "Replacement")
     assert replacement["file"]["file_id"] != file_id
@@ -1120,8 +1189,34 @@ def test_public_docs_describe_explicit_mutable_file_context() -> None:
     for model_doc in (instructions, prompt):
         assert "current file manifest is authoritative" in model_doc
         assert "not automatically notified" in model_doc
-        assert "`list_session_files`" in model_doc
-        assert "`download_session_file`" in model_doc
+        assert "`list_session_files(session_id=...)`" in model_doc
+        assert "`download_session_file(session_id=..., file_id=...)`" in model_doc
+
+
+def test_public_docs_describe_unlisted_sessions_and_scoped_file_reads() -> None:
+    readme = Path("README.md").read_text(encoding="utf-8").lower()
+    prompt = Path("docs/project-prompt-template.md").read_text(encoding="utf-8").lower()
+    instructions = Path("docs/model-instructions.md").read_text(encoding="utf-8").lower()
+    security = Path("docs/security.md").read_text(encoding="utf-8").lower()
+    limitations = Path("docs/limitations.md").read_text(encoding="utf-8").lower()
+    changelog = Path("CHANGELOG.md").read_text(encoding="utf-8").lower()
+
+    for active_doc in (readme, prompt, instructions):
+        assert "list_sessions" not in active_doc
+
+    for model_doc in (prompt, instructions):
+        assert "ask the user" in model_doc
+        assert "never enumerate" in model_doc
+        assert "`list_session_files(session_id=...)`" in model_doc
+        assert "`download_session_file(session_id=..., file_id=...)`" in model_doc
+
+    assert "not global across projects" not in prompt
+    assert "does not know" in prompt
+    assert "project boundaries" in prompt
+    assert "not access control" in security
+    assert "not access control" in limitations
+    assert "list_sessions" in changelog
+    assert "refresh" in changelog
 
 
 def test_server_instructions_are_publication_ready(tmp_path, monkeypatch) -> None:
@@ -1137,6 +1232,9 @@ def test_server_instructions_are_publication_ready(tmp_path, monkeypatch) -> Non
     assert "get_session_transcript_chunk" in main.SERVER_INSTRUCTIONS
     assert "list_session_groups" in main.SERVER_INSTRUCTIONS
     assert "save_exchange" in main.SERVER_INSTRUCTIONS
+    assert "list_sessions" not in main.SERVER_INSTRUCTIONS
+    assert "ask the user" in main.SERVER_INSTRUCTIONS.lower()
+    assert "never enumerate" in main.SERVER_INSTRUCTIONS.lower()
 
 
 def _load_main(tmp_path, monkeypatch, max_lines: int = 180, max_chars: int = 12000):

@@ -6,6 +6,17 @@ This project follows a lightweight changelog format inspired by Keep a Changelog
 
 ## [Unreleased]
 
+### Breaking Changes
+
+- Removed the public MCP `list_sessions` tool. Continuing an existing conversation now requires an explicitly supplied `session_id`; clients without one must ask the user or create a new session.
+- `list_session_files` now requires `session_id`. `download_session_file` now requires both `session_id` and `file_id`, and both tools expose only files belonging to that session or its current group.
+- MCP clients must refresh or reconnect after deployment to load the updated tool schemas, and project prompts should be updated before the next handoff.
+
+### Security
+
+- Missing and session-inaccessible file IDs now return the same generic error to avoid revealing whether another file exists.
+- Documented that unlisted sessions reduce accidental discovery but are not per-project access control; a client that knows a valid session ID retains access.
+
 ## [0.3.0] - 2026-07-14
 
 ### Highlights

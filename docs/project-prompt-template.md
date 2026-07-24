@@ -20,12 +20,12 @@ CONTEXT SOURCE: The bridge does not auto-ingest or auto-deliver the user's exter
 SESSION SETUP:
 
 1. If the user gives a `session_id`, use exactly that one.
-2. To continue a session with no `session_id` given, ask for it or use `list_sessions` to identify it. Do not guess when several could match.
+2. To continue a session with no `session_id` given, ask the user for it. Sessions are unlisted: never enumerate, infer, search for, or guess a session ID.
 3. To start a new session, call `list_session_groups` first; if the user names a group pass its valid `group_id` to `create_session`, otherwise omit `group_id` (defaults to `uncategorized`).
 4. If a new topic clearly starts and no `session_id` exists, propose creating a session — or create it immediately when intent is unambiguous.
 5. Pass `title` only if the user gave a clear one; otherwise omit it and the bridge auto-titles (and may improve it after the first exchange). Never make the user invent a title first.
 6. After creating, show the returned `session_id` and use it for the rest of the conversation.
-7. A `session_id` is not global across projects; it identifies one thread or topic.
+7. A `session_id` identifies one bridge session. The bridge does not know Claude Project or other client project boundaries, so keep each ID only in the project or conversation that should retain access.
 
 BEFORE ANSWERING:
 
@@ -33,7 +33,7 @@ BEFORE ANSWERING:
 2. Call `get_last_speaker` with your own `model_name`. If it returns `should_fetch_transcript: false` (you saved the last turn) and you are still in the same chat window with that turn in your local context, you may skip the transcript fetch and answer from local context. In any other case — a different or unknown last speaker, a fresh window, or any doubt — fetch the full transcript with `get_session_transcript_chunk` from `chunk_index=1` through `transcript_chunk_count` (if `has_more` is true, fetch the next chunk).
 3. Unless step 2 confirmed a safe same-model, same-window skip, do not draft, outline, or answer until every required chunk has been fetched and checked — the latest chunks may change the answer.
 4. If `get_session_overview` or any required chunk returns an error, tell the user you cannot safely continue without the current transcript.
-5. Treat chat-supplied files and context as the primary domain source, and the bridge as the conversation history between models. If the overview lists relevant session or group files, read them with `download_session_file` before answering.
+5. Treat chat-supplied files and context as the primary domain source, and the bridge as the conversation history between models. If the overview lists relevant session or group files, read them with `download_session_file(session_id=..., file_id=...)` before answering.
 
 SAVING THE RESPONSE:
 
@@ -51,8 +51,8 @@ SESSION AND GROUP NOTES:
 SESSION AND GROUP FILES:
 
 1. To save a plan, note, or reusable context for this conversation, call `upload_session_file`; for context shared across a topic/group, call `upload_group_file` with the correct `group_id` (call `list_session_groups` first if you do not know it).
-2. Use `list_session_files` to inspect uploaded files and `download_session_file` to read one by `file_id`.
-3. An owner may move, edit, or permanently delete files through the admin UI. The current file manifest is authoritative; models are not automatically notified about these changes. Re-check `get_session_overview` or `list_session_files` instead of relying on an older manifest or cached content.
+2. Use `list_session_files(session_id=...)` to inspect files visible to the current session and `download_session_file(session_id=..., file_id=...)` to read one. Always pass the same known `session_id`; never supply or infer a separate group for file reads.
+3. An owner may move, edit, or permanently delete files through the admin UI. The current file manifest is authoritative; models are not automatically notified about these changes. Re-check `get_session_overview` or `list_session_files(session_id=...)` instead of relying on an older manifest or cached content.
 4. To upload an existing PDF, use `upload_session_pdf` or `upload_group_pdf` with base64 content. `download_session_file` returns extracted PDF text. OCR is not supported; `text_available: false` means the PDF has no searchable/readable text layer.
 5. Uploaded files are local bridge runtime data — do not imply they are committed to the public repository.
 

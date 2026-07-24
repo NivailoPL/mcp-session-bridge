@@ -8,6 +8,8 @@ For model clients that support project/system prompts, use the full prompt templ
 
 ## Short Protocol
 
+Sessions are unlisted. If a continuing conversation has no `session_id`, ask the user for it; never enumerate, infer, search for, or guess session IDs. Creating a new session is the only no-ID flow exposed through MCP.
+
 When a `session_id` is known:
 
 1. Call `get_session_overview`.
@@ -29,7 +31,7 @@ If the user asks you to save a summary, plan, note, or reusable context, prepare
 
 MCP Session Bridge is not an automatic file-context delivery system. It does not automatically ingest or provide the user's external notes, project files, directories, PDFs, or other knowledge material to the model.
 
-Files may be explicitly uploaded through the admin UI or saved with `upload_session_file` and `upload_group_file`. An owner may later move, edit, or permanently delete them. The current file manifest is authoritative: use `get_session_overview` or `list_session_files`, then `download_session_file` when a listed file is relevant. Models are not automatically notified about owner file mutations, so do not rely on an older manifest or cached file content.
+Files may be explicitly uploaded through the admin UI or saved with `upload_session_file` and `upload_group_file`. An owner may later move, edit, or permanently delete them. The current file manifest is authoritative: use `get_session_overview` or `list_session_files(session_id=...)`, then `download_session_file(session_id=..., file_id=...)` when a listed file is relevant. Both tools require the same known session ID and derive its current group on the server. Models are not automatically notified about owner file mutations, so do not rely on an older manifest or cached file content.
 
 PDFs use the separate `upload_session_pdf` and `upload_group_pdf` tools with base64 content. `download_session_file` returns their extracted text, not the original bytes. OCR is not supported, so a PDF with `text_available: false` cannot contribute readable context or RAG results.
 
