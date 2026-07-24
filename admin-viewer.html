@@ -1102,12 +1102,12 @@
       <div id="sessionMoveGroupList" class="session-move-group-list" aria-label="Destination group"></div>
       <section id="sessionMoveConfirmationPane" hidden>
         <p id="sessionMoveConfirmation" class="session-move-confirmation"></p>
-        <p class="session-move-note">Pliki sesji pozostaną przy rozmowie. Widoczne pliki współdzielone zmienią się na pliki grupy docelowej.</p>
+        <p class="session-move-note">Session files will stay with the conversation. Visible shared files will change to those of the destination group.</p>
       </section>
       <div class="edit-actions">
-        <button type="button" class="ghost" id="sessionMoveBack" hidden>Wybierz inną grupę</button>
-        <button type="button" class="ghost" id="sessionMoveCancel">Anuluj</button>
-        <button type="button" class="primary" id="sessionMoveConfirm" hidden>Przenieś sesję</button>
+        <button type="button" class="ghost" id="sessionMoveBack" hidden>Choose another group</button>
+        <button type="button" class="ghost" id="sessionMoveCancel">Cancel</button>
+        <button type="button" class="primary" id="sessionMoveConfirm" hidden>Move session</button>
       </div>
     </div>
   </dialog>
@@ -3601,14 +3601,14 @@
           || { name: pending.sourceGroupId };
         const destinationGroup = state.groups.find((group) => group.group_id === pending.destinationGroupId) || null;
         dom.sessionMovePrompt.textContent = destinationGroup
-          ? "Potwierdź przeniesienie rozmowy."
-          : `Wybierz grupę docelową dla sesji ${pending.sessionId}.`;
+          ? "Confirm moving this session."
+          : `Choose a destination group for session ${pending.sessionId}.`;
         dom.sessionMoveGroupList.hidden = Boolean(destinationGroup);
         dom.sessionMoveConfirmationPane.hidden = !destinationGroup;
         dom.sessionMoveBack.hidden = !destinationGroup;
         dom.sessionMoveConfirm.hidden = !destinationGroup;
         dom.sessionMoveConfirmation.textContent = destinationGroup
-          ? `Sesja nr ${pending.sessionId} zostanie przeniesiona z grupy ${sourceGroup.name} do ${destinationGroup.name}.`
+          ? `Session ${pending.sessionId} will be moved from group ${sourceGroup.name} to ${destinationGroup.name}.`
           : "";
         dom.sessionMoveGroupList.replaceChildren();
         if (destinationGroup) return;

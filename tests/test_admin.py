@@ -59,8 +59,8 @@ def test_admin_viewer_session_move_requires_explicit_confirmation() -> None:
     assert 'openSessionMoveDialog(session.session_id);' in viewer
     assert 'openSessionMoveDialog(state.selectedSession.session_id, groupId);' in viewer
     assert (
-        'Sesja nr ${pending.sessionId} zostanie przeniesiona z grupy '
-        '${sourceGroup.name} do ${destinationGroup.name}.'
+        'Session ${pending.sessionId} will be moved from group '
+        '${sourceGroup.name} to ${destinationGroup.name}.'
     ) in viewer
     assert 'await moveSession(pending.sessionId, pending.destinationGroupId);' in viewer
     selection_flow = viewer[
@@ -70,7 +70,7 @@ def test_admin_viewer_session_move_requires_explicit_confirmation() -> None:
     assert "api(" not in selection_flow
     assert 'const movedSessionIsVisible = filteredSessions().some' in viewer
     assert 'else await loadSession("");' in viewer
-    assert "Pliki sesji pozostaną przy rozmowie." in viewer
+    assert "Session files will stay with the conversation." in viewer
 
 
 def test_admin_viewer_file_workspace_shell_contract() -> None:
