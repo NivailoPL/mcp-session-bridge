@@ -48,6 +48,31 @@ def test_admin_viewer_timezone_lives_in_general_settings() -> None:
     assert 'id="timezoneSelect"' in general
 
 
+def test_admin_viewer_session_move_requires_explicit_confirmation() -> None:
+    viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
+
+    assert 'id="sessionMoveDialog"' in viewer
+    assert 'id="sessionMoveGroupList"' in viewer
+    assert 'id="sessionMoveConfirmation"' in viewer
+    assert 'id="sessionMoveConfirm"' in viewer
+    assert 'button("Move", (event) =>' in viewer
+    assert 'openSessionMoveDialog(session.session_id);' in viewer
+    assert 'openSessionMoveDialog(state.selectedSession.session_id, groupId);' in viewer
+    assert (
+        'Sesja nr ${pending.sessionId} zostanie przeniesiona z grupy '
+        '${sourceGroup.name} do ${destinationGroup.name}.'
+    ) in viewer
+    assert 'await moveSession(pending.sessionId, pending.destinationGroupId);' in viewer
+    selection_flow = viewer[
+        viewer.index("async function moveSelectedSession"):
+        viewer.index("function openSessionMoveDialog")
+    ]
+    assert "api(" not in selection_flow
+    assert 'const movedSessionIsVisible = filteredSessions().some' in viewer
+    assert 'else await loadSession("");' in viewer
+    assert "Pliki sesji pozostaną przy rozmowie." in viewer
+
+
 def test_admin_viewer_file_workspace_shell_contract() -> None:
     viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
 

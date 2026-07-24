@@ -699,6 +699,19 @@
     .icon-choice { min-height: 2.35rem; padding: 0; border-radius: 8px; }
     .icon-choice svg { width: 19px; height: 19px; }
     .icon-choice.is-active { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-ink); }
+    .session-move-dialog { width: min(31rem, calc(100vw - 2rem)); }
+    .session-move-group-list { display: grid; gap: .45rem; max-height: min(22rem, 52vh); overflow: auto; }
+    .session-move-group {
+      justify-content: flex-start; gap: .65rem; width: 100%; min-height: 2.65rem;
+      padding: .55rem .7rem; text-align: left;
+    }
+    .session-move-group svg { width: 18px; height: 18px; color: var(--g, var(--accent-ink)); }
+    .session-move-group-id { margin-left: auto; color: var(--faint-ink); font-family: "Geist Mono", ui-monospace, monospace; font-size: .68rem; }
+    .session-move-confirmation {
+      margin: 0; padding: 1rem; border: 1px solid rgba(251, 191, 36, .35); border-radius: var(--r-card);
+      background: var(--warn-soft); color: #fff; font-weight: 700; line-height: 1.55; overflow-wrap: anywhere;
+    }
+    .session-move-note { margin: .7rem 0 0; color: var(--muted); font-size: .78rem; line-height: 1.5; }
 
     /* ---------- alternate read layouts (bubbles / thread) ---------- */
     .chat { display: grid; width: 100%; max-width: 62rem; min-width: 0; margin: 0 auto; }
@@ -1079,6 +1092,26 @@
     </form>
   </dialog>
 
+  <dialog id="sessionMoveDialog" class="session-move-dialog" aria-labelledby="sessionMoveHeading">
+    <div class="dialog-head">
+      <h3 id="sessionMoveHeading">Move session</h3>
+      <button type="button" class="ghost" id="sessionMoveClose">Close</button>
+    </div>
+    <div class="dialog-body">
+      <p id="sessionMovePrompt" class="meta">Choose a destination group.</p>
+      <div id="sessionMoveGroupList" class="session-move-group-list" aria-label="Destination group"></div>
+      <section id="sessionMoveConfirmationPane" hidden>
+        <p id="sessionMoveConfirmation" class="session-move-confirmation"></p>
+        <p class="session-move-note">Pliki sesji pozostaną przy rozmowie. Widoczne pliki współdzielone zmienią się na pliki grupy docelowej.</p>
+      </section>
+      <div class="edit-actions">
+        <button type="button" class="ghost" id="sessionMoveBack" hidden>Wybierz inną grupę</button>
+        <button type="button" class="ghost" id="sessionMoveCancel">Anuluj</button>
+        <button type="button" class="primary" id="sessionMoveConfirm" hidden>Przenieś sesję</button>
+      </div>
+    </div>
+  </dialog>
+
   <dialog id="fileWorkspaceDialog" aria-labelledby="fileWorkspaceHeading">
     <div class="dialog-head">
       <div class="dialog-title">
@@ -1413,6 +1446,7 @@
         searchController: null,
         renamingSessionId: "",
         manualRenameSessionId: "",
+        pendingSessionMove: null,
         showDeleted: true,
         editingExchangeId: null,
         busy: false,
@@ -1423,6 +1457,7 @@
       };
       let statusTimer = 0;
       let pdfJsPromise = null;
+      let sessionMoveFocusTarget = null;
 
       const dom = {
         addGroupButton: document.getElementById("addGroupButton"),
@@ -1496,6 +1531,15 @@
         sessionFileInput: document.getElementById("sessionFileInput"),
         sessionFileStatus: document.getElementById("sessionFileStatus"),
         sessionList: document.getElementById("sessionList"),
+        sessionMoveBack: document.getElementById("sessionMoveBack"),
+        sessionMoveCancel: document.getElementById("sessionMoveCancel"),
+        sessionMoveClose: document.getElementById("sessionMoveClose"),
+        sessionMoveConfirm: document.getElementById("sessionMoveConfirm"),
+        sessionMoveConfirmation: document.getElementById("sessionMoveConfirmation"),
+        sessionMoveConfirmationPane: document.getElementById("sessionMoveConfirmationPane"),
+        sessionMoveDialog: document.getElementById("sessionMoveDialog"),
+        sessionMoveGroupList: document.getElementById("sessionMoveGroupList"),
+        sessionMovePrompt: document.getElementById("sessionMovePrompt"),
         sessionId: document.getElementById("sessionId"),
         sessionIdLine: document.getElementById("sessionIdLine"),
         sessionMeta: document.getElementById("sessionMeta"),
@@ -1532,11 +1576,24 @@
       bindSettingsEvents();
       bindContextSearchEvents();
       bindDialogBackdropClose(dom.groupDialog, dom.groupDialogClose);
+      bindDialogBackdropClose(dom.sessionMoveDialog, dom.sessionMoveCancel);
       bindDialogBackdropClose(dom.fileWorkspaceDialog, dom.fileWorkspaceClose);
       bindDialogBackdropClose(dom.aiSettingsDialog, dom.aiSettingsClose);
       bindDialogBackdropClose(settingsDom.searchDialog, settingsDom.searchClose);
       dom.groupCancelButton.addEventListener("click", () => dom.groupDialog.close());
       dom.groupDialogClose.addEventListener("click", () => dom.groupDialog.close());
+      dom.sessionMoveClose.addEventListener("click", () => cancelSessionMove());
+      dom.sessionMoveCancel.addEventListener("click", () => cancelSessionMove());
+      dom.sessionMoveBack.addEventListener("click", () => {
+        if (!state.pendingSessionMove) return;
+        state.pendingSessionMove.destinationGroupId = "";
+        renderSessionMoveDialog();
+      });
+      dom.sessionMoveConfirm.addEventListener("click", () => confirmSessionMove());
+      dom.sessionMoveDialog.addEventListener("cancel", (event) => {
+        event.preventDefault();
+        cancelSessionMove();
+      });
       dom.groupDeleteButton.addEventListener("click", () => {
         const group = state.groups.find((item) => item.group_id === dom.groupIdInput.value);
         if (group) deleteGroup(group);
@@ -3404,7 +3461,14 @@
         manualButton.title = "Set title manually";
         manualButton.disabled = state.busy;
 
-        actions.append(aiButton, manualButton);
+        const moveButton = button("Move", (event) => {
+          event.stopPropagation();
+          openSessionMoveDialog(session.session_id);
+        }, "ghost");
+        moveButton.title = "Move to another group";
+        moveButton.disabled = state.busy || !state.groups.some((group) => group.group_id !== session.group_id);
+
+        actions.append(aiButton, manualButton, moveButton);
         return actions;
       }
 
@@ -3491,19 +3555,135 @@
 
       async function moveSelectedSession(groupId) {
         if (!state.selectedSession || !groupId || groupId === state.selectedSession.group_id) return;
+        renderSessionGroupSelect();
+        openSessionMoveDialog(state.selectedSession.session_id, groupId);
+      }
+
+      function openSessionMoveDialog(sessionId, destinationGroupId = "") {
+        const session = state.sessions.find((item) => item.session_id === sessionId)
+          || (state.selectedSession?.session_id === sessionId ? state.selectedSession : null);
+        if (!session) {
+          setStatus(`Unknown session: ${sessionId}`, "error");
+          return;
+        }
+        const destinations = state.groups.filter((group) => group.group_id !== session.group_id);
+        if (!destinations.length) {
+          setStatus("There is no other group to move this session to.", "warn");
+          renderSessionGroupSelect();
+          return;
+        }
+        if (destinationGroupId && !destinations.some((group) => group.group_id === destinationGroupId)) {
+          setStatus(`Unknown destination group: ${destinationGroupId}`, "error");
+          renderSessionGroupSelect();
+          return;
+        }
+        sessionMoveFocusTarget = document.activeElement;
+        state.pendingSessionMove = {
+          sessionId: session.session_id,
+          sourceGroupId: session.group_id,
+          destinationGroupId,
+          inFlight: false,
+        };
+        renderSessionMoveDialog();
+        dom.sessionMoveDialog.showModal();
+        window.requestAnimationFrame(() => {
+          const focusTarget = destinationGroupId
+            ? dom.sessionMoveConfirm
+            : dom.sessionMoveGroupList.querySelector("button");
+          focusTarget?.focus();
+        });
+      }
+
+      function renderSessionMoveDialog() {
+        const pending = state.pendingSessionMove;
+        if (!pending) return;
+        const sourceGroup = state.groups.find((group) => group.group_id === pending.sourceGroupId)
+          || { name: pending.sourceGroupId };
+        const destinationGroup = state.groups.find((group) => group.group_id === pending.destinationGroupId) || null;
+        dom.sessionMovePrompt.textContent = destinationGroup
+          ? "Potwierdź przeniesienie rozmowy."
+          : `Wybierz grupę docelową dla sesji ${pending.sessionId}.`;
+        dom.sessionMoveGroupList.hidden = Boolean(destinationGroup);
+        dom.sessionMoveConfirmationPane.hidden = !destinationGroup;
+        dom.sessionMoveBack.hidden = !destinationGroup;
+        dom.sessionMoveConfirm.hidden = !destinationGroup;
+        dom.sessionMoveConfirmation.textContent = destinationGroup
+          ? `Sesja nr ${pending.sessionId} zostanie przeniesiona z grupy ${sourceGroup.name} do ${destinationGroup.name}.`
+          : "";
+        dom.sessionMoveGroupList.replaceChildren();
+        if (destinationGroup) return;
+        for (const group of state.groups) {
+          if (group.group_id === pending.sourceGroupId) continue;
+          const choice = button(group.name, () => {
+            pending.destinationGroupId = group.group_id;
+            renderSessionMoveDialog();
+            window.requestAnimationFrame(() => dom.sessionMoveConfirm.focus());
+          }, "ghost session-move-group");
+          choice.style.setProperty("--g", group.color || "#8b93a7");
+          choice.setAttribute("aria-label", `Move to ${group.name}`);
+          choice.prepend(svgNode(group.icon_key || "folder"));
+          choice.append(spanCls("session-move-group-id", group.group_id));
+          dom.sessionMoveGroupList.append(choice);
+        }
+      }
+
+      function cancelSessionMove({ restoreFocus = true } = {}) {
+        if (state.pendingSessionMove?.inFlight) return;
+        const focusTarget = sessionMoveFocusTarget;
+        state.pendingSessionMove = null;
+        sessionMoveFocusTarget = null;
+        if (dom.sessionMoveDialog.open) dom.sessionMoveDialog.close();
+        renderSessionGroupSelect();
+        if (restoreFocus && focusTarget instanceof HTMLElement) {
+          window.requestAnimationFrame(() => focusTarget.focus());
+        }
+      }
+
+      async function confirmSessionMove() {
+        const pending = state.pendingSessionMove;
+        if (!pending?.destinationGroupId || pending.inFlight) return;
+        pending.inFlight = true;
+        dom.sessionMoveConfirm.disabled = true;
+        const moved = await moveSession(pending.sessionId, pending.destinationGroupId);
+        if (moved) {
+          pending.inFlight = false;
+          cancelSessionMove({ restoreFocus: false });
+        } else if (state.pendingSessionMove) {
+          state.pendingSessionMove.inFlight = false;
+          dom.sessionMoveConfirm.disabled = false;
+        }
+      }
+
+      async function moveSession(sessionId, groupId) {
+        const sourceSession = state.sessions.find((session) => session.session_id === sessionId)
+          || (state.selectedSession?.session_id === sessionId ? state.selectedSession : null);
+        const sourceGroup = state.groups.find((group) => group.group_id === sourceSession?.group_id);
+        const destinationGroup = state.groups.find((group) => group.group_id === groupId);
+        if (!sourceSession || !sourceGroup || !destinationGroup) {
+          setStatus("The session or destination group is no longer available.", "error");
+          return false;
+        }
+        const wasSelected = state.selectedSessionId === sessionId;
         setBusy(true);
         try {
-          const payload = await api(`/admin/api/sessions/${encodeURIComponent(state.selectedSession.session_id)}`, {
+          await api(`/admin/api/sessions/${encodeURIComponent(sessionId)}`, {
             method: "PATCH",
             body: JSON.stringify({ group_id: groupId }),
           });
-          state.selectedSession = payload.session;
           await loadSessions();
+          if (wasSelected) {
+            const movedSessionIsVisible = filteredSessions().some((session) => session.session_id === sessionId);
+            if (movedSessionIsVisible) await loadSession(sessionId);
+            else if (state.selectedSessionId) await loadSession(state.selectedSessionId);
+            else await loadSession("");
+          }
           renderSessionGroupSelect();
-          setStatus("Session moved to group.", "ok");
+          setStatus(`Session ${sessionId} moved from ${sourceGroup.name} to ${destinationGroup.name}.`, "ok");
+          return true;
         } catch (error) {
           renderSessionGroupSelect();
           setStatus(error.message, "error");
+          return false;
         } finally {
           setBusy(false);
         }
