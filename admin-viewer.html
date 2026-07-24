@@ -836,6 +836,16 @@
     .developer-settings { border: 1px solid var(--stroke); border-radius: var(--r-card); padding: .75rem; }
     .developer-settings summary { cursor: pointer; color: var(--muted); font-size: .82rem; }
     .settings-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: .75rem; padding-top: .85rem; }
+    .probe-config, .probe-global, .probe-recommendations, .probe-results { display: grid; gap: .75rem; padding: .9rem; border: 1px solid var(--stroke); border-radius: var(--r-card); background: rgba(255,255,255,.025); }
+    .probe-config-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: .7rem; }
+    .probe-prompt { max-height: 9rem; margin: 0; padding: .75rem; overflow: auto; border: 1px solid var(--stroke-soft); border-radius: 9px; background: rgba(0,0,0,.18); color: var(--muted); font: .72rem/1.5 ui-monospace,SFMono-Regular,Menlo,monospace; white-space: pre-wrap; }
+    .probe-recommendation-list, .probe-result-list { display: grid; gap: .55rem; }
+    .probe-recommendation, .probe-result { display: grid; gap: .35rem; padding: .7rem; border: 1px solid var(--stroke-soft); border-radius: 9px; background: rgba(255,255,255,.025); }
+    .probe-recommendation-head, .probe-result-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: .45rem; }
+    .probe-result-meta { color: var(--muted); font-size: .72rem; line-height: 1.45; }
+    .probe-result-class { font-size: .68rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+    .probe-result-class.complete { color: var(--ok); }
+    .probe-result-class.pending { color: var(--warn); }
     .provider-card, .index-card { display: grid; gap: .65rem; padding: .9rem; border: 1px solid var(--stroke); border-radius: var(--r-card); background: rgba(255,255,255,.025); }
     .index-card { grid-template-columns: minmax(0,1fr); }
     .index-card-main { min-width: 0; }
@@ -909,10 +919,10 @@
       .file-workspace-list, .file-workspace-detail { height: 100%; border-right: 0; }
       .dialog-actions { gap: .25rem; }
       .settings-shell { grid-template-columns: 1fr; min-height: 0; overflow: auto; }
-      .settings-tabs { grid-template-columns: repeat(3, 1fr); border-right: 0; border-bottom: 1px solid var(--stroke-soft); }
+      .settings-tabs { grid-template-columns: repeat(2, 1fr); border-right: 0; border-bottom: 1px solid var(--stroke-soft); }
       .settings-tabs button { justify-content: center; }
       .settings-content { overflow: visible; }
-      .settings-grid, .index-card, .index-estimate-grid { grid-template-columns: 1fr; }
+      .settings-grid, .index-card, .index-estimate-grid, .probe-config-grid { grid-template-columns: 1fr; }
       .search-command { grid-template-columns: 1fr 1fr; }
       .search-command input { grid-column: 1 / -1; }
       .search-workspace { grid-template-columns: 1fr; overflow: auto; }
@@ -1162,12 +1172,13 @@
 
   <dialog id="aiSettingsDialog" class="settings-dialog" aria-labelledby="settingsHeading">
     <div class="dialog-head">
-      <div><h3 id="settingsHeading">Settings</h3><p class="meta">Admin configuration for models and context search.</p></div>
+      <div><h3 id="settingsHeading">Settings</h3><p class="meta">Admin configuration for models, transcript delivery, and context search.</p></div>
       <button type="button" class="ghost" id="aiSettingsClose">Close</button>
     </div>
     <div class="settings-shell">
       <nav class="settings-tabs" aria-label="Settings sections">
         <button type="button" data-settings-tab="general" class="is-active">General</button>
+        <button type="button" data-settings-tab="transcript">Transcript</button>
         <button type="button" data-settings-tab="search">Search</button>
         <button type="button" data-settings-tab="api">API</button>
       </nav>
@@ -1177,6 +1188,35 @@
           <div class="settings-section-head"><div><h4>General</h4><p>Defaults used by admin automation.</p></div></div>
           <label class="field">AI rename model<input id="aiModelInput" type="text" maxlength="96" autocomplete="off"></label>
           <div class="edit-actions"><button type="button" class="primary" id="generalSettingsSave">Save General</button></div>
+        </section>
+        <section data-settings-panel="transcript" class="settings-panel" hidden>
+          <div class="settings-section-head"><div><h4>Transcript delivery</h4><p>Measure the real single-tool-result capacity of each MCP harness, then set one conservative chunk limit for every client.</p></div></div>
+          <section class="probe-global">
+            <div class="settings-section-head"><div><h4>Global transcript chunk</h4><p>The bridge starts a new chunk when either limit is reached. Changes apply immediately without a service restart.</p></div></div>
+            <div class="settings-grid">
+              <label class="field">Maximum characters<input id="transcriptChunkMaxChars" type="number" min="1000" max="250000" step="1000"></label>
+              <label class="field">Maximum lines<input id="transcriptChunkMaxLines" type="number" min="1" max="10000"></label>
+            </div>
+            <div class="edit-actions"><button type="button" class="primary" id="transcriptSettingsSave">Save global chunk size</button></div>
+          </section>
+          <section class="probe-config">
+            <div class="settings-section-head"><div><h4>Run a harness test</h4><p>Copy this instruction into the harness being measured. Running the payload in this browser would bypass the harness and produce a false result.</p></div></div>
+            <div class="probe-config-grid">
+              <label class="field">Harness label<input id="probeHarnessLabel" type="text" maxlength="80" placeholder="chatgpt-web"></label>
+              <label class="field">Payload characters<input id="probeTargetChars" type="number" min="4096" max="250000" step="1000" value="100000"></label>
+              <label class="field">Content profile<select id="probeContentProfile"><option value="transcript_markdown">Transcript Markdown</option><option value="transport_canary">Transport canary</option></select></label>
+            </div>
+            <pre id="probePromptPreview" class="probe-prompt"></pre>
+            <div class="edit-actions"><button type="button" class="primary" id="probePromptCopy">Copy test instruction</button></div>
+          </section>
+          <section class="probe-recommendations">
+            <div class="settings-section-head"><div><h4>Checkpoint-verified recommendations</h4><p>Each recommendation keeps a 25% safety margin. Use the weakest verified harness when all clients share one global size.</p></div></div>
+            <div id="probeRecommendations" class="probe-recommendation-list"></div>
+          </section>
+          <section class="probe-results">
+            <div class="settings-section-head"><div><h4>Recent results</h4><p>Pending runs reached the server but never produced a model report; this can indicate a rejected or unusable tool result.</p></div></div>
+            <div id="probeResults" class="probe-result-list"></div>
+          </section>
         </section>
         <section data-settings-panel="search" class="settings-panel" hidden>
           <div class="settings-section-head"><div><h4>RAG search</h4><p>BM25 stays local. Only checked groups may leave this server for embeddings or reranking.</p></div></div>
@@ -1473,7 +1513,7 @@
         turnNav: document.getElementById("turnNav"),
       };
       const settingsDom = Object.fromEntries([
-        "generalSettingsSave", "apiSettingsSave", "searchSettingsSave", "cohereKeyInput",
+        "generalSettingsSave", "apiSettingsSave", "searchSettingsSave", "transcriptSettingsSave", "cohereKeyInput",
         "cohereKeyRemoveButton", "openaiKeyStatus", "cohereKeyStatus", "ragEnabled",
         "ragOptions", "cohereEnabled", "sourceConversations", "sourceSessionFiles",
         "sourceGroupFiles", "ragGroupList", "chunkSize", "chunkOverlap", "embeddingModel",
@@ -1483,7 +1523,9 @@
         "indexEstimateTokens", "indexEstimateOverlap", "indexEstimateCost", "indexEstimateModel", "indexEstimatePricing",
         "indexRebuild", "indexRebuildSpinner", "indexRebuildLabel", "indexCancel", "indexDelete", "searchDialog", "searchClose",
         "contextSearchForm", "contextSearchInput", "contextSearchSubmit", "contextSearchStop",
-        "contextSearchStatus", "searchResults", "localSearchResults", "searchDetail"
+        "contextSearchStatus", "searchResults", "localSearchResults", "searchDetail",
+        "transcriptChunkMaxChars", "transcriptChunkMaxLines", "probeHarnessLabel", "probeTargetChars",
+        "probeContentProfile", "probePromptPreview", "probePromptCopy", "probeRecommendations", "probeResults"
       ].map((id) => [id, document.getElementById(id)]));
 
       dom.addGroupButton.addEventListener("click", () => openGroupDialog());
@@ -1650,6 +1692,7 @@
           if (button) selectSettingsTab(button.dataset.settingsTab);
         });
         settingsDom.generalSettingsSave.addEventListener("click", () => saveGeneralSettings());
+        settingsDom.transcriptSettingsSave.addEventListener("click", () => saveTranscriptSettings());
         settingsDom.searchSettingsSave.addEventListener("click", () => saveSearchSettings());
         settingsDom.apiSettingsSave.addEventListener("click", () => saveApiSettings());
         dom.aiKeyRemoveButton.addEventListener("click", () => removeProviderKey("openai"));
@@ -1661,6 +1704,11 @@
         settingsDom.indexRebuild.addEventListener("click", () => runIndexAction("rebuild"));
         settingsDom.indexCancel.addEventListener("click", () => runIndexAction("cancel"));
         settingsDom.indexDelete.addEventListener("click", () => runIndexAction("delete"));
+        settingsDom.probePromptCopy.addEventListener("click", () => copyOutputProbePrompt());
+        for (const node of [settingsDom.probeHarnessLabel, settingsDom.probeTargetChars, settingsDom.probeContentProfile]) {
+          node.addEventListener("input", renderOutputProbePrompt);
+          node.addEventListener("change", renderOutputProbePrompt);
+        }
       }
 
       function selectSettingsTab(name) {
@@ -1684,9 +1732,19 @@
       function fillSettingsForm() {
         const settings = state.settings;
         const search = settings.search;
+        const transcript = settings.transcript || {};
         dom.aiModelInput.value = settings.general.rename_model || "gpt-5.4-nano";
         dom.aiKeyInput.value = "";
         settingsDom.cohereKeyInput.value = "";
+        settingsDom.transcriptChunkMaxChars.value = transcript.chunk_max_chars || 12000;
+        settingsDom.transcriptChunkMaxLines.value = transcript.chunk_max_lines || 180;
+        settingsDom.transcriptChunkMaxChars.min = transcript.min_chunk_max_chars || 1000;
+        settingsDom.transcriptChunkMaxChars.max = transcript.max_chunk_max_chars || 250000;
+        settingsDom.transcriptChunkMaxLines.min = transcript.min_chunk_max_lines || 1;
+        settingsDom.transcriptChunkMaxLines.max = transcript.max_chunk_max_lines || 10000;
+        settingsDom.probeTargetChars.min = transcript.min_probe_target_chars || 4096;
+        settingsDom.probeTargetChars.max = transcript.max_probe_target_chars || 250000;
+        if (!settingsDom.probeHarnessLabel.value) settingsDom.probeHarnessLabel.value = localStorage.getItem("mcp-admin:probe-harness") || "";
         settingsDom.ragEnabled.checked = search.enabled;
         settingsDom.cohereEnabled.checked = search.cohere_rerank_enabled;
         settingsDom.sourceConversations.checked = search.include_conversations;
@@ -1703,6 +1761,8 @@
         for (const [name, value] of Object.entries(values)) settingsDom[name].value = value;
         renderRagGroups(search.included_group_ids || []);
         renderRagVisibility();
+        renderOutputProbePrompt();
+        renderOutputProbeResults();
         renderSettingsStatus();
       }
 
@@ -1833,6 +1893,104 @@
         await saveSettingsRequest("/admin/api/settings/general", {
           rename_model: dom.aiModelInput.value.trim() || "gpt-5.4-nano",
         }, "General settings saved.");
+      }
+
+      async function saveTranscriptSettings() {
+        await saveSettingsRequest("/admin/api/settings/transcript", {
+          chunk_max_chars: Number.parseInt(settingsDom.transcriptChunkMaxChars.value, 10),
+          chunk_max_lines: Number.parseInt(settingsDom.transcriptChunkMaxLines.value, 10),
+        }, "Global transcript chunk size saved.");
+      }
+
+      function outputProbePrompt() {
+        const harness = settingsDom.probeHarnessLabel.value.trim() || "describe-this-harness";
+        const target = Number.parseInt(settingsDom.probeTargetChars.value, 10) || 100000;
+        const profile = settingsDom.probeContentProfile.value || "transcript_markdown";
+        return `Use MCP Session Bridge to measure this harness. Call run_output_probe exactly once with harness_label="${harness}", target_chars=${target}, and content_profile="${profile}". Read the tool result without summarizing it. Then immediately call submit_output_probe_observation with every CHECKPOINT canary actually visible and the index and canary of the last block with a complete END marker. Never infer a missing canary. After the report tool returns, tell me only its result_class, payload_char_count, server_result_json_chars, and recommended_chunk_chars.`;
+      }
+
+      function renderOutputProbePrompt() {
+        settingsDom.probePromptPreview.textContent = outputProbePrompt();
+      }
+
+      async function copyOutputProbePrompt() {
+        const harness = settingsDom.probeHarnessLabel.value.trim();
+        if (!harness) { renderSettingsStatus("Enter a harness label before copying the test.", "error"); return; }
+        localStorage.setItem("mcp-admin:probe-harness", harness);
+        try {
+          await navigator.clipboard.writeText(outputProbePrompt());
+          renderSettingsStatus("Harness test instruction copied.", "ok");
+        } catch (error) {
+          renderSettingsStatus(`Could not copy the test instruction: ${error.message}`, "error");
+        }
+      }
+
+      function renderOutputProbeResults() {
+        const transcript = state.settings?.transcript || {};
+        const recommendations = transcript.recommendations || [];
+        const runs = transcript.runs || [];
+        settingsDom.probeRecommendations.replaceChildren();
+        if (!recommendations.length) {
+          settingsDom.probeRecommendations.append(spanCls("meta", "No fully verified harness result yet."));
+        } else {
+          const weakest = Math.min(...recommendations.map((item) => item.recommended_chunk_chars));
+          const weakestCard = document.createElement("article");
+          weakestCard.className = "probe-recommendation";
+          const weakestHead = document.createElement("div");
+          weakestHead.className = "probe-recommendation-head";
+          weakestHead.append(spanCls("", `Weakest verified: ${Number(weakest).toLocaleString()} characters`));
+          const weakestButton = document.createElement("button");
+          weakestButton.type = "button";
+          weakestButton.className = "primary";
+          weakestButton.textContent = "Fill global limit";
+          weakestButton.addEventListener("click", () => selectTranscriptChunkRecommendation(weakest));
+          weakestHead.append(weakestButton);
+          weakestCard.append(weakestHead, spanCls("probe-result-meta", "Minimum safe recommendation across all completed harness profiles."));
+          settingsDom.probeRecommendations.append(weakestCard);
+          for (const item of recommendations) {
+            const card = document.createElement("article");
+            card.className = "probe-recommendation";
+            const head = document.createElement("div");
+            head.className = "probe-recommendation-head";
+            head.append(spanCls("", `${item.harness_label} · ${item.content_profile}`));
+            const button = document.createElement("button");
+            button.type = "button";
+            button.className = "ghost";
+            button.textContent = `Fill ${Number(item.recommended_chunk_chars).toLocaleString()}`;
+            button.addEventListener("click", () => selectTranscriptChunkRecommendation(item.recommended_chunk_chars));
+            head.append(button);
+            card.append(head, spanCls("probe-result-meta", `Verified ${Number(item.largest_verified_payload_chars).toLocaleString()} payload characters.`));
+            settingsDom.probeRecommendations.append(card);
+          }
+        }
+
+        settingsDom.probeResults.replaceChildren();
+        if (!runs.length) {
+          settingsDom.probeResults.append(spanCls("meta", "No harness tests recorded yet."));
+          return;
+        }
+        for (const run of runs) {
+          const card = document.createElement("article");
+          card.className = "probe-result";
+          const head = document.createElement("div");
+          head.className = "probe-result-head";
+          head.append(spanCls("", `${run.harness_label} · ${Number(run.payload_char_count).toLocaleString()} chars`));
+          const resultClass = run.result_class || "pending";
+          head.append(spanCls(`probe-result-class ${resultClass}`, resultClass.replaceAll("_", " ")));
+          const checkpoints = (run.matched_checkpoints || []).join(", ") || "none reported";
+          const created = run.created_at ? formatDate(new Date(run.created_at * 1000).toISOString()) : "unknown time";
+          card.append(
+            head,
+            spanCls("probe-result-meta", `${run.content_profile} · ${created} · checkpoints: ${checkpoints}`),
+            spanCls("probe-result-meta", `Run ${run.run_id} · last complete block: ${run.last_complete_block_index || "—"}/${run.block_count}`),
+          );
+          settingsDom.probeResults.append(card);
+        }
+      }
+
+      function selectTranscriptChunkRecommendation(value) {
+        settingsDom.transcriptChunkMaxChars.value = value;
+        renderSettingsStatus("Recommendation filled in. Save the global chunk size to apply it.", "ok");
       }
 
       function searchFormPayload() {
@@ -4071,6 +4229,14 @@
                 processed_count: 0, dirty_document_count: 0, source_document_count: demo.sessions.length,
                 last_error: null, cancel_requested: false,
               },
+              transcript: {
+                chunk_max_chars: 12000, chunk_max_lines: 180,
+                default_chunk_max_chars: 12000, default_chunk_max_lines: 180,
+                min_chunk_max_chars: 1000, max_chunk_max_chars: 250000,
+                min_chunk_max_lines: 1, max_chunk_max_lines: 10000,
+                min_probe_target_chars: 4096, max_probe_target_chars: 250000,
+                safety_margin_percent: 25, runs: [], recommendations: [],
+              },
             };
           }
           state.settings.groups = demo.groups;
@@ -4079,6 +4245,11 @@
         if (path === "/admin/api/settings/general" && method === "PUT") {
           state.settings.general.rename_model = body.rename_model;
           state.aiSettings.model = body.rename_model;
+          return Promise.resolve({ ok: true, settings: state.settings });
+        }
+        if (path === "/admin/api/settings/transcript" && method === "PUT") {
+          state.settings.transcript.chunk_max_chars = body.chunk_max_chars;
+          state.settings.transcript.chunk_max_lines = body.chunk_max_lines;
           return Promise.resolve({ ok: true, settings: state.settings });
         }
         if (path === "/admin/api/settings/search" && method === "PUT") {

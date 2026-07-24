@@ -78,6 +78,8 @@ http://127.0.0.1:8787/mcp
 | `bridge_ping` | Minimal authenticated MCP health check. |
 | `auth_whoami` | Shows the OAuth client attached to the current token. |
 | `save_probe` / `read_probe` | Simple connector testing tools for non-sensitive strings. |
+| `run_output_probe` | Returns a large checkpointed payload for measuring one MCP tool result through a named harness. |
+| `submit_output_probe_observation` | Validates the canaries visible to the model and records the harness result. |
 | `list_session_groups` | Lists local session groups and their valid `group_id` values. |
 | `create_session` | Creates a new conversation session. |
 | `list_sessions` | Lists saved sessions. |
@@ -113,7 +115,7 @@ The Search button in the admin panel opens an overlay over the complete bridge d
 - Search sources can include conversations, session files, and group files.
 - Each group must be explicitly selected before its content can be embedded or reranked. Unselected groups remain available only in the separate local BM25 lane.
 
-Settings are split into General, Search, and API tabs. Provider keys are encrypted with the bridge secret, are returned only as masked previews, and are shared with the existing AI rename feature where applicable. Vector indexing is disabled by default; the owner can build, stop, rebuild, or delete the index and configure chunking plus refresh thresholds. This search is admin-only and does not add search tools to MCP clients.
+Settings are split into General, Transcript, Search, and API tabs. The Transcript tab creates harness-test instructions, records verified probe results, recommends a safe character limit with a 25% margin, and controls the global transcript chunk character/line limits without a restart. Provider keys are encrypted with the bridge secret, are returned only as masked previews, and are shared with the existing AI rename feature where applicable. Vector indexing is disabled by default; the owner can build, stop, rebuild, or delete the index and configure search chunking plus refresh thresholds. Admin search remains admin-only.
 
 `get_session_overview` returns `response_display_timezone` for the configured bridge display timezone. `save_exchange` returns `assistant_created_at_display` and `assistant_created_at_timezone`; use that returned display timestamp as the user-visible response timestamp. The bridge renders response display timestamps in the configured bridge display timezone, UTC by default, so clients should not convert that value into their own local timezone.
 
