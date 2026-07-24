@@ -33,6 +33,21 @@ def test_admin_viewer_group_ui_contract() -> None:
     assert 'spanCls("file-meta", "No files")' not in viewer
 
 
+def test_admin_viewer_timezone_lives_in_general_settings() -> None:
+    viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
+
+    identity = viewer[
+        viewer.index('<div class="identity-row">'):
+        viewer.index('<section class="toolbar">')
+    ]
+    general = viewer[
+        viewer.index('<section data-settings-panel="general"'):
+        viewer.index('<section data-settings-panel="transcript"')
+    ]
+    assert 'id="timezoneSelect"' not in identity
+    assert 'id="timezoneSelect"' in general
+
+
 def test_admin_viewer_file_workspace_shell_contract() -> None:
     viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
 

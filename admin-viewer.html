@@ -230,9 +230,6 @@
     .identity-row .who-stack { display: grid; gap: .55rem; width: 100%; min-width: 0; }
     .identity-row .who-label { font-size: .68rem; text-transform: uppercase; letter-spacing: .14em; color: var(--faint-ink); }
     .identity-row .who-name { font-size: .86rem; font-weight: 600; overflow-wrap: anywhere; }
-    .timezone-field { display: grid; gap: .28rem; }
-    .timezone-field span { font-size: .66rem; text-transform: uppercase; letter-spacing: .12em; color: var(--faint-ink); }
-
     .toolbar { display: grid; gap: .7rem; padding: 1rem 1.2rem; border-bottom: 1px solid var(--stroke-soft); }
     .search-wrap { position: relative; }
     .search-wrap svg {
@@ -965,10 +962,6 @@
           <div class="who-stack">
             <div class="who-label">Signed in</div>
             <div id="identity" class="who-name">Loading...</div>
-            <label class="timezone-field">
-              <span>Timezone</span>
-              <select id="timezoneSelect" aria-label="Display timezone"></select>
-            </label>
           </div>
         </div>
       </div>
@@ -1185,7 +1178,8 @@
       <div class="settings-content">
         <p id="aiSettingsStatus" class="settings-status" aria-live="polite"></p>
         <section data-settings-panel="general" class="settings-panel">
-          <div class="settings-section-head"><div><h4>General</h4><p>Defaults used by admin automation.</p></div></div>
+          <div class="settings-section-head"><div><h4>General</h4><p>Display and automation defaults for the admin.</p></div></div>
+          <label class="field">Display timezone<select id="timezoneSelect" aria-label="Display timezone"></select></label>
           <label class="field">AI rename model<input id="aiModelInput" type="text" maxlength="96" autocomplete="off"></label>
           <div class="edit-actions"><button type="button" class="primary" id="generalSettingsSave">Save General</button></div>
         </section>
