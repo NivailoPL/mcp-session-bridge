@@ -39,7 +39,7 @@ from app.request_limits import RequestBodyLimitMiddleware
 from app.security import hash_secret
 from app.session_package import render_session_overview, render_session_transcript_chunk
 from app.settings import ROOT, load_settings
-from app.storage import PdfStorageQuotaError, Store, session_file_payload
+from app.storage import PdfStorageQuotaError, SessionFileConflictError, Store, session_file_payload
 from app.time_format import (
     DEFAULT_DISPLAY_TIMEZONE_NAME,
     DISPLAY_TIMEZONE_SETTING_KEY,
@@ -49,12 +49,13 @@ from app.time_format import (
 
 MANUAL_CONTEXT_ID = "manual-context"
 SERVER_INSTRUCTIONS = (
-    "MCP Session Bridge is a shared transcript bridge for multi-model conversations. "
-    "User context is supplied manually outside MCP. With a known session_id, call "
+    "MCP Session Bridge shares model transcripts. Sessions are unlisted: without a "
+    "session_id, ask the user or create a new session; never enumerate or guess sessions. With a "
+    "known session_id, call "
     "get_session_overview, then get_last_speaker; fetch every get_session_transcript_chunk before "
     "answering unless get_last_speaker says you wrote the last turn and still have it locally. "
     "Always call save_exchange with the full user message and response before answering. Use "
-    "list_session_groups before create_session; list_sessions finds a session."
+    "list_session_groups before create_session."
 )
 
 settings = load_settings()
@@ -590,26 +591,6 @@ def create_session(title: str = "", group_id: str = "") -> dict[str, Any]:
 
 
 @mcp.tool()
-def list_sessions() -> dict[str, Any]:
-    """List saved brainstorming sessions."""
-    sessions = []
-    for session in store.list_sessions():
-        sessions.append(
-            {
-                "session_id": session["session_id"],
-                "title": session["title"],
-                "group_id": session["group_id"],
-                "group": session["group"],
-                "title_is_auto": session["title_is_auto"],
-                "created_at": session["created_at"],
-                "updated_at": session["updated_at"],
-                "exchange_count": session["exchange_count"],
-            }
-        )
-    return {"ok": True, "sessions": sessions}
-
-
-@mcp.tool()
 def get_session_overview(session_id: str) -> dict[str, Any]:
     """Return lightweight session metadata and transcript chunking information, without transcript content."""
     session = store.get_session(session_id)
@@ -860,23 +841,26 @@ async def upload_group_pdf(
 
 
 @mcp.tool()
-def list_session_files(session_id: str = "", group_id: str = "") -> dict[str, Any]:
-    """List uploaded text and PDF files, optionally filtered by session_id and/or group_id."""
-    return {
-        "ok": True,
-        "files": store.list_session_files(
-            session_id=session_id.strip() or None,
-            group_id=group_id.strip() or None,
-        ),
-    }
+def list_session_files(session_id: str) -> dict[str, Any]:
+    """List files belonging to a session or its current group."""
+    try:
+        files = store.list_session_files_for_session(session_id)
+    except ValueError as exc:
+        return {"ok": False, "error": str(exc)}
+    return {"ok": True, "files": files}
 
 
 @mcp.tool()
-def download_session_file(file_id: int) -> dict[str, Any]:
-    """Read text content by file_id; for PDFs this returns extracted text, never original bytes."""
-    saved = store.get_session_file(file_id)
+def download_session_file(session_id: str, file_id: int) -> dict[str, Any]:
+    """Read a file visible to a session; PDFs return extracted text, never original bytes."""
+    try:
+        saved = store.get_session_file_for_session(session_id, file_id)
+    except SessionFileConflictError:
+        saved = None
+    except ValueError as exc:
+        return {"ok": False, "error": str(exc)}
     if saved is None:
-        return {"ok": False, "error": f"Unknown file_id: {file_id}"}
+        return {"ok": False, "error": "File is unavailable for this session."}
     return {"ok": True, "file": session_file_payload(saved, include_content=True)}
 
 

@@ -33,6 +33,46 @@ def test_admin_viewer_group_ui_contract() -> None:
     assert 'spanCls("file-meta", "No files")' not in viewer
 
 
+def test_admin_viewer_timezone_lives_in_general_settings() -> None:
+    viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
+
+    identity = viewer[
+        viewer.index('<div class="identity-row">'):
+        viewer.index('<section class="toolbar">')
+    ]
+    general = viewer[
+        viewer.index('<section data-settings-panel="general"'):
+        viewer.index('<section data-settings-panel="transcript"')
+    ]
+    assert 'id="timezoneSelect"' not in identity
+    assert 'id="timezoneSelect"' in general
+
+
+def test_admin_viewer_session_move_requires_explicit_confirmation() -> None:
+    viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
+
+    assert 'id="sessionMoveDialog"' in viewer
+    assert 'id="sessionMoveGroupList"' in viewer
+    assert 'id="sessionMoveConfirmation"' in viewer
+    assert 'id="sessionMoveConfirm"' in viewer
+    assert 'button("Move", (event) =>' in viewer
+    assert 'openSessionMoveDialog(session.session_id);' in viewer
+    assert 'openSessionMoveDialog(state.selectedSession.session_id, groupId);' in viewer
+    assert (
+        'Session ${pending.sessionId} will be moved from group '
+        '${sourceGroup.name} to ${destinationGroup.name}.'
+    ) in viewer
+    assert 'await moveSession(pending.sessionId, pending.destinationGroupId);' in viewer
+    selection_flow = viewer[
+        viewer.index("async function moveSelectedSession"):
+        viewer.index("function openSessionMoveDialog")
+    ]
+    assert "api(" not in selection_flow
+    assert 'const movedSessionIsVisible = filteredSessions().some' in viewer
+    assert 'else await loadSession("");' in viewer
+    assert "Session files will stay with the conversation." in viewer
+
+
 def test_admin_viewer_file_workspace_shell_contract() -> None:
     viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
 
@@ -932,7 +972,7 @@ def test_admin_file_workspace_stays_consistent_with_mcp_reads(tmp_path, monkeypa
     for session_id in ("s1", "s2"):
         assert [item["file_id"] for item in client.get(f"/admin/api/sessions/{session_id}").json()["files"]["group"]] == [file_id]
         assert [item["file_id"] for item in main.get_session_overview(session_id)["files"]["group"]] == [file_id]
-    assert [item["file_id"] for item in main.list_session_files(group_id="ideas")["files"]] == [file_id]
+    assert [item["file_id"] for item in main.list_session_files(session_id="s2")["files"]] == [file_id]
 
     moved_to_session = client.patch(path, json={"scope_type": "session"}, headers=headers)
     assert moved_to_session.status_code == 200
@@ -951,7 +991,7 @@ def test_admin_file_workspace_stays_consistent_with_mcp_reads(tmp_path, monkeypa
     assert current["file_id"] == file_id
     assert current["sha256"] != original["sha256"]
     assert current["size_bytes"] == len("Updated draft".encode("utf-8"))
-    assert main.download_session_file(file_id)["file"]["content"] == "Updated draft"
+    assert main.download_session_file(session_id="s1", file_id=file_id)["file"]["content"] == "Updated draft"
 
     stale = client.patch(
         path,
@@ -959,7 +999,7 @@ def test_admin_file_workspace_stays_consistent_with_mcp_reads(tmp_path, monkeypa
         headers=headers,
     )
     assert stale.status_code == 409
-    assert main.download_session_file(file_id)["file"]["content"] == "Updated draft"
+    assert main.download_session_file(session_id="s1", file_id=file_id)["file"]["content"] == "Updated draft"
 
     assert client.patch(path, json={"scope_type": "group"}, headers=headers).status_code == 200
     assert [item["file_id"] for item in main.get_session_overview("s2")["files"]["group"]] == [file_id]
@@ -970,8 +1010,11 @@ def test_admin_file_workspace_stays_consistent_with_mcp_reads(tmp_path, monkeypa
         admin_files = client.get(f"/admin/api/sessions/{session_id}").json()["files"]
         assert admin_files == {"session": [], "group": []}
         assert main.get_session_overview(session_id)["files"] == {"session": [], "group": []}
-    assert main.list_session_files(session_id="s1", group_id="ideas")["files"] == []
-    assert main.download_session_file(file_id) == {"ok": False, "error": f"Unknown file_id: {file_id}"}
+    assert main.list_session_files(session_id="s1")["files"] == []
+    assert main.download_session_file(session_id="s1", file_id=file_id) == {
+        "ok": False,
+        "error": "File is unavailable for this session.",
+    }
 
 
 def _load_main(tmp_path: Path, monkeypatch):

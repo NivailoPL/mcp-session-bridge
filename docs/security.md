@@ -32,6 +32,12 @@ Never use `git add -f` for a runtime data or secret path. Keep production backup
 - MCP tool calls require a bearer token with the configured `BRIDGE_SCOPE`.
 - Dynamic client registration is enabled for compatible remote MCP clients.
 
+## Unlisted Sessions
+
+Public MCP tools do not enumerate session IDs. A model without an ID must ask the user or create a new session, and file reads are limited to the named session plus its current group.
+
+Unlisted sessions are protection against accidental discovery, not access control or a project-level ACL. The bridge does not know Claude Project or other client project boundaries. Any client with a valid bridge token and a known `session_id` can use the existing handoff tools for that session, so treat IDs as sensitive references and share them only with the intended project or conversation.
+
 ## Owner Login
 
 The owner login protects the OAuth login form and admin UI. Generate the password hash with:
