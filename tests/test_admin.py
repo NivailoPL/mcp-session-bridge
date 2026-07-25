@@ -1291,6 +1291,8 @@ def test_admin_viewer_rag_settings_and_search_overlay_contract() -> None:
     assert "It cannot use OpenAI embeddings or Cohere reranking." in viewer
     assert ".rag-group-option.is-sensitive:hover .rag-sensitive-help" in viewer
     assert ".rag-group-option.is-sensitive:focus-visible .rag-sensitive-help" in viewer
+    assert "left: 0; right: 0; width: auto; box-sizing: border-box;" in viewer
+    assert "width: min(22rem, calc(100vw - 3rem))" not in viewer
     assert 'note.textContent = "Sensitive · local search only"' not in viewer
     assert 'id="indexRebuild"' in viewer
     assert 'id="indexReadyCheck"' in viewer
