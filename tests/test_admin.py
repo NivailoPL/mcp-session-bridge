@@ -55,6 +55,25 @@ def test_admin_viewer_sensitive_group_privacy_contract() -> None:
     assert "Sensitive · local search only" in viewer
     assert 'payload.is_sensitive = dom.groupSensitiveButton.getAttribute("aria-pressed") === "true";' in viewer
     assert "mcp-admin:sensitive" not in viewer
+    name_field = viewer.index('<label class="field">Name')
+    sensitive_control = viewer.index('id="groupSensitiveControl"')
+    color_field = viewer.index('<label class="field">Color')
+    assert name_field < sensitive_control < color_field
+    assert 'class="sensitive-help-trigger"' in viewer
+    assert 'aria-describedby="groupSensitiveNote"' in viewer
+    assert 'id="groupSensitiveNote"' in viewer
+    assert 'role="tooltip"' in viewer
+    assert ".sensitive-help:hover .sensitive-help-box" in viewer
+    assert ".sensitive-help:focus-within .sensitive-help-box" in viewer
+    assert ".sensitive-control { position: relative;" in viewer
+    assert "top: calc(100% + .45rem); left: 0;" in viewer
+
+    group_button = viewer[viewer.index("function groupButton"):viewer.index("function renderGroupActions")]
+    assert 'node.innerHTML = iconSvg(group.icon_key || "folder");' in group_button
+    assert 'const badge = spanCls("group-sensitive-badge");' in group_button
+    assert "badge.innerHTML = sensitiveIconSvg();" in group_button
+    assert "group.is_sensitive ? sensitiveIconSvg()" not in group_button
+
 
     all_sessions_guard = viewer[
         viewer.index("const cardIsGuarded = state.activeGroupId === \"all\""):

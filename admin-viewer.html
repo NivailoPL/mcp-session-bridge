@@ -272,6 +272,16 @@
       border-color: color-mix(in oklab, var(--g, var(--muted)) 30%, transparent);
     }
     .group-filter svg { width: 19px; height: 19px; }
+    .group-sensitive-badge {
+      position: absolute; right: -.16rem; bottom: -.16rem;
+      display: grid; place-items: center;
+      width: 1rem; height: 1rem;
+      border: 1px solid rgba(251, 191, 36, .58); border-radius: 999px;
+      background: #11141b; color: var(--warn);
+      box-shadow: 0 2px 7px rgba(0, 0, 0, .42);
+      pointer-events: none;
+    }
+    .group-filter .group-sensitive-badge svg { width: 10px; height: 10px; }
     .group-filter::after {
       content: attr(data-count);
       position: absolute; top: 0; right: 0;
@@ -733,12 +743,38 @@
     .icon-choice { min-height: 2.35rem; padding: 0; border-radius: 8px; }
     .icon-choice svg { width: 19px; height: 19px; }
     .icon-choice.is-active { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-ink); }
-    .sensitive-toggle { justify-content: flex-start; width: 100%; }
-    .sensitive-toggle svg { width: 18px; height: 18px; }
+    .sensitive-control { position: relative; display: flex; align-items: center; gap: .42rem; margin-top: -.35rem; }
+    .sensitive-control[hidden] { display: none; }
+    .sensitive-toggle {
+      display: inline-flex; align-items: center; justify-content: center; gap: .38rem;
+      width: auto; min-height: 2rem; padding: .34rem .62rem;
+      border-radius: 8px; font-size: .78rem;
+    }
+    .sensitive-toggle-icon { display: inline-flex; align-items: center; justify-content: center; line-height: 0; }
+    .sensitive-toggle svg { width: 14px; height: 14px; transform: none; }
     .sensitive-toggle[aria-pressed="true"] {
       border-color: rgba(251, 191, 36, .42); background: var(--warn-soft); color: var(--warn);
     }
-    .sensitive-toggle-note { margin: -.35rem 0 0; color: var(--muted); font-size: .75rem; }
+    .sensitive-help { display: inline-flex; }
+    .sensitive-help-trigger {
+      display: inline-grid; place-items: center;
+      width: 1.65rem; min-height: 1.65rem; padding: 0;
+      border-radius: 999px; color: var(--muted);
+      font-size: .72rem; font-weight: 800;
+    }
+    .sensitive-help-box {
+      position: absolute; z-index: 30; top: calc(100% + .45rem); left: 0;
+      width: min(20rem, calc(100vw - 3rem)); padding: .7rem .8rem;
+      border: 1px solid var(--stroke); border-radius: 9px;
+      background: #171a22; color: var(--muted); box-shadow: var(--shadow-pop);
+      font-size: .74rem; line-height: 1.45;
+      opacity: 0; visibility: hidden; transform: translateY(-.2rem);
+      pointer-events: none; transition: opacity .14s ease, transform .14s ease, visibility .14s ease;
+    }
+    .sensitive-help:hover .sensitive-help-box,
+    .sensitive-help:focus-within .sensitive-help-box {
+      opacity: 1; visibility: visible; transform: translateY(0);
+    }
     .session-move-dialog { width: min(31rem, calc(100vw - 2rem)); }
     .session-move-group-list { display: grid; gap: .45rem; max-height: min(22rem, 52vh); overflow: auto; }
     .session-move-group {
@@ -1135,6 +1171,16 @@
         <label class="field">Name
           <input id="groupNameInput" type="text" maxlength="48" required>
         </label>
+        <div id="groupSensitiveControl" class="sensitive-control" hidden>
+          <button id="groupSensitiveButton" type="button" class="sensitive-toggle" aria-pressed="false">
+            <span aria-hidden="true" class="sensitive-toggle-icon"></span>
+            <span>Sensitive</span>
+          </button>
+          <span class="sensitive-help">
+            <button type="button" class="sensitive-help-trigger" aria-label="About sensitive groups" aria-describedby="groupSensitiveNote">?</button>
+            <span id="groupSensitiveNote" class="sensitive-help-box" role="tooltip">Sensitive groups stay available in local BM25 search, but are excluded from OpenAI embeddings and Cohere reranking. Their session list and conversation preview are blurred until revealed.</span>
+          </span>
+        </div>
         <label class="field">Color
           <input id="groupColorInput" type="color" value="#22c55e">
         </label>
@@ -1143,11 +1189,6 @@
           <label class="field">Icon</label>
           <div id="iconGrid" class="icon-grid" aria-label="Icon gallery"></div>
         </div>
-        <button id="groupSensitiveButton" type="button" class="sensitive-toggle" aria-pressed="false" hidden>
-          <span aria-hidden="true" class="sensitive-toggle-icon"></span>
-          <span>Sensitive</span>
-        </button>
-        <p id="groupSensitiveNote" class="sensitive-toggle-note" hidden>Keep this group out of external AI processing and obscure it in the admin viewer.</p>
         <div class="edit-actions">
           <button type="submit" class="primary">Save group</button>
           <button type="button" class="ghost" id="groupCancelButton">Cancel</button>
@@ -1583,8 +1624,8 @@
         groupIdInput: document.getElementById("groupIdInput"),
         groupList: document.getElementById("groupList"),
         groupNameInput: document.getElementById("groupNameInput"),
+        groupSensitiveControl: document.getElementById("groupSensitiveControl"),
         groupSensitiveButton: document.getElementById("groupSensitiveButton"),
-        groupSensitiveNote: document.getElementById("groupSensitiveNote"),
         iconGrid: document.getElementById("iconGrid"),
         identity: document.getElementById("identity"),
         layoutSeg: document.getElementById("layoutSeg"),
@@ -2489,7 +2530,13 @@
         node.setAttribute("aria-label", `${node.title}${sensitivityLabel}, ${conversationCount} ${conversationCount === 1 ? "conversation" : "conversations"}`);
         node.style.setProperty("--g", group.color || "#8b93a7");
         if (group.group_id === state.activeGroupId) node.classList.add("is-active");
-        node.innerHTML = group.is_sensitive ? sensitiveIconSvg() : iconSvg(group.icon_key || "folder");
+        node.innerHTML = iconSvg(group.icon_key || "folder");
+        if (group.is_sensitive) {
+          const badge = spanCls("group-sensitive-badge");
+          badge.setAttribute("aria-hidden", "true");
+          badge.innerHTML = sensitiveIconSvg();
+          node.append(badge);
+        }
         node.addEventListener("click", () => {
           state.activeGroupId = group.group_id;
           localStorage.setItem("mcp-admin:group", state.activeGroupId);
@@ -3836,8 +3883,7 @@
         dom.groupColorInput.value = group ? group.color : "#22c55e";
         dom.groupIconInput.value = group ? group.icon_key : "ideas";
         dom.groupDeleteButton.hidden = !group;
-        dom.groupSensitiveButton.hidden = !group;
-        dom.groupSensitiveNote.hidden = !group;
+        dom.groupSensitiveControl.hidden = !group;
         dom.groupSensitiveButton.setAttribute("aria-pressed", String(Boolean(group?.is_sensitive)));
         renderIconGrid(dom.groupIconInput.value);
         dom.groupDialog.showModal();
@@ -5123,7 +5169,7 @@
       }
 
       function sensitiveIconSvg() {
-        return `<svg ${GROUP_ICON_SVG_ATTRS}><path d="M3 3l18 18"></path><path d="M10.6 10.7a2 2 0 0 0 2.7 2.7"></path><path d="M9.9 4.2A10.8 10.8 0 0 1 12 4c5.5 0 9 6 9 6a16.2 16.2 0 0 1-2.1 2.8"></path><path d="M6.6 6.7A16.4 16.4 0 0 0 3 10s3.5 6 9 6c1.2 0 2.3-.3 3.3-.7"></path></svg>`;
+        return `<svg ${GROUP_ICON_SVG_ATTRS}><path d="M10.73 5.08A10.4 10.4 0 0 1 12 5c5.5 0 9 7 9 7a16.7 16.7 0 0 1-2.1 3"></path><path d="M14.1 14.2a3 3 0 0 1-4.3-4.3"></path><path d="M17.5 17.5A9.7 9.7 0 0 1 12 19c-5.5 0-9-7-9-7a16 16 0 0 1 3.6-4.7"></path><path d="M3 3l18 18"></path></svg>`;
       }
 
       for (const icon of document.querySelectorAll(".sensitive-overlay-icon, .sensitive-toggle-icon")) {
