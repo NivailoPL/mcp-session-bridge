@@ -69,6 +69,16 @@ def test_admin_viewer_sensitive_group_privacy_contract() -> None:
     assert "selectSession();" not in reveal_handler
 
 
+def test_admin_viewer_initializes_sensitive_icons_after_svg_constants() -> None:
+    viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
+
+    svg_constants = viewer.index("const GROUP_ICON_SVG_ATTRS")
+    static_icon_initialization = viewer.index(
+        'for (const icon of document.querySelectorAll(".sensitive-overlay-icon, .sensitive-toggle-icon"))'
+    )
+    assert svg_constants < static_icon_initialization
+
+
 def test_admin_viewer_timezone_lives_in_general_settings() -> None:
     viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
 
