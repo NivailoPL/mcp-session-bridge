@@ -52,7 +52,7 @@ def test_admin_viewer_sensitive_group_privacy_contract() -> None:
     assert "state.revealedSensitiveSessionLists.add(groupId);" in viewer
     assert "state.revealedSensitiveThreads.add(groupId);" in viewer
     assert 'input.disabled = Boolean(group.is_sensitive);' in viewer
-    assert "Sensitive · local search only" in viewer
+    assert "This group stays in local BM25 search." in viewer
     assert 'payload.is_sensitive = dom.groupSensitiveButton.getAttribute("aria-pressed") === "true";' in viewer
     assert "mcp-admin:sensitive" not in viewer
     name_field = viewer.index('<label class="field">Name')
@@ -1278,6 +1278,20 @@ def test_admin_viewer_rag_settings_and_search_overlay_contract() -> None:
     assert 'id="ragGroupList"' in viewer
     assert 'Groups allowed for external processing' in viewer
     assert 'Only checked groups may leave this server' in viewer
+    assert 'className = "rag-group-name"' in viewer
+    assert 'className = "rag-sensitive-mark"' in viewer
+    assert 'className = "rag-sensitive-help"' in viewer
+    assert 'help.setAttribute("role", "tooltip")' in viewer
+    assert 'label.setAttribute("aria-disabled", "true")' in viewer
+    assert 'label.setAttribute("aria-label", `${group.name}, sensitive group`)' in viewer
+    assert 'label.setAttribute("aria-describedby", help.id)' in viewer
+    assert "label.tabIndex = 0" in viewer
+    assert 'icon.innerHTML = iconSvg(group.icon_key || "folder")' in viewer
+    assert "This group stays in local BM25 search." in viewer
+    assert "It cannot use OpenAI embeddings or Cohere reranking." in viewer
+    assert ".rag-group-option.is-sensitive:hover .rag-sensitive-help" in viewer
+    assert ".rag-group-option.is-sensitive:focus-visible .rag-sensitive-help" in viewer
+    assert 'note.textContent = "Sensitive · local search only"' not in viewer
     assert 'id="indexRebuild"' in viewer
     assert 'id="indexReadyCheck"' in viewer
     assert 'id="indexBuiltAt"' in viewer
