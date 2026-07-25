@@ -1280,6 +1280,7 @@ def test_admin_viewer_rag_settings_and_search_overlay_contract() -> None:
     assert 'Only checked groups may leave this server' in viewer
     assert 'className = "rag-group-name"' in viewer
     assert 'className = "rag-sensitive-mark"' in viewer
+    assert ".rag-sensitive-mark { display: grid; place-items: center; color: var(--warn); }" in viewer
     assert 'className = "rag-sensitive-help"' in viewer
     assert 'help.setAttribute("role", "tooltip")' in viewer
     assert 'label.setAttribute("aria-disabled", "true")' in viewer
