@@ -1,4 +1,5 @@
 import sqlite3
+import threading
 
 import pytest
 
@@ -190,8 +191,18 @@ def test_schema_uses_fts5_and_keeps_private_documents_local(tmp_path):
 
 def test_rebuild_sends_only_approved_groups_to_openai(tmp_path):
     store = make_store(tmp_path)
+    store.update_session_group("private", is_sensitive=True)
     store.save_exchange("public-session", "test", "public nectarine evidence", "public reply")
     store.save_exchange("private-session", "test", "private dragonfruit evidence", "private reply")
+    store.save_session_file(
+        "public-session", "public.md", "public plum file evidence", mime_type="text/markdown"
+    )
+    store.save_session_file(
+        "private-session", "secret.md", "private mangosteen session file", mime_type="text/markdown"
+    )
+    store.save_group_file(
+        "private", "shared-secret.md", "private kumquat group file", mime_type="text/markdown"
+    )
     service = SearchService(store)
     sent: list[str] = []
 
@@ -202,7 +213,7 @@ def test_rebuild_sends_only_approved_groups_to_openai(tmp_path):
     service.embed_texts = fake_embed
     config = SearchConfig(
         enabled=True,
-        included_group_ids=("uncategorized",),
+        included_group_ids=("uncategorized", "private"),
         chunk_size=64,
         chunk_overlap=8,
         embedding_dimensions=2,
@@ -212,7 +223,36 @@ def test_rebuild_sends_only_approved_groups_to_openai(tmp_path):
     assert status["status"] == "ready"
     assert status["active_generation"] == 1
     assert any("nectarine" in text for text in sent)
+    assert any("plum" in text for text in sent)
     assert all("dragonfruit" not in text for text in sent)
+    assert all("mangosteen" not in text for text in sent)
+    assert all("kumquat" not in text for text in sent)
+
+
+def test_sensitive_scope_mutation_serializes_rebuild_start(tmp_path):
+    store = make_store(tmp_path)
+    service = SearchService(store)
+    stale_config = SearchConfig(enabled=True, included_group_ids=("private",))
+    started = threading.Event()
+    errors: list[str] = []
+
+    def start_stale_rebuild() -> None:
+        started.set()
+        try:
+            service.start_rebuild("test-key", stale_config)
+        except ValueError as exc:
+            errors.append(str(exc))
+
+    with service.external_scope_mutation():
+        thread = threading.Thread(target=start_stale_rebuild)
+        thread.start()
+        assert started.wait(timeout=1)
+        assert thread.is_alive()
+        store.update_session_group("private", is_sensitive=True)
+
+    thread.join(timeout=1)
+    assert errors == ["Select at least one group before building the vector index"]
+    assert service.index_status(sync=False)["status"] == "empty"
 
 
 def test_failed_rebuild_preserves_previous_generation(tmp_path):
@@ -319,21 +359,43 @@ def test_cancelled_queued_build_never_calls_provider(tmp_path, monkeypatch):
 
 def test_hybrid_search_keeps_unapproved_bm25_results_in_local_lane(tmp_path):
     store = make_store(tmp_path)
+    store.update_session_group("private", is_sensitive=True)
     store.save_exchange("public-session", "test", "shared lychee evidence", "public reply")
     store.save_exchange("private-session", "test", "private lychee evidence", "private reply")
+    store.save_session_file(
+        "private-session", "secret.md", "sensitive lychee session file", mime_type="text/markdown"
+    )
+    store.save_group_file(
+        "private", "shared-secret.md", "sensitive lychee group file", mime_type="text/markdown"
+    )
     service = SearchService(store)
     config = SearchConfig(
         enabled=True,
-        included_group_ids=("uncategorized",),
+        included_group_ids=("uncategorized", "private"),
+        cohere_rerank_enabled=True,
         chunk_size=64,
         chunk_overlap=8,
         embedding_dimensions=2,
     )
     service.embed_texts = lambda api_key, texts, config: [[1.0, 0.0] for _ in texts]
+    reranked_documents: list[str] = []
+
+    def fake_rerank(api_key, query, documents, config):
+        reranked_documents.extend(documents)
+        return [(index, 1.0) for index in range(len(documents))]
+
+    service.rerank = fake_rerank
     service.rebuild_index("test-key", config)
 
-    result = service.hybrid_search("lychee", openai_api_key="test-key", config=config)
+    result = service.hybrid_search(
+        "lychee",
+        openai_api_key="test-key",
+        cohere_api_key="cohere-key",
+        config=config,
+    )
 
     assert {item["group_id"] for item in result["results"]} == {"uncategorized"}
     assert {item["group_id"] for item in result["local_only_results"]} == {"private"}
     assert result["local_only_results"][0]["pipeline"] == ["BM25", "Local only"]
+    assert all("private" not in document for document in reranked_documents)
+    assert all("sensitive" not in document for document in reranked_documents)

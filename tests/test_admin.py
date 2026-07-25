@@ -11,6 +11,7 @@ import pytest
 from starlette.testclient import TestClient
 
 from app.security import password_hash
+from app.search import SearchConfig
 from app.storage import SESSION_GROUP_ICON_KEYS
 from app.time_format import DISPLAY_TIMEZONE_SETTING_KEY
 from tests.pdf_samples import make_pdf
@@ -31,6 +32,41 @@ def test_admin_viewer_group_ui_contract() -> None:
     assert 'spanCls("group-file-identity")' in viewer
     assert 'setStatus(`Selected ${sessionId}.`, "ok");' not in viewer
     assert 'spanCls("file-meta", "No files")' not in viewer
+
+
+def test_admin_viewer_sensitive_group_privacy_contract() -> None:
+    viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
+
+    assert 'id="groupSensitiveButton"' in viewer
+    assert 'aria-pressed="false"' in viewer
+    assert 'function sensitiveIconSvg()' in viewer
+    assert viewer.count("sensitiveIconSvg()") >= 4
+    assert 'revealedSensitiveSessionLists: new Set()' in viewer
+    assert 'revealedSensitiveThreads: new Set()' in viewer
+    assert 'id="sessionListSensitiveOverlay"' in viewer
+    assert 'id="threadSensitiveOverlay"' in viewer
+    assert viewer.count("Sensitive content") >= 2
+    assert viewer.count("Click to reveal") >= 2
+    assert "dom.sessionList.inert = listIsGuarded;" in viewer
+    assert "dom.threadSensitiveContent.inert = threadIsGuarded;" in viewer
+    assert "state.revealedSensitiveSessionLists.add(groupId);" in viewer
+    assert "state.revealedSensitiveThreads.add(groupId);" in viewer
+    assert 'input.disabled = Boolean(group.is_sensitive);' in viewer
+    assert "Sensitive · local search only" in viewer
+    assert 'payload.is_sensitive = dom.groupSensitiveButton.getAttribute("aria-pressed") === "true";' in viewer
+    assert "mcp-admin:sensitive" not in viewer
+
+    all_sessions_guard = viewer[
+        viewer.index("const cardIsGuarded = state.activeGroupId === \"all\""):
+        viewer.index("dom.sessionList.append(item);", viewer.index("const cardIsGuarded"))
+    ]
+    assert 'if (!cardIsGuarded) {' in all_sessions_guard
+    assert 'item.addEventListener("keydown"' in all_sessions_guard
+    assert "content.inert = true;" in all_sessions_guard
+    reveal_handler = all_sessions_guard[all_sessions_guard.index('overlay.addEventListener("click"'):]
+    assert "state.revealedSensitiveSessionLists.add(groupId);" in reveal_handler
+    assert "renderSessions();" in reveal_handler
+    assert "selectSession();" not in reveal_handler
 
 
 def test_admin_viewer_timezone_lives_in_general_settings() -> None:
@@ -539,6 +575,56 @@ def test_admin_can_manage_session_groups_and_move_sessions(tmp_path, monkeypatch
         headers={"x-csrf-token": csrf_token},
     )
     assert bad_move.status_code == 404
+
+
+def test_admin_sensitive_group_prunes_and_blocks_external_rag_scope(tmp_path, monkeypatch) -> None:
+    main = _load_main(tmp_path, monkeypatch)
+    main.store.create_session_group("Private", "#ef4444", "lock", group_id="private")
+    client = TestClient(main.app, base_url="http://127.0.0.1:8787")
+    client.post(
+        "/admin/login",
+        data={"username": "owner", "password": "secret-admin-password", "next": "/admin/sessions"},
+        follow_redirects=False,
+    )
+    headers = {"x-csrf-token": client.get("/admin/api/me").json()["csrf_token"]}
+    path = "/admin/api/session-groups/private"
+    monkeypatch.setattr(main.admin, "_read_provider_key", lambda provider: "test-key")
+
+    main.admin.search.set_config(SearchConfig(enabled=True, included_group_ids=("uncategorized",)))
+    system_group = client.patch(
+        "/admin/api/session-groups/uncategorized",
+        json={"is_sensitive": True},
+        headers=headers,
+    )
+    assert system_group.status_code == 400
+    assert main.store.get_session_group("uncategorized").is_sensitive is False
+    assert main.admin.search.get_config().included_group_ids == ("uncategorized",)
+
+    main.admin.search.set_config(SearchConfig(enabled=True, included_group_ids=("private",)))
+    enabled = client.patch(path, json={"is_sensitive": True}, headers=headers)
+    assert enabled.status_code == 200
+    assert enabled.json()["group"]["is_sensitive"] is True
+    assert main.admin.search.get_config().included_group_ids == ()
+
+    disabled = client.patch(path, json={"is_sensitive": False}, headers=headers)
+    assert disabled.status_code == 200
+    assert disabled.json()["group"]["is_sensitive"] is False
+    assert main.admin.search.get_config().included_group_ids == ()
+
+    assert client.patch(path, json={"is_sensitive": "true"}, headers=headers).status_code == 400
+    client.patch(path, json={"is_sensitive": True}, headers=headers)
+    sensitive_config = SearchConfig(enabled=True, included_group_ids=("private",)).to_dict()
+    assert client.put("/admin/api/settings/search", json=sensitive_config, headers=headers).status_code == 400
+    assert client.post("/admin/api/search/index/estimate", json=sensitive_config, headers=headers).status_code == 400
+
+    client.patch(path, json={"is_sensitive": False}, headers=headers)
+    main.admin.search.set_config(SearchConfig(enabled=True, included_group_ids=("private",)))
+    with main.admin.search._connect() as conn:
+        conn.execute("UPDATE search_index_state SET status='building' WHERE singleton=1")
+    blocked = client.patch(path, json={"is_sensitive": True}, headers=headers)
+    assert blocked.status_code == 409
+    assert main.store.get_session_group("private").is_sensitive is False
+    assert main.admin.search.get_config().included_group_ids == ("private",)
 
 
 def test_admin_can_view_session_and_group_files(tmp_path, monkeypatch) -> None:

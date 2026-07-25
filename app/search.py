@@ -7,8 +7,9 @@ import re
 import sqlite3
 import threading
 import time
-from dataclasses import asdict, dataclass, fields
-from typing import Any, Iterable, Sequence
+from contextlib import contextmanager
+from dataclasses import asdict, dataclass, fields, replace
+from typing import Any, Iterable, Iterator, Sequence
 
 import httpx
 import sqlite_vec
@@ -193,6 +194,7 @@ def _parse_highlighted(value: str) -> tuple[str, list[dict[str, int]]]:
 class SearchService:
     def __init__(self, store: Store):
         self.store = store
+        self._external_scope_lock = threading.RLock()
         self._init_schema()
         with self._connect() as conn:
             conn.execute(
@@ -335,8 +337,8 @@ class SearchService:
             return SearchConfig()
 
     def set_config(self, config: SearchConfig) -> SearchConfig:
-        validated = config.validate()
-        previous = self.get_config()
+        validated = self.effective_external_config(config.validate())
+        previous = self.effective_external_config(self.get_config())
         self.store.set_app_setting(SEARCH_CONFIG_SETTING, json.dumps(validated.to_dict(), separators=(",", ":")))
         if (
             validated.enabled
@@ -350,6 +352,27 @@ class SearchService:
                         WHERE singleton=1"""
                 )
         return validated
+
+    def sensitive_group_ids(self) -> set[str]:
+        return {
+            group["group_id"]
+            for group in self.store.list_session_groups()
+            if group.get("is_sensitive")
+        }
+
+    def effective_external_config(self, config: SearchConfig) -> SearchConfig:
+        sensitive = self.sensitive_group_ids()
+        included = tuple(
+            group_id for group_id in config.included_group_ids if group_id not in sensitive
+        )
+        if included == config.included_group_ids:
+            return config
+        return replace(config, included_group_ids=included)
+
+    @contextmanager
+    def external_scope_mutation(self) -> Iterator[None]:
+        with self._external_scope_lock:
+            yield
 
     def _source_rows(self) -> list[dict[str, Any]]:
         with self._connect() as conn:
@@ -453,7 +476,7 @@ class SearchService:
 
     def estimate_index(self, config: SearchConfig | None = None) -> dict[str, Any]:
         """Estimate one full vector rebuild without making a provider request."""
-        config = (config or self.get_config()).validate()
+        config = self.effective_external_config((config or self.get_config()).validate())
         self.sync_documents()
         documents: list[sqlite3.Row] = []
         if config.included_group_ids:
@@ -539,7 +562,7 @@ class SearchService:
 
     def partition_basic_candidates(self, query: str, config: SearchConfig | None = None
                                    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-        config = (config or self.get_config()).validate()
+        config = self.effective_external_config((config or self.get_config()).validate())
         candidates = self.basic_search(query, limit=config.bm25_candidates * 2,
                                        source_kinds=config.source_kinds())
         approved_ids = set(config.included_group_ids)
@@ -561,7 +584,7 @@ class SearchService:
         payload["auto_rebuild_suppressed"] = bool(payload["auto_rebuild_suppressed"])
         payload["dirty_document_count"] = dirty
         payload["source_document_count"] = documents
-        config = self.get_config()
+        config = self.effective_external_config(self.get_config())
         payload["needs_rebuild"] = (
             payload["active_generation"] is None
             or payload["index_config_hash"] != config.index_signature()
@@ -656,48 +679,49 @@ class SearchService:
         *,
         queued_build: bool = False,
     ) -> dict[str, Any]:
-        config = (config or self.get_config()).validate()
-        if not config.enabled:
-            raise ValueError("RAG search is disabled")
-        if not config.included_group_ids:
-            raise ValueError("Select at least one group before building the vector index")
-        self.sync_documents()
-        cancelled_before_start = False
-        with self._connect() as conn:
-            state = conn.execute("SELECT * FROM search_index_state WHERE singleton=1").fetchone()
-            if state["status"] == "building" or (
-                state["status"] == "queued" and not queued_build
-            ):
-                raise RuntimeError("A vector index build is already running")
-            if queued_build and state["cancel_requested"]:
-                conn.execute(
-                    """UPDATE search_index_state SET status=CASE WHEN active_generation IS NULL
-                        THEN 'empty' ELSE 'ready' END,cancel_requested=0,
-                        last_error='Vector index build was stopped before it started.'
-                        WHERE singleton=1"""
-                )
-                cancelled_before_start = True
-            generation = int(state["active_generation"] or 0) + 1
-            if cancelled_before_start:
-                documents = []
-            else:
-                source_kinds = config.source_kinds()
-                if not source_kinds:
-                    raise ValueError("Select at least one source type")
-                group_marks = ",".join("?" for _ in config.included_group_ids)
-                kind_marks = ",".join("?" for _ in source_kinds)
-                documents = conn.execute(
-                    f"""SELECT * FROM search_documents
-                        WHERE group_id IN ({group_marks}) AND source_kind IN ({kind_marks})
-                        ORDER BY document_id""",
-                    [*config.included_group_ids, *source_kinds],
-                ).fetchall()
-                conn.execute(
-                    """UPDATE search_index_state SET status='building',queued_at=?,started_at=?,
-                        completed_at=NULL,last_error=NULL,cancel_requested=0,processed_count=0,
-                        document_count=?,auto_rebuild_suppressed=0 WHERE singleton=1""",
-                    (int(time.time()), int(time.time()), len(documents)),
-                )
+        with self._external_scope_lock:
+            config = self.effective_external_config((config or self.get_config()).validate())
+            if not config.enabled:
+                raise ValueError("RAG search is disabled")
+            if not config.included_group_ids:
+                raise ValueError("Select at least one group before building the vector index")
+            self.sync_documents()
+            cancelled_before_start = False
+            with self._connect() as conn:
+                state = conn.execute("SELECT * FROM search_index_state WHERE singleton=1").fetchone()
+                if state["status"] == "building" or (
+                    state["status"] == "queued" and not queued_build
+                ):
+                    raise RuntimeError("A vector index build is already running")
+                if queued_build and state["cancel_requested"]:
+                    conn.execute(
+                        """UPDATE search_index_state SET status=CASE WHEN active_generation IS NULL
+                            THEN 'empty' ELSE 'ready' END,cancel_requested=0,
+                            last_error='Vector index build was stopped before it started.'
+                            WHERE singleton=1"""
+                    )
+                    cancelled_before_start = True
+                generation = int(state["active_generation"] or 0) + 1
+                if cancelled_before_start:
+                    documents = []
+                else:
+                    source_kinds = config.source_kinds()
+                    if not source_kinds:
+                        raise ValueError("Select at least one source type")
+                    group_marks = ",".join("?" for _ in config.included_group_ids)
+                    kind_marks = ",".join("?" for _ in source_kinds)
+                    documents = conn.execute(
+                        f"""SELECT * FROM search_documents
+                            WHERE group_id IN ({group_marks}) AND source_kind IN ({kind_marks})
+                            ORDER BY document_id""",
+                        [*config.included_group_ids, *source_kinds],
+                    ).fetchall()
+                    conn.execute(
+                        """UPDATE search_index_state SET status='building',queued_at=?,started_at=?,
+                            completed_at=NULL,last_error=NULL,cancel_requested=0,processed_count=0,
+                            document_count=?,auto_rebuild_suppressed=0 WHERE singleton=1""",
+                        (int(time.time()), int(time.time()), len(documents)),
+                    )
         if cancelled_before_start:
             return self.index_status(sync=False)
         try:
@@ -771,24 +795,25 @@ class SearchService:
             raise
 
     def start_rebuild(self, openai_api_key: str, config: SearchConfig | None = None) -> dict[str, Any]:
-        config = (config or self.get_config()).validate()
-        if not openai_api_key.strip():
-            raise ValueError("OpenAI API key is not configured")
-        if not config.enabled:
-            raise ValueError("RAG search is disabled")
-        if not config.included_group_ids:
-            raise ValueError("Select at least one group before building the vector index")
-        with self._connect() as conn:
-            status = conn.execute(
-                "SELECT status FROM search_index_state WHERE singleton=1"
-            ).fetchone()[0]
-            if status in {"queued", "building"}:
-                return self.index_status(sync=False)
-            conn.execute(
-                """UPDATE search_index_state SET status='queued',queued_at=?,last_error=NULL,
-                    cancel_requested=0,auto_rebuild_suppressed=0 WHERE singleton=1""",
-                (int(time.time()),),
-            )
+        with self._external_scope_lock:
+            config = self.effective_external_config((config or self.get_config()).validate())
+            if not openai_api_key.strip():
+                raise ValueError("OpenAI API key is not configured")
+            if not config.enabled:
+                raise ValueError("RAG search is disabled")
+            if not config.included_group_ids:
+                raise ValueError("Select at least one group before building the vector index")
+            with self._connect() as conn:
+                status = conn.execute(
+                    "SELECT status FROM search_index_state WHERE singleton=1"
+                ).fetchone()[0]
+                if status in {"queued", "building"}:
+                    return self.index_status(sync=False)
+                conn.execute(
+                    """UPDATE search_index_state SET status='queued',queued_at=?,last_error=NULL,
+                        cancel_requested=0,auto_rebuild_suppressed=0 WHERE singleton=1""",
+                    (int(time.time()),),
+                )
 
         def run() -> None:
             try:
@@ -808,7 +833,7 @@ class SearchService:
         return self.index_status(sync=False)
 
     def maybe_start_rebuild(self, openai_api_key: str) -> dict[str, Any]:
-        config = self.get_config()
+        config = self.effective_external_config(self.get_config())
         status = self.index_status(sync=False)
         if not config.enabled or not openai_api_key:
             return status
@@ -832,6 +857,7 @@ class SearchService:
 
     def _vector_candidates(self, query: str, openai_api_key: str,
                            config: SearchConfig) -> list[dict[str, Any]]:
+        config = self.effective_external_config(config)
         with self._connect() as conn:
             state = conn.execute(
                 """SELECT active_generation,index_config_hash
@@ -870,7 +896,7 @@ class SearchService:
     def hybrid_search(self, query: str, *, openai_api_key: str,
                       cohere_api_key: str = "", config: SearchConfig | None = None
                       ) -> dict[str, Any]:
-        config = (config or self.get_config()).validate()
+        config = self.effective_external_config((config or self.get_config()).validate())
         if not config.enabled:
             raise ValueError("RAG search is disabled")
         approved, local_only = self.partition_basic_candidates(query, config)

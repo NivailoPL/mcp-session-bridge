@@ -244,11 +244,7 @@ class AdminHandlers:
         if parse_error:
             return parse_error
         try:
-            config = SearchConfig.from_dict(payload)
-            known_groups = {item["group_id"] for item in self.store.list_session_groups()}
-            unknown = set(config.included_group_ids) - known_groups
-            if unknown:
-                raise ValueError(f"Unknown group ids: {', '.join(sorted(unknown))}")
+            config = self._validated_search_config(payload)
             previous = self.search.get_config()
             index = self.search.index_status(sync=False)
             build_sensitive_change = (
@@ -366,11 +362,7 @@ class AdminHandlers:
         if parse_error:
             return parse_error
         try:
-            config = SearchConfig.from_dict(payload)
-            known_groups = {item["group_id"] for item in self.store.list_session_groups()}
-            unknown = set(config.included_group_ids) - known_groups
-            if unknown:
-                raise ValueError(f"Unknown group ids: {', '.join(sorted(unknown))}")
+            config = self._validated_search_config(payload)
             estimate = await asyncio.to_thread(self.search.estimate_index, config)
         except (TypeError, ValueError) as exc:
             return self._json_error(str(exc), status_code=400)
@@ -499,14 +491,44 @@ class AdminHandlers:
         payload, parse_error = await _json_body(request)
         if parse_error:
             return parse_error
-        fields: dict[str, str] = {}
+        fields: dict[str, Any] = {}
         for key in ("name", "color", "icon_key"):
             if key in payload:
                 fields[key] = str(payload[key])
+        if "is_sensitive" in payload:
+            if not isinstance(payload["is_sensitive"], bool):
+                return self._json_error("is_sensitive must be a boolean.", status_code=400)
+            fields["is_sensitive"] = payload["is_sensitive"]
         if not fields:
             return self._json_error("No editable session group fields provided.", status_code=400)
         try:
-            group = self.store.update_session_group(request.path_params["group_id"], **fields)
+            group_id = request.path_params["group_id"]
+            with self.search.external_scope_mutation():
+                current = self.store.get_session_group(group_id)
+                if current is None:
+                    raise ValueError(f"Unknown session group: {group_id}")
+                if current.is_system:
+                    raise ValueError("System session groups cannot be edited")
+                enabling_sensitive = fields.get("is_sensitive") is True and not current.is_sensitive
+                config = self.search.get_config()
+                if enabling_sensitive and group_id in config.included_group_ids:
+                    index = self.search.index_status(sync=False)
+                    if index["status"] in {"queued", "building"}:
+                        return self._json_error(
+                            "Stop the active vector build before marking this group sensitive.",
+                            status_code=409,
+                        )
+                    config_payload = config.to_dict()
+                    config_payload["included_group_ids"] = [
+                        item for item in config.included_group_ids if item != group_id
+                    ]
+                    self.search.set_config(SearchConfig.from_dict(config_payload))
+                group = self.store.update_session_group(group_id, **fields)
+                external_config = self.search.effective_external_config(self.search.get_config())
+            if enabling_sensitive and external_config.included_group_ids:
+                await asyncio.to_thread(
+                    self.search.maybe_start_rebuild, self._read_provider_key("openai")
+                )
         except ValueError as exc:
             return self._value_error(exc)
         return JSONResponse(
@@ -1202,6 +1224,22 @@ class AdminHandlers:
         status_code = 404 if message.startswith("Unknown ") else 400
         return self._json_error(message, status_code=status_code)
 
+    def _validated_search_config(self, payload: dict[str, Any]) -> SearchConfig:
+        config = SearchConfig.from_dict(payload)
+        groups = self.store.list_session_groups()
+        known_groups = {item["group_id"] for item in groups}
+        unknown = set(config.included_group_ids) - known_groups
+        if unknown:
+            raise ValueError(f"Unknown group ids: {', '.join(sorted(unknown))}")
+        sensitive = {
+            item["group_id"] for item in groups if item.get("is_sensitive")
+        } & set(config.included_group_ids)
+        if sensitive:
+            raise ValueError(
+                f"Sensitive groups cannot be enabled for external processing: {', '.join(sorted(sensitive))}"
+            )
+        return config
+
     @staticmethod
     def _json_error(message: str, status_code: int) -> JSONResponse:
         return JSONResponse({"ok": False, "error": message}, status_code=status_code, headers=AdminHandlers._no_store_headers())
@@ -1242,6 +1280,7 @@ def _session_group_payload(group: SessionGroupRecord) -> dict[str, Any]:
         "icon_key": group.icon_key,
         "sort_order": group.sort_order,
         "is_system": group.is_system,
+        "is_sensitive": group.is_sensitive,
         "created_at": group.created_at,
         "updated_at": group.updated_at,
         "deleted_at": group.deleted_at,

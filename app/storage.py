@@ -148,6 +148,7 @@ class SessionGroupRecord:
     icon_key: str
     sort_order: int
     is_system: bool
+    is_sensitive: bool
     created_at: int
     updated_at: int
     deleted_at: int | None = None
@@ -334,6 +335,7 @@ class Store:
                     icon_key TEXT NOT NULL,
                     sort_order INTEGER NOT NULL DEFAULT 100,
                     is_system INTEGER NOT NULL DEFAULT 0,
+                    is_sensitive INTEGER NOT NULL DEFAULT 0,
                     created_at INTEGER NOT NULL,
                     updated_at INTEGER NOT NULL,
                     deleted_at INTEGER
@@ -406,6 +408,7 @@ class Store:
             self._ensure_column(conn, "sessions", "context_pack_version", "TEXT")
             self._ensure_column(conn, "sessions", "title_is_auto", "INTEGER NOT NULL DEFAULT 0")
             self._ensure_column(conn, "sessions", "group_id", f"TEXT NOT NULL DEFAULT '{UNCATEGORIZED_GROUP_ID}'")
+            self._ensure_column(conn, "session_groups", "is_sensitive", "INTEGER NOT NULL DEFAULT 0")
             self._ensure_column(conn, "exchanges", "assistant_created_at", "INTEGER")
             self._ensure_column(conn, "exchanges", "deleted_at", "INTEGER")
             self._ensure_column(conn, "exchanges", "deleted_reason", "TEXT")
@@ -868,6 +871,7 @@ class Store:
         name: str | None = None,
         color: str | None = None,
         icon_key: str | None = None,
+        is_sensitive: bool | None = None,
     ) -> SessionGroupRecord:
         resolved_group_id = group_id.strip()
         updates: dict[str, Any] = {}
@@ -877,6 +881,10 @@ class Store:
             updates["color"] = _validate_group_color(color)
         if icon_key is not None:
             updates["icon_key"] = _validate_group_icon_key(icon_key)
+        if is_sensitive is not None:
+            if not isinstance(is_sensitive, bool):
+                raise ValueError("is_sensitive must be a boolean")
+            updates["is_sensitive"] = int(is_sensitive)
         if not updates:
             raise ValueError("No editable session group fields provided")
 
@@ -1568,6 +1576,7 @@ class Store:
                     g.icon_key AS group_icon_key,
                     g.sort_order AS group_sort_order,
                     g.is_system AS group_is_system,
+                    g.is_sensitive AS group_is_sensitive,
                     COALESCE(
                         MAX(CASE
                             WHEN e.deleted_at IS NULL THEN COALESCE(e.assistant_created_at, e.created_at)
@@ -1926,6 +1935,7 @@ def _session_group_from_row(row: sqlite3.Row) -> SessionGroupRecord:
         icon_key=row["icon_key"],
         sort_order=row["sort_order"],
         is_system=bool(row["is_system"]),
+        is_sensitive=bool(row["is_sensitive"]),
         created_at=row["created_at"],
         updated_at=row["updated_at"],
         deleted_at=row["deleted_at"],
@@ -1940,6 +1950,7 @@ def _session_group_payload(group: SessionGroupRecord) -> dict[str, Any]:
         "icon_key": group.icon_key,
         "sort_order": group.sort_order,
         "is_system": group.is_system,
+        "is_sensitive": group.is_sensitive,
         "created_at": group.created_at,
         "updated_at": group.updated_at,
         "deleted_at": group.deleted_at,
@@ -1955,6 +1966,7 @@ def _group_payload_from_join(row: sqlite3.Row) -> dict[str, Any]:
         "icon_key": row["group_icon_key"] or "folder",
         "sort_order": row["group_sort_order"] if row["group_sort_order"] is not None else 0,
         "is_system": bool(row["group_is_system"]) if row["group_is_system"] is not None else False,
+        "is_sensitive": bool(row["group_is_sensitive"]) if row["group_is_sensitive"] is not None else False,
     }
 
 

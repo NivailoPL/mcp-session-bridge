@@ -91,13 +91,22 @@ def test_store_manages_session_groups_and_reassigns_deleted_group(tmp_path) -> N
 
     assert ideas.group_id == "ideas"
     assert ideas.is_system is False
+    assert ideas.is_sensitive is False
     assert session.group_id == "ideas"
     assert store.list_sessions()[0]["group"]["name"] == "Ideas"
 
-    updated = store.update_session_group("ideas", name="Idea Lab", color="#0ea5e9", icon_key="brain")
+    updated = store.update_session_group(
+        "ideas",
+        name="Idea Lab",
+        color="#0ea5e9",
+        icon_key="brain",
+        is_sensitive=True,
+    )
     assert updated.name == "Idea Lab"
     assert updated.color == "#0ea5e9"
     assert updated.icon_key == "brain"
+    assert updated.is_sensitive is True
+    assert store.list_sessions()[0]["group"]["is_sensitive"] is True
 
     with pytest.raises(ValueError, match="System session groups cannot be edited"):
         store.update_session_group("uncategorized", name="Inbox")
@@ -117,6 +126,41 @@ def test_store_manages_session_groups_and_reassigns_deleted_group(tmp_path) -> N
     assert store.get_session("s1").group_id == "health"
     assert "ideas" not in {group["group_id"] for group in store.list_session_groups()}
     assert "ideas" in {group["group_id"] for group in store.list_session_groups(include_deleted=True)}
+
+
+def test_store_migrates_legacy_session_groups_with_sensitive_default(tmp_path) -> None:
+    db_path = tmp_path / "bridge.sqlite3"
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(
+            """
+            CREATE TABLE session_groups (
+                group_id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                color TEXT NOT NULL,
+                icon_key TEXT NOT NULL,
+                sort_order INTEGER NOT NULL DEFAULT 0,
+                is_system INTEGER NOT NULL DEFAULT 0,
+                created_at REAL NOT NULL,
+                updated_at REAL NOT NULL,
+                deleted_at REAL
+            )
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO session_groups (
+                group_id, name, color, icon_key, sort_order, is_system, created_at, updated_at
+            ) VALUES ('legacy', 'Legacy', '#334455', 'archive', 10, 0, 1, 1)
+            """
+        )
+
+    store = Store(db_path)
+    groups = {group["group_id"]: group for group in store.list_session_groups()}
+
+    assert groups["legacy"]["is_sensitive"] is False
+    with sqlite3.connect(db_path) as conn:
+        columns = {row[1] for row in conn.execute("PRAGMA table_info(session_groups)")}
+    assert "is_sensitive" in columns
 
 
 def test_store_demotes_legacy_non_default_system_groups(tmp_path) -> None:
@@ -641,16 +685,21 @@ def test_create_session_works_without_context_pack_manifest(tmp_path, monkeypatc
     main = _load_main(tmp_path, monkeypatch)
 
     main.store.create_session_group("Ideas", "#22c55e", "ideas")
+    main.store.update_session_group("ideas", is_sensitive=True)
     groups_result = main.list_session_groups()
     result = main.create_session("Manual context session", group_id="ideas")
     invalid_result = main.create_session("Manual context session", group_id="missing")
     session = main.store.get_session(result["session_id"])
+    overview = main.get_session_overview(result["session_id"])
 
     assert groups_result["ok"] is True
     assert "ideas" in {group["group_id"] for group in groups_result["groups"]}
+    assert all("is_sensitive" not in group for group in groups_result["groups"])
     assert result["ok"] is True
     assert result["group_id"] == "ideas"
     assert result["group"]["name"] == "Ideas"
+    assert "is_sensitive" not in result["group"]
+    assert "is_sensitive" not in overview["group"]
     assert invalid_result["ok"] is False
     assert invalid_result["error"] == "Unknown session group: missing"
     assert result["context_source"] == "manual"

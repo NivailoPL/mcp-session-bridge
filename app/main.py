@@ -556,7 +556,16 @@ def submit_output_probe_observation(
 @mcp.tool()
 def list_session_groups() -> dict[str, Any]:
     """List available local session groups so a model can choose a valid group_id before creating a session."""
-    return {"ok": True, "groups": store.list_session_groups()}
+    groups = []
+    for group in store.list_session_groups():
+        groups.append({
+            key: group[key]
+            for key in (
+                "group_id", "name", "color", "icon_key", "sort_order", "is_system",
+                "created_at", "updated_at", "deleted_at",
+            )
+        })
+    return {"ok": True, "groups": groups}
 
 
 @mcp.tool()

@@ -109,6 +109,8 @@ Sessions are unlisted to reduce accidental discovery. This is a privacy boundary
 
 Session groups and uploaded files are runtime data in the SQLite database. User-created groups and their files are not stored in tracked repo configuration. The admin panel at `/admin/sessions` can create, edit, delete, filter by, and move sessions between groups. Its file workspace can explicitly upload text files and PDFs, preview and download original PDFs, move files between session and group scope, edit text content, and permanently delete files. PDF editing and OCR are not supported. PDF storage has a 1 GB global default quota, configurable with `BRIDGE_PDF_STORAGE_MAX_BYTES`. These owner actions change what models can find through the current overview and file manifest; they do not add MCP move, edit, or delete tools.
 
+Owner-created groups can also be marked **Sensitive** in the admin panel. Their session list and transcript preview are obscured until clicked, with each reveal kept only in the current page's memory and reset by reload. This is protection against accidental disclosure in the admin UI, not a new API authorization boundary, and it does not change MCP tool payloads or access.
+
 ### Admin Search
 
 The Search button in the admin panel opens an overlay over the complete bridge database:
@@ -117,6 +119,7 @@ The Search button in the admin panel opens an overlay over the complete bridge d
 - **Hybrid** combines BM25 with OpenAI embeddings and can optionally rerank approved candidates with Cohere.
 - Search sources can include conversations, session files, and group files.
 - Each group must be explicitly selected before its content can be embedded or reranked. Unselected groups remain available only in the separate local BM25 lane.
+- Sensitive groups always remain in the local BM25 lane and cannot be selected for OpenAI embeddings or Cohere reranking.
 
 Settings are split into General, Transcript, Search, and API tabs. The Transcript tab creates harness-test instructions, records verified probe results, recommends a safe character limit with a 25% margin, and controls the global transcript chunk character/line limits without a restart. Provider keys are encrypted with the bridge secret, are returned only as masked previews, and are shared with the existing AI rename feature where applicable. Vector indexing is disabled by default; the owner can build, stop, rebuild, or delete the index and configure search chunking plus refresh thresholds. Admin search remains admin-only.
 
