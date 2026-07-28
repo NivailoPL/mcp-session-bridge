@@ -117,20 +117,37 @@ def test_admin_viewer_timezone_lives_in_general_settings() -> None:
 def test_admin_viewer_exposes_large_tool_result_compatibility_controls() -> None:
     viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
 
-    transcript = viewer[
+    mcp_panel = viewer[
         viewer.index('<section data-settings-panel="transcript"'):
         viewer.index('<section data-settings-panel="search"')
     ]
-    assert 'id="toolOutputOptimized"' in transcript
-    assert 'value="optimized"' in transcript
-    assert 'id="toolOutputMaximumCompatibility"' in transcript
-    assert 'value="maximum_compatibility"' in transcript
-    assert "returns large payloads once" in transcript
-    assert "can nearly double" in transcript
-    assert 'id="toolOutputRestartRequired"' in transcript
-    assert 'id="toolOutputRestart"' in transcript
-    assert 'id="toolOutputRestartMessage"' in transcript
-    assert "refresh the tool list" in transcript.lower()
+    settings_tabs = viewer[
+        viewer.index('<nav class="settings-tabs"'):
+        viewer.index('<div class="settings-content">')
+    ]
+    assert 'data-settings-tab="transcript">MCP</button>' in settings_tabs
+    assert 'data-settings-tab="transcript">Transcript</button>' not in settings_tabs
+    assert "Transcript delivery" not in mcp_panel
+    assert mcp_panel.count('class="mcp-settings-section') == 2
+    assert mcp_panel.index("Large tool result format") < mcp_panel.index("Chunk settings")
+    assert mcp_panel.index("Chunk settings") < mcp_panel.index("Global transcript chunk")
+    for heading in (
+        "Global transcript chunk",
+        "Run a harness test",
+        "Checkpoint-verified recommendations",
+        "Recent results",
+    ):
+        assert heading in mcp_panel
+    assert 'id="toolOutputOptimized"' in mcp_panel
+    assert 'value="optimized"' in mcp_panel
+    assert 'id="toolOutputMaximumCompatibility"' in mcp_panel
+    assert 'value="maximum_compatibility"' in mcp_panel
+    assert "returns large payloads once" in mcp_panel
+    assert "can nearly double" in mcp_panel
+    assert 'id="toolOutputRestartRequired"' in mcp_panel
+    assert 'id="toolOutputRestart"' in mcp_panel
+    assert 'id="toolOutputRestartMessage"' in mcp_panel
+    assert "refresh the tool list" in mcp_panel.lower()
     assert 'saveToolOutputSettings()' in viewer
     assert 'restartBridgeService()' in viewer
     assert "toolOutput.restart_pending || state.toolOutputRestartInFlight" in viewer

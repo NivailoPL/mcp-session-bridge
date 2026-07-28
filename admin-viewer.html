@@ -912,7 +912,14 @@
     .settings-switch input { width: auto; margin-top: .2rem; accent-color: var(--accent); }
     .settings-switch span { display: grid; gap: .15rem; }
     .settings-switch small { color: var(--muted); line-height: 1.45; }
-    .tool-output-card { display: grid; gap: .8rem; padding: .9rem; border: 1px solid var(--stroke); border-radius: var(--r-card); background: rgba(255,255,255,.025); }
+    .mcp-settings-section { display: grid; gap: 1rem; padding: 1rem; border: 1px solid var(--stroke); border-radius: var(--r-card); background: rgba(255,255,255,.025); }
+    .tool-output-card { gap: .8rem; }
+    .chunk-settings-card { gap: 0; }
+    .chunk-settings-card > .settings-section-head { padding-bottom: .2rem; }
+    .chunk-settings-card > .probe-config,
+    .chunk-settings-card > .probe-global,
+    .chunk-settings-card > .probe-recommendations,
+    .chunk-settings-card > .probe-results { padding: 1rem 0 0; margin-top: 1rem; border-top: 1px solid var(--stroke-soft); }
     .tool-output-options { display: grid; gap: .55rem; }
     .tool-output-actions { display: flex; align-items: center; justify-content: space-between; gap: .7rem; flex-wrap: wrap; }
     .tool-output-restart { display: flex; align-items: center; gap: .65rem; flex-wrap: wrap; padding: .65rem .75rem; border: 1px solid rgba(251,191,36,.35); border-radius: 9px; background: var(--warn-soft); }
@@ -936,7 +943,7 @@
     .developer-settings { border: 1px solid var(--stroke); border-radius: var(--r-card); padding: .75rem; }
     .developer-settings summary { cursor: pointer; color: var(--muted); font-size: .82rem; }
     .settings-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: .75rem; padding-top: .85rem; }
-    .probe-config, .probe-global, .probe-recommendations, .probe-results { display: grid; gap: .75rem; padding: .9rem; border: 1px solid var(--stroke); border-radius: var(--r-card); background: rgba(255,255,255,.025); }
+    .probe-config, .probe-global, .probe-recommendations, .probe-results { display: grid; gap: .75rem; }
     .probe-config-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: .7rem; }
     .probe-prompt { max-height: 9rem; margin: 0; padding: .75rem; overflow: auto; border: 1px solid var(--stroke-soft); border-radius: 9px; background: rgba(0,0,0,.18); color: var(--muted); font: .72rem/1.5 ui-monospace,SFMono-Regular,Menlo,monospace; white-space: pre-wrap; }
     .probe-recommendation-list, .probe-result-list { display: grid; gap: .55rem; }
@@ -1316,13 +1323,13 @@
 
   <dialog id="aiSettingsDialog" class="settings-dialog" aria-labelledby="settingsHeading">
     <div class="dialog-head">
-      <div><h3 id="settingsHeading">Settings</h3><p class="meta">Admin configuration for models, transcript delivery, and context search.</p></div>
+      <div><h3 id="settingsHeading">Settings</h3><p class="meta">Admin configuration for models, MCP delivery, and context search.</p></div>
       <button type="button" class="ghost" id="aiSettingsClose">Close</button>
     </div>
     <div class="settings-shell">
       <nav class="settings-tabs" aria-label="Settings sections">
         <button type="button" data-settings-tab="general" class="is-active">General</button>
-        <button type="button" data-settings-tab="transcript">Transcript</button>
+        <button type="button" data-settings-tab="transcript">MCP</button>
         <button type="button" data-settings-tab="search">Search</button>
         <button type="button" data-settings-tab="api">API</button>
       </nav>
@@ -1335,8 +1342,7 @@
           <div class="edit-actions"><button type="button" class="primary" id="generalSettingsSave">Save General</button></div>
         </section>
         <section data-settings-panel="transcript" class="settings-panel" hidden>
-          <div class="settings-section-head"><div><h4>Transcript delivery</h4><p>Measure the real single-tool-result capacity of each MCP harness, then set one conservative chunk limit for every client.</p></div></div>
-          <section class="tool-output-card">
+          <section class="mcp-settings-section tool-output-card">
             <div class="settings-section-head"><div><h4>Large tool result format</h4><p>Controls transcript chunks, output probes, and downloaded file contents. Small metadata tools remain structured in both modes.</p></div></div>
             <div class="tool-output-options" role="radiogroup" aria-label="Large tool result format">
               <label class="settings-switch"><input id="toolOutputOptimized" type="radio" name="toolOutputMode" value="optimized"><span><b>Optimized <small>Recommended</small></b><small>Optimized returns large payloads once as text. This avoids duplicate context and reduces the chance of truncation.</small></span></label>
@@ -1352,31 +1358,34 @@
               </div>
             </div>
           </section>
-          <section class="probe-global">
-            <div class="settings-section-head"><div><h4>Global transcript chunk</h4><p>The bridge starts a new chunk when either limit is reached. Changes apply immediately without a service restart.</p></div></div>
-            <div class="settings-grid">
-              <label class="field">Maximum characters<input id="transcriptChunkMaxChars" type="number" min="1000" max="250000" step="1000"></label>
-              <label class="field">Maximum lines<input id="transcriptChunkMaxLines" type="number" min="1" max="10000"></label>
-            </div>
-            <div class="edit-actions"><button type="button" class="primary" id="transcriptSettingsSave">Save global chunk size</button></div>
-          </section>
-          <section class="probe-config">
-            <div class="settings-section-head"><div><h4>Run a harness test</h4><p>Copy this instruction into the harness being measured. Running the payload in this browser would bypass the harness and produce a false result.</p></div></div>
-            <div class="probe-config-grid">
-              <label class="field">Harness label<input id="probeHarnessLabel" type="text" maxlength="80" placeholder="chatgpt-web"></label>
-              <label class="field">Payload characters<input id="probeTargetChars" type="number" min="4096" max="250000" step="1000" value="100000"></label>
-              <label class="field">Content profile<select id="probeContentProfile"><option value="transcript_markdown">Transcript Markdown</option><option value="transport_canary">Transport canary</option></select></label>
-            </div>
-            <pre id="probePromptPreview" class="probe-prompt"></pre>
-            <div class="edit-actions"><button type="button" class="primary" id="probePromptCopy">Copy test instruction</button></div>
-          </section>
-          <section class="probe-recommendations">
-            <div class="settings-section-head"><div><h4>Checkpoint-verified recommendations</h4><p>Each recommendation keeps a 25% safety margin. Use the weakest verified harness when all clients share one global size.</p></div></div>
-            <div id="probeRecommendations" class="probe-recommendation-list"></div>
-          </section>
-          <section class="probe-results">
-            <div class="settings-section-head"><div><h4>Recent results</h4><p>Pending runs reached the server but never produced a model report; this can indicate a rejected or unusable tool result.</p></div></div>
-            <div id="probeResults" class="probe-result-list"></div>
+          <section class="mcp-settings-section chunk-settings-card">
+            <div class="settings-section-head"><div><h4>Chunk settings</h4><p>Set one conservative transcript limit and measure the real single-tool-result capacity of each MCP harness.</p></div></div>
+            <section class="probe-global">
+              <div class="settings-section-head"><div><h4>Global transcript chunk</h4><p>The bridge starts a new chunk when either limit is reached. Changes apply immediately without a service restart.</p></div></div>
+              <div class="settings-grid">
+                <label class="field">Maximum characters<input id="transcriptChunkMaxChars" type="number" min="1000" max="250000" step="1000"></label>
+                <label class="field">Maximum lines<input id="transcriptChunkMaxLines" type="number" min="1" max="10000"></label>
+              </div>
+              <div class="edit-actions"><button type="button" class="primary" id="transcriptSettingsSave">Save global chunk size</button></div>
+            </section>
+            <section class="probe-config">
+              <div class="settings-section-head"><div><h4>Run a harness test</h4><p>Copy this instruction into the harness being measured. Running the payload in this browser would bypass the harness and produce a false result.</p></div></div>
+              <div class="probe-config-grid">
+                <label class="field">Harness label<input id="probeHarnessLabel" type="text" maxlength="80" placeholder="chatgpt-web"></label>
+                <label class="field">Payload characters<input id="probeTargetChars" type="number" min="4096" max="250000" step="1000" value="100000"></label>
+                <label class="field">Content profile<select id="probeContentProfile"><option value="transcript_markdown">Transcript Markdown</option><option value="transport_canary">Transport canary</option></select></label>
+              </div>
+              <pre id="probePromptPreview" class="probe-prompt"></pre>
+              <div class="edit-actions"><button type="button" class="primary" id="probePromptCopy">Copy test instruction</button></div>
+            </section>
+            <section class="probe-recommendations">
+              <div class="settings-section-head"><div><h4>Checkpoint-verified recommendations</h4><p>Each recommendation keeps a 25% safety margin. Use the weakest verified harness when all clients share one global size.</p></div></div>
+              <div id="probeRecommendations" class="probe-recommendation-list"></div>
+            </section>
+            <section class="probe-results">
+              <div class="settings-section-head"><div><h4>Recent results</h4><p>Pending runs reached the server but never produced a model report; this can indicate a rejected or unusable tool result.</p></div></div>
+              <div id="probeResults" class="probe-result-list"></div>
+            </section>
           </section>
         </section>
         <section data-settings-panel="search" class="settings-panel" hidden>
