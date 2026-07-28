@@ -5,6 +5,8 @@ import secrets
 from collections.abc import Callable
 from typing import Any
 
+from app.tool_output import TOOL_OUTPUT_MODE_MAXIMUM_COMPATIBILITY
+
 
 TRANSCRIPT_CHUNK_MAX_CHARS_SETTING = "transcript.chunk_max_chars"
 TRANSCRIPT_CHUNK_MAX_LINES_SETTING = "transcript.chunk_max_lines"
@@ -196,6 +198,7 @@ def public_probe_run(run: dict[str, Any]) -> dict[str, Any]:
             "server_result_json_chars",
             "block_count",
             "block_size",
+            "tool_output_mode",
             "status",
             "result_class",
             "matched_checkpoints",
@@ -215,23 +218,31 @@ def public_probe_run(run: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def probe_recommendations(runs: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    best: dict[tuple[str, str], dict[str, Any]] = {}
+def probe_recommendations(
+    runs: list[dict[str, Any]],
+    *,
+    tool_output_mode: str | None = None,
+) -> list[dict[str, Any]]:
+    best: dict[tuple[str, str, str], dict[str, Any]] = {}
     for run in runs:
         if run.get("result_class") != "complete":
             continue
-        key = (str(run["harness_label"]), str(run["content_profile"]))
+        run_mode = str(run.get("tool_output_mode") or TOOL_OUTPUT_MODE_MAXIMUM_COMPATIBILITY)
+        if tool_output_mode is not None and run_mode != tool_output_mode:
+            continue
+        key = (str(run["harness_label"]), str(run["content_profile"]), run_mode)
         if key not in best or int(run["payload_char_count"]) > int(best[key]["payload_char_count"]):
             best[key] = run
     return [
         {
             "harness_label": harness_label,
             "content_profile": content_profile,
+            "tool_output_mode": run_mode,
             "largest_verified_payload_chars": int(run["payload_char_count"]),
             "recommended_chunk_chars": recommended_chunk_chars(int(run["payload_char_count"])),
             "run_id": run["run_id"],
         }
-        for (harness_label, content_profile), run in sorted(best.items())
+        for (harness_label, content_profile, run_mode), run in sorted(best.items())
     ]
 
 

@@ -912,6 +912,13 @@
     .settings-switch input { width: auto; margin-top: .2rem; accent-color: var(--accent); }
     .settings-switch span { display: grid; gap: .15rem; }
     .settings-switch small { color: var(--muted); line-height: 1.45; }
+    .tool-output-card { display: grid; gap: .8rem; padding: .9rem; border: 1px solid var(--stroke); border-radius: var(--r-card); background: rgba(255,255,255,.025); }
+    .tool-output-options { display: grid; gap: .55rem; }
+    .tool-output-actions { display: flex; align-items: center; justify-content: space-between; gap: .7rem; flex-wrap: wrap; }
+    .tool-output-restart { display: flex; align-items: center; gap: .65rem; flex-wrap: wrap; padding: .65rem .75rem; border: 1px solid rgba(251,191,36,.35); border-radius: 9px; background: var(--warn-soft); }
+    .tool-output-restart[hidden] { display: none; }
+    .tool-output-restart span { color: var(--warn); font-size: .76rem; font-weight: 750; }
+    .tool-output-summary { margin: 0; color: var(--muted); font-size: .76rem; line-height: 1.5; }
     .settings-fieldset { display: flex; flex-wrap: wrap; gap: .75rem 1rem; padding: .85rem; border: 1px solid var(--stroke); border-radius: var(--r-card); }
     .settings-fieldset legend { padding: 0 .35rem; color: var(--muted); font-size: .75rem; }
     .rag-group-list { display: grid; grid-template-columns: repeat(auto-fill,minmax(13rem,1fr)); gap: .5rem; width: 100%; }
@@ -1329,6 +1336,22 @@
         </section>
         <section data-settings-panel="transcript" class="settings-panel" hidden>
           <div class="settings-section-head"><div><h4>Transcript delivery</h4><p>Measure the real single-tool-result capacity of each MCP harness, then set one conservative chunk limit for every client.</p></div></div>
+          <section class="tool-output-card">
+            <div class="settings-section-head"><div><h4>Large tool result format</h4><p>Controls transcript chunks, output probes, and downloaded file contents. Small metadata tools remain structured in both modes.</p></div></div>
+            <div class="tool-output-options" role="radiogroup" aria-label="Large tool result format">
+              <label class="settings-switch"><input id="toolOutputOptimized" type="radio" name="toolOutputMode" value="optimized"><span><b>Optimized <small>Recommended</small></b><small>Optimized returns large payloads once as text. This avoids duplicate context and reduces the chance of truncation.</small></span></label>
+              <label class="settings-switch"><input id="toolOutputMaximumCompatibility" type="radio" name="toolOutputMode" value="maximum_compatibility"><span><b>Maximum compatibility</b><small>Returns both text and structured representations for clients that require them. This can nearly double each large tool result.</small></span></label>
+            </div>
+            <p id="toolOutputActiveSummary" class="tool-output-summary"></p>
+            <p class="tool-output-summary">After changing modes and restarting, refresh the tool list or reconnect the connector in every harness. Probe results are compared only within the active mode.</p>
+            <div class="tool-output-actions">
+              <button type="button" class="primary" id="toolOutputSave">Save result format</button>
+              <div id="toolOutputRestartRequired" class="tool-output-restart" hidden>
+                <span id="toolOutputRestartMessage">Restart required to activate this mode.</span>
+                <button type="button" class="ghost" id="toolOutputRestart">Restart Bridge</button>
+              </div>
+            </div>
+          </section>
           <section class="probe-global">
             <div class="settings-section-head"><div><h4>Global transcript chunk</h4><p>The bridge starts a new chunk when either limit is reached. Changes apply immediately without a service restart.</p></div></div>
             <div class="settings-grid">
@@ -1558,6 +1581,7 @@
         renamingSessionId: "",
         manualRenameSessionId: "",
         pendingSessionMove: null,
+        toolOutputRestartInFlight: false,
         showDeleted: true,
         editingExchangeId: null,
         busy: false,
@@ -1669,7 +1693,7 @@
         turnNav: document.getElementById("turnNav"),
       };
       const settingsDom = Object.fromEntries([
-        "generalSettingsSave", "apiSettingsSave", "searchSettingsSave", "transcriptSettingsSave", "cohereKeyInput",
+        "generalSettingsSave", "apiSettingsSave", "searchSettingsSave", "transcriptSettingsSave", "toolOutputSave", "toolOutputRestart", "toolOutputRestartRequired", "toolOutputRestartMessage", "toolOutputActiveSummary", "toolOutputOptimized", "toolOutputMaximumCompatibility", "cohereKeyInput",
         "cohereKeyRemoveButton", "openaiKeyStatus", "cohereKeyStatus", "ragEnabled",
         "ragOptions", "cohereEnabled", "sourceConversations", "sourceSessionFiles",
         "sourceGroupFiles", "ragGroupList", "chunkSize", "chunkOverlap", "embeddingModel",
@@ -1878,6 +1902,8 @@
         });
         settingsDom.generalSettingsSave.addEventListener("click", () => saveGeneralSettings());
         settingsDom.transcriptSettingsSave.addEventListener("click", () => saveTranscriptSettings());
+        settingsDom.toolOutputSave.addEventListener("click", () => saveToolOutputSettings());
+        settingsDom.toolOutputRestart.addEventListener("click", () => restartBridgeService());
         settingsDom.searchSettingsSave.addEventListener("click", () => saveSearchSettings());
         settingsDom.apiSettingsSave.addEventListener("click", () => saveApiSettings());
         dom.aiKeyRemoveButton.addEventListener("click", () => removeProviderKey("openai"));
@@ -1918,6 +1944,9 @@
         const settings = state.settings;
         const search = settings.search;
         const transcript = settings.transcript || {};
+        const toolOutput = settings.tool_output || {
+          active_mode: "optimized", configured_mode: "optimized", restart_required: false,
+        };
         dom.aiModelInput.value = settings.general.rename_model || "gpt-5.4-nano";
         dom.aiKeyInput.value = "";
         settingsDom.cohereKeyInput.value = "";
@@ -1927,6 +1956,9 @@
         settingsDom.transcriptChunkMaxChars.max = transcript.max_chunk_max_chars || 250000;
         settingsDom.transcriptChunkMaxLines.min = transcript.min_chunk_max_lines || 1;
         settingsDom.transcriptChunkMaxLines.max = transcript.max_chunk_max_lines || 10000;
+        settingsDom.toolOutputOptimized.checked = toolOutput.configured_mode !== "maximum_compatibility";
+        settingsDom.toolOutputMaximumCompatibility.checked = toolOutput.configured_mode === "maximum_compatibility";
+        renderToolOutputState();
         settingsDom.probeTargetChars.min = transcript.min_probe_target_chars || 4096;
         settingsDom.probeTargetChars.max = transcript.max_probe_target_chars || 250000;
         if (!settingsDom.probeHarnessLabel.value) settingsDom.probeHarnessLabel.value = localStorage.getItem("mcp-admin:probe-harness") || "";
@@ -2106,11 +2138,117 @@
         }, "Global transcript chunk size saved.");
       }
 
+      function toolOutputModeLabel(mode) {
+        return mode === "maximum_compatibility" ? "Maximum compatibility" : "Optimized";
+      }
+
+      function renderToolOutputState() {
+        const toolOutput = state.settings?.tool_output || {
+          active_mode: "optimized", configured_mode: "optimized", restart_required: false,
+          restart_pending: false, pending_mode: null,
+        };
+        const active = toolOutputModeLabel(toolOutput.active_mode);
+        const configured = toolOutputModeLabel(toolOutput.configured_mode);
+        const restartLocked = Boolean(toolOutput.restart_pending || state.toolOutputRestartInFlight);
+        settingsDom.toolOutputActiveSummary.textContent = restartLocked
+          ? `Active: ${active}. Restarting to activate ${toolOutputModeLabel(toolOutput.pending_mode || toolOutput.configured_mode)}.`
+          : toolOutput.restart_required
+          ? `Active: ${active}. Saved for next start: ${configured}.`
+          : `Active: ${active}.`;
+        settingsDom.toolOutputRestartRequired.hidden = !(toolOutput.restart_required || restartLocked);
+        settingsDom.toolOutputRestartMessage.textContent = restartLocked
+          ? "Restart in progress. Result format changes are temporarily locked."
+          : "Restart required to activate this mode.";
+        settingsDom.toolOutputOptimized.disabled = restartLocked;
+        settingsDom.toolOutputMaximumCompatibility.disabled = restartLocked;
+        settingsDom.toolOutputSave.disabled = restartLocked;
+        settingsDom.toolOutputRestart.disabled = restartLocked || !toolOutput.restart_required;
+      }
+
+      async function saveToolOutputSettings() {
+        const selected = document.querySelector('input[name="toolOutputMode"]:checked');
+        if (!selected) { renderSettingsStatus("Choose a large tool result format.", "error"); return; }
+        try {
+          const result = await api("/admin/api/settings/tool-output", {
+            method: "PUT", body: JSON.stringify({ mode: selected.value }),
+          });
+          state.settings.tool_output = result.tool_output;
+          fillSettingsForm();
+          renderSettingsStatus(
+            result.tool_output.restart_required
+              ? "Large tool result format saved. Restart Bridge to activate it."
+              : "Large tool result format saved and already active.",
+            "ok",
+          );
+        } catch (error) {
+          if (error.status === 409) {
+            try { await loadSettings(); fillSettingsForm(); } catch (_) {}
+          }
+          renderSettingsStatus(error.message, "error");
+        }
+      }
+
+      async function restartBridgeService() {
+        const toolOutput = state.settings?.tool_output || {};
+        if (!toolOutput.restart_required) return;
+        const configured = toolOutputModeLabel(toolOutput.configured_mode);
+        if (!window.confirm(`Restart MCP Session Bridge and activate ${configured}? Active tool calls may be interrupted.`)) return;
+        state.toolOutputRestartInFlight = true;
+        renderToolOutputState();
+        renderSettingsStatus("Requesting Bridge restart…", "ok");
+        try {
+          const result = await api("/admin/api/service/restart", { method: "POST" });
+          if (result.tool_output) state.settings.tool_output = result.tool_output;
+          renderToolOutputState();
+          renderSettingsStatus(result.message || "Bridge restart requested…", "ok");
+          await waitForBridgeRestart();
+        } catch (error) {
+          state.toolOutputRestartInFlight = false;
+          if (error.status === 409) {
+            try { await loadSettings(); fillSettingsForm(); } catch (_) { renderToolOutputState(); }
+          } else {
+            renderToolOutputState();
+          }
+          renderSettingsStatus(error.message, "error");
+        }
+      }
+
+      async function waitForBridgeRestart() {
+        await new Promise((resolve) => window.setTimeout(resolve, 1500));
+        for (let attempt = 0; attempt < 40; attempt += 1) {
+          try {
+            const response = await fetch("/admin/api/service/status", {
+              credentials: "same-origin", cache: "no-store",
+            });
+            if (response.status === 401) {
+              window.location.assign("/admin/login?next=/admin/sessions");
+              return;
+            }
+            if (response.ok) {
+              const payload = await response.json();
+              if (payload.tool_output && !payload.tool_output.restart_pending && !payload.tool_output.restart_required) {
+                state.toolOutputRestartInFlight = false;
+                await loadSettings();
+                fillSettingsForm();
+                renderSettingsStatus("Bridge restarted. Refresh the tool list or reconnect the connector in every harness.", "ok");
+                return;
+              }
+            }
+          } catch (_) {
+            // The brief connection failure is expected while systemd restarts the service.
+          }
+          await new Promise((resolve) => window.setTimeout(resolve, 500));
+        }
+        state.toolOutputRestartInFlight = false;
+        renderToolOutputState();
+        throw new Error("Bridge did not return with the saved mode. Check the service status on the server.");
+      }
+
       function outputProbePrompt() {
         const harness = settingsDom.probeHarnessLabel.value.trim() || "describe-this-harness";
         const target = Number.parseInt(settingsDom.probeTargetChars.value, 10) || 100000;
         const profile = settingsDom.probeContentProfile.value || "transcript_markdown";
-        return `Use MCP Session Bridge to measure this harness. Call run_output_probe exactly once with harness_label="${harness}", target_chars=${target}, and content_profile="${profile}". Read the tool result without summarizing it. Then immediately call submit_output_probe_observation with every CHECKPOINT canary actually visible and the index and canary of the last block with a complete END marker. Never infer a missing canary. After the report tool returns, tell me only its result_class, payload_char_count, server_result_json_chars, and recommended_chunk_chars.`;
+        return `Use MCP Session Bridge to measure this harness. Call run_output_probe exactly once with harness_label="${harness}", target_chars=${target}, and content_profile="${profile}". Read the tool result without summarizing it. Then immediately call submit_output_probe_observation with every CHECKPOINT canary actually visible and the index and canary of the last block with a complete END marker. Never infer a missing canary. After the report tool returns, tell me only its result_class, tool_output_mode, payload_char_count, server_result_json_chars, and recommended_chunk_chars.`;
       }
 
       function renderOutputProbePrompt() {
@@ -2163,7 +2301,7 @@
             button.textContent = `Fill ${Number(item.recommended_chunk_chars).toLocaleString()}`;
             button.addEventListener("click", () => selectTranscriptChunkRecommendation(item.recommended_chunk_chars));
             head.append(button);
-            card.append(head, spanCls("probe-result-meta", `Verified ${Number(item.largest_verified_payload_chars).toLocaleString()} payload characters.`));
+            card.append(head, spanCls("probe-result-meta", `${toolOutputModeLabel(item.tool_output_mode)} · verified ${Number(item.largest_verified_payload_chars).toLocaleString()} payload characters.`));
             settingsDom.probeRecommendations.append(card);
           }
         }
@@ -2185,7 +2323,7 @@
           const created = run.created_at ? formatDate(new Date(run.created_at * 1000).toISOString()) : "unknown time";
           card.append(
             head,
-            spanCls("probe-result-meta", `${run.content_profile} · ${created} · checkpoints: ${checkpoints}`),
+            spanCls("probe-result-meta", `${run.content_profile} · ${toolOutputModeLabel(run.tool_output_mode)} · ${created} · checkpoints: ${checkpoints}`),
             spanCls("probe-result-meta", `Run ${run.run_id} · last complete block: ${run.last_complete_block_index || "—"}/${run.block_count}`),
           );
           settingsDom.probeResults.append(card);
@@ -4636,6 +4774,10 @@
                 min_probe_target_chars: 4096, max_probe_target_chars: 250000,
                 safety_margin_percent: 25, runs: [], recommendations: [],
               },
+              tool_output: {
+                active_mode: "optimized", configured_mode: "optimized", restart_required: false,
+                restart_pending: false, pending_mode: null,
+              },
             };
           }
           state.settings.groups = demo.groups;
@@ -4650,6 +4792,17 @@
           state.settings.transcript.chunk_max_chars = body.chunk_max_chars;
           state.settings.transcript.chunk_max_lines = body.chunk_max_lines;
           return Promise.resolve({ ok: true, settings: state.settings });
+        }
+        if (path === "/admin/api/settings/tool-output" && method === "PUT") {
+          state.settings.tool_output.configured_mode = body.mode;
+          state.settings.tool_output.restart_required = body.mode !== state.settings.tool_output.active_mode;
+          return Promise.resolve({ ok: true, tool_output: state.settings.tool_output });
+        }
+        if (path === "/admin/api/service/status" && method === "GET") {
+          return Promise.resolve({ ok: true, tool_output: state.settings.tool_output });
+        }
+        if (path === "/admin/api/service/restart" && method === "POST") {
+          return Promise.reject(Object.assign(new Error("Service restart is unavailable in demo mode."), { status: 503 }));
         }
         if (path === "/admin/api/settings/search" && method === "PUT") {
           state.settings.search = { ...state.settings.search, ...body };

@@ -1,3 +1,4 @@
+import asyncio
 import base64
 import importlib
 import json
@@ -111,6 +112,37 @@ def test_admin_viewer_timezone_lives_in_general_settings() -> None:
     ]
     assert 'id="timezoneSelect"' not in identity
     assert 'id="timezoneSelect"' in general
+
+
+def test_admin_viewer_exposes_large_tool_result_compatibility_controls() -> None:
+    viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
+
+    transcript = viewer[
+        viewer.index('<section data-settings-panel="transcript"'):
+        viewer.index('<section data-settings-panel="search"')
+    ]
+    assert 'id="toolOutputOptimized"' in transcript
+    assert 'value="optimized"' in transcript
+    assert 'id="toolOutputMaximumCompatibility"' in transcript
+    assert 'value="maximum_compatibility"' in transcript
+    assert "returns large payloads once" in transcript
+    assert "can nearly double" in transcript
+    assert 'id="toolOutputRestartRequired"' in transcript
+    assert 'id="toolOutputRestart"' in transcript
+    assert 'id="toolOutputRestartMessage"' in transcript
+    assert "refresh the tool list" in transcript.lower()
+    assert 'saveToolOutputSettings()' in viewer
+    assert 'restartBridgeService()' in viewer
+    assert "toolOutput.restart_pending || state.toolOutputRestartInFlight" in viewer
+    assert "!payload.tool_output.restart_pending && !payload.tool_output.restart_required" in viewer
+
+
+def test_deployment_includes_narrow_restart_helper() -> None:
+    helper = Path("deploy/mcp-session-bridge-restart.service").read_text(encoding="utf-8")
+
+    assert "ExecStart=/bin/sleep 1" in helper
+    assert "ExecStart=/bin/systemctl restart mcp-session-bridge.service" in helper
+    assert "User=" not in helper
 
 
 def test_admin_viewer_session_move_requires_explicit_confirmation() -> None:
@@ -1142,6 +1174,98 @@ def _load_main(tmp_path: Path, monkeypatch):
     sys.modules.pop("app.main", None)
     return importlib.import_module("app.main")
 
+
+def test_restart_helper_uses_fixed_systemctl_command(tmp_path, monkeypatch) -> None:
+    main = _load_main(tmp_path, monkeypatch)
+    invocation = {}
+
+    class Process:
+        returncode = 0
+
+        async def communicate(self):
+            return b"", b""
+
+    async def create_subprocess_exec(*args, **kwargs):
+        invocation["args"] = args
+        invocation["kwargs"] = kwargs
+        return Process()
+
+    monkeypatch.setattr(main.asyncio, "create_subprocess_exec", create_subprocess_exec)
+    asyncio.run(main._request_service_restart())
+
+    assert invocation == {
+        "args": (
+            "/bin/systemctl",
+            "start",
+            "--no-block",
+            "mcp-session-bridge-restart.service",
+        ),
+        "kwargs": {
+            "stdout": asyncio.subprocess.PIPE,
+            "stderr": asyncio.subprocess.PIPE,
+        },
+    }
+
+
+def test_restart_helper_surfaces_nonzero_systemctl_result(tmp_path, monkeypatch) -> None:
+    main = _load_main(tmp_path, monkeypatch)
+
+    class Process:
+        returncode = 1
+
+        async def communicate(self):
+            return b"", b"systemd rejected request"
+
+    async def create_subprocess_exec(*args, **kwargs):
+        return Process()
+
+    monkeypatch.setattr(main.asyncio, "create_subprocess_exec", create_subprocess_exec)
+
+    with pytest.raises(RuntimeError, match="systemd rejected request"):
+        asyncio.run(main._request_service_restart())
+
+
+def test_restart_helper_terminates_and_reaps_timed_out_systemctl(tmp_path, monkeypatch) -> None:
+    main = _load_main(tmp_path, monkeypatch)
+
+    class Process:
+        returncode = None
+        terminated = False
+        killed = False
+        wait_calls = 0
+
+        async def communicate(self):
+            await asyncio.Event().wait()
+
+        def terminate(self):
+            self.terminated = True
+
+        def kill(self):
+            self.killed = True
+
+        async def wait(self):
+            self.wait_calls += 1
+            if not self.killed:
+                await asyncio.Event().wait()
+            self.returncode = -9
+            return self.returncode
+
+    process = Process()
+
+    async def create_subprocess_exec(*args, **kwargs):
+        return process
+
+    monkeypatch.setattr(main.asyncio, "create_subprocess_exec", create_subprocess_exec)
+    monkeypatch.setattr(main, "RESTART_REQUEST_TIMEOUT_SECONDS", 0.01)
+    monkeypatch.setattr(main, "RESTART_CLEANUP_TIMEOUT_SECONDS", 0.01)
+
+    with pytest.raises(RuntimeError, match="timed out after 0.01 seconds"):
+        asyncio.run(main._request_service_restart())
+
+    assert process.terminated is True
+    assert process.killed is True
+    assert process.wait_calls == 2
+
 def test_admin_search_settings_keys_and_basic_search_api(tmp_path, monkeypatch) -> None:
     main = _load_main(tmp_path, monkeypatch)
     main.store.create_session("search-session", "Searchable session", "manual-context")
@@ -1160,11 +1284,102 @@ def test_admin_search_settings_keys_and_basic_search_api(tmp_path, monkeypatch) 
     settings = client.get("/admin/api/settings")
     assert settings.status_code == 200
     assert set(settings.json()["settings"]) == {
-        "general", "search", "api", "groups", "index", "transcript"
+        "general", "search", "api", "groups", "index", "transcript", "tool_output"
     }
     assert settings.json()["settings"]["search"]["enabled"] is False
     assert settings.json()["settings"]["transcript"]["chunk_max_chars"] == 12000
     assert settings.json()["settings"]["transcript"]["chunk_max_lines"] == 180
+    assert settings.json()["settings"]["tool_output"] == {
+        "active_mode": "optimized",
+        "configured_mode": "optimized",
+        "restart_required": False,
+        "restart_pending": False,
+        "pending_mode": None,
+    }
+
+    service_status = client.get("/admin/api/service/status")
+    assert service_status.status_code == 200
+    assert service_status.json()["tool_output"] == settings.json()["settings"]["tool_output"]
+
+    no_restart_needed = client.post("/admin/api/service/restart", headers=headers)
+    assert no_restart_needed.status_code == 409
+
+    invalid_tool_output = client.put(
+        "/admin/api/settings/tool-output",
+        json={"mode": "structured_only"},
+        headers=headers,
+    )
+    assert invalid_tool_output.status_code == 400
+
+    tool_output_update = client.put(
+        "/admin/api/settings/tool-output",
+        json={"mode": "maximum_compatibility"},
+        headers=headers,
+    )
+    assert tool_output_update.status_code == 200
+    assert set(tool_output_update.json()) == {"ok", "tool_output"}
+    assert tool_output_update.json()["tool_output"]["active_mode"] == "optimized"
+    assert tool_output_update.json()["tool_output"]["configured_mode"] == "maximum_compatibility"
+    assert tool_output_update.json()["tool_output"]["restart_required"] is True
+
+    anonymous_client = TestClient(main.app, base_url="http://127.0.0.1:8787")
+    assert anonymous_client.post("/admin/api/service/restart").status_code == 401
+    assert client.post("/admin/api/service/restart").status_code == 403
+
+    main.admin.restart_requester = None
+    unavailable_restart = client.post("/admin/api/service/restart", headers=headers)
+    assert unavailable_restart.status_code == 503
+    assert "unavailable" in unavailable_restart.json()["error"].lower()
+    assert client.get("/admin/api/service/status").json()["tool_output"]["restart_pending"] is False
+
+    async def fail_restart_with_os_error() -> None:
+        raise OSError("systemctl missing")
+
+    main.admin.restart_requester = fail_restart_with_os_error
+    os_error_restart = client.post("/admin/api/service/restart", headers=headers)
+    assert os_error_restart.status_code == 503
+    assert "systemctl missing" in os_error_restart.json()["error"]
+    assert client.get("/admin/api/service/status").json()["tool_output"]["restart_pending"] is False
+
+    async def reject_restart() -> None:
+        raise RuntimeError("systemd unavailable")
+
+    main.admin.restart_requester = reject_restart
+    failed_restart = client.post("/admin/api/service/restart", headers=headers)
+    assert failed_restart.status_code == 503
+    assert client.get("/admin/api/service/status").json()["tool_output"]["restart_pending"] is False
+
+    restart_requests = []
+
+    async def request_restart() -> None:
+        restart_requests.append(True)
+
+    main.admin.restart_requester = request_restart
+    restart = client.post("/admin/api/service/restart", headers=headers)
+    assert restart.status_code == 202
+    assert restart.json()["restart_requested"] is True
+    assert restart.json()["tool_output"]["restart_pending"] is True
+    assert restart.json()["tool_output"]["pending_mode"] == "maximum_compatibility"
+    assert restart_requests == [True]
+
+    pending_status = client.get("/admin/api/service/status").json()["tool_output"]
+    assert pending_status["restart_pending"] is True
+    assert pending_status["restart_required"] is True
+
+    blocked_update = client.put(
+        "/admin/api/settings/tool-output",
+        json={"mode": "optimized"},
+        headers=headers,
+    )
+    assert blocked_update.status_code == 409
+    assert main.store.get_app_setting("mcp.tool_output_mode") == "maximum_compatibility"
+    assert main.store.get_app_setting("mcp.tool_output_restart_pending_mode") == "maximum_compatibility"
+
+    async def enter_app_lifespan() -> None:
+        async with main.app_lifespan(None):
+            assert main.store.get_app_setting("mcp.tool_output_restart_pending_mode") is None
+
+    asyncio.run(enter_app_lifespan())
 
     transcript_update = client.put(
         "/admin/api/settings/transcript",
@@ -1197,6 +1412,7 @@ def test_admin_search_settings_keys_and_basic_search_api(tmp_path, monkeypatch) 
     )
     probe_settings = client.get("/admin/api/settings").json()["settings"]["transcript"]
     assert probe_settings["runs"][0]["result_class"] == "complete"
+    assert probe_settings["runs"][0]["tool_output_mode"] == "optimized"
     assert probe_settings["recommendations"][0]["recommended_chunk_chars"] == 9_000
     assert "blocks" not in probe_settings["runs"][0]
     assert "observed_canaries" not in probe_settings["runs"][0]

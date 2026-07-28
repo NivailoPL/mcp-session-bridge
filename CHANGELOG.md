@@ -6,6 +6,15 @@ This project follows a lightweight changelog format inspired by Keep a Changelog
 
 ## [Unreleased]
 
+### New Features
+
+- Added an advanced Settings control for large MCP tool results. Optimized mode is the default and returns transcript chunks, output probes, and downloaded file contents once; Maximum compatibility restores the SDK's duplicated text and structured representations.
+- Added an authenticated, CSRF-protected **Restart Bridge** action backed by a fixed systemd helper unit. The panel tracks configured versus active output mode and reminds owners to refresh tool lists in every harness after restart.
+
+### Reliability and Operations
+
+- Output probe runs now record their active tool-result mode, and chunk recommendations compare only runs made in the currently active mode.
+
 ### Breaking Changes
 
 - Removed the public MCP `list_sessions` tool. Continuing an existing conversation now requires an explicitly supplied `session_id`; clients without one must ask the user or create a new session.

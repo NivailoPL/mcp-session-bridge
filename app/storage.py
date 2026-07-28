@@ -12,6 +12,13 @@ from threading import Lock
 from typing import Any
 
 from app.time_format import format_timestamp_iso
+from app.tool_output import (
+    DEFAULT_TOOL_OUTPUT_MODE,
+    TOOL_OUTPUT_MODE_MAXIMUM_COMPATIBILITY,
+    TOOL_OUTPUT_MODE_SETTING,
+    TOOL_OUTPUT_MODES,
+    TOOL_OUTPUT_RESTART_PENDING_SETTING,
+)
 
 UNCATEGORIZED_GROUP_ID = "uncategorized"
 
@@ -233,7 +240,7 @@ class Store:
     def _init_schema(self) -> None:
         with self._lock, self._connect() as conn:
             conn.executescript(
-                """
+                f"""
                 CREATE TABLE IF NOT EXISTS clients (
                     client_id TEXT PRIMARY KEY,
                     client_secret_hash TEXT,
@@ -311,6 +318,7 @@ class Store:
                     server_result_json_chars INTEGER NOT NULL,
                     block_count INTEGER NOT NULL,
                     block_size INTEGER NOT NULL,
+                    tool_output_mode TEXT NOT NULL DEFAULT '{TOOL_OUTPUT_MODE_MAXIMUM_COMPATIBILITY}',
                     blocks_json TEXT NOT NULL,
                     status TEXT NOT NULL,
                     result_class TEXT,
@@ -413,6 +421,12 @@ class Store:
             self._ensure_column(conn, "exchanges", "deleted_at", "INTEGER")
             self._ensure_column(conn, "exchanges", "deleted_reason", "TEXT")
             self._ensure_column(conn, "exchanges", "edited_at", "INTEGER")
+            self._ensure_column(
+                conn,
+                "output_probe_runs",
+                "tool_output_mode",
+                f"TEXT NOT NULL DEFAULT '{TOOL_OUTPUT_MODE_MAXIMUM_COMPATIBILITY}'",
+            )
             self._ensure_column(conn, "session_files", "binary_content", "BLOB")
             self._ensure_column(conn, "session_files", "content_kind", "TEXT NOT NULL DEFAULT 'text'")
             self._ensure_column(conn, "session_files", "page_count", "INTEGER")
@@ -696,6 +710,56 @@ class Store:
             )
         return {"key": key, "value": value, "updated_at": updated_at}
 
+    def set_tool_output_mode_if_restart_not_pending(self, mode: str) -> bool:
+        updated_at = int(time.time())
+        with self._lock, self._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            pending = conn.execute(
+                "SELECT 1 FROM app_settings WHERE key = ?",
+                (TOOL_OUTPUT_RESTART_PENDING_SETTING,),
+            ).fetchone()
+            if pending:
+                return False
+            conn.execute(
+                """
+                INSERT INTO app_settings (key, value, updated_at)
+                VALUES (?, ?, ?)
+                ON CONFLICT(key) DO UPDATE SET
+                    value = excluded.value,
+                    updated_at = excluded.updated_at
+                """,
+                (TOOL_OUTPUT_MODE_SETTING, mode, updated_at),
+            )
+        return True
+
+    def reserve_tool_output_restart(self, active_mode: str) -> tuple[str, str]:
+        updated_at = int(time.time())
+        with self._lock, self._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            pending = conn.execute(
+                "SELECT value FROM app_settings WHERE key = ?",
+                (TOOL_OUTPUT_RESTART_PENDING_SETTING,),
+            ).fetchone()
+            if pending:
+                return "pending", str(pending["value"])
+            configured = conn.execute(
+                "SELECT value FROM app_settings WHERE key = ?",
+                (TOOL_OUTPUT_MODE_SETTING,),
+            ).fetchone()
+            configured_mode = str(configured["value"]) if configured else DEFAULT_TOOL_OUTPUT_MODE
+            if configured_mode not in TOOL_OUTPUT_MODES:
+                configured_mode = DEFAULT_TOOL_OUTPUT_MODE
+            if configured_mode == active_mode:
+                return "not_required", configured_mode
+            conn.execute(
+                "INSERT INTO app_settings (key, value, updated_at) VALUES (?, ?, ?)",
+                (TOOL_OUTPUT_RESTART_PENDING_SETTING, configured_mode, updated_at),
+            )
+        return "reserved", configured_mode
+
+    def clear_tool_output_restart_pending(self) -> None:
+        self.delete_app_setting(TOOL_OUTPUT_RESTART_PENDING_SETTING)
+
     def create_output_probe_run(self, run: dict[str, Any]) -> dict[str, Any]:
         created_at = int(time.time())
         with self._lock, self._connect() as conn:
@@ -704,8 +768,8 @@ class Store:
                 INSERT INTO output_probe_runs (
                     run_id, harness_label, content_profile, target_chars,
                     payload_char_count, server_result_json_chars, block_count,
-                    block_size, blocks_json, status, created_by, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
+                    block_size, tool_output_mode, blocks_json, status, created_by, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
                 """,
                 (
                     run["run_id"],
@@ -716,6 +780,7 @@ class Store:
                     run["server_result_json_chars"],
                     run["block_count"],
                     run["block_size"],
+                    run["tool_output_mode"],
                     json.dumps(run["blocks"], separators=(",", ":")),
                     run["created_by"],
                     created_at,
@@ -751,7 +816,7 @@ class Store:
                 SELECT
                     run_id, harness_label, content_profile, target_chars,
                     payload_char_count, server_result_json_chars, block_count,
-                    block_size, '[]' AS blocks_json, status, result_class,
+                    block_size, tool_output_mode, '[]' AS blocks_json, status, result_class,
                     '[]' AS observed_canaries_json, matched_checkpoints_json,
                     last_complete_block_index, NULL AS last_complete_canary,
                     noticed_truncation, notes, created_by, created_at, reported_at
@@ -2229,6 +2294,7 @@ def _output_probe_row(row: sqlite3.Row) -> dict[str, Any]:
         "server_result_json_chars": row["server_result_json_chars"],
         "block_count": row["block_count"],
         "block_size": row["block_size"],
+        "tool_output_mode": row["tool_output_mode"],
         "blocks": json.loads(row["blocks_json"]),
         "status": row["status"],
         "result_class": row["result_class"],

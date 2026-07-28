@@ -41,6 +41,18 @@ Template:
 deploy/mcp-session-bridge.service
 ```
 
+To enable the narrowly scoped **Restart Bridge** action in the authenticated admin Settings,
+install both service units:
+
+```bash
+install -m 0644 deploy/mcp-session-bridge.service /etc/systemd/system/mcp-session-bridge.service
+install -m 0644 deploy/mcp-session-bridge-restart.service /etc/systemd/system/mcp-session-bridge-restart.service
+systemctl daemon-reload
+```
+
+The helper waits one second so the admin response can finish, then restarts only
+`mcp-session-bridge.service`. It accepts no service name or command from the HTTP request.
+
 Typical update:
 
 ```bash

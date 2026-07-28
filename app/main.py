@@ -46,6 +46,7 @@ from app.time_format import (
     format_response_timestamp,
     resolve_timezone_name,
 )
+from app.tool_output import configured_tool_output_mode, large_tool_structured_output
 
 MANUAL_CONTEXT_ID = "manual-context"
 SERVER_INSTRUCTIONS = (
@@ -65,6 +66,11 @@ store = Store(
 )
 logger = logging.getLogger(__name__)
 MCP_REQUEST_MAX_BODY_BYTES = ((MAX_MCP_PDF_BYTES + 2) // 3 * 4) + 262_144
+BRIDGE_RESTART_HELPER_UNIT = "mcp-session-bridge-restart.service"
+RESTART_REQUEST_TIMEOUT_SECONDS = 5.0
+RESTART_CLEANUP_TIMEOUT_SECONDS = 1.0
+ACTIVE_TOOL_OUTPUT_MODE = configured_tool_output_mode(store)
+LARGE_TOOL_STRUCTURED_OUTPUT = large_tool_structured_output(ACTIVE_TOOL_OUTPUT_MODE)
 
 
 class BridgeTokenVerifier(TokenVerifier):
@@ -99,6 +105,8 @@ async def _search_index_monitor() -> None:
 async def app_lifespan(_: FastMCP[Any]):
     monitor = asyncio.create_task(_search_index_monitor())
     try:
+        # Reaching this point is the final startup step before the app is ready to serve.
+        await asyncio.to_thread(store.clear_tool_output_restart_pending)
         yield {}
     finally:
         monitor.cancel()
@@ -127,7 +135,49 @@ mcp = FastMCP(
 )
 
 oauth = OAuthHandlers(settings, store)
-admin = AdminHandlers(settings, store, ROOT / "admin-viewer.html")
+
+
+async def _request_service_restart() -> None:
+    process = await asyncio.create_subprocess_exec(
+        "/bin/systemctl",
+        "start",
+        "--no-block",
+        BRIDGE_RESTART_HELPER_UNIT,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    try:
+        _, stderr = await asyncio.wait_for(
+            process.communicate(),
+            timeout=RESTART_REQUEST_TIMEOUT_SECONDS,
+        )
+    except TimeoutError as exc:
+        process.terminate()
+        try:
+            await asyncio.wait_for(process.wait(), timeout=RESTART_CLEANUP_TIMEOUT_SECONDS)
+        except TimeoutError:
+            process.kill()
+            try:
+                await asyncio.wait_for(process.wait(), timeout=RESTART_CLEANUP_TIMEOUT_SECONDS)
+            except TimeoutError as cleanup_exc:
+                raise RuntimeError(
+                    "Service restart request timed out and its systemctl process could not be reaped"
+                ) from cleanup_exc
+        raise RuntimeError(
+            f"Service restart request timed out after {RESTART_REQUEST_TIMEOUT_SECONDS:g} seconds"
+        ) from exc
+    if process.returncode != 0:
+        detail = stderr.decode("utf-8", errors="replace").strip()
+        raise RuntimeError(detail or "systemd rejected the restart request")
+
+
+admin = AdminHandlers(
+    settings,
+    store,
+    ROOT / "admin-viewer.html",
+    active_tool_output_mode=ACTIVE_TOOL_OUTPUT_MODE,
+    restart_requester=_request_service_restart,
+)
 
 
 @mcp.custom_route("/healthz", methods=["GET"])
@@ -232,6 +282,21 @@ async def admin_api_update_general_settings(request: Request) -> Response:
 @mcp.custom_route("/admin/api/settings/transcript", methods=["PUT"])
 async def admin_api_update_transcript_settings(request: Request) -> Response:
     return await admin.api_update_transcript_settings(request)
+
+
+@mcp.custom_route("/admin/api/settings/tool-output", methods=["PUT"])
+async def admin_api_update_tool_output_settings(request: Request) -> Response:
+    return await admin.api_update_tool_output_settings(request)
+
+
+@mcp.custom_route("/admin/api/service/restart", methods=["POST"])
+async def admin_api_restart_service(request: Request) -> Response:
+    return await admin.api_restart_service(request)
+
+
+@mcp.custom_route("/admin/api/service/status", methods=["GET"])
+async def admin_api_service_status(request: Request) -> Response:
+    return await admin.api_service_status(request)
 
 
 @mcp.custom_route("/admin/api/settings/search", methods=["PUT"])
@@ -411,7 +476,7 @@ def _current_transcript_chunk_limits() -> tuple[int, int]:
     )
 
 
-@mcp.tool()
+@mcp.tool(structured_output=LARGE_TOOL_STRUCTURED_OUTPUT)
 def run_output_probe(
     harness_label: str,
     target_chars: int = 100_000,
@@ -449,6 +514,7 @@ def run_output_probe(
         "payload_char_count": probe["payload_char_count"],
         "block_count": probe["block_count"],
         "block_size": probe["block_size"],
+        "tool_output_mode": ACTIVE_TOOL_OUTPUT_MODE,
         "server_result_json_chars": 0,
         "report_instructions": (
             "Immediately call submit_output_probe_observation. Pass every CHECKPOINT canary you can "
@@ -632,7 +698,7 @@ def get_session_overview(session_id: str) -> dict[str, Any]:
     }
 
 
-@mcp.tool()
+@mcp.tool(structured_output=LARGE_TOOL_STRUCTURED_OUTPUT)
 def get_session_transcript_chunk(session_id: str, chunk_index: int = 1) -> dict[str, Any]:
     """Return one bounded chunk of the saved conversation transcript."""
     session = store.get_session(session_id)
@@ -859,7 +925,7 @@ def list_session_files(session_id: str) -> dict[str, Any]:
     return {"ok": True, "files": files}
 
 
-@mcp.tool()
+@mcp.tool(structured_output=LARGE_TOOL_STRUCTURED_OUTPUT)
 def download_session_file(session_id: str, file_id: int) -> dict[str, Any]:
     """Read a file visible to a session; PDFs return extracted text, never original bytes."""
     try:

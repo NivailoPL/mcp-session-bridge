@@ -1,4 +1,4 @@
-from app.output_probe import build_output_probe, classify_probe_observation
+from app.output_probe import build_output_probe, classify_probe_observation, probe_recommendations
 
 
 def _canary_factory():
@@ -104,3 +104,31 @@ def test_probe_observation_classifies_complete_tail_and_middle_loss() -> None:
         last["canary"],
     )
     assert middle["result_class"] == "middle_removed"
+
+
+def test_probe_recommendations_do_not_mix_tool_output_modes() -> None:
+    runs = [
+        {
+            "run_id": "optimized-run",
+            "harness_label": "codex",
+            "content_profile": "transcript_markdown",
+            "tool_output_mode": "optimized",
+            "payload_char_count": 80_000,
+            "result_class": "complete",
+        },
+        {
+            "run_id": "compatibility-run",
+            "harness_label": "codex",
+            "content_profile": "transcript_markdown",
+            "tool_output_mode": "maximum_compatibility",
+            "payload_char_count": 120_000,
+            "result_class": "complete",
+        },
+    ]
+
+    recommendations = probe_recommendations(runs, tool_output_mode="optimized")
+
+    assert len(recommendations) == 1
+    assert recommendations[0]["run_id"] == "optimized-run"
+    assert recommendations[0]["tool_output_mode"] == "optimized"
+    assert recommendations[0]["recommended_chunk_chars"] == 60_000

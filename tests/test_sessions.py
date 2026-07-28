@@ -486,6 +486,34 @@ def test_session_audit_builds_offline_viewer_payload(tmp_path) -> None:
     assert payload["transcripts"]["s1"]["turns"][0]["content"] == "Show me this conversation in the viewer."
 
 
+def test_output_probe_mode_migration_marks_historical_runs_as_maximum_compatibility(tmp_path) -> None:
+    db_path = tmp_path / "legacy-probes.sqlite3"
+    store = Store(db_path)
+    store.create_output_probe_run(
+        {
+            "run_id": "legacy-probe",
+            "harness_label": "codex",
+            "content_profile": "transcript_markdown",
+            "target_chars": 4_096,
+            "payload_char_count": 4_096,
+            "server_result_json_chars": 4_200,
+            "block_count": 4,
+            "block_size": 1_024,
+            "tool_output_mode": "optimized",
+            "blocks": [],
+            "created_by": "test",
+        }
+    )
+    with store._connect() as conn:
+        conn.execute("ALTER TABLE output_probe_runs DROP COLUMN tool_output_mode")
+
+    migrated = Store(db_path)
+    run = migrated.get_output_probe_run("legacy-probe")
+
+    assert run is not None
+    assert run["tool_output_mode"] == "maximum_compatibility"
+
+
 def test_public_tools_hide_context_pack_tools(tmp_path, monkeypatch) -> None:
     main = _load_main(tmp_path, monkeypatch)
 
@@ -517,6 +545,75 @@ def test_public_tools_hide_context_pack_tools(tmp_path, monkeypatch) -> None:
     assert "delete_session_file" not in tool_names
 
 
+def test_large_tool_results_default_to_optimized_unstructured_output(tmp_path, monkeypatch) -> None:
+    main = _load_main(tmp_path, monkeypatch)
+    main.store.create_session("shape", "Result shape", "manual-context")
+    main.store.save_exchange("shape", "Codex", "hello", "world")
+
+    async def inspect_tools():
+        tools = {tool.name: tool for tool in await main.mcp.list_tools()}
+        result = await main.mcp._tool_manager.call_tool(
+            "get_session_transcript_chunk",
+            {"session_id": "shape", "chunk_index": 1},
+            convert_result=True,
+        )
+        return tools, result
+
+    tools, result = asyncio.run(inspect_tools())
+    for tool_name in {
+        "get_session_transcript_chunk",
+        "run_output_probe",
+        "download_session_file",
+    }:
+        assert tools[tool_name].outputSchema is None
+
+    assert tools["get_session_overview"].outputSchema is not None
+    assert main.ACTIVE_TOOL_OUTPUT_MODE == "optimized"
+    assert isinstance(result, list)
+    assert len(result) == 1
+    assert result[0].type == "text"
+
+
+def test_invalid_persisted_tool_output_mode_falls_back_to_optimized(tmp_path, monkeypatch) -> None:
+    main = _load_main(tmp_path, monkeypatch)
+    main.store.set_app_setting("mcp.tool_output_mode", "invalid-mode")
+    sys.modules.pop("app.main", None)
+    main = importlib.import_module("app.main")
+
+    assert main.ACTIVE_TOOL_OUTPUT_MODE == "optimized"
+
+
+def test_large_tool_results_can_restore_maximum_compatibility(tmp_path, monkeypatch) -> None:
+    main = _load_main(tmp_path, monkeypatch)
+    main.store.create_session("shape", "Result shape", "manual-context")
+    main.store.save_exchange("shape", "Codex", "hello", "world")
+    main.store.set_app_setting("mcp.tool_output_mode", "maximum_compatibility")
+    sys.modules.pop("app.main", None)
+    main = importlib.import_module("app.main")
+
+    async def inspect_tools():
+        tools = {tool.name: tool for tool in await main.mcp.list_tools()}
+        result = await main.mcp._tool_manager.call_tool(
+            "get_session_transcript_chunk",
+            {"session_id": "shape", "chunk_index": 1},
+            convert_result=True,
+        )
+        return tools, result
+
+    tools, result = asyncio.run(inspect_tools())
+    for tool_name in {
+        "get_session_transcript_chunk",
+        "run_output_probe",
+        "download_session_file",
+    }:
+        assert tools[tool_name].outputSchema is not None
+    assert main.ACTIVE_TOOL_OUTPUT_MODE == "maximum_compatibility"
+    assert isinstance(result, tuple)
+    assert len(result) == 2
+    assert result[0][0].type == "text"
+    assert result[1]["transcript_markdown"]
+
+
 def test_public_file_tools_require_session_scoping(tmp_path, monkeypatch) -> None:
     main = _load_main(tmp_path, monkeypatch)
 
@@ -545,8 +642,10 @@ def test_output_probe_round_trip_records_verified_result(tmp_path, monkeypatch) 
 
     assert started["ok"] is True
     assert len(started["probe_payload"]) == 12_000
+    assert started["tool_output_mode"] == "optimized"
     assert stored is not None
     assert stored["status"] == "pending"
+    assert stored["tool_output_mode"] == "optimized"
     assert started["server_result_json_chars"] > started["payload_char_count"]
     assert started["server_result_json_chars"] == len(
         json.dumps(started, ensure_ascii=False, separators=(",", ":"))

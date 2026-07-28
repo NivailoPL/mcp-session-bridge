@@ -12,6 +12,7 @@ import time
 import urllib.error
 import urllib.request
 import urllib.parse
+from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Any
 
@@ -68,6 +69,12 @@ from app.time_format import (
     format_timestamp_iso,
     resolve_timezone_name,
 )
+from app.tool_output import (
+    DEFAULT_TOOL_OUTPUT_MODE,
+    TOOL_OUTPUT_RESTART_PENDING_SETTING,
+    configured_tool_output_mode,
+    validate_tool_output_mode,
+)
 
 ADMIN_COOKIE = "mcp_bridge_admin"
 ADMIN_SESSION_SECONDS = 12 * 60 * 60
@@ -93,12 +100,22 @@ ADMIN_FILE_EXTENSIONS = {
 
 
 class AdminHandlers:
-    def __init__(self, settings: Settings, store: Store, html_path: Path):
+    def __init__(
+        self,
+        settings: Settings,
+        store: Store,
+        html_path: Path,
+        *,
+        active_tool_output_mode: str = DEFAULT_TOOL_OUTPUT_MODE,
+        restart_requester: Callable[[], Awaitable[None]] | None = None,
+    ):
         self.settings = settings
         self.store = store
         self.html_path = html_path
         self.pdfjs_dir = html_path.parent / "vendor" / "pdfjs"
         self.search = SearchService(store)
+        self.active_tool_output_mode = active_tool_output_mode
+        self.restart_requester = restart_requester
 
     async def index(self, request: Request) -> Response:
         return RedirectResponse("/admin/sessions", status_code=303)
@@ -233,6 +250,67 @@ class AdminHandlers:
         self.store.set_app_setting(TRANSCRIPT_CHUNK_MAX_LINES_SETTING, str(chunk_max_lines))
         return JSONResponse(
             {"ok": True, "settings": await asyncio.to_thread(self._settings_payload)},
+            headers=self._no_store_headers(),
+        )
+
+    async def api_update_tool_output_settings(self, request: Request) -> Response:
+        _, error = self._require_admin_mutation(request)
+        if error:
+            return error
+        payload, parse_error = await _json_body(request)
+        if parse_error:
+            return parse_error
+        try:
+            mode = validate_tool_output_mode(payload.get("mode"))
+        except ValueError as exc:
+            return self._json_error(str(exc), status_code=400)
+        if not self.store.set_tool_output_mode_if_restart_not_pending(mode):
+            return self._json_error(
+                "A Bridge restart is already in progress. Wait for it to finish before changing the mode.",
+                status_code=409,
+            )
+        return JSONResponse(
+            {"ok": True, "tool_output": self._tool_output_settings_payload()},
+            headers=self._no_store_headers(),
+        )
+
+    async def api_service_status(self, request: Request) -> Response:
+        _, error = self._require_admin(request)
+        if error:
+            return error
+        return JSONResponse(
+            {"ok": True, "tool_output": self._tool_output_settings_payload()},
+            headers=self._no_store_headers(),
+        )
+
+    async def api_restart_service(self, request: Request) -> Response:
+        _, error = self._require_admin_mutation(request)
+        if error:
+            return error
+        reservation, _ = self.store.reserve_tool_output_restart(self.active_tool_output_mode)
+        if reservation == "pending":
+            return self._json_error("A Bridge restart is already in progress.", status_code=409)
+        if reservation == "not_required":
+            return self._json_error("No pending tool output change requires a restart.", status_code=409)
+        if self.restart_requester is None:
+            self.store.clear_tool_output_restart_pending()
+            return self._json_error("Service restart is unavailable on this deployment.", status_code=503)
+        try:
+            await self.restart_requester()
+        except (OSError, RuntimeError) as exc:
+            self.store.clear_tool_output_restart_pending()
+            return self._json_error(f"Could not request service restart: {exc}", status_code=503)
+        return JSONResponse(
+            {
+                "ok": True,
+                "restart_requested": True,
+                "tool_output": self._tool_output_settings_payload(),
+                "message": (
+                    "Bridge restart requested. After it returns, refresh the tool list or reconnect "
+                    "the connector in every harness."
+                ),
+            },
+            status_code=202,
             headers=self._no_store_headers(),
         )
 
@@ -1101,6 +1179,7 @@ class AdminHandlers:
             self.settings.transcript_chunk_max_lines,
         )
         output_probe_runs = self.store.list_output_probe_runs(limit=50)
+        tool_output = self._tool_output_settings_payload()
         return {
             "general": {"rename_model": rename_model},
             "api": {
@@ -1110,6 +1189,7 @@ class AdminHandlers:
             "search": self.search.get_config().to_dict(),
             "groups": self.store.list_session_groups(),
             "index": self.search.index_status(),
+            "tool_output": tool_output,
             "transcript": {
                 "chunk_max_chars": chunk_max_chars,
                 "chunk_max_lines": chunk_max_lines,
@@ -1123,8 +1203,22 @@ class AdminHandlers:
                 "max_probe_target_chars": MAX_PROBE_TARGET_CHARS,
                 "safety_margin_percent": round(PROBE_SAFETY_MARGIN * 100),
                 "runs": [public_probe_run(run) for run in output_probe_runs],
-                "recommendations": probe_recommendations(output_probe_runs),
+                "recommendations": probe_recommendations(
+                    output_probe_runs,
+                    tool_output_mode=self.active_tool_output_mode,
+                ),
             },
+        }
+
+    def _tool_output_settings_payload(self) -> dict[str, Any]:
+        configured_mode = configured_tool_output_mode(self.store)
+        pending_mode = self.store.get_app_setting(TOOL_OUTPUT_RESTART_PENDING_SETTING)
+        return {
+            "active_mode": self.active_tool_output_mode,
+            "configured_mode": configured_mode,
+            "restart_required": configured_mode != self.active_tool_output_mode,
+            "restart_pending": pending_mode is not None,
+            "pending_mode": pending_mode,
         }
 
     def _read_ai_api_key(self) -> str:

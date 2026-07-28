@@ -1,0 +1,7 @@
+[Unit]
+Description=Restart MCP Session Bridge after an authenticated admin request
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sleep 1
+ExecStart=/bin/systemctl restart mcp-session-bridge.service
