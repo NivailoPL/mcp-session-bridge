@@ -240,6 +240,28 @@ def test_admin_viewer_markdown_table_contract() -> None:
     assert '.markdown-body th, .markdown-body td {' in viewer
 
 
+def test_admin_viewer_session_html_export_contract() -> None:
+    viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
+
+    assert 'id="exportHtmlButton"' in viewer
+    assert 'dom.exportHtmlButton.addEventListener("click", exportSessionHtml);' in viewer
+    assert 'function buildSessionExportHtml()' in viewer
+    assert 'state.exchanges.filter((exchange) => !exchange.is_deleted)' in viewer
+    assert 'function selectedThreadIsGuarded()' in viewer
+    assert 'dom.exportHtmlButton.disabled = !state.selectedSession || selectedThreadIsGuarded();' in viewer
+    assert 'if (selectedThreadIsGuarded()) return "";' in viewer
+    assert 'renderMarkdown(content || "\u2014")' in viewer
+    assert '<meta name="viewport" content="width=device-width, initial-scale=1">' in viewer
+    assert '@media (max-width: 640px)' in viewer
+    export_flow = viewer[
+        viewer.index("function exportSessionHtml()"):
+        viewer.index("function renderSessionTitleIcon")
+    ]
+    assert 'URL.createObjectURL(blob)' in export_flow
+    assert 'link.download = `${sessionExportFilename(state.selectedSession)}.html`;' in export_flow
+    assert 'URL.revokeObjectURL(url);' in export_flow
+
+
 @pytest.mark.skipif(shutil.which("node") is None, reason="Node.js is required for the browser renderer smoke test")
 def test_admin_viewer_markdown_table_rendering() -> None:
     viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
