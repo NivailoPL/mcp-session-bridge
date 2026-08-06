@@ -787,6 +787,29 @@ def test_runtime_transcript_chunk_setting_overrides_environment(tmp_path, monkey
     assert all(chunk["chunk_char_count"] <= 1000 for chunk in chunks)
 
 
+def test_transcript_chunks_mask_model_response_for_every_consumer(tmp_path, monkeypatch) -> None:
+    main = _load_main(tmp_path, monkeypatch)
+    session = main.store.create_session("masked-chunk", "Masked chunk", "manual-context")
+    exchange = main.store.save_exchange(
+        session.session_id,
+        "GPT-5",
+        "Give each model an independent view.",
+        "This answer must not anchor another model.",
+    )
+    main.store.mask_exchange_response(exchange.exchange_id, actor="owner")
+
+    overview = main.get_session_overview(session.session_id)
+    chunks = [
+        main.get_session_transcript_chunk(session.session_id, index)
+        for index in range(1, overview["transcript_chunk_count"] + 1)
+    ]
+    transcript = "".join(chunk["transcript_markdown"] for chunk in chunks)
+
+    assert "Give each model an independent view." in transcript
+    assert MASKED_MODEL_RESPONSE in transcript
+    assert "This answer must not anchor another model." not in transcript
+
+
 def test_get_last_speaker_reports_continuity_decision(tmp_path, monkeypatch) -> None:
     main = _load_main(tmp_path, monkeypatch)
     main.store.create_session("s1", "Continuity", "manual-context")

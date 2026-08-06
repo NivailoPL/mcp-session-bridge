@@ -262,6 +262,21 @@ def test_admin_viewer_session_html_export_contract() -> None:
     assert 'URL.revokeObjectURL(url);' in export_flow
 
 
+def test_admin_viewer_context_visibility_controls_contract() -> None:
+    viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
+
+    assert '"Exclude"' in viewer
+    assert '"Include"' in viewer
+    assert '"Mask"' in viewer
+    assert '"Unmask"' in viewer
+    assert "Exclude this user and model exchange from all MCP transcript chunks." in viewer
+    assert "Include this user and model exchange in MCP transcript chunks again." in viewer
+    assert "Mask this model response in all MCP transcript chunks." in viewer
+    assert "Restore this model response in MCP transcript chunks." in viewer
+    assert ".is-masked" in viewer
+    assert "Show excluded exchanges" in viewer
+
+
 @pytest.mark.skipif(shutil.which("node") is None, reason="Node.js is required for the browser renderer smoke test")
 def test_admin_viewer_markdown_table_rendering() -> None:
     viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
@@ -432,6 +447,7 @@ def test_admin_api_requires_login_and_csrf_for_mutations(tmp_path, monkeypatch) 
 
     assert client.get("/admin/api/sessions").status_code == 401
     assert client.delete(f"/admin/api/exchanges/{exchange.exchange_id}").status_code == 401
+    assert client.post(f"/admin/api/exchanges/{exchange.exchange_id}/mask").status_code == 401
 
     login = client.post(
         "/admin/login",
@@ -449,6 +465,17 @@ def test_admin_api_requires_login_and_csrf_for_mutations(tmp_path, monkeypatch) 
         f"/admin/api/exchanges/{exchange.exchange_id}",
         json={"reason": "duplicate"},
     ).status_code == 403
+    assert client.post(
+        f"/admin/api/exchanges/{exchange.exchange_id}/mask",
+    ).status_code == 403
+
+    masked = client.post(
+        f"/admin/api/exchanges/{exchange.exchange_id}/mask",
+        headers={"x-csrf-token": csrf_token},
+    )
+    assert masked.status_code == 200
+    assert masked.json()["exchange"]["is_masked"] is True
+    assert masked.json()["exchange"]["is_excluded"] is False
 
     deleted = client.request(
         "DELETE",
@@ -477,6 +504,14 @@ def test_admin_api_requires_login_and_csrf_for_mutations(tmp_path, monkeypatch) 
     assert restored.status_code == 200
     assert restored.json()["exchange"]["is_deleted"] is False
     assert len(main.store.list_exchanges(session.session_id)) == 1
+    assert restored.json()["exchange"]["is_masked"] is True
+
+    unmasked = client.post(
+        f"/admin/api/exchanges/{exchange.exchange_id}/unmask",
+        headers={"x-csrf-token": csrf_token},
+    )
+    assert unmasked.status_code == 200
+    assert unmasked.json()["exchange"]["is_masked"] is False
 
 
 def test_admin_can_configure_ai_rename_and_update_session_title(tmp_path, monkeypatch) -> None:

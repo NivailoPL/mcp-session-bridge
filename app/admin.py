@@ -1080,6 +1080,38 @@ class AdminHandlers:
             headers=self._no_store_headers(),
         )
 
+    async def api_mask_exchange_response(self, request: Request) -> Response:
+        return await self._api_set_exchange_response_masked(request, masked=True)
+
+    async def api_unmask_exchange_response(self, request: Request) -> Response:
+        return await self._api_set_exchange_response_masked(request, masked=False)
+
+    async def _api_set_exchange_response_masked(self, request: Request, *, masked: bool) -> Response:
+        session, error = self._require_admin_mutation(request)
+        if error:
+            return error
+        exchange_id, error_response = _path_exchange_id(request)
+        if error_response:
+            return error_response
+
+        try:
+            if masked:
+                exchange = self.store.mask_exchange_response(exchange_id, actor=session["username"])
+            else:
+                exchange = self.store.unmask_exchange_response(exchange_id, actor=session["username"])
+        except ValueError as exc:
+            return self._value_error(exc)
+        return JSONResponse(
+            {
+                "ok": True,
+                "exchange": _exchange_payload(
+                    exchange,
+                    timezone_name=self._display_timezone_name(),
+                ),
+            },
+            headers=self._no_store_headers(),
+        )
+
     def _require_admin(self, request: Request) -> tuple[dict[str, Any], Response | None]:
         session = self._read_cookie(request)
         if session:
@@ -1468,6 +1500,9 @@ def _exchange_payload(exchange: ExchangeRecord, timezone_name: str | None = None
         ),
         "assistant_created_at_timezone": resolve_timezone_name(timezone_name),
         "created_at": exchange.created_at,
+        "assistant_masked_at": exchange.assistant_masked_at,
+        "assistant_masked_at_iso": format_timestamp_iso(exchange.assistant_masked_at) if exchange.assistant_masked_at else None,
+        "is_masked": exchange.assistant_masked_at is not None,
         "created_at_iso": format_timestamp_iso(exchange.created_at),
         "deleted_at": exchange.deleted_at,
         "deleted_at_iso": format_timestamp_iso(exchange.deleted_at) if exchange.deleted_at else None,
@@ -1475,6 +1510,7 @@ def _exchange_payload(exchange: ExchangeRecord, timezone_name: str | None = None
         "edited_at": exchange.edited_at,
         "edited_at_iso": format_timestamp_iso(exchange.edited_at) if exchange.edited_at else None,
         "is_deleted": exchange.deleted_at is not None,
+        "is_excluded": exchange.deleted_at is not None,
     }
 
 

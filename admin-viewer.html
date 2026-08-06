@@ -593,6 +593,9 @@
     }
     .exchange:hover { border-color: var(--stroke-strong); }
     .exchange.is-deleted { opacity: .86; border-color: rgba(251, 191, 36, .26); background: rgba(251, 191, 36, .03); }
+    .exchange.is-deleted .exchange-grid { display: none; }
+    .turn.is-masked .turn-content, .message.is-masked .bubble { filter: blur(5px); user-select: none; opacity: .68; }
+    .ex-group.is-deleted .message { display: none; }
     .exchange.is-editing { border-color: rgba(122, 125, 240, .45); box-shadow: var(--shadow-pop); }
 
     .exchange-head {
@@ -626,8 +629,9 @@
     }
     .pill::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
     .pill.deleted { border-color: rgba(251, 191, 36, .32); background: var(--warn-soft); color: var(--warn); }
+    .pill.masked { border-color: rgba(122, 125, 240, .38); background: var(--accent-soft); color: var(--accent-ink); }
 
-    .exchange-actions { display: flex; gap: .4rem; }
+    .exchange-actions { display: flex; flex-wrap: wrap; gap: .4rem; }
     .exchange-actions button { min-height: 2.05rem; padding: .35rem .7rem; font-size: .78rem; }
 
     .reason {
@@ -1085,7 +1089,7 @@
         </button>
         <label class="toggle">
           <input id="showDeletedToggle" type="checkbox" checked>
-          <span>Show deleted exchanges</span>
+          <span>Show excluded exchanges</span>
         </label>
       </section>
 
@@ -2801,7 +2805,7 @@
           lastTurnChip.classList.add("last-turn");
           foot.append(lastTurnChip, chip(`${(session.exchange_count || 0) * 2} turns`));
           if (Number(session.deleted_exchange_count || 0) > 0) {
-            foot.append(chip(`${session.deleted_exchange_count} deleted`, true));
+            foot.append(chip(`${session.deleted_exchange_count} excluded`, true));
           }
 
           const content = div("session-card-content");
@@ -4159,7 +4163,7 @@
           { text: `${formatNumber(state.selectedSession.token_count || 0)} tokens` },
           { text: `${fileCount} files` },
           { text: `${activeCount} active exchanges` },
-          { text: `${deletedCount} deleted` },
+          { text: `${deletedCount} excluded` },
           { text: `timezone ${state.displayTimezone}` },
           { text: `updated ${formatDate(state.selectedSession.updated_at_iso)}` },
         ]);
@@ -4308,7 +4312,9 @@
       }
 
       function statusPill(exchange) {
-        return spanCls(`pill${exchange.is_deleted ? " deleted" : ""}`, exchange.is_deleted ? "Deleted" : "Active");
+        if (exchange.is_deleted) return spanCls("pill deleted", "Excluded");
+        if (exchange.is_masked) return spanCls("pill masked", "Masked");
+        return spanCls("pill", "Active");
       }
 
       // bubbles / thread: each exchange becomes a USER + MODEL message pair plus an action row
@@ -4318,16 +4324,17 @@
         const modelTime = exchange.assistant_created_at_display || formatDate(exchange.assistant_created_at_iso);
         group.append(
           renderMsg("USER", exchange.user_message, false, "", exchange.user_message_token_count),
-          renderMsg(exchange.model_name || "Model", exchange.assistant_response, true, modelTime, exchange.assistant_response_token_count),
+          renderMsg(exchange.model_name || "Model", exchange.assistant_response, true, modelTime, exchange.assistant_response_token_count, exchange.is_masked),
           renderExActions(exchange)
         );
         return group;
       }
 
-      function renderMsg(speakerName, content, isModel, timeText, tokenCount) {
+      function renderMsg(speakerName, content, isModel, timeText, tokenCount, isMasked = false) {
         const speaker = isModel ? (speakerName || "Model") : userDisplayName();
         const article = document.createElement("article");
         article.className = "message " + (isModel ? "is-model" : "is-user");
+        if (isMasked) article.classList.add("is-masked");
         article.style.setProperty("--m", modelIdentity(isModel ? speakerName : "USER").color);
 
         if (state.layout === "thread") {
@@ -4356,6 +4363,23 @@
         return article;
       }
 
+      function contextActionButton(text, onClick, tooltip, className = "ghost") {
+        const node = button(text, onClick, className);
+        node.title = tooltip;
+        node.setAttribute("aria-label", `${text}: ${tooltip}`);
+        return node;
+      }
+
+      function contextVisibilityButtons(exchange) {
+        const maskButton = exchange.is_masked
+          ? contextActionButton("Unmask", () => unmaskExchange(exchange.exchange_id), "Restore this model response in MCP transcript chunks.")
+          : contextActionButton("Mask", () => maskExchange(exchange.exchange_id), "Mask this model response in all MCP transcript chunks.");
+        const exchangeButton = exchange.is_deleted
+          ? contextActionButton("Include", () => restoreExchange(exchange.exchange_id), "Include this user and model exchange in MCP transcript chunks again.", "primary")
+          : contextActionButton("Exclude", () => deleteExchange(exchange.exchange_id), "Exclude this user and model exchange from all MCP transcript chunks.", "danger");
+        return [maskButton, exchangeButton];
+      }
+
       function renderExActions(exchange) {
         const row = div("ex-actions");
         row.append(spanCls("ex-num", `#${exchange.exchange_id}`), statusPill(exchange));
@@ -4364,18 +4388,16 @@
           if (state.layout !== "pairs") setLayout("pairs");
           else renderExchanges();
         }, "ghost"));
+        row.append(...contextVisibilityButtons(exchange));
         if (exchange.is_deleted) {
-          row.append(button("Restore", () => restoreExchange(exchange.exchange_id), "primary"));
           if (exchange.deleted_reason) {
             const r = document.createElement("span");
             r.className = "reason-inline";
             const b = document.createElement("b");
-            b.textContent = "Reason: ";
+            b.textContent = "Note: ";
             r.append(b, document.createTextNode(exchange.deleted_reason));
             row.append(r);
           }
-        } else {
-          row.append(button("Delete", () => deleteExchange(exchange.exchange_id), "danger"));
         }
         return row;
       }
@@ -4397,7 +4419,8 @@
           lines.push(`### USER (${ex.user_message_token_count || 0} tokens)`, "", ex.user_message || "", "");
           const model = ex.model_name || "Model";
           const t = ex.assistant_created_at_display ? ` — ${ex.assistant_created_at_display}` : "";
-          lines.push(`### ${model}${t}${ex.is_deleted ? " (deleted)" : ""} (${ex.assistant_response_token_count || 0} tokens)`, "", ex.assistant_response || "", "");
+          const response = ex.is_masked ? "[MODEL RESPONSE MASKED - CONTENT HIDDEN FROM ALL MODELS]" : (ex.assistant_response || "");
+          lines.push(`### ${model}${t}${ex.is_deleted ? " (excluded)" : ""} (${ex.assistant_response_token_count || 0} tokens)`, "", response, "");
         }
         return lines.join("\n");
       }
@@ -4596,7 +4619,8 @@
         const stampParts = [
           exchange.assistant_created_at_display || formatDate(exchange.assistant_created_at_iso),
           exchange.edited_at_iso ? `edited ${formatDate(exchange.edited_at_iso)}` : "",
-          exchange.is_deleted ? `deleted ${formatDate(exchange.deleted_at_iso)}` : "",
+          exchange.is_masked ? `masked ${formatDate(exchange.assistant_masked_at_iso)}` : "",
+          exchange.is_deleted ? `excluded ${formatDate(exchange.deleted_at_iso)}` : "",
         ].filter(Boolean);
         stampParts.forEach((t, i) => {
           if (i > 0) { const s = document.createElement("span"); s.className = "sep"; stamps.append(s); }
@@ -4606,18 +4630,13 @@
         headId.append(num, av, model);
 
         const right = div("head-right");
-        const pill = spanCls(`pill${exchange.is_deleted ? " deleted" : ""}`, exchange.is_deleted ? "Deleted" : "Active");
+        const pill = statusPill(exchange);
         const actions = div("exchange-actions");
         const editButton = button(state.editingExchangeId === exchange.exchange_id ? "Close" : "Edit", () => {
           state.editingExchangeId = state.editingExchangeId === exchange.exchange_id ? null : exchange.exchange_id;
           renderExchanges();
         }, "ghost");
-        actions.append(editButton);
-        if (exchange.is_deleted) {
-          actions.append(button("Restore", () => restoreExchange(exchange.exchange_id), "primary"));
-        } else {
-          actions.append(button("Delete", () => deleteExchange(exchange.exchange_id), "danger"));
-        }
+        actions.append(editButton, ...contextVisibilityButtons(exchange));
         right.append(pill, actions);
         head.append(headId, right);
 
@@ -4627,7 +4646,7 @@
           const reason = document.createElement("p");
           reason.className = "reason";
           const b = document.createElement("b");
-          b.textContent = "Reason: ";
+          b.textContent = "Note: ";
           reason.append(b, document.createTextNode(exchange.deleted_reason));
           article.append(reason);
         }
@@ -4636,7 +4655,7 @@
         const grid = div("exchange-grid");
         grid.append(
           renderTurn("USER", userDisplayName(), exchange.user_message, false, exchange.user_message_token_count),
-          renderTurn(exchange.model_name || "MODEL", exchange.model_name || "Model", exchange.assistant_response, true, exchange.assistant_response_token_count)
+          renderTurn(exchange.model_name || "MODEL", exchange.model_name || "Model", exchange.assistant_response, true, exchange.assistant_response_token_count, exchange.is_masked)
         );
         article.append(grid);
 
@@ -4644,8 +4663,9 @@
         return article;
       }
 
-      function renderTurn(identityName, label, content, isModel, tokenCount) {
+      function renderTurn(identityName, label, content, isModel, tokenCount, isMasked = false) {
         const node = div("turn " + (isModel ? "model" : "user"));
+        if (isMasked) node.classList.add("is-masked");
         if (isModel) node.style.setProperty("--m", modelIdentity(identityName).color);
         const headRow = div("turn-head");
         headRow.append(avatar(identityName, true), spanCls("turn-label", label), spanCls("token-count", tokenLabel(tokenCount)));
@@ -4708,15 +4728,25 @@
       }
 
       async function deleteExchange(exchangeId) {
-        const reason = window.prompt("Deletion reason", "duplicate after response generation");
+        const reason = window.prompt("Exclusion note", "temporarily excluded from model context");
         if (reason === null) return;
-        if (!window.confirm(`Delete exchange #${exchangeId} from the active transcript?`)) return;
-        await mutate(`/admin/api/exchanges/${exchangeId}`, { method: "DELETE", body: JSON.stringify({ reason }) }, "Exchange removed from the active transcript.");
+        if (!window.confirm(`Exclude exchange #${exchangeId} from all MCP transcript chunks?`)) return;
+        await mutate(`/admin/api/exchanges/${exchangeId}`, { method: "DELETE", body: JSON.stringify({ reason }) }, "Exchange excluded from model context.");
       }
 
       async function restoreExchange(exchangeId) {
-        if (!window.confirm(`Restore exchange #${exchangeId}?`)) return;
-        await mutate(`/admin/api/exchanges/${exchangeId}/restore`, { method: "POST" }, "Exchange restored.");
+        if (!window.confirm(`Include exchange #${exchangeId} in MCP transcript chunks again?`)) return;
+        await mutate(`/admin/api/exchanges/${exchangeId}/restore`, { method: "POST" }, "Exchange included in model context.");
+      }
+
+      async function maskExchange(exchangeId) {
+        if (!window.confirm(`Mask the model response in exchange #${exchangeId} for all models?`)) return;
+        await mutate(`/admin/api/exchanges/${exchangeId}/mask`, { method: "POST" }, "Model response masked.");
+      }
+
+      async function unmaskExchange(exchangeId) {
+        if (!window.confirm(`Restore the model response in exchange #${exchangeId} to MCP transcript chunks?`)) return;
+        await mutate(`/admin/api/exchanges/${exchangeId}/unmask`, { method: "POST" }, "Model response unmasked.");
       }
 
       async function mutate(path, options, successMessage) {
@@ -5101,6 +5131,18 @@
         if (restore) {
           const hit = find(restore[1]);
           if (hit) { hit.ex.is_deleted = false; hit.ex.deleted_reason = ""; recountDemo(hit.sessionId); }
+          return Promise.resolve({ ok: true });
+        }
+        const mask = path.match(/^\/admin\/api\/exchanges\/(\d+)\/mask$/);
+        if (mask) {
+          const hit = find(mask[1]);
+          if (hit) { hit.ex.is_masked = true; hit.ex.assistant_masked_at_iso = new Date().toISOString(); }
+          return Promise.resolve({ ok: true });
+        }
+        const unmask = path.match(/^\/admin\/api\/exchanges\/(\d+)\/unmask$/);
+        if (unmask) {
+          const hit = find(unmask[1]);
+          if (hit) { hit.ex.is_masked = false; hit.ex.assistant_masked_at_iso = null; }
           return Promise.resolve({ ok: true });
         }
         const exMatch = path.match(/^\/admin\/api\/exchanges\/(\d+)$/);

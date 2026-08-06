@@ -110,3 +110,24 @@ Deferred: per-model visibility, automatic expiry, schedules, bulk actions, maski
 
 **Requirements:** R2, R6-R7; AE4.
 
+**Dependencies:** U1-U2.
+
+**Files:** `admin-viewer.html`, `tests/test_admin.py`.
+
+**Approach:** Rename the owner-facing soft-delete actions to `Exclude` and `Include`, add `Mask` and `Unmask` beside them in both transcript layouts, and attach native English tooltips plus accessible labels. Collapse excluded content completely and blur only masked model content while keeping its state visible.
+
+**Test scenarios:**
+
+- Both layouts expose all four reversible actions with the required tooltips.
+- Excluded exchanges render as compact state rows without their transcript content.
+- Masked model content is visually obscured while the user turn remains readable.
+- The raw admin transcript uses the exact masking placeholder.
+
+**Verification:** Viewer contract tests cover labels, tooltips, state classes, and demo API behavior; the full suite validates the integrated storage, API, transcript, and UI contract.
+
+## Verification Ladder
+
+1. Focused storage and transcript tests for masking, migration, and exclusion behavior.
+2. Focused admin tests for authentication, CSRF, payloads, and state transitions.
+3. Full test suite and `git diff --check` on the VPS checkout.
+4. Service restart followed by readiness and `/healthz` verification.

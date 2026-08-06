@@ -430,6 +430,16 @@ async def admin_api_restore_exchange(request: Request) -> Response:
     return await admin.api_restore_exchange(request)
 
 
+@mcp.custom_route("/admin/api/exchanges/{exchange_id}/mask", methods=["POST"])
+async def admin_api_mask_exchange_response(request: Request) -> Response:
+    return await admin.api_mask_exchange_response(request)
+
+
+@mcp.custom_route("/admin/api/exchanges/{exchange_id}/unmask", methods=["POST"])
+async def admin_api_unmask_exchange_response(request: Request) -> Response:
+    return await admin.api_unmask_exchange_response(request)
+
+
 @mcp.tool()
 def bridge_ping() -> dict[str, Any]:
     """Return a minimal health response proving the authenticated MCP tool path works."""
