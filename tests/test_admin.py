@@ -275,6 +275,123 @@ def test_admin_viewer_context_visibility_controls_contract() -> None:
     assert "Restore this model response in MCP transcript chunks." in viewer
     assert ".is-masked" in viewer
     assert "Show excluded exchanges" in viewer
+    assert 'function contextActionIcon(key)' in viewer
+    assert 'return spanCls("pill", "In context");' in viewer
+    assert 'contextActionButton("Mask", "eye-off"' in viewer
+    assert 'contextActionButton("Exclude", "circle-minus"' in viewer
+    assert 'button("?", null, "context-help-trigger")' in viewer
+    assert '.context-help:hover .context-help-box' in viewer
+    assert '.context-help:focus-within .context-help-box' in viewer
+    assert "Mask hides only the model response and leaves an explicit placeholder for all models." in viewer
+    assert "Exclude removes the complete user and model exchange from all MCP transcript chunks." in viewer
+    assert "Both actions are reversible." in viewer
+    assert 'function renderExcludedTurnBar(exchange)' in viewer
+    assert '"Excluded turn"' in viewer
+    assert 'spanCls("excluded-turn-note", `Note: ${exchange.deleted_reason}`)' in viewer
+    assert '.ex-group.is-deleted { opacity' not in viewer
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="Node.js is required for the browser renderer smoke test")
+def test_admin_viewer_excluded_turn_rendering_hides_message_content() -> None:
+    viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
+    render_group = viewer[viewer.index("function renderExGroup"):viewer.index("function renderMsg")]
+    context_controls = viewer[viewer.index("const CONTEXT_ACTION_ICONS"):viewer.index("function renderExActions")]
+    render_exchange = viewer[viewer.index("function renderExchange(exchange)"):viewer.index("function renderTurn")]
+    helpers = viewer[viewer.index("function button(text"):viewer.index("function label(className")]
+    harness = """
+class Element {
+  constructor(tag) { this.tag = tag; this.children = []; this.dataset = {}; this.attributes = {}; this.listeners = {}; this.className = ""; this.textContent = ""; }
+  append(...nodes) { this.children.push(...nodes); }
+  setAttribute(name, value) { this.attributes[name] = String(value); }
+  addEventListener(name, handler) { this.listeners[name] = handler; }
+  click() { if (this.listeners.click) this.listeners.click(); }
+  style = { setProperty() {} };
+}
+global.document = { createElement: (tag) => new Element(tag) };
+function textOf(node) { return (node.textContent || "") + node.children.map(textOf).join(""); }
+function findNode(node, predicate) {
+  if (predicate(node)) return node;
+  for (const child of node.children) { const match = findNode(child, predicate); if (match) return match; }
+  return null;
+}
+const restored = [];
+function restoreExchange(id) { restored.push(id); }
+"""
+    exchange = """
+const exchange = {
+  exchange_id: 42,
+  is_deleted: true,
+  deleted_reason: "Fresh perspective",
+  user_message: "HIDDEN USER CONTENT",
+  assistant_response: "HIDDEN MODEL CONTENT"
+};
+const pair = renderExchange(exchange);
+const conversational = renderExGroup(exchange);
+const includeButton = findNode(pair, (node) => node.tag === "button" && textOf(node) === "Include");
+includeButton.click();
+const helpTrigger = findNode(pair, (node) => node.className === "context-help-trigger");
+const tooltip = findNode(pair, (node) => node.className === "context-help-box");
+const activeControls = contextVisibilityControls({ exchange_id: 7, is_masked: false });
+const maskedControls = contextVisibilityControls({ exchange_id: 7, is_masked: true });
+process.stdout.write(JSON.stringify({
+  pair: textOf(pair),
+  conversational: textOf(conversational),
+  restored,
+  activeControls: textOf(activeControls),
+  maskedControls: textOf(maskedControls),
+  tooltipLinked: helpTrigger.attributes["aria-describedby"] === tooltip.id && tooltip.attributes.role === "tooltip"
+}));
+"""
+    node = shutil.which("node")
+    assert node is not None
+    completed = subprocess.run(
+        [node, "-e", harness + helpers + context_controls + render_group + render_exchange + exchange],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    rendered = json.loads(completed.stdout)
+
+    for layout_text in (rendered["pair"], rendered["conversational"]):
+        assert "#42Excluded turnNote: Fresh perspectiveInclude?" in layout_text
+        assert "HIDDEN USER CONTENT" not in layout_text
+        assert "HIDDEN MODEL CONTENT" not in layout_text
+    assert rendered["restored"] == [42]
+    assert rendered["activeControls"].startswith("MaskExclude?")
+    assert rendered["maskedControls"].startswith("UnmaskExclude?")
+    assert rendered["tooltipLinked"] is True
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="Node.js is required for the browser renderer smoke test")
+def test_admin_viewer_markdown_hides_excluded_message_content() -> None:
+    viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
+    renderer = viewer[viewer.index("function buildMarkdown()"):viewer.index("function buildSessionExportHtml")]
+    state = """
+const state = {
+  selectedSession: { title: "Review", session_id: "review", token_count: 12 },
+  showDeleted: true,
+  exchanges: [{
+    exchange_id: 42,
+    is_deleted: true,
+    deleted_reason: "Fresh perspective",
+    user_message: "HIDDEN USER CONTENT",
+    assistant_response: "HIDDEN MODEL CONTENT"
+  }]
+};
+"""
+    node = shutil.which("node")
+    assert node is not None
+    completed = subprocess.run(
+        [node, "-e", state + renderer + "\nprocess.stdout.write(buildMarkdown());"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert "### Excluded turn #42" in completed.stdout
+    assert "Note: Fresh perspective" in completed.stdout
+    assert "HIDDEN USER CONTENT" not in completed.stdout
+    assert "HIDDEN MODEL CONTENT" not in completed.stdout
 
 
 @pytest.mark.skipif(shutil.which("node") is None, reason="Node.js is required for the browser renderer smoke test")

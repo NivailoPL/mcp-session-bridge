@@ -585,23 +585,24 @@
 
     /* ---------- exchange card (flat) ---------- */
     .exchange {
+      position: relative;
       border: 1px solid var(--stroke);
       border-radius: var(--r-card);
       background: var(--glass);
-      overflow: hidden;
+      overflow: visible;
       transition: border-color .18s ease, box-shadow .18s ease;
     }
     .exchange:hover { border-color: var(--stroke-strong); }
-    .exchange.is-deleted { opacity: .86; border-color: rgba(251, 191, 36, .26); background: rgba(251, 191, 36, .03); }
-    .exchange.is-deleted .exchange-grid { display: none; }
+    .exchange.is-deleted { border-color: rgba(251, 191, 36, .32); background: rgba(251, 191, 36, .035); }
+    .exchange:has(.context-help:hover), .exchange:has(.context-help:focus-within) { z-index: 6; }
     .turn.is-masked .turn-content, .message.is-masked .bubble { filter: blur(5px); user-select: none; opacity: .68; }
-    .ex-group.is-deleted .message { display: none; }
     .exchange.is-editing { border-color: rgba(122, 125, 240, .45); box-shadow: var(--shadow-pop); }
 
     .exchange-head {
       display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem;
       padding: .9rem 1.05rem;
       border-bottom: 1px solid var(--stroke-soft);
+      border-radius: calc(var(--r-card) - 1px) calc(var(--r-card) - 1px) 0 0;
       background: rgba(255, 255, 255, .02);
     }
     .head-id { display: flex; align-items: center; gap: .7rem; min-width: 0; }
@@ -628,19 +629,59 @@
       white-space: nowrap;
     }
     .pill::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
-    .pill.deleted { border-color: rgba(251, 191, 36, .32); background: var(--warn-soft); color: var(--warn); }
     .pill.masked { border-color: rgba(122, 125, 240, .38); background: var(--accent-soft); color: var(--accent-ink); }
 
-    .exchange-actions { display: flex; flex-wrap: wrap; gap: .4rem; }
-    .exchange-actions button { min-height: 2.05rem; padding: .35rem .7rem; font-size: .78rem; }
+    .exchange-actions { display: flex; align-items: center; flex-wrap: wrap; gap: .4rem; }
+    .exchange-actions > button, .exchange-actions .context-action { min-height: 2.05rem; padding: .35rem .7rem; font-size: .78rem; }
 
-    .reason {
-      margin: 0; padding: .55rem 1.05rem;
-      font-size: .78rem; color: var(--warn);
-      background: var(--warn-soft);
-      border-bottom: 1px solid var(--stroke-soft);
+    .context-visibility-controls { display: inline-flex; align-items: center; gap: .35rem; }
+    .context-action { gap: .38rem; }
+    .context-action-icon { display: inline-flex; align-items: center; justify-content: center; line-height: 0; }
+    .context-action-icon svg { width: 14px; height: 14px; }
+    button.mask-action {
+      border-color: rgba(122, 125, 240, .34); background: rgba(122, 125, 240, .1); color: #b9bbff;
     }
-    .reason b { color: #fff; font-weight: 600; }
+    button.mask-action:hover { border-color: rgba(122, 125, 240, .58); background: rgba(122, 125, 240, .18); color: #fff; }
+    button.exclude-action {
+      border-color: rgba(251, 191, 36, .38); background: rgba(251, 191, 36, .1); color: var(--warn);
+    }
+    button.exclude-action:hover { border-color: rgba(251, 191, 36, .62); background: rgba(251, 191, 36, .18); color: #ffe4a3; }
+    button.include-action {
+      border-color: rgba(52, 211, 153, .34); background: rgba(52, 211, 153, .09); color: var(--ok);
+    }
+    button.include-action:hover { border-color: rgba(52, 211, 153, .56); background: rgba(52, 211, 153, .16); color: #d7ffef; }
+
+    .context-help { position: relative; display: inline-flex; flex: 0 0 auto; }
+    .context-help-trigger {
+      width: 1.45rem; min-height: 1.45rem; padding: 0;
+      border-radius: 999px; border-color: var(--stroke-soft); background: transparent;
+      color: var(--faint-ink); font-size: .68rem; font-weight: 800;
+    }
+    .context-help-trigger:hover { border-color: var(--stroke); background: var(--glass); color: var(--muted); }
+    .context-help-box {
+      position: absolute; z-index: 40; top: calc(100% + .45rem); right: 0;
+      width: min(23rem, calc(100vw - 7.5rem)); padding: .72rem .8rem;
+      border: 1px solid var(--stroke); border-radius: 9px;
+      background: #171a22; color: var(--muted); box-shadow: var(--shadow-pop);
+      font-size: .74rem; line-height: 1.5; text-align: left;
+      opacity: 0; visibility: hidden; transform: translateY(-.2rem);
+      pointer-events: none; transition: opacity .14s ease, transform .14s ease, visibility .14s ease;
+    }
+    .ex-actions .context-help-box { right: auto; left: 0; }
+    .context-help:hover .context-help-box,
+    .context-help:focus-within .context-help-box { opacity: 1; visibility: visible; transform: translateY(0); }
+
+    .excluded-turn-bar {
+      display: flex; align-items: center; gap: .65rem; flex-wrap: wrap;
+      min-width: 0; padding: .7rem .85rem;
+      border: 1px solid rgba(251, 191, 36, .3); border-radius: var(--r-card);
+      background: rgba(251, 191, 36, .055);
+    }
+    .exchange > .excluded-turn-bar { border: 0; border-radius: inherit; }
+    .excluded-turn-label { color: #f7d982; font-size: .78rem; font-weight: 750; letter-spacing: .04em; }
+    .excluded-turn-note { min-width: 0; color: var(--warn); font-size: .74rem; overflow-wrap: anywhere; }
+    .excluded-turn-actions { display: flex; align-items: center; gap: .4rem; margin-left: auto; }
+    .excluded-turn-actions .context-action { min-height: 1.95rem; padding: .32rem .65rem; font-size: .76rem; }
 
     /* ---------- voiceprint avatar ----------
        colored tile + procedurally generated waveform (see avatar() in JS) */
@@ -659,7 +700,7 @@
     .avatar.xs { width: 22px; height: 22px; border-radius: 7px; padding: 4px; }
 
     /* exchange body — the conversation pair */
-    .exchange-grid { display: grid; grid-template-columns: 1fr 1fr; }
+    .exchange-grid { display: grid; grid-template-columns: 1fr 1fr; overflow: hidden; border-radius: 0 0 calc(var(--r-card) - 1px) calc(var(--r-card) - 1px); }
     .turn {
       min-width: 0; padding: 1rem 1.05rem;
       display: grid; gap: .6rem; align-content: start;
@@ -846,12 +887,8 @@
     .chat.bubbles .message.is-user .markdown-body pre { background: rgba(0, 0, 0, .18); border-color: rgba(255, 255, 255, .16); }
 
     .ex-group { display: grid; gap: .55rem; min-width: 0; }
-    .ex-group.is-deleted { opacity: .82; }
     .ex-actions { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
-    .ex-actions button { min-height: 1.9rem; padding: .3rem .65rem; font-size: .76rem; }
-    .ex-actions .reason-inline { font-size: .74rem; color: var(--warn); }
-    .ex-actions .reason-inline b { color: #fff; font-weight: 600; }
-
+    .ex-actions > button, .ex-actions .context-action { min-height: 1.9rem; padding: .3rem .65rem; font-size: .76rem; }
     .chat.bubbles { gap: 1.3rem; }
     .chat.bubbles .ex-group { padding-bottom: .25rem; }
     .chat.bubbles .message { display: grid; gap: .4rem; width: fit-content; max-width: min(42rem, 84%); min-width: 0; }
@@ -1025,6 +1062,9 @@
     @media (max-width: 520px) {
       .exchange-head { flex-direction: column; }
       .head-right { width: 100%; justify-content: space-between; }
+      .context-visibility-controls { flex-wrap: wrap; }
+      .excluded-turn-actions { width: 100%; margin-left: 0; justify-content: flex-end; }
+      .ex-actions .context-help-box { right: 0; left: auto; }
       .file-workspace-grid { display: block; }
       .file-workspace-grid:not(.show-detail) .file-workspace-detail { display: none; }
       .file-workspace-grid.show-detail .file-workspace-list { display: none; }
@@ -4312,14 +4352,17 @@
       }
 
       function statusPill(exchange) {
-        if (exchange.is_deleted) return spanCls("pill deleted", "Excluded");
         if (exchange.is_masked) return spanCls("pill masked", "Masked");
-        return spanCls("pill", "Active");
+        return spanCls("pill", "In context");
       }
 
       // bubbles / thread: each exchange becomes a USER + MODEL message pair plus an action row
       function renderExGroup(exchange) {
         const group = div("ex-group" + (exchange.is_deleted ? " is-deleted" : ""));
+        if (exchange.is_deleted) {
+          group.append(renderExcludedTurnBar(exchange));
+          return group;
+        }
         group.style.setProperty("--m", modelIdentity(exchange.model_name).color);
         const modelTime = exchange.assistant_created_at_display || formatDate(exchange.assistant_created_at_iso);
         group.append(
@@ -4363,21 +4406,63 @@
         return article;
       }
 
-      function contextActionButton(text, onClick, tooltip, className = "ghost") {
-        const node = button(text, onClick, className);
+      const CONTEXT_ACTION_ICONS = Object.freeze({
+        "eye-off": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3l18 18"></path><path d="M10.6 10.7a2 2 0 0 0 2.7 2.7"></path><path d="M9.9 4.2A10.4 10.4 0 0 1 12 4c5.7 0 9 8 9 8a15.7 15.7 0 0 1-2.1 3.2"></path><path d="M6.2 6.2C4.1 7.7 3 12 3 12s3.3 8 9 8a9.8 9.8 0 0 0 4.2-.9"></path></svg>',
+        eye: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12s3.3-7 9-7 9 7 9 7-3.3 7-9 7-9-7-9-7z"></path><circle cx="12" cy="12" r="2.5"></circle></svg>',
+        "circle-minus": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"></circle><path d="M8.5 12h7"></path></svg>',
+        "circle-plus": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"></circle><path d="M8.5 12h7M12 8.5v7"></path></svg>',
+      });
+
+      function contextActionIcon(key) {
+        const node = spanCls("context-action-icon");
+        node.innerHTML = CONTEXT_ACTION_ICONS[key] || "";
+        return node;
+      }
+
+      function contextActionButton(text, iconKey, onClick, tooltip, className = "ghost") {
+        const node = button("", onClick, className);
+        node.append(contextActionIcon(iconKey), spanCls("context-action-label", text));
         node.title = tooltip;
         node.setAttribute("aria-label", `${text}: ${tooltip}`);
         return node;
       }
 
-      function contextVisibilityButtons(exchange) {
+      let contextHelpId = 0;
+      function contextHelpTooltip(description, label) {
+        contextHelpId += 1;
+        const wrapper = spanCls("context-help");
+        const trigger = button("?", null, "context-help-trigger");
+        trigger.setAttribute("aria-label", label);
+        const box = spanCls("context-help-box", description);
+        box.id = `context-help-${contextHelpId}`;
+        box.setAttribute("role", "tooltip");
+        trigger.setAttribute("aria-describedby", box.id);
+        wrapper.append(trigger, box);
+        return wrapper;
+      }
+
+      function contextVisibilityControls(exchange) {
+        const helpText = "Mask hides only the model response and leaves an explicit placeholder for all models. Exclude removes the complete user and model exchange from all MCP transcript chunks. Both actions are reversible.";
         const maskButton = exchange.is_masked
-          ? contextActionButton("Unmask", () => unmaskExchange(exchange.exchange_id), "Restore this model response in MCP transcript chunks.")
-          : contextActionButton("Mask", () => maskExchange(exchange.exchange_id), "Mask this model response in all MCP transcript chunks.");
-        const exchangeButton = exchange.is_deleted
-          ? contextActionButton("Include", () => restoreExchange(exchange.exchange_id), "Include this user and model exchange in MCP transcript chunks again.", "primary")
-          : contextActionButton("Exclude", () => deleteExchange(exchange.exchange_id), "Exclude this user and model exchange from all MCP transcript chunks.", "danger");
-        return [maskButton, exchangeButton];
+          ? contextActionButton("Unmask", "eye", () => unmaskExchange(exchange.exchange_id), "Restore this model response in MCP transcript chunks.", "context-action mask-action")
+          : contextActionButton("Mask", "eye-off", () => maskExchange(exchange.exchange_id), "Mask this model response in all MCP transcript chunks.", "context-action mask-action");
+        const excludeButton = contextActionButton("Exclude", "circle-minus", () => deleteExchange(exchange.exchange_id), "Exclude this user and model exchange from all MCP transcript chunks.", "context-action exclude-action");
+        const controls = spanCls("context-visibility-controls");
+        controls.append(maskButton, excludeButton, contextHelpTooltip(helpText, "About Mask and Exclude"));
+        return controls;
+      }
+
+      function renderExcludedTurnBar(exchange) {
+        const bar = div("excluded-turn-bar");
+        bar.append(spanCls("ex-num", `#${exchange.exchange_id}`), spanCls("excluded-turn-label", "Excluded turn"));
+        if (exchange.deleted_reason) {
+          bar.append(spanCls("excluded-turn-note", `Note: ${exchange.deleted_reason}`));
+        }
+        const actions = div("excluded-turn-actions");
+        const includeButton = contextActionButton("Include", "circle-plus", () => restoreExchange(exchange.exchange_id), "Include this user and model exchange in MCP transcript chunks again.", "context-action include-action");
+        actions.append(includeButton, contextHelpTooltip("Include restores the complete user and model exchange to MCP transcript chunks.", "About Include"));
+        bar.append(actions);
+        return bar;
       }
 
       function renderExActions(exchange) {
@@ -4388,17 +4473,7 @@
           if (state.layout !== "pairs") setLayout("pairs");
           else renderExchanges();
         }, "ghost"));
-        row.append(...contextVisibilityButtons(exchange));
-        if (exchange.is_deleted) {
-          if (exchange.deleted_reason) {
-            const r = document.createElement("span");
-            r.className = "reason-inline";
-            const b = document.createElement("b");
-            b.textContent = "Note: ";
-            r.append(b, document.createTextNode(exchange.deleted_reason));
-            row.append(r);
-          }
-        }
+        row.append(contextVisibilityControls(exchange));
         return row;
       }
 
@@ -4416,11 +4491,16 @@
         const visible = state.showDeleted ? state.exchanges : state.exchanges.filter((e) => !e.is_deleted);
         const lines = [`# ${s.title || s.session_id}`, "", `- session_id: \`${s.session_id}\``, `- tokens: ${s.token_count || 0}`, `- exchanges: ${visible.length}`, "", "## Transcript", ""];
         for (const ex of visible) {
+          if (ex.is_deleted) {
+            lines.push(`### Excluded turn #${ex.exchange_id}`, "");
+            if (ex.deleted_reason) lines.push(`Note: ${ex.deleted_reason}`, "");
+            continue;
+          }
           lines.push(`### USER (${ex.user_message_token_count || 0} tokens)`, "", ex.user_message || "", "");
           const model = ex.model_name || "Model";
           const t = ex.assistant_created_at_display ? ` — ${ex.assistant_created_at_display}` : "";
           const response = ex.is_masked ? "[MODEL RESPONSE MASKED - CONTENT HIDDEN FROM ALL MODELS]" : (ex.assistant_response || "");
-          lines.push(`### ${model}${t}${ex.is_deleted ? " (excluded)" : ""} (${ex.assistant_response_token_count || 0} tokens)`, "", response, "");
+          lines.push(`### ${model}${t} (${ex.assistant_response_token_count || 0} tokens)`, "", response, "");
         }
         return lines.join("\n");
       }
@@ -4606,6 +4686,10 @@
         const article = document.createElement("article");
         article.className = `exchange${exchange.is_deleted ? " is-deleted" : ""}`;
         article.dataset.exchangeId = String(exchange.exchange_id);
+        if (exchange.is_deleted) {
+          article.append(renderExcludedTurnBar(exchange));
+          return article;
+        }
         if (state.editingExchangeId === exchange.exchange_id) article.classList.add("is-editing");
 
         // head
@@ -4636,20 +4720,11 @@
           state.editingExchangeId = state.editingExchangeId === exchange.exchange_id ? null : exchange.exchange_id;
           renderExchanges();
         }, "ghost");
-        actions.append(editButton, ...contextVisibilityButtons(exchange));
+        actions.append(editButton, contextVisibilityControls(exchange));
         right.append(pill, actions);
         head.append(headId, right);
 
         article.append(head);
-
-        if (exchange.deleted_reason) {
-          const reason = document.createElement("p");
-          reason.className = "reason";
-          const b = document.createElement("b");
-          b.textContent = "Note: ";
-          reason.append(b, document.createTextNode(exchange.deleted_reason));
-          article.append(reason);
-        }
 
         // body grid
         const grid = div("exchange-grid");
