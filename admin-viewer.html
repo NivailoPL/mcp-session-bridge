@@ -334,6 +334,9 @@
     .session-button { gap: .4rem; cursor: pointer; }
     .session-card-content { display: grid; gap: .4rem; min-width: 0; }
     .session-title { font-weight: 700; font-size: .9rem; line-height: 1.3; overflow-wrap: anywhere; }
+    .session-compact-title { display: flex; align-items: flex-start; gap: .5rem; min-width: 0; }
+    .session-compact-icon { display: inline-flex; width: 1rem; height: 1rem; margin-top: .15rem; color: var(--g, var(--muted)); flex: 0 0 auto; }
+    .session-compact-title .session-title { min-width: 0; }
     .session-actions {
       position: absolute; inset: .55rem .55rem auto auto; display: flex; gap: .35rem;
       opacity: 0; transform: translateY(-3px); pointer-events: none; transition: opacity .16s ease, transform .16s ease;
@@ -415,7 +418,7 @@
     .session-title-line { display: flex; align-items: center; gap: .55rem; min-width: 0; }
     .session-title-icon { display: none; width: 1.35rem; height: 1.35rem; color: var(--g, var(--accent-ink)); flex: 0 0 auto; }
     .session-title-icon.show { display: inline-flex; }
-    .session-title-icon svg { width: 100%; height: 100%; }
+    .session-title-icon svg, .session-compact-icon svg { width: 100%; height: 100%; }
     .topbar-title h2 {
       margin: 0;
       font-size: 1.4rem; font-weight: 700; letter-spacing: -.015em; line-height: 1.15;
@@ -2816,6 +2819,9 @@
           if (!cardIsGuarded) {
             item.tabIndex = 0;
             item.role = "button";
+            if (!isSelected) {
+              item.setAttribute("aria-label", `${session.title || "Untitled"} — ${group?.name || session.group_id || "Uncategorized"}`);
+            }
             item.addEventListener("click", selectSession);
             item.addEventListener("keydown", (event) => {
               if (event.key === "Enter" || event.key === " ") {
@@ -2825,9 +2831,9 @@
             });
           }
 
-          const groupChip = sessionGroupChip(group, session.group_id);
           let foot = null;
           if (isSelected) {
+            const groupChip = sessionGroupChip(group, session.group_id);
             foot = div("session-foot");
             foot.append(groupChip);
             const lastTurnChip = chip(formatLastTurnDate(session.last_turn_at_iso || session.updated_at_iso));
@@ -2842,8 +2848,7 @@
           if (isSelected && state.manualRenameSessionId === session.session_id) {
             content.append(renderSessionRenameForm(session));
           } else if (!isSelected) {
-            content.append(div("session-title", session.title || "Untitled"));
-            content.append(groupChip);
+            content.append(sessionCompactTitle(session, group));
           } else {
             content.append(
               div("session-title", session.title || "Untitled"),
@@ -3832,6 +3837,16 @@
         const month = String(date.getMonth() + 1).padStart(2, "0");
         const year = String(date.getFullYear()).slice(-2);
         return `${time} ${weekday} (${day}.${month}.${year})`;
+      }
+
+      function sessionCompactTitle(session, group) {
+        const titleLine = div("session-compact-title");
+        const icon = spanCls("session-compact-icon");
+        icon.setAttribute("aria-hidden", "true");
+        icon.style.setProperty("--g", group?.color || "#8b93a7");
+        icon.append(svgNode(group?.icon_key));
+        titleLine.append(icon, div("session-title", session.title || "Untitled"));
+        return titleLine;
       }
 
       function sessionGroupChip(group, fallbackId) {

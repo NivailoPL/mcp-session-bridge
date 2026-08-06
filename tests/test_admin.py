@@ -45,14 +45,21 @@ def test_admin_viewer_compacts_unselected_sessions() -> None:
     assert 'item.classList.toggle("is-compact", !isSelected);' in render_sessions
     assert 'const isSelected = session.session_id === state.selectedSessionId;' in render_sessions
     assert 'if (isSelected && state.manualRenameSessionId === session.session_id) {' in render_sessions
+    assert 'content.append(sessionCompactTitle(session, group));' in render_sessions
+    assert 'item.setAttribute("aria-label"' in render_sessions
     assert 'function sessionGroupChip(group, fallbackId)' in viewer
+    assert 'function sessionCompactTitle(session, group)' in viewer
     assert ".session-button.is-compact" in viewer
 
 
 @pytest.mark.skipif(shutil.which("node") is None, reason="Node.js is required for the browser renderer smoke test")
 def test_admin_viewer_session_list_rendering() -> None:
     viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
-    render_sessions = viewer[
+    session_compact_title = viewer[
+        viewer.index("function sessionCompactTitle"):
+        viewer.index("function sessionGroupChip")
+    ]
+    render_sessions = session_compact_title + viewer[
         viewer.index("function renderSessions"):
         viewer.index("function renderSessionListSensitiveGuard")
     ]
@@ -104,6 +111,7 @@ function chip(text) {
 function sessionGroupChip(group, fallbackId) {
   return spanCls("mini-chip group", group?.name || fallbackId || "Uncategorized");
 }
+function svgNode() { return spanCls("group-icon"); }
 function renderSessionActions() { return spanCls("session-actions", "actions"); }
 function renderSessionRenameForm() { return spanCls("session-rename", "rename form"); }
 function formatLastTurnDate() { return "date"; }
@@ -115,6 +123,9 @@ function filteredSessions() {
   return state.sessions.filter((session) => (
     state.activeGroupId === "all" || session.group_id === state.activeGroupId
   ));
+}
+function hasClass(node, className) {
+  return node.classList.contains(className) || String(node.className).split(" ").includes(className) || node.children.some((child) => hasClass(child, className));
 }
 function sessionGroup(session) { return session.group; }
 const group = { name: "Brainstorming", color: "#2563eb", icon_key: "ideas", is_sensitive: false };
@@ -140,6 +151,10 @@ function cardSnapshot(node) {
     role: node.role,
     tabIndex: node.tabIndex,
     hasKeydown: Boolean(node.listeners.keydown),
+    compactIcon: hasClass(node, "session-compact-icon"),
+    compactIconFirst: node.children[0]?.children[0]?.children[0]?.className === "session-compact-icon",
+    compactIconHidden: node.children[0]?.children[0]?.children[0]?.attributes["aria-hidden"] === "true",
+    ariaLabel: node.attributes["aria-label"] || "",
     text: textOf(node)
   };
 }
@@ -164,6 +179,8 @@ process.stdout.write(JSON.stringify({ initial, switched }));
     initial_selected, initial_other = rendered["initial"]
     assert initial_selected["active"] is True
     assert initial_selected["compact"] is False
+    assert initial_selected["compactIcon"] is False
+    assert initial_selected["ariaLabel"] == ""
     assert "selected-id" in initial_selected["text"]
     assert "actions" in initial_selected["text"]
     assert initial_selected["role"] == "button"
@@ -171,7 +188,12 @@ process.stdout.write(JSON.stringify({ initial, switched }));
     assert initial_selected["hasKeydown"] is True
     assert initial_other["active"] is False
     assert initial_other["compact"] is True
-    assert initial_other["text"].startswith("Other sessionBrainstorming")
+    assert initial_other["compactIcon"] is True
+    assert initial_other["compactIconFirst"] is True
+    assert initial_other["compactIconHidden"] is True
+    assert initial_other["ariaLabel"] == "Other session — Brainstorming"
+    assert initial_other["text"] == "Other session"
+    assert "Brainstorming" not in initial_other["text"]
     assert "other-id" not in initial_other["text"]
     assert "actions" not in initial_other["text"]
     assert initial_other["role"] == "button"
@@ -181,10 +203,18 @@ process.stdout.write(JSON.stringify({ initial, switched }));
     switched_selected, switched_other = rendered["switched"]
     assert switched_selected["active"] is False
     assert switched_selected["compact"] is True
+    assert switched_selected["compactIcon"] is True
+    assert switched_selected["compactIconFirst"] is True
+    assert switched_selected["compactIconHidden"] is True
+    assert switched_selected["ariaLabel"] == "Selected session — Brainstorming"
     assert "rename form" not in switched_selected["text"]
+    assert "Brainstorming" not in switched_selected["text"]
     assert switched_other["active"] is True
     assert switched_other["compact"] is False
+    assert switched_other["compactIcon"] is False
+    assert switched_other["ariaLabel"] == ""
     assert "other-id" in switched_other["text"]
+    assert "Brainstorming" in switched_other["text"]
     assert "actions" in switched_other["text"]
 
 
