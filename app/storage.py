@@ -182,6 +182,7 @@ class ExchangeRecord:
     assistant_response: str
     assistant_created_at: int
     created_at: int
+    assistant_masked_at: int | None = None
     deleted_at: int | None = None
     deleted_reason: str | None = None
     edited_at: int | None = None
@@ -368,6 +369,7 @@ class Store:
                     assistant_response TEXT NOT NULL,
                     assistant_created_at INTEGER NOT NULL,
                     created_at INTEGER NOT NULL,
+                    assistant_masked_at INTEGER,
                     deleted_at INTEGER,
                     deleted_reason TEXT,
                     edited_at INTEGER,
@@ -418,6 +420,7 @@ class Store:
             self._ensure_column(conn, "sessions", "group_id", f"TEXT NOT NULL DEFAULT '{UNCATEGORIZED_GROUP_ID}'")
             self._ensure_column(conn, "session_groups", "is_sensitive", "INTEGER NOT NULL DEFAULT 0")
             self._ensure_column(conn, "exchanges", "assistant_created_at", "INTEGER")
+            self._ensure_column(conn, "exchanges", "assistant_masked_at", "INTEGER")
             self._ensure_column(conn, "exchanges", "deleted_at", "INTEGER")
             self._ensure_column(conn, "exchanges", "deleted_reason", "TEXT")
             self._ensure_column(conn, "exchanges", "edited_at", "INTEGER")
@@ -1838,6 +1841,48 @@ class Store:
             self._record_exchange_event(conn, "restore", actor, before, after)
         return _exchange_from_row(after)
 
+    def mask_exchange_response(self, exchange_id: int, *, actor: str = "admin") -> ExchangeRecord:
+        return self._set_exchange_response_masked(exchange_id, masked=True, actor=actor)
+
+    def unmask_exchange_response(self, exchange_id: int, *, actor: str = "admin") -> ExchangeRecord:
+        return self._set_exchange_response_masked(exchange_id, masked=False, actor=actor)
+
+    def _set_exchange_response_masked(
+        self,
+        exchange_id: int,
+        *,
+        masked: bool,
+        actor: str,
+    ) -> ExchangeRecord:
+        now = int(time.time())
+        with self._lock, self._connect() as conn:
+            before = conn.execute("SELECT * FROM exchanges WHERE exchange_id = ?", (exchange_id,)).fetchone()
+            if before is None:
+                raise ValueError(f"Unknown exchange_id: {exchange_id}")
+            should_update = (before["assistant_masked_at"] is None) == masked
+            if should_update:
+                conn.execute(
+                    """
+                    UPDATE exchanges
+                    SET assistant_masked_at = ?, edited_at = ?
+                    WHERE exchange_id = ?
+                    """,
+                    (now if masked else None, now, exchange_id),
+                )
+                conn.execute(
+                    "UPDATE sessions SET updated_at = ? WHERE session_id = ?",
+                    (now, before["session_id"]),
+                )
+            after = conn.execute("SELECT * FROM exchanges WHERE exchange_id = ?", (exchange_id,)).fetchone()
+            self._record_exchange_event(
+                conn,
+                "mask_response" if masked else "unmask_response",
+                actor,
+                before,
+                after,
+            )
+        return _exchange_from_row(after)
+
     def list_exchange_events(self, exchange_id: int) -> list[dict[str, Any]]:
         with self._lock, self._connect() as conn:
             rows = conn.execute(
@@ -2044,6 +2089,7 @@ def _exchange_from_row(row: sqlite3.Row) -> ExchangeRecord:
         assistant_response=row["assistant_response"],
         assistant_created_at=row["assistant_created_at"] or row["created_at"],
         created_at=row["created_at"],
+        assistant_masked_at=row["assistant_masked_at"],
         deleted_at=row["deleted_at"],
         deleted_reason=row["deleted_reason"],
         edited_at=row["edited_at"],
@@ -2153,6 +2199,7 @@ def _exchange_row_dict(row: sqlite3.Row | None) -> dict[str, Any] | None:
         "assistant_response": row["assistant_response"],
         "assistant_created_at": row["assistant_created_at"] or row["created_at"],
         "created_at": row["created_at"],
+        "assistant_masked_at": row["assistant_masked_at"],
         "deleted_at": row["deleted_at"],
         "deleted_reason": row["deleted_reason"],
         "edited_at": row["edited_at"],

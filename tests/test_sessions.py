@@ -10,7 +10,7 @@ from datetime import UTC
 
 import pytest
 
-from app.session_package import render_session_transcript
+from app.session_package import MASKED_MODEL_RESPONSE, render_session_transcript
 from app.time_format import DISPLAY_TIMEZONE_SETTING_KEY
 from app.storage import (
     MAX_SESSION_FILE_BYTES,
@@ -301,6 +301,48 @@ def test_store_soft_deletes_exchange_and_hides_it_from_transcript(tmp_path) -> N
 
     assert restored.deleted_at is None
     assert [exchange.exchange_id for exchange in store.list_exchanges("s1")] == [first.exchange_id, duplicate.exchange_id]
+
+
+def test_store_masks_assistant_response_without_hiding_exchange(tmp_path) -> None:
+    store = Store(tmp_path / "bridge.sqlite3")
+    session = store.create_session("s1", "Masking test", "manual-context")
+    exchange = store.save_exchange("s1", "GPT-5", "Give me a fresh opinion.", "A strongly anchoring answer.")
+
+    masked = store.mask_exchange_response(exchange.exchange_id, actor="owner")
+    transcript = render_session_transcript(session, store.list_exchanges("s1"))
+    events = store.list_exchange_events(exchange.exchange_id)
+
+    assert masked.assistant_masked_at is not None
+    assert "Give me a fresh opinion." in transcript["transcript_markdown"]
+    assert "A strongly anchoring answer." not in transcript["transcript_markdown"]
+    assert MASKED_MODEL_RESPONSE in transcript["transcript_markdown"]
+    assert transcript["turn_sequence"] == ["USER", "GPT-5"]
+    assert events[-1]["action"] == "mask_response"
+
+    store.delete_exchange(exchange.exchange_id, actor="owner")
+    restored = store.restore_exchange(exchange.exchange_id, actor="owner")
+    assert restored.assistant_masked_at == masked.assistant_masked_at
+
+    unmasked = store.unmask_exchange_response(exchange.exchange_id, actor="owner")
+    restored_transcript = render_session_transcript(session, store.list_exchanges("s1"))
+    assert unmasked.assistant_masked_at is None
+    assert "A strongly anchoring answer." in restored_transcript["transcript_markdown"]
+    assert MASKED_MODEL_RESPONSE not in restored_transcript["transcript_markdown"]
+    assert store.list_exchange_events(exchange.exchange_id)[-1]["action"] == "unmask_response"
+
+
+def test_store_migrates_existing_exchanges_with_unmasked_default(tmp_path) -> None:
+    db_path = tmp_path / "bridge.sqlite3"
+    store = Store(db_path)
+    store.create_session("s1", "Migration test", "manual-context")
+    exchange = store.save_exchange("s1", "Claude", "Question.", "Answer.")
+
+    with store._connect() as conn:
+        conn.execute("ALTER TABLE exchanges DROP COLUMN assistant_masked_at")
+
+    migrated = Store(db_path).get_exchange(exchange.exchange_id)
+    assert migrated is not None
+    assert migrated.assistant_masked_at is None
 
 
 def test_get_latest_exchange_returns_newest_active_exchange(tmp_path) -> None:

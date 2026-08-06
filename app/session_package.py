@@ -8,6 +8,9 @@ from app.storage import ExchangeRecord, SessionRecord
 from app.time_format import format_response_timestamp, format_timestamp_iso, resolve_timezone_name
 
 
+MASKED_MODEL_RESPONSE = "[MODEL RESPONSE MASKED - CONTENT HIDDEN FROM ALL MODELS]"
+
+
 @dataclass(frozen=True)
 class TextChunk:
     index: int
@@ -195,6 +198,7 @@ def _transcript_turns(exchanges: list[ExchangeRecord], timezone_name: str) -> li
             exchange.assistant_created_at,
             timezone_name=timezone_name,
         )
+        assistant_content = MASKED_MODEL_RESPONSE if exchange.assistant_masked_at is not None else exchange.assistant_response
         turns.append(
             {
                 "turn": len(turns) + 1,
@@ -213,8 +217,8 @@ def _transcript_turns(exchanges: list[ExchangeRecord], timezone_name: str) -> li
                 "exchange_id": exchange.exchange_id,
                 "created_at": assistant_created_at,
                 "created_at_display": assistant_created_at_display,
-                "chars": len(exchange.assistant_response),
-                "content": exchange.assistant_response,
+                "chars": len(assistant_content),
+                "content": assistant_content,
             }
         )
     return turns
