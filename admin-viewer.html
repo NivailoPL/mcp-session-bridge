@@ -214,35 +214,18 @@
       display: flex;
       gap: .45rem;
       align-items: center;
-      padding: .8rem 1.2rem .25rem;
+      padding: .8rem 1.2rem .9rem;
+      border-bottom: 1px solid var(--stroke-soft);
     }
-    .settings-row form { margin: 0; }
     .settings-row button { min-height: 2.05rem; padding: .36rem .68rem; font-size: .78rem; border-radius: 8px; }
     .settings-button { display: inline-flex; align-items: center; gap: .42rem; }
     .settings-button svg { width: 15px; height: 15px; }
-
-    .identity-row {
-      display: block;
-      padding: .65rem 1.2rem .9rem;
-      border-bottom: 1px solid var(--stroke-soft);
-    }
-    .identity-row .who { flex: 1 1 auto; display: flex; align-items: flex-start; gap: .6rem; min-width: 0; }
-    .identity-row .who-stack { display: grid; gap: .55rem; width: 100%; min-width: 0; }
-    .identity-row .who-label { font-size: .68rem; text-transform: uppercase; letter-spacing: .14em; color: var(--faint-ink); }
-    .identity-row .who-name { font-size: .86rem; font-weight: 600; overflow-wrap: anywhere; }
-    .toolbar { display: grid; gap: .7rem; padding: 1rem 1.2rem; border-bottom: 1px solid var(--stroke-soft); }
     .search-wrap { position: relative; }
     .search-wrap svg {
       position: absolute; left: .72rem; top: 50%; transform: translateY(-50%);
       width: 16px; height: 16px; color: var(--faint-ink); pointer-events: none;
     }
     .search-wrap input { padding-left: 2.2rem; }
-
-    .toggle {
-      display: flex; align-items: center; gap: .55rem;
-      font-size: .82rem; color: var(--muted); cursor: pointer; user-select: none;
-    }
-    .toggle input { width: auto; accent-color: var(--accent); }
 
     .list-head {
       display: flex; align-items: center; justify-content: space-between;
@@ -934,8 +917,17 @@
       background: rgba(255, 255, 255, .03);
       color: #d4d8e2; font-size: .9rem; line-height: 1.65; overflow-wrap: anywhere;
     }
-    .search-launcher { justify-content: flex-start; gap: .55rem; width: 100%; }
+    .search-launcher { justify-content: flex-start; gap: .42rem; width: auto; }
     .search-launcher svg { width: 16px; height: 16px; }
+    .admin-session-card {
+      display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+      padding: .8rem; border: 1px solid var(--stroke); border-radius: var(--r-card);
+      background: rgba(255,255,255,.025);
+    }
+    .admin-session-copy { display: grid; gap: .2rem; min-width: 0; }
+    .admin-session-copy small { color: var(--muted); font-size: .72rem; }
+    .admin-session-copy strong { overflow-wrap: anywhere; font-size: .86rem; }
+    .admin-session-card form { flex: 0 0 auto; margin: 0; }
     .settings-dialog { width: min(58rem, calc(100vw - 2rem)); max-width: none; max-height: min(48rem, calc(100vh - 2rem)); }
     .settings-shell { display: grid; grid-template-columns: 10rem minmax(0, 1fr); min-height: 31rem; }
     .settings-tabs { display: grid; align-content: start; gap: .35rem; padding: 1rem; border-right: 1px solid var(--stroke-soft); }
@@ -1104,34 +1096,15 @@
       </section>
 
       <div class="settings-row" aria-label="Admin menu">
+        <button id="searchOpenButton" type="button" class="ghost search-launcher" aria-haspopup="dialog" aria-controls="searchDialog">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+          Search
+        </button>
         <button id="aiSettingsButton" type="button" class="ghost settings-button">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z"></path><path d="M19.4 15a1.8 1.8 0 0 0 .36 2l.05.05a2.2 2.2 0 1 1-3.11 3.11l-.05-.05a1.8 1.8 0 0 0-2-.36 1.8 1.8 0 0 0-1.1 1.66V21.5a2.2 2.2 0 1 1-4.4 0v-.09A1.8 1.8 0 0 0 8.05 19.75a1.8 1.8 0 0 0-2 .36l-.05.05a2.2 2.2 0 1 1-3.11-3.11l.05-.05a1.8 1.8 0 0 0 .36-2A1.8 1.8 0 0 0 1.64 13.9H1.5a2.2 2.2 0 1 1 0-4.4h.14A1.8 1.8 0 0 0 3.3 8.4a1.8 1.8 0 0 0-.36-2l-.05-.05A2.2 2.2 0 1 1 6 3.24l.05.05a1.8 1.8 0 0 0 2 .36A1.8 1.8 0 0 0 9.15 2V1.9a2.2 2.2 0 1 1 4.4 0V2a1.8 1.8 0 0 0 1.1 1.65 1.8 1.8 0 0 0 2-.36l.05-.05a2.2 2.2 0 1 1 3.11 3.11l-.05.05a1.8 1.8 0 0 0-.36 2A1.8 1.8 0 0 0 21.1 9.5h.1a2.2 2.2 0 1 1 0 4.4h-.1A1.8 1.8 0 0 0 19.4 15z"></path></svg>
           Settings
         </button>
-        <form method="post" action="/admin/logout">
-          <button type="submit" class="ghost">Sign out</button>
-        </form>
       </div>
-
-      <div class="identity-row">
-        <div class="who">
-          <div class="who-stack">
-            <div class="who-label">Signed in</div>
-            <div id="identity" class="who-name">Loading...</div>
-          </div>
-        </div>
-      </div>
-
-      <section class="toolbar">
-        <button id="searchOpenButton" type="button" class="ghost search-launcher" aria-haspopup="dialog" aria-controls="searchDialog">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
-          Search context
-        </button>
-        <label class="toggle">
-          <input id="showDeletedToggle" type="checkbox" checked>
-          <span>Show excluded exchanges</span>
-        </label>
-      </section>
 
       <section class="group-panel" aria-label="Session groups">
         <div class="group-head">
@@ -1384,6 +1357,15 @@
         <p id="aiSettingsStatus" class="settings-status" aria-live="polite"></p>
         <section data-settings-panel="general" class="settings-panel">
           <div class="settings-section-head"><div><h4>General</h4><p>Display and automation defaults for the admin.</p></div></div>
+          <div class="admin-session-card">
+            <div class="admin-session-copy">
+              <small>Signed in</small>
+              <strong id="identity">Loading...</strong>
+            </div>
+            <form method="post" action="/admin/logout">
+              <button type="submit" class="ghost">Sign out</button>
+            </form>
+          </div>
           <label class="field">Display timezone<select id="timezoneSelect" aria-label="Display timezone"></select></label>
           <label class="field">AI rename model<input id="aiModelInput" type="text" maxlength="96" autocomplete="off"></label>
           <div class="edit-actions"><button type="button" class="primary" id="generalSettingsSave">Save General</button></div>
@@ -1638,7 +1620,6 @@
         manualRenameSessionId: "",
         pendingSessionMove: null,
         toolOutputRestartInFlight: false,
-        showDeleted: true,
         editingExchangeId: null,
         busy: false,
         layout: localStorage.getItem("mcp-admin:layout") || "pairs",
@@ -1742,7 +1723,6 @@
         sessionMeta: document.getElementById("sessionMeta"),
         sessionTitle: document.getElementById("sessionTitle"),
         sessionTitleIcon: document.getElementById("sessionTitleIcon"),
-        showDeletedToggle: document.getElementById("showDeletedToggle"),
         status: document.getElementById("status"),
         timezoneSelect: document.getElementById("timezoneSelect"),
         threadSensitiveContent: document.getElementById("threadSensitiveContent"),
@@ -1879,10 +1859,6 @@
       dom.scrollNextButton.addEventListener("click", () => scrollTranscript("next"));
       dom.scrollBottomButton.addEventListener("click", () => scrollTranscript("bottom"));
       dom.searchOpenButton.addEventListener("click", () => openContextSearch());
-      dom.showDeletedToggle.addEventListener("change", () => {
-        state.showDeleted = dom.showDeletedToggle.checked;
-        renderExchanges();
-      });
       dom.timezoneSelect.addEventListener("change", () => saveTimezone(dom.timezoneSelect.value));
       dom.layoutSeg.addEventListener("click", (event) => {
         const btn = event.target.closest("button[data-layout]");
@@ -1990,10 +1966,19 @@
       }
 
       async function openAiSettingsDialog() {
-        try { await loadSettings(); } catch (error) { setStatus(error.message, "error"); return; }
-        fillSettingsForm();
         selectSettingsTab("general");
+        dom.aiSettingsStatus.textContent = "Loading settings...";
+        dom.aiSettingsStatus.classList.remove("is-error", "is-ok");
         dom.aiSettingsDialog.showModal();
+        try {
+          await loadSettings();
+        } catch (error) {
+          dom.aiSettingsStatus.textContent = `Could not load settings: ${error.message}. Sign out is still available.`;
+          dom.aiSettingsStatus.classList.add("is-error");
+          return;
+        }
+        fillSettingsForm();
+        renderSettingsStatus();
         scheduleIndexEstimate(0);
         dom.aiModelInput.focus();
       }
@@ -4208,9 +4193,9 @@
           { text: `updated ${formatDate(state.selectedSession.updated_at_iso)}` },
         ]);
 
-        const visible = state.showDeleted ? state.exchanges : state.exchanges.filter((e) => !e.is_deleted);
+        const visible = state.exchanges;
         if (!visible.length) {
-          dom.exchangeList.append(emptyState("No exchanges", "This session has no exchanges to show with the current filters."));
+          dom.exchangeList.append(emptyState("No exchanges", "This session has no exchanges."));
           return;
         }
 
@@ -4488,7 +4473,7 @@
       function buildMarkdown() {
         if (!state.selectedSession) return "";
         const s = state.selectedSession;
-        const visible = state.showDeleted ? state.exchanges : state.exchanges.filter((e) => !e.is_deleted);
+        const visible = state.exchanges;
         const lines = [`# ${s.title || s.session_id}`, "", `- session_id: \`${s.session_id}\``, `- tokens: ${s.token_count || 0}`, `- exchanges: ${visible.length}`, "", "## Transcript", ""];
         for (const ex of visible) {
           if (ex.is_deleted) {

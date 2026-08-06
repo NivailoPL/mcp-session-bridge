@@ -99,19 +99,38 @@ def test_admin_viewer_initializes_sensitive_icons_after_svg_constants() -> None:
     assert svg_constants < static_icon_initialization
 
 
-def test_admin_viewer_timezone_lives_in_general_settings() -> None:
+def test_admin_viewer_admin_session_and_timezone_live_in_general_settings() -> None:
     viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
 
-    identity = viewer[
-        viewer.index('<div class="identity-row">'):
-        viewer.index('<section class="toolbar">')
+    sidebar_menu = viewer[
+        viewer.index('<div class="settings-row"'):
+        viewer.index('<section class="group-panel"')
     ]
     general = viewer[
         viewer.index('<section data-settings-panel="general"'):
         viewer.index('<section data-settings-panel="transcript"')
     ]
-    assert 'id="timezoneSelect"' not in identity
+    assert 'id="identity"' not in sidebar_menu
+    assert 'action="/admin/logout"' not in sidebar_menu
+    assert "\n          Search\n" in sidebar_menu
+    assert 'Search context' not in sidebar_menu
+    assert sidebar_menu.index("\n          Search\n") < sidebar_menu.index("\n          Settings\n")
+    assert 'id="identity"' in general
+    assert 'action="/admin/logout"' in general
+    assert general.index('id="identity"') < general.index('id="timezoneSelect"')
     assert 'id="timezoneSelect"' in general
+
+
+def test_admin_viewer_settings_opens_before_refreshing_configuration() -> None:
+    viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
+    opener = viewer[
+        viewer.index("async function openAiSettingsDialog()"):
+        viewer.index("function fillSettingsForm()")
+    ]
+
+    assert opener.index('selectSettingsTab("general")') < opener.index("await loadSettings()")
+    assert opener.index("dom.aiSettingsDialog.showModal()") < opener.index("await loadSettings()")
+    assert "dom.aiSettingsStatus.textContent" in opener
 
 
 def test_admin_viewer_exposes_large_tool_result_compatibility_controls() -> None:
@@ -274,7 +293,10 @@ def test_admin_viewer_context_visibility_controls_contract() -> None:
     assert "Mask this model response in all MCP transcript chunks." in viewer
     assert "Restore this model response in MCP transcript chunks." in viewer
     assert ".is-masked" in viewer
-    assert "Show excluded exchanges" in viewer
+    assert "Show excluded exchanges" not in viewer
+    assert "showDeletedToggle" not in viewer
+    assert "showDeleted" not in viewer
+    assert "const visible = state.exchanges;" in viewer
     assert 'function contextActionIcon(key)' in viewer
     assert 'return spanCls("pill", "In context");' in viewer
     assert 'contextActionButton("Mask", "eye-off"' in viewer
@@ -369,7 +391,6 @@ def test_admin_viewer_markdown_hides_excluded_message_content() -> None:
     state = """
 const state = {
   selectedSession: { title: "Review", session_id: "review", token_count: 12 },
-  showDeleted: true,
   exchanges: [{
     exchange_id: 42,
     is_deleted: true,
