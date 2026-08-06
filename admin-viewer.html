@@ -326,6 +326,11 @@
       background: rgba(99, 102, 241, .09);
       border-color: rgba(99, 102, 241, .32);
     }
+    .session-button.is-compact {
+      gap: .3rem;
+      padding: .55rem .85rem .6rem 1rem;
+    }
+    .session-button.is-compact .session-card-content { gap: .25rem; }
     .session-button { gap: .4rem; cursor: pointer; }
     .session-card-content { display: grid; gap: .4rem; min-width: 0; }
     .session-title { font-weight: 700; font-size: .9rem; line-height: 1.3; overflow-wrap: anywhere; }
@@ -2790,7 +2795,9 @@
         for (const session of visible) {
           const item = document.createElement("article");
           item.className = "session-button";
-          if (session.session_id === state.selectedSessionId) item.classList.add("is-active");
+          const isSelected = session.session_id === state.selectedSessionId;
+          item.classList.toggle("is-active", isSelected);
+          item.classList.toggle("is-compact", !isSelected);
           const group = sessionGroup(session);
           const cardIsGuarded = state.activeGroupId === "all"
             && Boolean(group?.is_sensitive)
@@ -2818,24 +2825,25 @@
             });
           }
 
-          const foot = div("session-foot");
-          if (session.group) {
-            const groupChip = chip(session.group.name || session.group_id);
-            groupChip.classList.add("group");
-            groupChip.style.setProperty("--g", session.group.color || "#8b93a7");
-            groupChip.prepend(svgNode(session.group.icon_key || "folder"));
+          const groupChip = sessionGroupChip(group, session.group_id);
+          let foot = null;
+          if (isSelected) {
+            foot = div("session-foot");
             foot.append(groupChip);
-          }
-          const lastTurnChip = chip(formatLastTurnDate(session.last_turn_at_iso || session.updated_at_iso));
-          lastTurnChip.classList.add("last-turn");
-          foot.append(lastTurnChip, chip(`${(session.exchange_count || 0) * 2} turns`));
-          if (Number(session.deleted_exchange_count || 0) > 0) {
-            foot.append(chip(`${session.deleted_exchange_count} excluded`, true));
+            const lastTurnChip = chip(formatLastTurnDate(session.last_turn_at_iso || session.updated_at_iso));
+            lastTurnChip.classList.add("last-turn");
+            foot.append(lastTurnChip, chip(`${(session.exchange_count || 0) * 2} turns`));
+            if (Number(session.deleted_exchange_count || 0) > 0) {
+              foot.append(chip(`${session.deleted_exchange_count} excluded`, true));
+            }
           }
 
           const content = div("session-card-content");
-          if (state.manualRenameSessionId === session.session_id) {
+          if (isSelected && state.manualRenameSessionId === session.session_id) {
             content.append(renderSessionRenameForm(session));
+          } else if (!isSelected) {
+            content.append(div("session-title", session.title || "Untitled"));
+            content.append(groupChip);
           } else {
             content.append(
               div("session-title", session.title || "Untitled"),
@@ -3824,6 +3832,14 @@
         const month = String(date.getMonth() + 1).padStart(2, "0");
         const year = String(date.getFullYear()).slice(-2);
         return `${time} ${weekday} (${day}.${month}.${year})`;
+      }
+
+      function sessionGroupChip(group, fallbackId) {
+        const groupChip = chip(group?.name || fallbackId || "Uncategorized");
+        groupChip.classList.add("group");
+        groupChip.style.setProperty("--g", group?.color || "#8b93a7");
+        groupChip.prepend(svgNode(group?.icon_key || "folder"));
+        return groupChip;
       }
 
       function renderSessionActions(session) {

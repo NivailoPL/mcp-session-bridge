@@ -35,6 +35,159 @@ def test_admin_viewer_group_ui_contract() -> None:
     assert 'spanCls("file-meta", "No files")' not in viewer
 
 
+def test_admin_viewer_compacts_unselected_sessions() -> None:
+    viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
+
+    render_sessions = viewer[
+        viewer.index("function renderSessions"):
+        viewer.index("function renderSessionListSensitiveGuard")
+    ]
+    assert 'item.classList.toggle("is-compact", !isSelected);' in render_sessions
+    assert 'const isSelected = session.session_id === state.selectedSessionId;' in render_sessions
+    assert 'if (isSelected && state.manualRenameSessionId === session.session_id) {' in render_sessions
+    assert 'function sessionGroupChip(group, fallbackId)' in viewer
+    assert ".session-button.is-compact" in viewer
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="Node.js is required for the browser renderer smoke test")
+def test_admin_viewer_session_list_rendering() -> None:
+    viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
+    render_sessions = viewer[
+        viewer.index("function renderSessions"):
+        viewer.index("function renderSessionListSensitiveGuard")
+    ]
+    harness = r"""
+class Element {
+  constructor(tag) {
+    this.tag = tag;
+    this.children = [];
+    this.textContent = "";
+    this.attributes = {};
+    this.listeners = {};
+    this.className = "";
+    this.classList = {
+      values: new Set(),
+      add: (...names) => names.forEach((name) => this.classList.values.add(name)),
+      toggle: (name, force) => {
+        const next = force === undefined ? !this.classList.values.has(name) : force;
+        if (next) this.classList.values.add(name);
+        else this.classList.values.delete(name);
+        return next;
+      },
+      contains: (name) => this.classList.values.has(name),
+    };
+    this.style = { setProperty() {} };
+  }
+  append(...nodes) { this.children.push(...nodes); }
+  replaceChildren(...nodes) { this.children = [...nodes]; }
+  setAttribute(name, value) { this.attributes[name] = String(value); }
+  addEventListener(name, handler) { this.listeners[name] = handler; }
+}
+global.document = { createElement: (tag) => new Element(tag) };
+function textOf(node) { return (node.textContent || "") + node.children.map(textOf).join(""); }
+function div(className, text) {
+  const node = new Element("div");
+  node.className = className;
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+function spanCls(className, text) {
+  const node = new Element("span");
+  node.className = className;
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+function emptyRow(text) { return div("empty", text); }
+function chip(text) {
+  return spanCls("mini-chip", text);
+}
+function sessionGroupChip(group, fallbackId) {
+  return spanCls("mini-chip group", group?.name || fallbackId || "Uncategorized");
+}
+function renderSessionActions() { return spanCls("session-actions", "actions"); }
+function renderSessionRenameForm() { return spanCls("session-rename", "rename form"); }
+function formatLastTurnDate() { return "date"; }
+function setStatus() {}
+function runFileContinuation() {}
+function loadSession() {}
+function renderSessionListSensitiveGuard() {}
+function filteredSessions() {
+  return state.sessions.filter((session) => (
+    state.activeGroupId === "all" || session.group_id === state.activeGroupId
+  ));
+}
+function sessionGroup(session) { return session.group; }
+const group = { name: "Brainstorming", color: "#2563eb", icon_key: "ideas", is_sensitive: false };
+const state = {
+  sessions: [
+    { session_id: "selected-id", title: "Selected session", group_id: "brainstorming", group, exchange_count: 2 },
+    { session_id: "other-id", title: "Other session", group_id: "brainstorming", group, exchange_count: 1 }
+  ],
+  selectedSessionId: "selected-id",
+  activeGroupId: "all",
+  revealedSensitiveSessionLists: new Set(),
+  fileOperationPending: false,
+  manualRenameSessionId: ""
+};
+const dom = {
+  sessionList: new Element("nav"),
+  fileWorkspaceDialog: { open: false }
+};
+function cardSnapshot(node) {
+  return {
+    active: node.classList.contains("is-active"),
+    compact: node.classList.contains("is-compact"),
+    role: node.role,
+    tabIndex: node.tabIndex,
+    hasKeydown: Boolean(node.listeners.keydown),
+    text: textOf(node)
+  };
+}
+renderSessions();
+const initial = dom.sessionList.children.map(cardSnapshot);
+state.selectedSessionId = "other-id";
+state.manualRenameSessionId = "selected-id";
+renderSessions();
+const switched = dom.sessionList.children.map(cardSnapshot);
+process.stdout.write(JSON.stringify({ initial, switched }));
+"""
+    node = shutil.which("node")
+    assert node is not None
+    completed = subprocess.run(
+        [node, "-e", harness + render_sessions],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    rendered = json.loads(completed.stdout)
+
+    initial_selected, initial_other = rendered["initial"]
+    assert initial_selected["active"] is True
+    assert initial_selected["compact"] is False
+    assert "selected-id" in initial_selected["text"]
+    assert "actions" in initial_selected["text"]
+    assert initial_selected["role"] == "button"
+    assert initial_selected["tabIndex"] == 0
+    assert initial_selected["hasKeydown"] is True
+    assert initial_other["active"] is False
+    assert initial_other["compact"] is True
+    assert initial_other["text"].startswith("Other sessionBrainstorming")
+    assert "other-id" not in initial_other["text"]
+    assert "actions" not in initial_other["text"]
+    assert initial_other["role"] == "button"
+    assert initial_other["tabIndex"] == 0
+    assert initial_other["hasKeydown"] is True
+
+    switched_selected, switched_other = rendered["switched"]
+    assert switched_selected["active"] is False
+    assert switched_selected["compact"] is True
+    assert "rename form" not in switched_selected["text"]
+    assert switched_other["active"] is True
+    assert switched_other["compact"] is False
+    assert "other-id" in switched_other["text"]
+    assert "actions" in switched_other["text"]
+
+
 def test_admin_viewer_sensitive_group_privacy_contract() -> None:
     viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
 
