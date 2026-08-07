@@ -329,6 +329,7 @@
     .session-button.is-compact {
       gap: .3rem;
       padding: .55rem .85rem .6rem 1rem;
+      --session-compact-icon-offset: calc(1rem + 1rem + .5rem);
     }
     .session-button.is-compact .session-card-content { gap: .25rem; }
     .session-button { gap: .4rem; cursor: pointer; }
@@ -377,6 +378,11 @@
       user-select: none;
       pointer-events: none;
     }
+    .session-button.is-compact .session-card-content.sensitive-compact-content .session-title {
+      filter: blur(12px);
+      user-select: none;
+      pointer-events: none;
+    }
     .sensitive-overlay {
       position: absolute; inset: 0; z-index: 12;
       display: grid; place-items: center;
@@ -401,6 +407,8 @@
     .session-card-sensitive-overlay .sensitive-overlay-card { padding: .75rem 1rem; box-shadow: none; }
     .session-card-sensitive-overlay .sensitive-overlay-card svg { width: 1.4rem; height: 1.4rem; }
     .session-button.is-compact .session-card-sensitive-overlay {
+      inset: 0 0 0 var(--session-compact-icon-offset);
+      width: auto;
       min-height: 0;
       padding: .25rem;
     }
@@ -2895,7 +2903,11 @@
           item.append(content);
           if (cardIsGuarded) {
             content.inert = true;
-            content.classList.add("sensitive-blurred");
+            if (isSelected) {
+              content.classList.add("sensitive-blurred");
+            } else {
+              content.classList.add("sensitive-compact-content");
+            }
             const overlay = sensitiveOverlayButton("session-card-sensitive-overlay");
             overlay.setAttribute("aria-label", `Sensitive content in ${group.name}. Click to reveal.`);
             overlay.addEventListener("click", (event) => {

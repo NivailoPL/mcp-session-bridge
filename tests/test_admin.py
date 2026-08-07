@@ -50,6 +50,7 @@ def test_admin_viewer_compacts_unselected_sessions() -> None:
     assert 'function sessionGroupChip(group, fallbackId)' in viewer
     assert 'function sessionCompactTitle(session, group)' in viewer
     assert ".session-button.is-compact" in viewer
+    assert 'content.classList.add("sensitive-compact-content");' in render_sessions
 
 
 def test_admin_viewer_compact_sensitive_overlay_fits_card_contract() -> None:
@@ -65,6 +66,10 @@ def test_admin_viewer_compact_sensitive_overlay_fits_card_contract() -> None:
     assert "grid-row: 1 / span 2;" in compact_overlay
     assert "width: min(100%, 18rem);" in compact_overlay
     assert ".session-button.is-compact .session-card-sensitive-overlay .sensitive-overlay-card svg" in compact_overlay
+    assert "inset: 0 0 0 var(--session-compact-icon-offset);" in compact_overlay
+    assert "width: auto;" in compact_overlay
+    assert "--session-compact-icon-offset: calc(1rem + 1rem + .5rem);" in viewer
+    assert ".session-button.is-compact .session-card-content.sensitive-compact-content .session-title {" in viewer
 
 
 @pytest.mark.skipif(shutil.which("node") is None, reason="Node.js is required for the browser renderer smoke test")
