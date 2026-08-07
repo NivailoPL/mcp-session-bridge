@@ -52,6 +52,21 @@ def test_admin_viewer_compacts_unselected_sessions() -> None:
     assert ".session-button.is-compact" in viewer
 
 
+def test_admin_viewer_compact_sensitive_overlay_fits_card_contract() -> None:
+    viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
+
+    compact_overlay = viewer[
+        viewer.index(".session-button.is-compact .session-card-sensitive-overlay"):
+        viewer.index("#threadSensitiveOverlay")
+    ]
+    assert "padding: .25rem;" in compact_overlay
+    assert "grid-template-columns: auto minmax(0, 1fr);" in compact_overlay
+    assert "grid-template-rows: auto auto;" in compact_overlay
+    assert "grid-row: 1 / span 2;" in compact_overlay
+    assert "width: min(100%, 18rem);" in compact_overlay
+    assert ".session-button.is-compact .session-card-sensitive-overlay .sensitive-overlay-card svg" in compact_overlay
+
+
 @pytest.mark.skipif(shutil.which("node") is None, reason="Node.js is required for the browser renderer smoke test")
 def test_admin_viewer_session_list_rendering() -> None:
     viewer = Path("admin-viewer.html").read_text(encoding="utf-8")

@@ -400,6 +400,41 @@
     .session-card-sensitive-overlay { border-radius: 11px; }
     .session-card-sensitive-overlay .sensitive-overlay-card { padding: .75rem 1rem; box-shadow: none; }
     .session-card-sensitive-overlay .sensitive-overlay-card svg { width: 1.4rem; height: 1.4rem; }
+    .session-button.is-compact .session-card-sensitive-overlay {
+      min-height: 0;
+      padding: .25rem;
+    }
+    .session-button.is-compact .session-card-sensitive-overlay .sensitive-overlay-card {
+      grid-template-columns: auto minmax(0, 1fr);
+      grid-template-rows: auto auto;
+      align-items: center;
+      justify-items: start;
+      column-gap: .45rem;
+      row-gap: .1rem;
+      width: min(100%, 18rem);
+      min-height: 0;
+      padding: .35rem .55rem;
+      border-radius: 9px;
+    }
+    .session-button.is-compact .session-card-sensitive-overlay .sensitive-overlay-icon {
+      grid-row: 1 / span 2;
+    }
+    .session-button.is-compact .session-card-sensitive-overlay .sensitive-overlay-card svg {
+      width: 1.1rem;
+      height: 1.1rem;
+    }
+    .session-button.is-compact .session-card-sensitive-overlay .sensitive-overlay-title {
+      min-width: 0;
+      font-size: .72rem;
+      line-height: 1.1;
+      text-align: left;
+    }
+    .session-button.is-compact .session-card-sensitive-overlay .sensitive-overlay-hint {
+      min-width: 0;
+      font-size: .64rem;
+      line-height: 1.1;
+      text-align: left;
+    }
     #threadSensitiveOverlay { place-items: start center; }
     #threadSensitiveOverlay .sensitive-overlay-card { position: sticky; top: 32vh; margin-top: 32vh; }
     .thread-sensitive-content { display: flex; flex: 1; flex-direction: column; min-width: 0; }
