@@ -75,6 +75,46 @@ class Layout:
         return self.state_root / "last-operation.json"
 
     @property
+    def setup_file(self) -> Path:
+        return self.state_root / "setup.json"
+
+    @property
+    def pending_root(self) -> Path:
+        return self.state_root / "pending"
+
+    @property
+    def pending_env_file(self) -> Path:
+        return self.pending_root / "bridge.env"
+
+    @property
+    def pending_service_unit(self) -> Path:
+        return self.pending_root / "mcp-session-bridge.service"
+
+    @property
+    def pending_restart_path_unit(self) -> Path:
+        return self.pending_root / "mcp-session-bridge-restart.path"
+
+    @property
+    def pending_restart_service_unit(self) -> Path:
+        return self.pending_root / "mcp-session-bridge-restart.service"
+
+    @property
+    def pending_status_service_unit(self) -> Path:
+        return self.pending_root / "mcp-session-bridge-status.service"
+
+    @property
+    def pending_status_timer_unit(self) -> Path:
+        return self.pending_root / "mcp-session-bridge-status.timer"
+
+    @property
+    def pending_caddy_fragment(self) -> Path:
+        return self.pending_root / "mcp-session-bridge.caddy"
+
+    @property
+    def pending_launcher(self) -> Path:
+        return self.pending_root / "mcp-bridge"
+
+    @property
     def backup_root(self) -> Path:
         return self._path("var/backups/mcp-session-bridge")
 

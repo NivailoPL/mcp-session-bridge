@@ -5,6 +5,8 @@ from argparse import Namespace
 import socket
 from pathlib import Path
 
+import pytest
+
 from app.storage import Store
 from bridge_cli.install import ManagedInstaller, SetupAnswers
 from bridge_cli.layout import Layout
@@ -21,9 +23,30 @@ class RecordingRunner:
 
         class Result:
             returncode = 0
+            stdout = '{"ok": true}\n' if args and args[0] == "curl" else "active\n"
+            stderr = ""
+
+        return Result()
+
+
+class FailFirstRestartRunner(RecordingRunner):
+    def __init__(self) -> None:
+        super().__init__()
+        self.failed_restart = False
+
+    def run(self, *args: str, check: bool = True):
+        self.calls.append(tuple(args))
+
+        class Result:
+            returncode = 0
             stdout = "active\n"
             stderr = ""
 
+        if args == ("systemctl", "restart", "mcp-session-bridge.service") and not self.failed_restart:
+            self.failed_restart = True
+            Result.returncode = 1
+            Result.stdout = ""
+            Result.stderr = "forced restart failure"
         return Result()
 
 
@@ -34,6 +57,25 @@ def test_layout_is_fully_relocatable_for_safe_setup_tests(tmp_path: Path) -> Non
     assert layout.env_file == tmp_path / "etc/mcp-session-bridge/bridge.env"
     assert layout.db_path == tmp_path / "var/lib/mcp-session-bridge/bridge.sqlite3"
     assert layout.command_path == tmp_path / "usr/local/bin/mcp-bridge"
+
+
+@pytest.mark.parametrize(
+    ("mode", "state", "message"),
+    [
+        ("managed", "pass", "active"),
+        ("prepared", "action_required", "prepared but not active"),
+        ("unmanaged", "action_required", "not managed"),
+    ],
+)
+def test_status_reports_installation_lifecycle(
+    tmp_path: Path, mode: str, state: str, message: str
+) -> None:
+    check = StatusCollector(
+        Layout.for_root(tmp_path), RecordingRunner(), probe_http=False
+    )._installation_check(mode)
+
+    assert check.state == state
+    assert message in check.message
 
 
 def test_setup_dry_run_makes_no_changes(tmp_path: Path) -> None:
@@ -75,18 +117,22 @@ def test_setup_creates_managed_layout_without_leaking_password(tmp_path: Path) -
     )
 
     manifest = json.loads(layout.installation_file.read_text(encoding="utf-8"))
-    env_text = layout.env_file.read_text(encoding="utf-8")
-    assert result["state"] == "complete"
-    assert manifest["mode"] == "managed"
+    env_text = layout.pending_env_file.read_text(encoding="utf-8")
+    assert result["state"] == "prepared"
+    assert manifest["mode"] == "prepared"
     assert manifest["public_base_url"] == "https://bridge.example.test"
-    assert layout.current_link.resolve() == layout.release_dir(result["version"]).resolve()
+    setup_state = json.loads(layout.setup_file.read_text(encoding="utf-8"))
+    assert not layout.current_link.exists()
+    assert Path(setup_state["release_dir"]).resolve() == layout.release_dir(result["version"]).resolve()
     assert layout.db_path.exists()
     assert "BRIDGE_ALLOW_STARTUP_MIGRATIONS=false" in env_text
     assert "BRIDGE_OWNER_USERNAME=admin" in env_text
     assert "long-password" not in env_text
-    assert layout.service_unit.exists()
-    assert layout.caddy_fragment.exists()
-    status_unit = layout.status_service_unit.read_text(encoding="utf-8")
+    assert not layout.service_unit.exists()
+    assert not layout.caddy_fragment.exists()
+    assert layout.pending_service_unit.exists()
+    assert layout.pending_caddy_fragment.exists()
+    status_unit = layout.pending_status_service_unit.read_text(encoding="utf-8")
     assert f"ExecStart={layout.command_path} status --refresh --write-snapshot" in status_unit
     assert "{self.layout.command_path}" not in status_unit
 
@@ -113,7 +159,7 @@ def test_setup_adopts_legacy_database_and_preserves_source(tmp_path: Path) -> No
     managed = Store(layout.db_path, allow_startup_migrations=False)
     assert managed.get_session("legacy-session") is not None
     assert marker.read_text(encoding="utf-8") == "preserved"
-    assert any(layout.backup_root.iterdir())
+    assert not any(layout.backup_root.iterdir())
 
 
 def test_status_collector_reports_managed_installation(tmp_path: Path) -> None:
@@ -131,9 +177,12 @@ def test_status_collector_reports_managed_installation(tmp_path: Path) -> None:
 
     report = StatusCollector(layout, runner, probe_http=False).collect()
 
-    assert report.installation["mode"] == "managed"
+    assert report.installation["mode"] == "prepared"
     assert report.version["current"] == "0.4.0"
-    assert {check.id for check in report.checks} >= {"config", "database", "service", "caddy"}
+    assert {check.id for check in report.checks} >= {"installation", "config", "database", "service", "caddy"}
+    installation = next(check for check in report.checks if check.id == "installation")
+    assert installation.state == "action_required"
+    assert "Activate" in (installation.remediation or "")
     assert next(check for check in report.checks if check.id == "database").state == "pass"
 
 
@@ -151,7 +200,7 @@ def test_repeated_setup_preserves_bridge_secret(tmp_path: Path) -> None:
         activate=False,
     )
     first_secret = next(
-        line for line in layout.env_file.read_text(encoding="utf-8").splitlines()
+        line for line in layout.pending_env_file.read_text(encoding="utf-8").splitlines()
         if line.startswith("BRIDGE_SECRET_KEY=")
     )
     installer.install(
@@ -159,7 +208,7 @@ def test_repeated_setup_preserves_bridge_secret(tmp_path: Path) -> None:
         activate=False,
     )
     second_secret = next(
-        line for line in layout.env_file.read_text(encoding="utf-8").splitlines()
+        line for line in layout.pending_env_file.read_text(encoding="utf-8").splitlines()
         if line.startswith("BRIDGE_SECRET_KEY=")
     )
 
@@ -189,14 +238,18 @@ def test_setup_reports_waiting_when_dns_has_not_propagated(tmp_path: Path, monke
     assert result["state"] == "waiting"
     assert "DNS" in result["next_step"]
     assert operation["state"] == "waiting"
+    assert not any(
+        call and call[-1] == "https://pending.example.test/healthz"
+        for call in runner.calls
+    )
     assert (
         "systemctl",
         "enable",
-        "--now",
         "mcp-session-bridge.service",
         "mcp-session-bridge-restart.path",
         "mcp-session-bridge-status.timer",
     ) in runner.calls
+    assert ("systemctl", "restart", "mcp-session-bridge.service") in runner.calls
 
 
 def test_status_reports_waiting_dns_as_an_actionable_check(tmp_path: Path, monkeypatch) -> None:
@@ -253,7 +306,7 @@ def test_configure_domain_updates_caddy_and_runtime_atomically(tmp_path: Path, m
     runner = RecordingRunner()
     ManagedInstaller(layout, source, runner).install(
         SetupAnswers(domain="old.example.test", username="owner", password="long-password"),
-        activate=False,
+        activate=True,
     )
     monkeypatch.setattr("bridge_cli.__main__._require_root", lambda _command: None)
     monkeypatch.setattr("builtins.input", lambda _prompt: "n")
@@ -270,3 +323,68 @@ def test_configure_domain_updates_caddy_and_runtime_atomically(tmp_path: Path, m
     assert ("caddy", "validate", "--config", str(layout.caddyfile)) in runner.calls
     assert ("systemctl", "reload", "caddy") in runner.calls
     assert ("systemctl", "restart", "mcp-session-bridge.service") in runner.calls
+
+
+def test_configure_failure_restores_files_and_running_service(tmp_path: Path, monkeypatch) -> None:
+    source = tmp_path / "source"
+    source.mkdir()
+    (source / "pyproject.toml").write_text("[project]\nname='test'\n", encoding="utf-8")
+    (source / "app").mkdir()
+    (source / "app/__init__.py").write_text("", encoding="utf-8")
+    layout = Layout.for_root(tmp_path / "target")
+    ManagedInstaller(layout, source, RecordingRunner()).install(
+        SetupAnswers("old.example.test", "owner", "long-password"),
+        activate=True,
+    )
+    old_env = layout.env_file.read_text(encoding="utf-8")
+    old_caddy = layout.caddyfile.read_text(encoding="utf-8")
+    old_fragment = layout.caddy_fragment.read_text(encoding="utf-8")
+    runner = FailFirstRestartRunner()
+    monkeypatch.setattr("bridge_cli.__main__._require_root", lambda _command: None)
+
+    with pytest.raises(RuntimeError, match="forced restart failure"):
+        _configure(
+            Namespace(domain="new.example.test", username=None, section="domain"),
+            layout,
+            runner,
+        )
+
+    assert layout.env_file.read_text(encoding="utf-8") == old_env
+    assert layout.caddyfile.read_text(encoding="utf-8") == old_caddy
+    assert layout.caddy_fragment.read_text(encoding="utf-8") == old_fragment
+    assert runner.calls.count(("systemctl", "restart", "mcp-session-bridge.service")) == 2
+
+
+def test_configure_domain_updates_adopted_caddy_site_without_creating_duplicate(
+    tmp_path: Path, monkeypatch
+) -> None:
+    source = tmp_path / "source"
+    source.mkdir()
+    (source / "pyproject.toml").write_text("[project]\nname='test'\n", encoding="utf-8")
+    (source / "app").mkdir()
+    (source / "app/__init__.py").write_text("", encoding="utf-8")
+    layout = Layout.for_root(tmp_path / "target")
+    layout.caddyfile.parent.mkdir(parents=True)
+    layout.caddyfile.write_text(
+        "old.example.test {\n    bind 192.0.2.10\n    reverse_proxy 127.0.0.1:8787\n}\n",
+        encoding="utf-8",
+    )
+    runner = RecordingRunner()
+    ManagedInstaller(layout, source, runner).install(
+        SetupAnswers(domain="old.example.test", username="owner", password="long-password"),
+        activate=True,
+    )
+    monkeypatch.setattr("bridge_cli.__main__._require_root", lambda _command: None)
+
+    result = _configure(
+        Namespace(domain="new.example.test", username=None, section="domain"),
+        layout,
+        runner,
+    )
+
+    assert result == 0
+    caddy = layout.caddyfile.read_text(encoding="utf-8")
+    assert "new.example.test {" in caddy
+    assert "old.example.test {" not in caddy
+    assert "bind 192.0.2.10" in caddy
+    assert not layout.caddy_fragment.exists()

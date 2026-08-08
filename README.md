@@ -29,9 +29,9 @@ cd mcp-session-bridge
 ./mcp-bridge setup
 ```
 
-The guided CLI installs the locked runtime, initializes or adopts the database, configures an unprivileged systemd service and Caddy HTTPS, and leaves a global `bridge` command.
+The resumable CLI shows the state of each setup area, lets you configure only the section you want, and keeps all prepared changes inactive until you explicitly choose **Activate installation**. Activation takes a final SQLite backup, switches systemd/Caddy, verifies the service, and restores the previous service configuration if verification fails. A successful activation installs the global `mcp-bridge` command.
 
-Every stage reports `PASS`, `WAITING`, or `FAILED` plus the next action. If DNS has not propagated, the local service remains installed and setup ends in `WAITING` instead of hiding the problem.
+Setup distinguishes `DETECTED`, `NEEDS INPUT`, `READY`, `ACTIVE`, `WAITING`, and `FAILED`, always showing what exists and what should happen next. Headings use the Indygo terminal accent when color is supported; set `NO_COLOR=1` or pass global `--no-color` for plain output.
 
 Verify the server:
 

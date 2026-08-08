@@ -35,6 +35,7 @@ class StatusCollector:
     def collect(self) -> StatusReport:
         installation = read_json(self.layout.installation_file) or {"mode": "unmanaged"}
         checks = [
+            self._installation_check(str(installation.get("mode", "unmanaged"))),
             self._config_check(),
             self._database_check(),
             self._dns_check(installation.get("public_base_url")),
@@ -62,6 +63,25 @@ class StatusCollector:
                 "installed_at": installation.get("installed_at"),
             },
             last_operation=read_json(self.layout.operation_file),
+        )
+
+    def _installation_check(self, mode: str) -> CheckResult:
+        if mode == "managed":
+            return CheckResult("installation", "Installation", "pass", "Managed installation is active.")
+        if mode == "prepared":
+            return CheckResult(
+                "installation",
+                "Installation",
+                "action_required",
+                "Managed installation is prepared but not active.",
+                "Run mcp-bridge setup and choose Activate installation.",
+            )
+        return CheckResult(
+            "installation",
+            "Installation",
+            "action_required",
+            "Bridge is not managed by the CLI yet.",
+            "Run mcp-bridge setup to inspect or adopt the current installation.",
         )
 
     def write_snapshot(self, report: StatusReport) -> None:

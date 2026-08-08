@@ -12,7 +12,7 @@ Prepare:
 - DNS access so you can create an `A` record pointing that hostname at the VPS;
 - inbound TCP ports 22, 80, and 443;
 - Git, curl, and CA certificates on the server;
-- an owner username and a new password of at least 10 characters.
+- an owner username and a password of at least 10 characters for a new installation. An adopted installation can keep its current owner credentials.
 
 The setup does not connect ChatGPT, Claude, Codex, or another harness. Client connection is a separate step after the server is healthy.
 
@@ -32,7 +32,7 @@ git clone https://github.com/NivailoPL/mcp-session-bridge.git
 cd mcp-session-bridge
 ```
 
-Optionally preview the managed-system plan without writing to `/opt`, `/etc`, or `/var` (the `./mcp-bridge` bootstrap may still install `uv` for your login and create the checkout's local environment):
+Preview the detected installation and every setup section without writing to `/opt`, `/etc`, or `/var` (the `./mcp-bridge` bootstrap may still install `uv` for your login and create the checkout's local environment):
 
 ```bash
 ./mcp-bridge setup --dry-run
@@ -44,11 +44,26 @@ Run the guided setup:
 ./mcp-bridge setup
 ```
 
-The command asks for the public hostname, owner username, and owner password. It then reports every major stage and finishes in one of three states:
+The command opens a resumable dashboard. Each numbered section shows its current state and can be selected independently:
 
-- `PASS`: installation is complete;
-- `WAITING`: the local service is installed, but DNS is not resolving yet;
-- `FAILED`: the command stopped and prints the failing stage.
+- `DETECTED`: existing data or configuration can be adopted;
+- `NEEDS INPUT`: required information is missing;
+- `READY`: the section is configured or staged but not live;
+- `ACTIVE`: the managed component is running;
+- `WAITING`: configuration is complete but an external dependency such as DNS is pending;
+- `ATTENTION` or `FAILED`: the dashboard prints the required next action.
+
+The normal order is server inspection, adoption choice, release staging, database staging, administrator, public address, service preparation, activation, and verification. You can exit at any point and run `./mcp-bridge setup` or `mcp-bridge setup` later to continue.
+
+Preparing a section does not replace the live systemd unit or Caddy configuration. **Activate installation** is a separate confirmation that:
+
+1. creates a dated backup;
+2. validates the intended Caddy configuration;
+3. briefly stops the current Bridge;
+4. takes the final SQLite copy so late writes are retained;
+5. switches and explicitly restarts the managed service;
+6. verifies the local health endpoint;
+7. restores the previous service configuration automatically if activation fails.
 
 If setup reports `WAITING`, create or correct the DNS record, wait for propagation, then run:
 
@@ -66,14 +81,15 @@ The managed installation uses versioned releases and stable host paths:
 | --- | --- |
 | `/opt/mcp-session-bridge/releases/<version>` | Immutable application releases |
 | `/opt/mcp-session-bridge/current` | Active release symlink |
-| `/etc/mcp-session-bridge/bridge.env` | Private runtime configuration |
+| `/etc/mcp-session-bridge/bridge.env` | Active private runtime configuration |
+| `/var/lib/mcp-session-bridge/state/pending/bridge.env` | Root-owned configuration staged by setup |
 | `/var/lib/mcp-session-bridge` | SQLite database, context packs, and status state |
 | `/var/backups/mcp-session-bridge` | Setup and update backups |
 | `/usr/local/bin/mcp-bridge` | Daily CLI command |
 | `/etc/systemd/system/mcp-session-bridge*.service` | Service, restart helper, and status refresh |
 | `/etc/caddy/conf.d/mcp-session-bridge.caddy` | HTTPS reverse-proxy fragment |
 
-Setup creates an unprivileged `mcp-session-bridge` service account, installs locked Python dependencies with `uv`, initializes or migrates SQLite, installs the systemd units, and configures Caddy.
+Activation creates an unprivileged `mcp-session-bridge` service account, installs locked Python dependencies with `uv`, initializes or migrates SQLite, atomically promotes the staged environment and release, installs the staged systemd units, and configures or adopts Caddy. Setup keeps pending configuration and unit files root-owned; the service account owns only runtime data that the application must change.
 
 Secrets are written only to the private environment file. Re-running setup preserves the existing Bridge secret so OAuth records and encrypted admin settings remain readable.
 
@@ -108,18 +124,32 @@ https://bridge.example.com/mcp
 
 ## Change The Domain Or Owner
 
-Use the guided configuration command instead of editing managed files:
+Use the section menu instead of editing managed files:
 
 ```bash
-mcp-bridge configure --domain new-bridge.example.com --username owner
+mcp-bridge configure
 ```
 
-The command optionally rotates the owner password, validates the replacement Caddy configuration, reloads HTTPS, and restarts the Bridge. If activation fails, it restores the previous environment and Caddy fragment.
+Or open one section directly:
+
+```bash
+mcp-bridge configure domain
+mcp-bridge configure administrator
+```
+
+Flag-based operation remains available for automation:
+
+```bash
+mcp-bridge configure --domain new-bridge.example.com
+mcp-bridge configure --username owner
+```
+
+The command can preserve or rotate the owner password, validates the replacement Caddy configuration, reloads HTTPS, and restarts the Bridge. If the original domain was adopted from the main Caddyfile, its site address is updated in place so a duplicate proxy block is not created. If activation fails, the previous environment and Caddy configuration are restored.
 
 
 ## Adopt An Existing Checkout
 
-When setup is run from an older checkout, it detects the checkout's `.env` and `data/bridge.sqlite3` when present. It copies the database through SQLite's online backup API, creates a dated backup, and leaves the source checkout untouched.
+When setup is run from an older checkout, it detects the checkout's `.env` and `data/bridge.sqlite3` when present. It shows the detected session count and owner/public configuration before asking whether to adopt them. Preparation uses SQLite's online backup API and leaves the source checkout untouched; activation creates the dated backup and takes a final copy while the old service is stopped.
 
 Before adoption:
 
@@ -134,6 +164,15 @@ mcp-bridge doctor
 ```
 
 Do not remove the old checkout until the managed service, admin login, sessions, and one MCP client have all been verified.
+
+## Terminal Color
+
+Interactive headings use the Indygo accent (`#6366F1`) when stdout is a compatible terminal. Data, logs, redirected output, and JSON remain unstyled. Disable color with either:
+
+```bash
+NO_COLOR=1 mcp-bridge status
+mcp-bridge --no-color setup
+```
 
 ## Updates And Recovery
 

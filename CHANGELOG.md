@@ -10,7 +10,8 @@ This project follows a lightweight changelog format inspired by Keep a Changelog
 
 - Added an advanced Settings control for large MCP tool results. Optimized mode is the default and returns transcript chunks, output probes, and downloaded file contents once; Maximum compatibility restores the SDK's duplicated text and structured representations.
 - Added an authenticated, CSRF-protected **Restart Bridge** action backed by a fixed systemd helper unit. The panel tracks configured versus active output mode and reminds owners to refresh tool lists in every harness after restart.
-- Added a guided `mcp-bridge setup` flow for managed Linux VPS installations, including legacy database adoption, versioned releases, systemd/Caddy provisioning, and explicit `PASS`, `WAITING`, and `FAILED` states.
+- Added a resumable, section-based `mcp-bridge setup` dashboard for managed Linux VPS installations, including legacy detection, selective configuration, staged preparation, and an explicit final activation.
+- Added Indygo terminal branding for interactive headings with automatic non-TTY suppression plus `NO_COLOR` and `--no-color` support.
 - Added `mcp-bridge status`, `doctor`, `logs`, `version`, `update`, and `rollback` operations with versioned machine-readable reports.
 - Added **Settings → Status** with live health signals, cached diagnostics, update availability, and notification dots on both Settings entry points.
 
@@ -20,6 +21,7 @@ This project follows a lightweight changelog format inspired by Keep a Changelog
 - Database schema changes now use recorded migrations; managed services refuse implicit startup migrations.
 - Stable updates verify GitHub release digests, preflight migrations on a copy, back up live SQLite, verify activation, and automatically restore the previous release and database on failure.
 - Managed setup reports unresolved public DNS as `WAITING` while keeping the local service installed.
+- Setup preparation no longer replaces live systemd or Caddy files. Activation stops the old service only for the final SQLite copy, explicitly restarts and health-checks the managed service, adopts an existing Caddy site without duplication, and restores the previous service configuration on failure.
 
 ### Breaking Changes
 

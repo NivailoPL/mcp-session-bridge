@@ -7,7 +7,6 @@ import json
 import os
 import re
 import shutil
-import sqlite3
 import tarfile
 import tempfile
 import time
@@ -23,6 +22,7 @@ from typing import Any, BinaryIO, Callable
 from bridge_cli.files import atomic_write_json, read_json
 from bridge_cli.layout import Layout
 from bridge_cli.runner import Runner
+from bridge_cli.system_files import sqlite_backup, switch_release
 
 
 LATEST_RELEASE_URL = (
@@ -180,20 +180,20 @@ class UpdateManager:
             try:
                 release_dir = self._prepare_release(release)
                 preflight_db = backup_dir / "preflight.sqlite3"
-                self._sqlite_backup(self.layout.db_path, preflight_db)
+                sqlite_backup(self.layout.db_path, preflight_db)
                 self.runner.run(
                     str(release_dir / ".venv/bin/python"), "-m", "bridge_cli",
                     "migrate", "--db", str(preflight_db),
                 )
                 self.runner.run("systemctl", "stop", "mcp-session-bridge.service")
                 stopped = True
-                self._sqlite_backup(self.layout.db_path, database_backup)
+                sqlite_backup(self.layout.db_path, database_backup)
                 live_backup_ready = True
                 self.runner.run(
                     str(release_dir / ".venv/bin/python"), "-m", "bridge_cli",
                     "migrate", "--db", str(self.layout.db_path),
                 )
-                self._switch_release(release_dir)
+                switch_release(self.layout.current_link, release_dir, temporary_name=".current-update")
                 self.runner.run("systemctl", "start", "mcp-session-bridge.service")
                 active = self.runner.run(
                     "systemctl", "is-active", "mcp-session-bridge.service", check=False
@@ -232,7 +232,7 @@ class UpdateManager:
             except Exception as exc:
                 if stopped:
                     self.runner.run("systemctl", "stop", "mcp-session-bridge.service", check=False)
-                    self._switch_release(previous_release)
+                    switch_release(self.layout.current_link, previous_release, temporary_name=".current-update")
                     if live_backup_ready:
                         self._restore_database(database_backup)
                     self.runner.run("systemctl", "start", "mcp-session-bridge.service", check=False)
@@ -262,10 +262,10 @@ class UpdateManager:
             current_release = self.layout.current_link.resolve()
             safety_dir = self._new_backup_dir("rollback-safety")
             current_database_backup = safety_dir / "bridge.sqlite3"
-            self._sqlite_backup(self.layout.db_path, current_database_backup)
+            sqlite_backup(self.layout.db_path, current_database_backup)
             self.runner.run("systemctl", "stop", "mcp-session-bridge.service")
             try:
-                self._switch_release(previous_release)
+                switch_release(self.layout.current_link, previous_release, temporary_name=".current-update")
                 self._restore_database(database_backup)
                 self.runner.run("systemctl", "start", "mcp-session-bridge.service")
                 active = self.runner.run(
@@ -277,7 +277,7 @@ class UpdateManager:
                     self._verify_http(self._installation())
             except Exception as exc:
                 self.runner.run("systemctl", "stop", "mcp-session-bridge.service", check=False)
-                self._switch_release(current_release)
+                switch_release(self.layout.current_link, current_release, temporary_name=".current-update")
                 self._restore_database(current_database_backup)
                 self.runner.run("systemctl", "start", "mcp-session-bridge.service", check=False)
                 raise RuntimeError(
@@ -339,13 +339,6 @@ class UpdateManager:
             raise RuntimeError("Managed installation metadata is missing. Run mcp-bridge setup first.")
         return installation
 
-    def _switch_release(self, release: Path) -> None:
-        temporary = self.layout.current_link.with_name(".current-update")
-        if temporary.exists() or temporary.is_symlink():
-            temporary.unlink()
-        temporary.symlink_to(release)
-        temporary.replace(self.layout.current_link)
-
     def _new_backup_dir(self, operation: str) -> Path:
         path = self.layout.backup_root / f"{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())}-{operation}"
         suffix = 1
@@ -355,19 +348,12 @@ class UpdateManager:
         path.mkdir(mode=0o700, parents=True)
         return path
 
-    @staticmethod
-    def _sqlite_backup(source: Path, destination: Path) -> None:
-        with sqlite3.connect(f"file:{source}?mode=ro", uri=True) as source_conn:
-            with sqlite3.connect(destination) as destination_conn:
-                source_conn.backup(destination_conn)
-        destination.chmod(0o600)
-
     def _restore_database(self, backup: Path) -> None:
         for suffix in ("", "-wal", "-shm"):
             target = Path(f"{self.layout.db_path}{suffix}")
             if target.exists():
                 target.unlink()
-        self._sqlite_backup(backup, self.layout.db_path)
+        sqlite_backup(backup, self.layout.db_path)
 
     @staticmethod
     def _verify_http(installation: dict[str, Any]) -> None:
