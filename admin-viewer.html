@@ -309,6 +309,17 @@
     }
     .session-list-region { position: relative; display: flex; min-height: 0; flex: 1; }
 
+    .session-date-heading {
+      grid-column: 1 / -1;
+      margin: .6rem .35rem .05rem;
+      color: var(--faint-ink);
+      font-size: .68rem;
+      font-weight: 800;
+      letter-spacing: .04em;
+      line-height: 1.2;
+    }
+    .session-date-heading:first-child { margin-top: .15rem; }
+
     .session-button {
       position: relative;
       display: grid; gap: .45rem;
@@ -2838,7 +2849,14 @@
           return;
         }
 
+        const currentDay = sessionDateKey(new Date(), state.displayTimezone);
+        let previousDateBucket = null;
         for (const session of visible) {
+          const dateBucket = sessionDateBucket(session, null, currentDay);
+          if (dateBucket !== previousDateBucket) {
+            dom.sessionList.append(sessionDateHeading(sessionDateGroupLabel(dateBucket)));
+            previousDateBucket = dateBucket;
+          }
           const item = document.createElement("article");
           item.className = "session-button";
           const isSelected = session.session_id === state.selectedSessionId;
@@ -3884,6 +3902,82 @@
         const month = String(date.getMonth() + 1).padStart(2, "0");
         const year = String(date.getFullYear()).slice(-2);
         return `${time} ${weekday} (${day}.${month}.${year})`;
+      }
+
+      const SESSION_DATE_GROUPS = [
+        { key: "today", label: "Today" },
+        { key: "yesterday", label: "Yesterday" },
+        { key: "more-than-2-days", label: "More than 2 days ago" },
+        { key: "more-than-7-days", label: "More than 7 days ago" },
+      ];
+
+      const SESSION_DATE_FORMATTERS = new Map();
+      function sessionDateFormatter(timezone) {
+        const key = timezone || "UTC";
+        if (SESSION_DATE_FORMATTERS.has(key)) return SESSION_DATE_FORMATTERS.get(key);
+        let formatter;
+        try {
+          formatter = new Intl.DateTimeFormat("en-CA", {
+            timeZone: key,
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit",
+          });
+        } catch (_) {
+          formatter = new Intl.DateTimeFormat("en-CA", {
+            timeZone: "UTC",
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit",
+          });
+        }
+        SESSION_DATE_FORMATTERS.set(key, formatter);
+        return formatter;
+      }
+
+      function sessionDateKey(value, timezone) {
+        if (!value) return null;
+        const date = value instanceof Date ? value : new Date(value);
+        if (Number.isNaN(date.getTime())) return null;
+        const parts = sessionDateFormatter(timezone).formatToParts(date);
+        const fields = {};
+        for (const part of parts) {
+          if (["year", "month", "day"].includes(part.type)) fields[part.type] = part.value;
+        }
+        if (!fields.year || !fields.month || !fields.day) return null;
+        return `${fields.year}-${fields.month}-${fields.day}`;
+      }
+
+      function sessionDateAgeDays(session, now = new Date(), currentDay = null) {
+        const value = session?.last_turn_at_iso || session?.updated_at_iso;
+        const sessionDay = sessionDateKey(value, state.displayTimezone);
+        const resolvedCurrentDay = currentDay || sessionDateKey(now, state.displayTimezone);
+        if (!sessionDay || !resolvedCurrentDay) return null;
+        const dayNumber = (key) => {
+          const [year, month, day] = key.split("-").map(Number);
+          return Date.UTC(year, month - 1, day) / 86_400_000;
+        };
+        return dayNumber(resolvedCurrentDay) - dayNumber(sessionDay);
+      }
+
+      function sessionDateBucket(session, now = new Date(), currentDay = null) {
+        const ageDays = sessionDateAgeDays(session, now, currentDay);
+        if (ageDays === null || ageDays <= 0) return "today";
+        if (ageDays === 1) return "yesterday";
+        if (ageDays <= 7) return "more-than-2-days";
+        return "more-than-7-days";
+      }
+
+      function sessionDateGroupLabel(bucket) {
+        return SESSION_DATE_GROUPS.find((group) => group.key === bucket)?.label
+          || SESSION_DATE_GROUPS[SESSION_DATE_GROUPS.length - 1].label;
+      }
+
+      function sessionDateHeading(label) {
+        const heading = document.createElement("h3");
+        heading.className = "session-date-heading";
+        heading.textContent = label;
+        return heading;
       }
 
       function sessionCompactTitle(session, group) {

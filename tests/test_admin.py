@@ -73,13 +73,75 @@ def test_admin_viewer_compact_sensitive_overlay_fits_card_contract() -> None:
 
 
 @pytest.mark.skipif(shutil.which("node") is None, reason="Node.js is required for the browser renderer smoke test")
+def test_admin_viewer_session_date_groups_use_display_timezone() -> None:
+    viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
+    date_helpers = viewer[
+        viewer.index("const SESSION_DATE_GROUPS"):
+        viewer.index("function sessionCompactTitle")
+    ]
+    harness = r"""
+class Element {
+  constructor(tag) { this.tag = tag; this.className = ""; this.textContent = ""; }
+}
+global.document = { createElement: (tag) => new Element(tag) };
+const state = { displayTimezone: "Europe/Warsaw" };
+const now = new Date("2026-08-08T00:30:00Z");
+const samples = [
+  "2026-08-07T22:30:00Z",
+  "2026-08-07T20:00:00Z",
+  "2026-08-06T20:00:00Z",
+  "2026-08-01T20:00:00Z",
+  "2026-07-31T20:00:00Z"
+];
+const heading = sessionDateHeading("Today");
+process.stdout.write(JSON.stringify({
+  labels: SESSION_DATE_GROUPS.map((group) => group.label),
+  buckets: samples.map((value) => sessionDateBucket({ last_turn_at_iso: value }, now)),
+  heading: { tag: heading.tag, className: heading.className, text: heading.textContent }
+}));
+"""
+    node = shutil.which("node")
+    assert node is not None
+    completed = subprocess.run(
+        [node, "-e", date_helpers + harness],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    rendered = json.loads(completed.stdout)
+
+    assert rendered["labels"] == [
+        "Today",
+        "Yesterday",
+        "More than 2 days ago",
+        "More than 7 days ago",
+    ]
+    assert rendered["buckets"] == [
+        "today",
+        "yesterday",
+        "more-than-2-days",
+        "more-than-2-days",
+        "more-than-7-days",
+    ]
+    assert rendered["heading"] == {
+        "tag": "h3",
+        "className": "session-date-heading",
+        "text": "Today",
+    }
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="Node.js is required for the browser renderer smoke test")
 def test_admin_viewer_session_list_rendering() -> None:
     viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
-    session_compact_title = viewer[
+    date_helpers = viewer[
+        viewer.index("const SESSION_DATE_GROUPS"):
+        viewer.index("function sessionCompactTitle")
+    ]
+    session_list_helpers = viewer[
         viewer.index("function sessionCompactTitle"):
         viewer.index("function sessionGroupChip")
     ]
-    render_sessions = session_compact_title + viewer[
+    render_sessions = session_list_helpers + viewer[
         viewer.index("function renderSessions"):
         viewer.index("function renderSessionListSensitiveGuard")
     ]
@@ -148,11 +210,21 @@ function hasClass(node, className) {
   return node.classList.contains(className) || String(node.className).split(" ").includes(className) || node.children.some((child) => hasClass(child, className));
 }
 function sessionGroup(session) { return session.group; }
+const today = new Date();
+const daysAgo = (days) => new Date(Date.UTC(
+  today.getUTCFullYear(),
+  today.getUTCMonth(),
+  today.getUTCDate() - days,
+  12,
+)).toISOString();
 const group = { name: "Brainstorming", color: "#2563eb", icon_key: "ideas", is_sensitive: false };
 const state = {
+  displayTimezone: "UTC",
   sessions: [
-    { session_id: "selected-id", title: "Selected session", group_id: "brainstorming", group, exchange_count: 2 },
-    { session_id: "other-id", title: "Other session", group_id: "brainstorming", group, exchange_count: 1 }
+    { session_id: "selected-id", title: "Selected session", group_id: "brainstorming", group, exchange_count: 2, last_turn_at_iso: daysAgo(0) },
+    { session_id: "other-id", title: "Other session", group_id: "brainstorming", group, exchange_count: 1, last_turn_at_iso: daysAgo(1) },
+    { session_id: "two-days-id", title: "Two-day session", group_id: "brainstorming", group, exchange_count: 1, last_turn_at_iso: daysAgo(2) },
+    { session_id: "old-id", title: "Old session", group_id: "brainstorming", group, exchange_count: 1, last_turn_at_iso: daysAgo(8) }
   ],
   selectedSessionId: "selected-id",
   activeGroupId: "all",
@@ -179,24 +251,47 @@ function cardSnapshot(node) {
   };
 }
 renderSessions();
-const initial = dom.sessionList.children.map(cardSnapshot);
+const listHeadings = () => dom.sessionList.children.filter((node) => node.tag === "h3").map(textOf);
+const listStructure = () => dom.sessionList.children.map((node) => (
+  node.tag === "h3" ? `heading:${textOf(node)}` : "card"
+));
+const initial = dom.sessionList.children.filter((node) => hasClass(node, "session-button")).map(cardSnapshot);
+const initialHeadings = listHeadings();
+const initialStructure = listStructure();
 state.selectedSessionId = "other-id";
 state.manualRenameSessionId = "selected-id";
 renderSessions();
-const switched = dom.sessionList.children.map(cardSnapshot);
-process.stdout.write(JSON.stringify({ initial, switched }));
+const switched = dom.sessionList.children.filter((node) => hasClass(node, "session-button")).map(cardSnapshot);
+const switchedHeadings = listHeadings();
+const switchedStructure = listStructure();
+process.stdout.write(JSON.stringify({ initial, switched, initialHeadings, switchedHeadings, initialStructure, switchedStructure }));
 """
     node = shutil.which("node")
     assert node is not None
     completed = subprocess.run(
-        [node, "-e", harness + render_sessions],
+        [node, "-e", date_helpers + harness + render_sessions],
         check=True,
         capture_output=True,
         text=True,
     )
     rendered = json.loads(completed.stdout)
 
-    initial_selected, initial_other = rendered["initial"]
+    expected_headings = ["Today", "Yesterday", "More than 2 days ago", "More than 7 days ago"]
+    expected_structure = [
+        "heading:Today",
+        "card",
+        "heading:Yesterday",
+        "card",
+        "heading:More than 2 days ago",
+        "card",
+        "heading:More than 7 days ago",
+        "card",
+    ]
+    assert rendered["initialHeadings"] == expected_headings
+    assert rendered["switchedHeadings"] == expected_headings
+    assert rendered["initialStructure"] == expected_structure
+    assert rendered["switchedStructure"] == expected_structure
+    initial_selected, initial_other, initial_two_days, initial_old = rendered["initial"]
     assert initial_selected["active"] is True
     assert initial_selected["compact"] is False
     assert initial_selected["compactIcon"] is False
@@ -219,8 +314,10 @@ process.stdout.write(JSON.stringify({ initial, switched }));
     assert initial_other["role"] == "button"
     assert initial_other["tabIndex"] == 0
     assert initial_other["hasKeydown"] is True
+    assert initial_two_days["text"] == "Two-day session"
+    assert initial_old["text"] == "Old session"
 
-    switched_selected, switched_other = rendered["switched"]
+    switched_selected, switched_other, switched_two_days, switched_old = rendered["switched"]
     assert switched_selected["active"] is False
     assert switched_selected["compact"] is True
     assert switched_selected["compactIcon"] is True
@@ -236,6 +333,8 @@ process.stdout.write(JSON.stringify({ initial, switched }));
     assert "other-id" in switched_other["text"]
     assert "Brainstorming" in switched_other["text"]
     assert "actions" in switched_other["text"]
+    assert switched_two_days["text"] == "Two-day session"
+    assert switched_old["text"] == "Old session"
 
 
 def test_admin_viewer_sensitive_group_privacy_contract() -> None:
