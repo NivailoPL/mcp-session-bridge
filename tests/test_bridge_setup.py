@@ -92,7 +92,8 @@ def test_dashboard_renders_indygo_heading_but_plain_text_can_be_forced(tmp_path:
     plain = render_setup_dashboard(steps, TerminalTheme(enabled=False))
 
     assert "\x1b[38;2;99;102;241m" in colored
-    assert "INDYGO · MCP Session Bridge" in plain
+    assert "MCP Session Bridge" in plain
+    assert "INDYGO" not in plain
     assert "\x1b[" not in plain
 
 

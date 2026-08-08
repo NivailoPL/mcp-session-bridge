@@ -162,7 +162,7 @@ class SetupInspector:
 
 
 def render_setup_dashboard(steps: list[SetupStep], theme: TerminalTheme) -> str:
-    lines = [theme.heading("INDYGO · MCP Session Bridge"), theme.heading("Setup & configuration"), ""]
+    lines = [theme.heading("MCP Session Bridge"), theme.heading("Setup & configuration"), ""]
     width = max(len(step.label) for step in steps)
     for step in steps:
         lines.append(f"  {step.number}. {step.label:<{width}}  {step.state}")

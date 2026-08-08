@@ -167,7 +167,7 @@ def _configure(args: argparse.Namespace, layout: Layout, runner: SubprocessRunne
     current = read_env_file(layout.env_file)
     if not section and not args.domain and not args.username:
         theme = TerminalTheme.detect(force_plain=getattr(args, "no_color", False))
-        print(theme.heading("INDYGO · Bridge configuration"))
+        print(theme.heading("Bridge configuration"))
         print("  1. Public address")
         print("  2. Administrator")
         choice = input("Section: ").strip()
@@ -319,7 +319,7 @@ def _print_report(report, as_json: bool, theme: TerminalTheme | None = None) -> 
         print(json.dumps(report.to_dict(), indent=2, sort_keys=True))
         return
     active_theme = theme or TerminalTheme.detect()
-    print(active_theme.heading(f"INDYGO · Bridge status: {report.overall.upper()}"))
+    print(active_theme.heading(f"Bridge status: {report.overall.upper()}"))
     print(f"Version: {report.version['current']}")
     for check in report.checks:
         label = check.state.replace("_", " ").upper()
