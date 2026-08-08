@@ -121,10 +121,20 @@ class SetupInspector:
         service_text = self.layout.service_unit.read_text(encoding="utf-8") if self.layout.service_unit.exists() else ""
         managed_unit = str(self.layout.current_link) in service_text
         active = self._service_active()
-        service_state = "ACTIVE" if active and managed_unit else "DETECTED" if active else "READY" if pending_service else "NOT INSTALLED"
+        service_state = (
+            "ACTIVE"
+            if active and managed_unit
+            else "READY"
+            if pending_service
+            else "DETECTED"
+            if active
+            else "NOT INSTALLED"
+        )
         service_detail = (
             "Managed service is active."
             if active and managed_unit
+            else "Managed service files are staged; the legacy service remains active."
+            if pending_service and active
             else "A legacy Bridge service is currently active."
             if active
             else "Managed service files are staged."

@@ -273,6 +273,12 @@ def test_prepare_does_not_replace_live_systemd_or_caddy(tmp_path: Path) -> None:
     assert layout.current_link.resolve() == previous_release.resolve()
     assert ("chown", "-R", "root:root", str(layout.state_root)) in runner.calls
 
+    steps = SetupInspector(layout, source, runner).collect()
+    service = next(step for step in steps if step.id == "service")
+    assert service.state == "READY"
+    assert "legacy service remains active" in service.detail
+    assert SetupWizard._recommended(steps) == 8
+
 
 def test_activation_adopts_existing_caddy_site_and_restarts_service(tmp_path: Path, monkeypatch) -> None:
     source = source_tree(tmp_path)
