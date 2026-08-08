@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import shlex
 import shutil
 import socket
 import time
@@ -47,6 +48,30 @@ class ManagedInstaller:
         self.source_root = source_root.resolve()
         self.runner = runner
         self._directories_prepared = False
+
+    def ensure_global_cli(self) -> str:
+        command = self.layout.command_path
+        command.parent.mkdir(mode=0o755, parents=True, exist_ok=True)
+        desired = _bootstrap_launcher(self.source_root)
+        if command.exists():
+            existing = command.read_text(encoding="utf-8")
+            if (
+                "# MCP Session Bridge managed launcher" in existing
+                or (
+                    f"exec {self.layout.current_link}/.venv/bin/python -m bridge_cli" in existing
+                )
+            ):
+                return "managed"
+            if "# MCP Session Bridge bootstrap launcher" not in existing:
+                raise RuntimeError(
+                    f"{command} already exists and is not owned by MCP Session Bridge."
+                )
+            if existing == desired:
+                return "current"
+            atomic_write_text(command, desired, 0o755)
+            return "updated"
+        atomic_write_text(command, desired, 0o755)
+        return "installed"
 
     def install(
         self,
@@ -494,6 +519,7 @@ WantedBy=timers.target
 }}
 """
         launcher = f"""#!/bin/sh
+# MCP Session Bridge managed launcher
 set -eu
 exec {current}/.venv/bin/python -m bridge_cli "$@"
 """
@@ -714,6 +740,15 @@ def _require_health_payload(raw: str, url: str) -> None:
         raise RuntimeError(f"{url} returned invalid health JSON.") from exc
     if not isinstance(payload, dict) or payload.get("ok") is not True:
         raise RuntimeError(f"{url} did not return the Bridge health contract.")
+
+
+def _bootstrap_launcher(source_root: Path) -> str:
+    project = shlex.quote(str(source_root))
+    return f"""#!/bin/sh
+# MCP Session Bridge bootstrap launcher
+set -eu
+exec uv run --project {project} --frozen python -m bridge_cli "$@"
+"""
 
 
 def url_hostname(public_base_url: str) -> str:

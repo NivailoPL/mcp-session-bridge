@@ -89,6 +89,8 @@ The managed installation uses versioned releases and stable host paths:
 | `/etc/systemd/system/mcp-session-bridge*.service` | Service, restart helper, and status refresh |
 | `/etc/caddy/conf.d/mcp-session-bridge.caddy` | HTTPS reverse-proxy fragment |
 
+Setup installs a bootstrap `/usr/local/bin/mcp-bridge` command immediately. Repeated setup runs keep the existing Bridge-owned launcher and skip this bootstrap step. Activation later replaces the bootstrap with the managed-release launcher.
+
 Activation creates an unprivileged `mcp-session-bridge` service account, installs locked Python dependencies with `uv`, initializes or migrates SQLite, atomically promotes the staged environment and release, installs the staged systemd units, and configures or adopts Caddy. Setup keeps pending configuration and unit files root-owned; the service account owns only runtime data that the application must change.
 
 Secrets are written only to the private environment file. Re-running setup preserves the existing Bridge secret so OAuth records and encrypted admin settings remain readable.

@@ -97,6 +97,32 @@ def test_dashboard_renders_indygo_heading_but_plain_text_can_be_forced(tmp_path:
     assert "\x1b[" not in plain
 
 
+def test_setup_bootstrap_installs_global_cli_and_is_idempotent(tmp_path: Path) -> None:
+    source = source_tree(tmp_path)
+    layout = Layout.for_root(tmp_path / "target")
+    installer = ManagedInstaller(layout, source, RecordingRunner())
+
+    assert installer.ensure_global_cli() == "installed"
+    first = layout.command_path.read_text(encoding="utf-8")
+    assert "# MCP Session Bridge bootstrap launcher" in first
+    assert f"--project {source}" in first
+    assert layout.command_path.stat().st_mode & 0o777 == 0o755
+    assert installer.ensure_global_cli() == "current"
+    assert layout.command_path.read_text(encoding="utf-8") == first
+
+
+def test_setup_bootstrap_does_not_overwrite_foreign_command(tmp_path: Path) -> None:
+    source = source_tree(tmp_path)
+    layout = Layout.for_root(tmp_path / "target")
+    layout.command_path.parent.mkdir(parents=True)
+    layout.command_path.write_text("#!/bin/sh\necho foreign\n", encoding="utf-8")
+
+    with pytest.raises(RuntimeError, match="not owned"):
+        ManagedInstaller(layout, source, RecordingRunner()).ensure_global_cli()
+
+    assert layout.command_path.read_text(encoding="utf-8") == "#!/bin/sh\necho foreign\n"
+
+
 def test_adoption_decision_is_resumable_and_advances_recommended_step(tmp_path: Path) -> None:
     source = source_tree(tmp_path)
     legacy_db = source / "data/bridge.sqlite3"

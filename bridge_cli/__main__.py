@@ -129,6 +129,14 @@ def _setup(args: argparse.Namespace, layout: Layout, runner: SubprocessRunner) -
         print(render_setup_dashboard(steps, theme))
         print("DRY RUN No files, services, or configuration were changed.")
         return 0
+    cli_state = ManagedInstaller(layout, source_root, runner).ensure_global_cli()
+    cli_message = {
+        "installed": "installed",
+        "updated": "updated",
+        "current": "already available",
+        "managed": "already managed",
+    }[cli_state]
+    print(f"PASS Global CLI {cli_message}: {layout.command_path}")
     if not args.domain and not args.username:
         if not sys.stdin.isatty() or not sys.stdout.isatty():
             raise RuntimeError("Interactive setup requires a terminal. Re-run over SSH with a TTY.")

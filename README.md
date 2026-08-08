@@ -29,7 +29,7 @@ cd mcp-session-bridge
 ./mcp-bridge setup
 ```
 
-The resumable CLI shows the state of each setup area, lets you configure only the section you want, and keeps all prepared changes inactive until you explicitly choose **Activate installation**. Activation takes a final SQLite backup, switches systemd/Caddy, verifies the service, and restores the previous service configuration if verification fails. A successful activation installs the global `mcp-bridge` command.
+The resumable CLI installs the global `mcp-bridge` command as soon as setup starts, shows the state of each setup area, lets you configure only the section you want, and keeps all prepared service changes inactive until you explicitly choose **Activate installation**. Activation takes a final SQLite backup, switches systemd/Caddy, verifies the service, and restores the previous service configuration if verification fails.
 
 Setup distinguishes `DETECTED`, `NEEDS INPUT`, `READY`, `ACTIVE`, `WAITING`, and `FAILED`, always showing what exists and what should happen next. Headings use the Indygo terminal accent when color is supported; set `NO_COLOR=1` or pass global `--no-color` for plain output.
 
