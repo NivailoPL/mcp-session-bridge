@@ -19,31 +19,28 @@ It is intentionally narrow. Files enter the bridge only through an explicit uplo
 
 ## Quickstart
 
-Requirements:
-
-- Python 3.12+
-- [uv](https://docs.astral.sh/uv/)
+For a persistent VPS installation, prepare a Debian or Ubuntu server with SSH, a public IP, a hostname you control, and inbound ports 22, 80, and 443. Then run:
 
 ```bash
+apt-get update
+apt-get install -y git curl ca-certificates
 git clone https://github.com/NivailoPL/mcp-session-bridge.git
 cd mcp-session-bridge
-cp .env.example .env
-uv sync
-uv run python scripts/demo_session.py
+./bridge setup
 ```
 
-Expected output:
+The guided CLI installs the locked runtime, initializes or adopts the database, configures an unprivileged systemd service and Caddy HTTPS, and leaves a global `bridge` command.
 
-```text
-Created session: demo-...
-Saved exchange #1: USER -> Claude
-Saved exchange #2: USER -> GPT
-Overview: 2 exchanges, 4 turns, 1 transcript chunk
-Transcript written to: examples/output/demo-transcript.md
-OK
+Every stage reports `PASS`, `WAITING`, or `FAILED` plus the next action. If DNS has not propagated, the local service remains installed and setup ends in `WAITING` instead of hiding the problem.
+
+Verify the server:
+
+```bash
+bridge status
+bridge doctor
 ```
 
-The generated demo files are written to `examples/output/`, which is ignored by git. Static examples live in `examples/`.
+Read the complete [managed server installation guide](docs/managed-installation.md), including adoption, updates, rollback, and the future Agent Plugins boundary. Client/harness connection is intentionally a separate step.
 
 ## Run Locally
 
@@ -121,13 +118,14 @@ The Search button in the admin panel opens an overlay over the complete bridge d
 - Each group must be explicitly selected before its content can be embedded or reranked. Unselected groups remain available only in the separate local BM25 lane.
 - Sensitive groups always remain in the local BM25 lane and cannot be selected for OpenAI embeddings or Cohere reranking.
 
-Settings are split into General, Transcript, Search, and API tabs. The Transcript tab creates harness-test instructions, records verified probe results, recommends a safe character limit with a 25% margin, and controls the global transcript chunk character/line limits without a restart. Provider keys are encrypted with the bridge secret, are returned only as masked previews, and are shared with the existing AI rename feature where applicable. Vector indexing is disabled by default; the owner can build, stop, rebuild, or delete the index and configure search chunking plus refresh thresholds. Admin search remains admin-only.
+Settings are split into General, MCP, Search, API, and Status tabs. Status mirrors the CLI's cached operational report and marks available releases, while all host changes and updates remain terminal-only. The MCP tab creates harness-test instructions, records verified probe results, recommends a safe character limit with a 25% margin, and controls the global transcript chunk character/line limits without a restart. Provider keys are encrypted with the bridge secret, are returned only as masked previews, and are shared with the existing AI rename feature where applicable. Vector indexing is disabled by default; the owner can build, stop, rebuild, or delete the index and configure search chunking plus refresh thresholds. Admin search remains admin-only.
 
 `get_session_overview` returns `response_display_timezone` for the configured bridge display timezone. `save_exchange` returns `assistant_created_at_display` and `assistant_created_at_timezone`; use that returned display timestamp as the user-visible response timestamp. The bridge renders response display timestamps in the configured bridge display timezone, UTC by default, so clients should not convert that value into their own local timezone.
 
 ## Documentation
 
 - [Installation](docs/installation.md)
+- [Managed VPS installation](docs/managed-installation.md)
 - [Client setup](docs/client-setup.md)
 - [Model instructions](docs/model-instructions.md)
 - [Deployment](docs/deployment.md)
@@ -183,6 +181,8 @@ Then open `http://127.0.0.1:8799/session-viewer.html`.
 | Path | Role |
 | --- | --- |
 | `app/main.py` | FastMCP server, routes, and tool definitions. |
+| `bridge` | Zero-to-managed-install bootstrap command. |
+| `bridge_cli/` | Setup, status, diagnostics, updates, migrations, and rollback. |
 | `app/oauth.py` | OAuth dynamic registration, login, token exchange, and refresh. |
 | `app/storage.py` | SQLite schema and persistence for sessions, transcripts, and tokens. |
 | `app/session_package.py` | Transcript rendering and chunking. |

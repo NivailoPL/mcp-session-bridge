@@ -1,6 +1,59 @@
 # Operations
 
 This page collects routine commands for running, inspecting, and maintaining MCP Session Bridge.
+## Managed CLI
+
+For a server installed with `./bridge setup`, use the global command from any directory.
+
+Fast status:
+
+```bash
+bridge status
+```
+
+Deeper read-only diagnostics:
+
+```bash
+bridge doctor
+```
+
+Recent service logs:
+
+```bash
+bridge logs
+bridge logs --follow
+bridge logs --lines 250
+```
+
+Version and database schema:
+
+```bash
+bridge version
+```
+
+Check for a stable release without installing it:
+
+```bash
+bridge update --check
+```
+
+Install and verify the latest stable release:
+
+```bash
+bridge update
+```
+
+Restore the release and database from the most recent completed update:
+
+```bash
+bridge rollback
+```
+
+The authenticated admin page exposes the same summary under **Settings → Status**. An amber dot on both **Settings** and **Status** means a release is available. Updates remain CLI-only so a browser session cannot perform package, database, service, or rollback operations.
+
+Managed data lives under `/var/lib/mcp-session-bridge`; dated setup and update backups live under `/var/backups/mcp-session-bridge`. Do not edit a version directory under `/opt/mcp-session-bridge/releases` in place.
+
+
 
 ## Health Check
 

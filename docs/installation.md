@@ -2,6 +2,8 @@
 
 This guide sets up MCP Session Bridge for local development and for trying the demo workflow. It does not require a hosted domain or an MCP client.
 
+For a persistent VPS with guided setup, systemd, Caddy, status reporting, and safe updates, use the [managed server installation](managed-installation.md) instead.
+
 ## Requirements
 
 - Python 3.12 or newer

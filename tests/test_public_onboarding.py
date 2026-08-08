@@ -129,6 +129,7 @@ def test_demo_session_script_creates_expected_files(tmp_path) -> None:
 def test_public_docs_are_linked_and_anonymized() -> None:
     expected_docs = [
         "docs/installation.md",
+        "docs/managed-installation.md",
         "docs/client-setup.md",
         "docs/model-instructions.md",
         "docs/deployment.md",

@@ -2,6 +2,8 @@
 
 This project can run as a normal ASGI app behind a reverse proxy. The included deployment files assume Uvicorn, systemd, and Caddy, but they are templates rather than a required platform.
 
+The recommended VPS path is the guided [managed server installation](managed-installation.md). The manual templates below remain useful for custom layouts that deliberately opt out of CLI-managed releases and updates.
+
 Docker is intentionally out of scope for v0.1.
 
 ## Environment
