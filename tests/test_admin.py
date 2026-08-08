@@ -1721,6 +1721,18 @@ def test_restart_helper_uses_fixed_systemctl_command(tmp_path, monkeypatch) -> N
     }
 
 
+def test_managed_restart_writes_runtime_request_file(tmp_path, monkeypatch) -> None:
+    request_file = tmp_path / "run" / "restart-request"
+    request_file.parent.mkdir()
+    monkeypatch.setenv("BRIDGE_RESTART_REQUEST_FILE", str(request_file))
+    main = _load_main(tmp_path, monkeypatch)
+
+    asyncio.run(main._request_service_restart())
+
+    assert request_file.exists()
+    assert request_file.stat().st_mode & 0o777 == 0o600
+
+
 def test_restart_helper_surfaces_nonzero_systemctl_result(tmp_path, monkeypatch) -> None:
     main = _load_main(tmp_path, monkeypatch)
 

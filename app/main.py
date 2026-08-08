@@ -139,6 +139,9 @@ oauth = OAuthHandlers(settings, store)
 
 
 async def _request_service_restart() -> None:
+    if settings.restart_request_file is not None:
+        await asyncio.to_thread(_write_restart_request, settings.restart_request_file)
+        return
     process = await asyncio.create_subprocess_exec(
         "/bin/systemctl",
         "start",
@@ -170,6 +173,11 @@ async def _request_service_restart() -> None:
     if process.returncode != 0:
         detail = stderr.decode("utf-8", errors="replace").strip()
         raise RuntimeError(detail or "systemd rejected the restart request")
+
+
+def _write_restart_request(path) -> None:
+    path.write_text(f"{time.time()}\n", encoding="utf-8")
+    path.chmod(0o600)
 
 
 admin = AdminHandlers(

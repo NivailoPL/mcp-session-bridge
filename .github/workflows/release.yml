@@ -1,0 +1,72 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: Install Python and locked dependencies
+        run: |
+          uv python install 3.12
+          uv sync --frozen
+      - name: Verify tag and project version
+        run: |
+          uv run python - <<'PY'
+          import os
+          import tomllib
+          from pathlib import Path
+          version = tomllib.loads(Path("pyproject.toml").read_text())["project"]["version"]
+          tag = os.environ["GITHUB_REF_NAME"]
+          if tag != f"v{version}":
+              raise SystemExit(f"Tag {tag} does not match project version {version}")
+          PY
+      - name: Test release
+        run: |
+          uv run pytest
+          uv run python scripts/demo_session.py
+      - name: Build release assets
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          artifact="mcp-session-bridge-${version}.tar.gz"
+          git archive --format=tar.gz --output="${artifact}" HEAD
+          digest="$(sha256sum "${artifact}" | cut -d ' ' -f 1)"
+          uv run python - "${version}" "${artifact}" "${digest}" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+          version, artifact, digest = sys.argv[1:]
+          Path("release-manifest.json").write_text(json.dumps({
+              "format_version": 1,
+              "version": version,
+              "artifact": artifact,
+              "sha256": digest,
+              "database_schema": 1,
+              "python": "3.12",
+              "channel": "stable",
+          }, indent=2) + "\n")
+          PY
+      - name: Attest release bundle
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: "mcp-session-bridge-*.tar.gz"
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          gh release create "${GITHUB_REF_NAME}" \
+            "mcp-session-bridge-${version}.tar.gz" \
+            release-manifest.json \
+            --verify-tag \
+            --generate-notes

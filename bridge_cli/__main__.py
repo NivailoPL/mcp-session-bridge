@@ -55,6 +55,13 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "configure":
             return _configure(args, layout, runner)
         if args.command in {"status", "doctor"}:
+            if getattr(args, "refresh", False):
+                try:
+                    from bridge_cli.release import UpdateManager
+
+                    UpdateManager(layout, runner).check()
+                except RuntimeError:
+                    pass
             collector = StatusCollector(
                 layout, runner, probe_http=layout.root == Path("/"), deep=args.command == "doctor"
             )

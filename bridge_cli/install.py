@@ -4,7 +4,7 @@ import os
 import shutil
 import sqlite3
 import time
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from pathlib import Path
 from secrets import token_urlsafe
 from typing import Any
@@ -187,6 +187,7 @@ class ManagedInstaller:
                 "BRIDGE_TRANSPORT_ALLOWED_HOSTS": (
                     f"127.0.0.1:8787,localhost:8787,{domain}"
                 ),
+                "BRIDGE_RESTART_REQUEST_FILE": str(self.layout._path("run/mcp-session-bridge/restart-request")),
                 "BRIDGE_ALLOW_STARTUP_MIGRATIONS": "false",
             },
         )
@@ -242,7 +243,7 @@ After=mcp-session-bridge.service
 
 [Service]
 Type=oneshot
-ExecStart=/usr/local/bin/bridge status --refresh --write-snapshot
+ExecStart={self.layout.command_path} status --refresh --write-snapshot
 """
         status_timer = """[Unit]
 Description=Refresh MCP Session Bridge operational status periodically
@@ -290,6 +291,9 @@ exec {current}/.venv/bin/python -m bridge_cli "$@"
             "chown", "-R", "mcp-session-bridge:mcp-session-bridge", str(self.layout.data_root)
         )
         release_dir = self.layout.current_link.resolve()
+        if shutil.which("caddy") is None:
+            self.runner.run("apt-get", "update")
+            self.runner.run("apt-get", "install", "-y", "caddy")
         self.runner.run("uv", "sync", "--frozen", "--no-dev", "--project", str(release_dir))
         self.runner.run("systemctl", "daemon-reload")
         self.runner.run(
@@ -298,10 +302,12 @@ exec {current}/.venv/bin/python -m bridge_cli "$@"
             "mcp-session-bridge-restart.path",
             "mcp-session-bridge-status.timer",
         )
-        if self.layout.caddyfile.exists():
-            import_line = "import /etc/caddy/conf.d/*.caddy"
-            text = self.layout.caddyfile.read_text(encoding="utf-8")
-            if import_line not in text:
-                atomic_write_text(self.layout.caddyfile, text.rstrip() + "\n\n" + import_line + "\n")
+        import_line = f"import {self.layout.caddy_fragment.parent}/*.caddy"
+        text = (
+            self.layout.caddyfile.read_text(encoding="utf-8")
+            if self.layout.caddyfile.exists() else ""
+        )
+        if import_line not in text:
+            atomic_write_text(self.layout.caddyfile, text.rstrip() + "\n\n" + import_line + "\n")
         self.runner.run("caddy", "validate", "--config", str(self.layout.caddyfile))
         self.runner.run("systemctl", "reload", "caddy")
