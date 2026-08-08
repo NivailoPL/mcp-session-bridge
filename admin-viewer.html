@@ -2140,7 +2140,9 @@
       }
 
       function statusState(value) {
-        return ["pass", "warn", "waiting", "fail"].includes(value) ? value : "unknown";
+        const aliases = { failed: "fail", action_required: "warn" };
+        const normalized = aliases[value] || value;
+        return ["pass", "warn", "waiting", "fail"].includes(normalized) ? normalized : "unknown";
       }
 
       function operationalTime(value) {

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import shutil
+import socket
 import sqlite3
 import time
 from dataclasses import dataclass
@@ -80,12 +81,20 @@ class ManagedInstaller:
             "backup_dir": str(backup_dir) if backup_dir else None,
         }
         atomic_write_json(self.layout.installation_file, manifest)
+        state = "complete"
+        next_step = "Run bridge status."
         if activate:
             self._activate_services()
+            if not _dns_resolves(answers.domain.strip().lower()):
+                state = "waiting"
+                next_step = (
+                    "DNS is not resolving yet. Point the hostname at this server, "
+                    "wait for propagation, then run bridge status."
+                )
         operation = {
             "format_version": 1,
             "operation": "setup",
-            "state": "complete",
+            "state": state,
             "version": version,
             "finished_at": int(time.time()),
             "backup_dir": str(backup_dir) if backup_dir else None,
@@ -93,7 +102,8 @@ class ManagedInstaller:
         atomic_write_json(self.layout.operation_file, operation)
         return {
             "ok": True,
-            "state": "complete",
+            "state": state,
+            "next_step": next_step,
             "version": version,
             "steps": steps,
             "backup_dir": str(backup_dir) if backup_dir else None,
@@ -312,3 +322,11 @@ exec {current}/.venv/bin/python -m bridge_cli "$@"
             atomic_write_text(self.layout.caddyfile, text.rstrip() + "\n\n" + import_line + "\n")
         self.runner.run("caddy", "validate", "--config", str(self.layout.caddyfile))
         self.runner.run("systemctl", "reload", "caddy")
+
+
+def _dns_resolves(hostname: str) -> bool:
+    try:
+        addresses = socket.getaddrinfo(hostname, 443, type=socket.SOCK_STREAM)
+    except socket.gaierror:
+        return False
+    return bool(addresses)

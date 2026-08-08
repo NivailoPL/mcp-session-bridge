@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import json
 import shutil
+import socket
 import sqlite3
 import urllib.error
 import urllib.request
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 from bridge_cli.config import read_env_file
 from bridge_cli.files import atomic_write_json, read_json
@@ -35,6 +37,7 @@ class StatusCollector:
         checks = [
             self._config_check(),
             self._database_check(),
+            self._dns_check(installation.get("public_base_url")),
             self._service_check("mcp-session-bridge.service", "service", "Bridge service"),
             self._service_check("caddy.service", "caddy", "Caddy"),
         ]
@@ -111,6 +114,32 @@ class StatusCollector:
                 return row[0] if row else None
         except sqlite3.Error:
             return None
+
+    def _dns_check(self, public_base_url: object) -> CheckResult:
+        hostname = urlparse(str(public_base_url or "")).hostname
+        if not hostname:
+            return CheckResult(
+                "dns", "Public DNS", "not_checked", "Public hostname is not configured."
+            )
+        try:
+            addresses = socket.getaddrinfo(hostname, 443, type=socket.SOCK_STREAM)
+        except socket.gaierror:
+            return CheckResult(
+                "dns",
+                "Public DNS",
+                "waiting",
+                f"{hostname} does not resolve yet.",
+                "Point DNS at this server, wait for propagation, then run bridge status.",
+            )
+        if not addresses:
+            return CheckResult(
+                "dns",
+                "Public DNS",
+                "waiting",
+                f"{hostname} has no usable address yet.",
+                "Check the DNS record, then run bridge status.",
+            )
+        return CheckResult("dns", "Public DNS", "pass", f"{hostname} resolves.")
 
     def _service_check(self, unit: str, check_id: str, label: str) -> CheckResult:
         if not self.layout.systemd_root.exists():

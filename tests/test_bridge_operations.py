@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import socket
 from pathlib import Path
 
 from app.storage import Store
@@ -153,3 +154,54 @@ def test_repeated_setup_preserves_bridge_secret(tmp_path: Path) -> None:
     )
 
     assert second_secret == first_secret
+def test_setup_reports_waiting_when_dns_has_not_propagated(tmp_path: Path, monkeypatch) -> None:
+    source = tmp_path / "source"
+    source.mkdir()
+    (source / "pyproject.toml").write_text("[project]\nname='test'\n", encoding="utf-8")
+    (source / "app").mkdir()
+    (source / "app/__init__.py").write_text("", encoding="utf-8")
+    layout = Layout.for_root(tmp_path / "target")
+    runner = RecordingRunner()
+    monkeypatch.setattr("bridge_cli.install.shutil.which", lambda _name: "/usr/bin/tool")
+
+    def unresolved(*_args, **_kwargs):
+        raise socket.gaierror("not found")
+
+    monkeypatch.setattr("bridge_cli.install.socket.getaddrinfo", unresolved)
+
+    result = ManagedInstaller(layout, source, runner).install(
+        SetupAnswers(domain="pending.example.test", username="owner", password="long-password"),
+        activate=True,
+    )
+
+    operation = json.loads(layout.operation_file.read_text(encoding="utf-8"))
+    assert result["state"] == "waiting"
+    assert "DNS" in result["next_step"]
+    assert operation["state"] == "waiting"
+    assert (
+        "systemctl",
+        "enable",
+        "--now",
+        "mcp-session-bridge.service",
+        "mcp-session-bridge-restart.path",
+        "mcp-session-bridge-status.timer",
+    ) in runner.calls
+
+
+def test_status_reports_waiting_dns_as_an_actionable_check(tmp_path: Path, monkeypatch) -> None:
+    layout = Layout.for_root(tmp_path)
+    layout.state_root.mkdir(parents=True)
+    layout.installation_file.write_text(
+        json.dumps({"mode": "managed", "public_base_url": "https://pending.example.test"}),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        "bridge_cli.operations.socket.getaddrinfo",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(socket.gaierror()),
+    )
+
+    report = StatusCollector(layout, RecordingRunner(), probe_http=False).collect()
+
+    dns = next(check for check in report.checks if check.id == "dns")
+    assert dns.state == "waiting"
+    assert "DNS" in (dns.remediation or "")

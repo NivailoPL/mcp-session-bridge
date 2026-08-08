@@ -5,6 +5,7 @@ import getpass
 import json
 import os
 import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -89,7 +90,7 @@ def main(argv: list[str] | None = None) -> int:
             from bridge_cli.release import run_release_command
             _require_root(args.command)
             return run_release_command(args, layout, runner)
-    except (OSError, RuntimeError, ValueError) as exc:
+    except (OSError, RuntimeError, ValueError, subprocess.SubprocessError) as exc:
         print(f"FAILED: {exc}", file=sys.stderr)
         return 1
     return 2
@@ -158,8 +159,15 @@ def _print_steps(result: dict[str, object]) -> None:
     steps = result.get("steps", [])
     for index, step in enumerate(steps, start=1):
         print(f"[{index}/{len(steps)}] {step}")
-    print(f"PASS setup state: {result['state']}")
-    if result["state"] == "complete":
+    state = result["state"]
+    label = "PASS" if state in {"complete", "dry_run"} else "WAITING"
+    print(f"{label} setup state: {state}")
+    if state == "dry_run":
+        print("Next: run bridge setup without --dry-run when you are ready.")
+    elif state == "waiting":
+        print(f"Next: {result['next_step']}")
+        print("The local Bridge service is installed; public HTTPS is pending DNS.")
+    else:
         print("Next: bridge status")
         print("Next: bridge doctor")
 
