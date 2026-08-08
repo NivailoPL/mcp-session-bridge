@@ -16,9 +16,6 @@ dependencies = [
     "uvicorn>=0.48.0",
 ]
 
-[project.scripts]
-bridge = "bridge_cli.__main__:main"
-
 [dependency-groups]
 dev = [
     "pytest>=9.0.0",

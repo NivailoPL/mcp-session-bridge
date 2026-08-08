@@ -10,6 +10,7 @@ import sys
 from pathlib import Path
 
 from bridge_cli.config import read_env_file, update_env_file
+from bridge_cli.files import atomic_write_text
 from bridge_cli.install import ManagedInstaller, SetupAnswers
 from bridge_cli.layout import Layout
 from bridge_cli.migrations import migrate_database
@@ -51,10 +52,15 @@ def main(argv: list[str] | None = None) -> int:
     layout = Layout.for_root(args.root) if args.root else Layout.system()
     runner = SubprocessRunner()
     try:
-        if args.command == "setup":
-            return _setup(args, layout, runner)
-        if args.command == "configure":
-            return _configure(args, layout, runner)
+        if args.command in {"setup", "configure"}:
+            if args.command == "setup" and args.dry_run:
+                return _setup(args, layout, runner)
+            _require_root(args.command)
+            from bridge_cli.release import UpdateManager
+            with UpdateManager(layout, runner).operation_lock():
+                if args.command == "setup":
+                    return _setup(args, layout, runner)
+                return _configure(args, layout, runner)
         if args.command in {"status", "doctor"}:
             if getattr(args, "refresh", False):
                 try:
@@ -115,6 +121,7 @@ def _setup(args: argparse.Namespace, layout: Layout, runner: SubprocessRunner) -
         legacy_db=legacy_db if legacy_db.exists() else None,
         legacy_env=legacy_env if legacy_env.exists() else None,
         activate=not args.dry_run,
+        progress=_print_progress,
     )
     _print_steps(result)
     return 0
@@ -146,19 +153,48 @@ def _configure(args: argparse.Namespace, layout: Layout, runner: SubprocessRunne
     backup = layout.backup_root / "configure.env.bak"
     backup.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     shutil.copy2(layout.env_file, backup)
+    previous_caddy = (
+        layout.caddy_fragment.read_text(encoding="utf-8")
+        if layout.caddy_fragment.exists()
+        else None
+    )
     update_env_file(layout.env_file, updates)
-    result = runner.run("systemctl", "restart", "mcp-session-bridge.service", check=False)
-    if result.returncode != 0:
+    failures = []
+    if args.domain:
+        atomic_write_text(
+            layout.caddy_fragment,
+            f"{domain} {{\n    encode zstd gzip\n    reverse_proxy 127.0.0.1:8787\n}}\n",
+        )
+        validation = runner.run(
+            "caddy", "validate", "--config", str(layout.caddyfile), check=False
+        )
+        failures.append(validation)
+        if validation.returncode == 0:
+            failures.append(runner.run("systemctl", "reload", "caddy", check=False))
+    if not any(result.returncode != 0 for result in failures):
+        failures.append(
+            runner.run("systemctl", "restart", "mcp-session-bridge.service", check=False)
+        )
+    failed = next((result for result in failures if result.returncode != 0), None)
+    if failed is not None:
         shutil.copy2(backup, layout.env_file)
-        raise RuntimeError(result.stderr.strip() or "Bridge restart failed; configuration restored.")
+        if previous_caddy is None:
+            layout.caddy_fragment.unlink(missing_ok=True)
+        else:
+            atomic_write_text(layout.caddy_fragment, previous_caddy)
+        runner.run("systemctl", "reload", "caddy", check=False)
+        raise RuntimeError(
+            failed.stderr.strip() or "Configuration activation failed; previous files restored."
+        )
     print("PASS Configuration updated and Bridge restarted.")
     return 0
 
 
 def _print_steps(result: dict[str, object]) -> None:
     steps = result.get("steps", [])
-    for index, step in enumerate(steps, start=1):
-        print(f"[{index}/{len(steps)}] {step}")
+    if not result.get("progress_reported"):
+        for index, step in enumerate(steps, start=1):
+            print(f"[{index}/{len(steps)}] {step}")
     state = result["state"]
     label = "PASS" if state in {"complete", "dry_run"} else "WAITING"
     print(f"{label} setup state: {state}")
@@ -170,6 +206,10 @@ def _print_steps(result: dict[str, object]) -> None:
     else:
         print("Next: bridge status")
         print("Next: bridge doctor")
+
+
+def _print_progress(index: int, total: int, step: str, state: str) -> None:
+    print(f"[{index}/{total}] {state:<8} {step}", flush=True)
 
 
 def _print_report(report, as_json: bool) -> None:

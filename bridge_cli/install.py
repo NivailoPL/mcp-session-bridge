@@ -8,7 +8,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 from secrets import token_urlsafe
-from typing import Any
+from typing import Any, Callable
 
 from app.security import password_hash
 from bridge_cli.config import read_env_file, update_env_file
@@ -49,26 +49,48 @@ class ManagedInstaller:
         activate: bool = True,
         legacy_db: Path | None = None,
         legacy_env: Path | None = None,
+        progress: Callable[[int, int, str, str], None] | None = None,
     ) -> dict[str, Any]:
-        answers.validate()
         version = BRIDGE_VERSION
         steps = [
             "Validate host and answers",
+            "Prepare managed directories and backups",
             f"Stage Bridge {version}",
-            "Create configuration and data directories",
             "Initialize or adopt SQLite database",
             "Install systemd and Caddy configuration",
             "Activate and verify services" if activate else "Leave services inactive",
         ]
+        _report_progress(progress, 1, steps, "RUNNING")
+        answers.validate()
+        _report_progress(progress, 1, steps, "PASS")
         if dry_run:
-            return {"ok": True, "state": "dry_run", "version": version, "steps": steps}
+            for index in range(2, len(steps) + 1):
+                _report_progress(progress, index, steps, "PLANNED")
+            return {
+                "ok": True,
+                "state": "dry_run",
+                "version": version,
+                "steps": steps,
+                "progress_reported": progress is not None,
+            }
 
+        _report_progress(progress, 2, steps, "RUNNING")
         self._prepare_directories()
+        legacy_db = None if self.layout.db_path.exists() else legacy_db
+        legacy_env = None if self.layout.env_file.exists() else legacy_env
         backup_dir = self._backup_existing(legacy_db=legacy_db, legacy_env=legacy_env)
+        _report_progress(progress, 2, steps, "PASS")
+        _report_progress(progress, 3, steps, "RUNNING")
         release_dir = self._stage_release(version)
+        _report_progress(progress, 3, steps, "PASS")
+        _report_progress(progress, 4, steps, "RUNNING")
         self._install_database(legacy_db)
+        _report_progress(progress, 4, steps, "PASS")
+        _report_progress(progress, 5, steps, "RUNNING")
         self._write_configuration(answers, legacy_env)
         self._write_units(answers.domain.strip().lower())
+        _report_progress(progress, 5, steps, "PASS")
+        _report_progress(progress, 6, steps, "RUNNING")
         self._activate_release(release_dir)
         manifest = {
             "format_version": 1,
@@ -100,12 +122,14 @@ class ManagedInstaller:
             "backup_dir": str(backup_dir) if backup_dir else None,
         }
         atomic_write_json(self.layout.operation_file, operation)
+        _report_progress(progress, 6, steps, "WAITING" if state == "waiting" else "PASS")
         return {
             "ok": True,
             "state": state,
             "next_step": next_step,
             "version": version,
             "steps": steps,
+            "progress_reported": progress is not None,
             "backup_dir": str(backup_dir) if backup_dir else None,
         }
 
@@ -129,7 +153,19 @@ class ManagedInstaller:
     ) -> Path | None:
         candidates = [
             path
-            for path in (legacy_db, legacy_env, self.layout.env_file, self.layout.service_unit)
+            for path in (
+                self.layout.db_path,
+                legacy_db,
+                legacy_env,
+                self.layout.env_file,
+                self.layout.service_unit,
+                self.layout.restart_path_unit,
+                self.layout.restart_service_unit,
+                self.layout.status_service_unit,
+                self.layout.status_timer_unit,
+                self.layout.caddy_fragment,
+                self.layout.caddyfile,
+            )
             if path is not None and path.exists()
         ]
         if not candidates:
@@ -248,7 +284,7 @@ Type=oneshot
 ExecStart=/bin/systemctl restart mcp-session-bridge.service
 ExecStartPost=/usr/bin/rm -f {runtime}/restart-request
 """
-        status_service = """[Unit]
+        status_service = f"""[Unit]
 Description=Refresh MCP Session Bridge operational status
 After=mcp-session-bridge.service
 
@@ -322,6 +358,16 @@ exec {current}/.venv/bin/python -m bridge_cli "$@"
             atomic_write_text(self.layout.caddyfile, text.rstrip() + "\n\n" + import_line + "\n")
         self.runner.run("caddy", "validate", "--config", str(self.layout.caddyfile))
         self.runner.run("systemctl", "reload", "caddy")
+
+
+def _report_progress(
+    progress: Callable[[int, int, str, str], None] | None,
+    index: int,
+    steps: list[str],
+    state: str,
+) -> None:
+    if progress is not None:
+        progress(index, len(steps), steps[index - 1], state)
 
 
 def _dns_resolves(hostname: str) -> bool:

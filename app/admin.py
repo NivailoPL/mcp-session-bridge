@@ -1255,9 +1255,12 @@ class AdminHandlers:
                 refreshed_at = int(path.stat().st_mtime)
             except OSError:
                 pass
+        overall = cached.get("overall", "unknown")
+        if overall not in {"healthy", "attention", "failed", "incomplete", "unknown"}:
+            overall = "unknown"
         return {
             "schema_version": 1,
-            "overall": cached.get("overall", "unknown"),
+            "overall": overall,
             "version": version,
             "update": update,
             "checks": checks,

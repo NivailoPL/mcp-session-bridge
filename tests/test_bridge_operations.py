@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import json
+from argparse import Namespace
 import socket
 from pathlib import Path
 
 from app.storage import Store
 from bridge_cli.install import ManagedInstaller, SetupAnswers
 from bridge_cli.layout import Layout
+from bridge_cli.__main__ import _configure
 from bridge_cli.operations import StatusCollector
 
 
@@ -40,13 +42,18 @@ def test_setup_dry_run_makes_no_changes(tmp_path: Path) -> None:
     (source / "pyproject.toml").write_text("[project]\nname='test'\n", encoding="utf-8")
     layout = Layout.for_root(tmp_path / "target")
     installer = ManagedInstaller(layout, source, RecordingRunner())
+    events: list[tuple[int, int, str, str]] = []
 
     result = installer.install(
         SetupAnswers(domain="bridge.example.test", username="owner", password="long-password"),
+        progress=lambda *event: events.append(event),
         dry_run=True,
         activate=False,
     )
 
+    assert events[0][3] == "RUNNING"
+    assert events[1][3] == "PASS"
+    assert [event[3] for event in events[2:]] == ["PLANNED"] * 5
     assert result["state"] == "dry_run"
     assert result["steps"]
     assert not layout.opt_root.exists()
@@ -79,6 +86,9 @@ def test_setup_creates_managed_layout_without_leaking_password(tmp_path: Path) -
     assert "long-password" not in env_text
     assert layout.service_unit.exists()
     assert layout.caddy_fragment.exists()
+    status_unit = layout.status_service_unit.read_text(encoding="utf-8")
+    assert f"ExecStart={layout.command_path} status --refresh --write-snapshot" in status_unit
+    assert "{self.layout.command_path}" not in status_unit
 
 
 def test_setup_adopts_legacy_database_and_preserves_source(tmp_path: Path) -> None:
@@ -154,6 +164,7 @@ def test_repeated_setup_preserves_bridge_secret(tmp_path: Path) -> None:
     )
 
     assert second_secret == first_secret
+
 def test_setup_reports_waiting_when_dns_has_not_propagated(tmp_path: Path, monkeypatch) -> None:
     source = tmp_path / "source"
     source.mkdir()
@@ -205,3 +216,57 @@ def test_status_reports_waiting_dns_as_an_actionable_check(tmp_path: Path, monke
     dns = next(check for check in report.checks if check.id == "dns")
     assert dns.state == "waiting"
     assert "DNS" in (dns.remediation or "")
+
+def test_repeated_setup_does_not_readopt_stale_legacy_database(tmp_path: Path) -> None:
+    source = tmp_path / "legacy"
+    source.mkdir()
+    (source / "pyproject.toml").write_text("[project]\nname='test'\n", encoding="utf-8")
+    (source / "app").mkdir()
+    (source / "app/__init__.py").write_text("", encoding="utf-8")
+    legacy_db = source / "data/bridge.sqlite3"
+    Store(legacy_db).create_session("legacy-session", "Legacy", "manual-context")
+    layout = Layout.for_root(tmp_path / "target")
+    installer = ManagedInstaller(layout, source, RecordingRunner())
+    answers = SetupAnswers(
+        domain="bridge.example.test",
+        username="owner",
+        password="long-password",
+    )
+
+    installer.install(answers, legacy_db=legacy_db, activate=False)
+    Store(layout.db_path, allow_startup_migrations=False).create_session(
+        "managed-session", "Created after adoption", "manual-context"
+    )
+    installer.install(answers, legacy_db=legacy_db, activate=False)
+
+    managed = Store(layout.db_path, allow_startup_migrations=False)
+    assert managed.get_session("legacy-session") is not None
+    assert managed.get_session("managed-session") is not None
+
+def test_configure_domain_updates_caddy_and_runtime_atomically(tmp_path: Path, monkeypatch) -> None:
+    source = tmp_path / "source"
+    source.mkdir()
+    (source / "pyproject.toml").write_text("[project]\nname='test'\n", encoding="utf-8")
+    (source / "app").mkdir()
+    (source / "app/__init__.py").write_text("", encoding="utf-8")
+    layout = Layout.for_root(tmp_path / "target")
+    runner = RecordingRunner()
+    ManagedInstaller(layout, source, runner).install(
+        SetupAnswers(domain="old.example.test", username="owner", password="long-password"),
+        activate=False,
+    )
+    monkeypatch.setattr("bridge_cli.__main__._require_root", lambda _command: None)
+    monkeypatch.setattr("builtins.input", lambda _prompt: "n")
+
+    result = _configure(
+        Namespace(domain="new.example.test", username=None),
+        layout,
+        runner,
+    )
+
+    assert result == 0
+    assert "https://new.example.test" in layout.env_file.read_text(encoding="utf-8")
+    assert "new.example.test {" in layout.caddy_fragment.read_text(encoding="utf-8")
+    assert ("caddy", "validate", "--config", str(layout.caddyfile)) in runner.calls
+    assert ("systemctl", "reload", "caddy") in runner.calls
+    assert ("systemctl", "restart", "mcp-session-bridge.service") in runner.calls

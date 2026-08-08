@@ -164,7 +164,7 @@ class UpdateManager:
         return payload
 
     def update(self, release: ReleaseInfo | None = None) -> dict[str, Any]:
-        with self._operation_lock():
+        with self.operation_lock():
             installation = self._installation()
             previous_version = str(installation["version"])
             release = release or self.client.latest()
@@ -251,7 +251,7 @@ class UpdateManager:
                 raise
 
     def rollback(self) -> dict[str, Any]:
-        with self._operation_lock():
+        with self.operation_lock():
             receipt = read_json(self.layout.operation_file)
             if not receipt or receipt.get("operation") != "update" or receipt.get("state") != "complete":
                 raise RuntimeError("No completed update receipt is available for rollback.")
@@ -260,15 +260,29 @@ class UpdateManager:
             if not previous_release.exists() or not database_backup.exists():
                 raise RuntimeError("Rollback release or database backup is missing.")
             current_release = self.layout.current_link.resolve()
+            safety_dir = self._new_backup_dir("rollback-safety")
+            current_database_backup = safety_dir / "bridge.sqlite3"
+            self._sqlite_backup(self.layout.db_path, current_database_backup)
             self.runner.run("systemctl", "stop", "mcp-session-bridge.service")
             try:
                 self._switch_release(previous_release)
                 self._restore_database(database_backup)
                 self.runner.run("systemctl", "start", "mcp-session-bridge.service")
-            except Exception:
+                active = self.runner.run(
+                    "systemctl", "is-active", "mcp-session-bridge.service", check=False
+                )
+                if active.returncode != 0:
+                    raise RuntimeError(active.stderr.strip() or "Bridge did not become active.")
+                if self.layout.root == Path("/"):
+                    self._verify_http(self._installation())
+            except Exception as exc:
+                self.runner.run("systemctl", "stop", "mcp-session-bridge.service", check=False)
                 self._switch_release(current_release)
+                self._restore_database(current_database_backup)
                 self.runner.run("systemctl", "start", "mcp-session-bridge.service", check=False)
-                raise
+                raise RuntimeError(
+                    f"Rollback failed; the current release and database were restored: {exc}"
+                ) from exc
             installation = self._installation()
             installation["version"] = str(receipt["previous_version"])
             installation["updated_at"] = int(time.time())
@@ -380,7 +394,7 @@ class UpdateManager:
                 raise RuntimeError(f"Post-update verification failed for {url}: {last_error}")
 
     @contextmanager
-    def _operation_lock(self):
+    def operation_lock(self):
         self.layout.state_root.mkdir(mode=0o750, parents=True, exist_ok=True)
         lock_path = self.layout.state_root / "operations.lock"
         with lock_path.open("a+", encoding="utf-8") as handle:

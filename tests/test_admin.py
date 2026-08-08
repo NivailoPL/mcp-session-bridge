@@ -2002,6 +2002,7 @@ def test_admin_operational_status_is_authenticated_and_secret_free(tmp_path, mon
             {
                 "schema_version": 1,
                 "overall": "attention",
+                "secret": "test-secret",
                 "version": {"current": "0.4.0", "database_schema": 1},
                 "update": {
                     "state": "available",

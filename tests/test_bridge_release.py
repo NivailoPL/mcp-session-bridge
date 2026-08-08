@@ -8,6 +8,7 @@ import tarfile
 from pathlib import Path
 
 import pytest
+from app.storage import Store
 
 from bridge_cli.files import atomic_write_json
 from bridge_cli.layout import Layout
@@ -185,3 +186,29 @@ def test_failed_update_restores_previous_release_and_database(tmp_path: Path) ->
         UpdateManager(layout, runner, StubClient(info, archive)).update(info)
 
     assert layout.current_link.resolve() == layout.release_dir("0.4.0").resolve()
+
+
+def test_failed_rollback_restores_current_release_and_database(tmp_path: Path) -> None:
+    layout = _managed_layout(tmp_path)
+    archive, digest = _release_archive(tmp_path, "0.4.1")
+    info = ReleaseInfo(
+        version="0.4.1",
+        release_url="https://github.test/v0.4.1",
+        asset_url="https://github.test/asset",
+        digest=digest,
+        notes="Changes",
+    )
+    runner = RecordingRunner()
+    manager = UpdateManager(layout, runner, StubClient(info, archive))
+    manager.update(info)
+    Store(layout.db_path, allow_startup_migrations=False).create_session(
+        "after-update", "Must survive failed rollback", "manual-context"
+    )
+    runner.fail_on = ("systemctl", "is-active")
+
+    with pytest.raises(RuntimeError, match="Rollback failed"):
+        manager.rollback()
+
+    assert layout.current_link.resolve() == layout.release_dir("0.4.1").resolve()
+    current = Store(layout.db_path, allow_startup_migrations=False)
+    assert current.get_session("after-update") is not None
