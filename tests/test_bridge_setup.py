@@ -102,6 +102,29 @@ def test_dashboard_renders_indygo_heading_but_plain_text_can_be_forced(tmp_path:
     assert "\x1b[" not in plain
 
 
+def test_verify_writes_snapshot_and_pauses_before_returning_to_menu(tmp_path: Path) -> None:
+    layout = Layout.for_root(tmp_path / "target")
+    layout.root.mkdir()
+    prompts: list[str] = []
+    outputs: list[str] = []
+    wizard = SetupWizard(
+        layout,
+        source_tree(tmp_path),
+        RecordingRunner(),
+        legacy_db=None,
+        legacy_env=None,
+        theme=TerminalTheme(enabled=False),
+        input_fn=lambda prompt: prompts.append(prompt) or "",
+        output_fn=outputs.append,
+    )
+
+    wizard._verify()
+
+    assert layout.status_file.exists()
+    assert prompts == ["Press Enter to return to setup."]
+    assert any(line.startswith("Bridge status:") for line in outputs)
+
+
 def test_setup_bootstrap_installs_global_cli_and_is_idempotent(tmp_path: Path) -> None:
     source = source_tree(tmp_path)
     layout = Layout.for_root(tmp_path / "target")
@@ -111,6 +134,7 @@ def test_setup_bootstrap_installs_global_cli_and_is_idempotent(tmp_path: Path) -
     first = layout.command_path.read_text(encoding="utf-8")
     assert "# MCP Session Bridge bootstrap launcher" in first
     assert f"--project {source}" in first
+    assert f"cd {source}" in first
     assert layout.command_path.stat().st_mode & 0o777 == 0o755
     assert installer.ensure_global_cli() == "current"
     assert layout.command_path.read_text(encoding="utf-8") == first
@@ -308,7 +332,7 @@ def test_prepare_does_not_replace_live_systemd_or_caddy(tmp_path: Path) -> None:
     assert layout.pending_service_unit.exists()
     assert layout.pending_caddy_fragment.exists()
     assert layout.current_link.resolve() == previous_release.resolve()
-    assert ("chown", "-R", "root:root", str(layout.state_root)) in runner.calls
+    assert layout.state_root.stat().st_mode & 0o7777 == 0o2750
 
     steps = SetupInspector(layout, source, runner).collect()
     service = next(step for step in steps if step.id == "service")
@@ -338,12 +362,26 @@ def test_activation_adopts_existing_caddy_site_and_restarts_service(tmp_path: Pa
     )
     assert prepared["state"] == "prepared"
     layout.data_root.chmod(0o700)
+    (source / "app" / "activated.py").write_text("fresh = True\n", encoding="utf-8")
 
     result = installer.activate(legacy_db)
 
     assert result["state"] == "complete"
-    assert layout.data_root.stat().st_mode & 0o777 == 0o750
+    assert layout.data_root.stat().st_mode & 0o7777 == 0o1770
+    assert layout.state_root.stat().st_mode & 0o7777 == 0o2750
+    assert ("chown", "root:mcp-session-bridge", str(layout.state_root)) in runner.calls
+    assert layout.pending_root.stat().st_mode & 0o777 == 0o700
     assert layout.current_link.resolve() == layout.release_dir(result["version"]).resolve()
+    assert (layout.current_link / "app" / "activated.py").exists()
+    launcher = layout.command_path.read_text(encoding="utf-8")
+    assert f"cd {layout.current_link}" in launcher
+    database_preflight = next(call for call in runner.calls if call[:3] == (
+        "runuser", "--user", "mcp-session-bridge"
+    ))
+    assert str(layout.db_path) == database_preflight[-1]
+    assert runner.calls.index(database_preflight) < runner.calls.index(
+        ("systemctl", "restart", "mcp-session-bridge.service")
+    )
     assert runner.calls.index(("systemctl", "stop", "mcp-session-bridge.service")) < runner.calls.index(
         ("systemctl", "restart", "mcp-session-bridge.service")
     )
@@ -619,6 +657,26 @@ def test_failed_managed_reactivation_keeps_last_write_and_removes_wal_sidecars(
     assert not Path(f"{layout.db_path}-shm").exists()
     restored = Store(layout.db_path, allow_startup_migrations=False)
     assert restored.get_session("last-write") is not None
+
+
+def test_atomic_database_replacement_removes_previous_wal_sidecars(tmp_path: Path) -> None:
+    source = tmp_path / "source.sqlite3"
+    destination = tmp_path / "destination.sqlite3"
+    Store(source).create_session("source", "Source", "manual-context")
+    Store(destination).create_session("old", "Old", "manual-context")
+    Path(f"{destination}-wal").write_bytes(b"stale-wal")
+    Path(f"{destination}-shm").write_bytes(b"stale-shm")
+
+    ManagedInstaller(
+        Layout.for_root(tmp_path / "target"),
+        source_tree(tmp_path),
+        RecordingRunner(),
+    )._sqlite_backup_atomic(source, destination)
+
+    assert not Path(f"{destination}-wal").exists()
+    assert not Path(f"{destination}-shm").exists()
+    replaced = Store(destination, allow_startup_migrations=False)
+    assert replaced.get_session("source") is not None
 
 
 def test_activation_checks_public_route_after_caddy_reload(tmp_path: Path, monkeypatch) -> None:

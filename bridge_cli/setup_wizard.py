@@ -355,7 +355,15 @@ class SetupWizard:
     def _verify(self) -> None:
         from bridge_cli.operations import StatusCollector
 
-        report = StatusCollector(self.layout, self.runner, probe_http=self.layout.root == Path("/"), deep=True).collect()
+        collector = StatusCollector(
+            self.layout,
+            self.runner,
+            probe_http=self.layout.root == Path("/"),
+            deep=True,
+        )
+        report = collector.collect()
+        collector.write_snapshot(report)
         self.output(f"Bridge status: {report.overall.upper()}")
         for check in report.checks:
             self.output(f"[{check.state.upper()}] {check.label}: {check.message}")
+        self.input("Press Enter to return to setup.")

@@ -19,7 +19,7 @@ from bridge_cli.files import atomic_write_json, atomic_write_text, read_json
 from bridge_cli.layout import Layout
 from bridge_cli.migrations import migrate_database
 from bridge_cli.runner import Runner
-from bridge_cli.system_files import sqlite_backup, switch_release
+from bridge_cli.system_files import remove_sqlite_sidecars, sqlite_backup, switch_release
 from bridge_cli.validation import normalize_domain, validate_owner_updates
 from bridge_cli.version import BRIDGE_VERSION
 
@@ -233,9 +233,9 @@ class ManagedInstaller:
 
     def activate(self, legacy_db: Path | None = None) -> dict[str, Any]:
         installation = read_json(self.layout.installation_file) or {}
-        release_dir = self._staged_release()
-        if not self.layout.pending_service_unit.exists() or release_dir is None:
+        if not self.layout.pending_service_unit.exists() or self._staged_release() is None:
             raise RuntimeError("Managed service is not prepared. Complete the setup steps first.")
+        release_dir = self.stage_release()
         values = read_env_file(self.layout.pending_env_file)
         domain = url_hostname(values.get("BRIDGE_PUBLIC_BASE_URL", ""))
         dns_ready = _dns_resolves(domain)
@@ -320,9 +320,9 @@ class ManagedInstaller:
         for path, mode in (
             (self.layout.releases_root, 0o755),
             (self.layout.etc_root, 0o750),
-            (self.layout.data_root, 0o750),
+            (self.layout.data_root, 0o1770),
             (self.layout.context_packs_dir, 0o750),
-            (self.layout.state_root, 0o750),
+            (self.layout.state_root, 0o2750),
             (self.layout.pending_root, 0o700),
             (self.layout.backup_root, 0o700),
             (self.layout.caddy_fragment.parent, 0o755),
@@ -331,7 +331,6 @@ class ManagedInstaller:
         ):
             path.mkdir(mode=mode, parents=True, exist_ok=True)
             path.chmod(mode)
-        self.runner.run("chown", "-R", "root:root", str(self.layout.state_root))
         self._directories_prepared = True
 
     def _backup_existing(
@@ -535,6 +534,7 @@ WantedBy=timers.target
         launcher = f"""#!/bin/sh
 # MCP Session Bridge managed launcher
 set -eu
+cd {current}
 exec {current}/.venv/bin/python -m bridge_cli "$@"
 """
         atomic_write_text(self.layout.pending_service_unit, service)
@@ -566,8 +566,22 @@ exec {current}/.venv/bin/python -m bridge_cli "$@"
         self.runner.run(
             "chown", "root:mcp-session-bridge", str(self.layout.data_root)
         )
-        self.layout.data_root.chmod(0o750)
-        self.runner.run("chown", "-R", "root:root", str(self.layout.state_root))
+        self.layout.data_root.chmod(0o1770)
+        self.runner.run("chown", "root:mcp-session-bridge", str(self.layout.state_root))
+        self.layout.state_root.chmod(0o2750)
+        self.runner.run("chown", "-R", "root:root", str(self.layout.pending_root))
+        self.layout.pending_root.chmod(0o700)
+        for readable_state in (
+            self.layout.installation_file,
+            self.layout.status_file,
+            self.layout.update_file,
+            self.layout.operation_file,
+        ):
+            if readable_state.exists():
+                self.runner.run(
+                    "chown", "root:mcp-session-bridge", str(readable_state)
+                )
+                readable_state.chmod(0o640)
         self.runner.run(
             "chown", "-R", "mcp-session-bridge:mcp-session-bridge",
             str(self.layout.context_packs_dir),
@@ -586,10 +600,19 @@ exec {current}/.venv/bin/python -m bridge_cli "$@"
         active = self.runner.run("systemctl", "is-active", "mcp-session-bridge.service", check=False)
         if active.returncode == 0 and active.stdout.strip() == "active":
             self.runner.run("systemctl", "stop", "mcp-session-bridge.service")
-            self._refresh_database_backup(backup_dir)
+            try:
+                self._refresh_database_backup(backup_dir)
+            except Exception as exc:
+                raise RuntimeError(f"Final SQLite backup failed: {exc}") from exc
         if legacy_db is not None and legacy_db.exists() and legacy_db.resolve() != self.layout.db_path.resolve():
-            self._sqlite_backup_atomic(legacy_db, self.layout.db_path)
-            migrate_database(self.layout.db_path)
+            try:
+                self._sqlite_backup_atomic(legacy_db, self.layout.db_path)
+            except Exception as exc:
+                raise RuntimeError(f"Final SQLite copy failed: {exc}") from exc
+            try:
+                migrate_database(self.layout.db_path)
+            except Exception as exc:
+                raise RuntimeError(f"Managed database migration failed: {exc}") from exc
 
         switch_release(self.layout.current_link, release_dir, temporary_name=".current-setup")
 
@@ -604,8 +627,20 @@ exec {current}/.venv/bin/python -m bridge_cli "$@"
         ):
             shutil.copy2(staged, live)
         self.layout.command_path.chmod(0o755)
-        self.layout.data_root.chmod(0o750)
         self.runner.run("chown", "mcp-session-bridge:mcp-session-bridge", str(self.layout.db_path))
+        database_preflight = self.runner.run(
+            "runuser", "--user", "mcp-session-bridge", "--",
+            str(release_dir / ".venv/bin/python"),
+            str(release_dir / "bridge_cli/database_probe.py"),
+            str(self.layout.db_path),
+            check=False,
+        )
+        if database_preflight.returncode != 0:
+            detail = database_preflight.stderr.strip() or database_preflight.stdout.strip()
+            raise RuntimeError(
+                "Managed database preflight failed as mcp-session-bridge: "
+                + (detail or "unknown error")
+            )
         self.runner.run("systemctl", "daemon-reload")
         self.runner.run(
             "systemctl", "enable",
@@ -642,13 +677,14 @@ exec {current}/.venv/bin/python -m bridge_cli "$@"
                 continue
             backup = entry.get("backup")
             if isinstance(backup, str):
-                sqlite_backup(self.layout.db_path, backup_dir / backup)
+                self._sqlite_backup_atomic(self.layout.db_path, backup_dir / backup)
             return
 
     def _sqlite_backup_atomic(self, source: Path, destination: Path) -> None:
         temporary = destination.with_name(f".{destination.name}.activation-{os.getpid()}")
         try:
             sqlite_backup(source, temporary)
+            remove_sqlite_sidecars(destination)
             temporary.replace(destination)
             destination.chmod(0o600)
         finally:
@@ -688,8 +724,8 @@ exec {current}/.venv/bin/python -m bridge_cli "$@"
             if entry.get("existed") and isinstance(backup, str):
                 path.parent.mkdir(parents=True, exist_ok=True)
                 if path == self.layout.db_path:
-                    for suffix in ("", "-wal", "-shm"):
-                        Path(f"{path}{suffix}").unlink(missing_ok=True)
+                    path.unlink(missing_ok=True)
+                    remove_sqlite_sidecars(path)
                     sqlite_backup(backup_dir / backup, path)
                 else:
                     shutil.copy2(backup_dir / backup, path)
@@ -765,6 +801,7 @@ def _bootstrap_launcher(source_root: Path) -> str:
     return f"""#!/bin/sh
 # MCP Session Bridge bootstrap launcher
 set -eu
+cd {project}
 exec uv run --project {project} --frozen python -m bridge_cli "$@"
 """
 

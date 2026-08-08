@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 from pathlib import Path
 
 import pytest
 
 from app.storage import Store
 from bridge_cli.config import update_env_file
+from bridge_cli.database_probe import verify_writable_database
 from bridge_cli.migrations import CURRENT_SCHEMA_VERSION, migrate_database
 from bridge_cli.status import CheckResult, StatusReport, UpdateStatus
 
@@ -92,3 +94,13 @@ def test_migration_is_idempotent_and_preserves_data(tmp_path: Path) -> None:
 
     assert first["schema_version"] == second["schema_version"] == CURRENT_SCHEMA_VERSION
     assert managed.get_session("keep-me") is not None
+
+
+def test_database_probe_enables_wal_and_verifies_write_access(tmp_path: Path) -> None:
+    db_path = tmp_path / "bridge.sqlite3"
+    migrate_database(db_path)
+
+    verify_writable_database(db_path)
+
+    with sqlite3.connect(db_path) as connection:
+        assert connection.execute("PRAGMA journal_mode").fetchone() == ("wal",)

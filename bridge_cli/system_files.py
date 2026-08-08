@@ -12,6 +12,11 @@ def sqlite_backup(source: Path, destination: Path) -> None:
     destination.chmod(0o600)
 
 
+def remove_sqlite_sidecars(db_path: Path) -> None:
+    for suffix in ("-wal", "-shm"):
+        Path(f"{db_path}{suffix}").unlink(missing_ok=True)
+
+
 def switch_release(current_link: Path, release: Path, *, temporary_name: str) -> None:
     temporary = current_link.with_name(temporary_name)
     if temporary.exists() or temporary.is_symlink():
