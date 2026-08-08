@@ -21,6 +21,7 @@ from app.tool_output import (
 )
 
 UNCATEGORIZED_GROUP_ID = "uncategorized"
+SCHEMA_VERSION = 1
 
 SYSTEM_SESSION_GROUPS = (
     {
@@ -208,13 +209,22 @@ class SessionFileRecord:
 
 
 class Store:
-    def __init__(self, db_path: Path, *, pdf_storage_max_bytes: int = 1_000_000_000):
+    def __init__(
+        self,
+        db_path: Path,
+        *,
+        pdf_storage_max_bytes: int = 1_000_000_000,
+        allow_startup_migrations: bool = True,
+    ):
         self.db_path = db_path
         self.pdf_storage_max_bytes = pdf_storage_max_bytes
         self._lock = Lock()
+        if not allow_startup_migrations:
+            self._require_current_schema()
         self.db_path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
         self._harden_runtime_permissions()
-        self._init_schema()
+        if allow_startup_migrations:
+            self._init_schema()
         self._harden_runtime_permissions()
 
     def _harden_runtime_permissions(self) -> None:
@@ -238,10 +248,50 @@ class Store:
         self._harden_runtime_permissions()
         return conn
 
+    def _require_current_schema(self) -> None:
+        if not self.db_path.exists():
+            raise RuntimeError(
+                "Database is not initialized. Run bridge migrate before starting Bridge."
+            )
+        try:
+            with sqlite3.connect(f"file:{self.db_path}?mode=ro", uri=True) as conn:
+                table = conn.execute(
+                    "SELECT 1 FROM sqlite_master WHERE type='table' AND name='schema_migrations'"
+                ).fetchone()
+                version = (
+                    conn.execute("SELECT MAX(version) FROM schema_migrations").fetchone()[0]
+                    if table
+                    else None
+                )
+        except sqlite3.Error as exc:
+            raise RuntimeError(
+                f"Could not read database schema. Run bridge migrate: {exc}"
+            ) from exc
+        if version != SCHEMA_VERSION:
+            raise RuntimeError(
+                f"Database schema is {version!r}; Bridge requires {SCHEMA_VERSION}. "
+                "Run bridge migrate before starting Bridge."
+            )
+
+    def schema_version(self) -> int | None:
+        with sqlite3.connect(self.db_path) as conn:
+            table = conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='schema_migrations'"
+            ).fetchone()
+            if not table:
+                return None
+            row = conn.execute("SELECT MAX(version) FROM schema_migrations").fetchone()
+            return row[0] if row else None
+
     def _init_schema(self) -> None:
         with self._lock, self._connect() as conn:
             conn.executescript(
                 f"""
+                CREATE TABLE IF NOT EXISTS schema_migrations (
+                    version INTEGER PRIMARY KEY,
+                    applied_at INTEGER NOT NULL
+                );
+
                 CREATE TABLE IF NOT EXISTS clients (
                     client_id TEXT PRIMARY KEY,
                     client_secret_hash TEXT,
@@ -461,6 +511,10 @@ class Store:
                 SET assistant_created_at = created_at
                 WHERE assistant_created_at IS NULL
                 """
+            )
+            conn.execute(
+                "INSERT OR IGNORE INTO schema_migrations(version, applied_at) VALUES (?, ?)",
+                (SCHEMA_VERSION, int(time.time())),
             )
 
     @staticmethod

@@ -1,0 +1,94 @@
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+import pytest
+
+from app.storage import Store
+from bridge_cli.config import update_env_file
+from bridge_cli.migrations import CURRENT_SCHEMA_VERSION, migrate_database
+from bridge_cli.status import CheckResult, StatusReport, UpdateStatus
+
+
+def test_status_report_has_stable_machine_readable_contract() -> None:
+    report = StatusReport(
+        overall="attention",
+        version={"current": "0.4.0"},
+        update=UpdateStatus(state="available", current="0.4.0", latest="0.4.1"),
+        checks=[CheckResult("service", "Bridge service", "pass", "active")],
+        installation={"mode": "managed"},
+        last_operation=None,
+    )
+
+    payload = report.to_dict()
+
+    assert payload["schema_version"] == 1
+    assert payload["overall"] == "attention"
+    assert payload["update"]["state"] == "available"
+    assert payload["checks"] == [
+        {
+            "id": "service",
+            "label": "Bridge service",
+            "state": "pass",
+            "message": "active",
+        }
+    ]
+    assert json.loads(report.to_json()) == payload
+
+
+def test_status_contract_rejects_unknown_states() -> None:
+    with pytest.raises(ValueError, match="check state"):
+        CheckResult("service", "Service", "maybe", "unknown")
+    with pytest.raises(ValueError, match="update state"):
+        UpdateStatus(state="newer", current="0.4.0")
+
+
+def test_update_env_file_preserves_comments_and_unknown_keys(tmp_path: Path) -> None:
+    env_path = tmp_path / "bridge.env"
+    env_path.write_text(
+        "# operator note\nCUSTOM_SETTING=keep-me\nBRIDGE_PUBLIC_BASE_URL=https://old.test\n",
+        encoding="utf-8",
+    )
+
+    update_env_file(
+        env_path,
+        {
+            "BRIDGE_PUBLIC_BASE_URL": "https://bridge.test",
+            "BRIDGE_OWNER_USERNAME": "owner",
+        },
+    )
+
+    text = env_path.read_text(encoding="utf-8")
+    assert "# operator note" in text
+    assert "CUSTOM_SETTING=keep-me" in text
+    assert "BRIDGE_PUBLIC_BASE_URL=https://bridge.test" in text
+    assert "BRIDGE_OWNER_USERNAME=owner" in text
+    assert text.count("BRIDGE_PUBLIC_BASE_URL=") == 1
+    assert env_path.stat().st_mode & 0o777 == 0o600
+
+
+def test_managed_store_requires_explicit_migration(tmp_path: Path) -> None:
+    db_path = tmp_path / "bridge.sqlite3"
+
+    with pytest.raises(RuntimeError, match="bridge migrate"):
+        Store(db_path, allow_startup_migrations=False)
+
+    result = migrate_database(db_path)
+    store = Store(db_path, allow_startup_migrations=False)
+
+    assert result["schema_version"] == CURRENT_SCHEMA_VERSION
+    assert store.schema_version() == CURRENT_SCHEMA_VERSION
+
+
+def test_migration_is_idempotent_and_preserves_data(tmp_path: Path) -> None:
+    db_path = tmp_path / "bridge.sqlite3"
+    legacy = Store(db_path)
+    legacy.create_session("keep-me", "Existing session", "manual-context")
+
+    first = migrate_database(db_path)
+    second = migrate_database(db_path)
+    managed = Store(db_path, allow_startup_migrations=False)
+
+    assert first["schema_version"] == second["schema_version"] == CURRENT_SCHEMA_VERSION
+    assert managed.get_session("keep-me") is not None
