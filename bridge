@@ -1,0 +1,29 @@
+#!/bin/sh
+set -eu
+
+UV_VERSION="0.8.22"
+
+if command -v uv >/dev/null 2>&1; then
+  exec uv run --frozen python -m bridge_cli "$@"
+fi
+if [ ! -t 0 ] && [ "${BRIDGE_BOOTSTRAP_YES:-}" != "1" ]; then
+  echo "uv is required. Re-run interactively or set BRIDGE_BOOTSTRAP_YES=1." >&2
+  exit 1
+fi
+echo "Bridge needs uv ${UV_VERSION} to install its pinned Python runtime."
+if [ "${BRIDGE_BOOTSTRAP_YES:-}" != "1" ]; then
+  printf "Install uv now? [y/N] "
+  read answer
+  case "$answer" in y|Y) ;; *) exit 1 ;; esac
+fi
+command -v curl >/dev/null 2>&1 || {
+  echo "curl is required to install uv." >&2
+  exit 1
+}
+curl -LsSf "https://astral.sh/uv/${UV_VERSION}/install.sh" | env UV_NO_MODIFY_PATH=1 sh
+UV_BIN="${XDG_BIN_HOME:-${HOME}/.local/bin}/uv"
+[ -x "$UV_BIN" ] || {
+  echo "uv installation did not create $UV_BIN." >&2
+  exit 1
+}
+exec "$UV_BIN" run --frozen python -m bridge_cli "$@"

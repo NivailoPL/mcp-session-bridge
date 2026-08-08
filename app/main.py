@@ -63,6 +63,7 @@ settings = load_settings()
 store = Store(
     settings.db_path,
     pdf_storage_max_bytes=settings.pdf_storage_max_bytes,
+    allow_startup_migrations=settings.allow_startup_migrations,
 )
 logger = logging.getLogger(__name__)
 MCP_REQUEST_MAX_BODY_BYTES = ((MAX_MCP_PDF_BYTES + 2) // 3 * 4) + 262_144

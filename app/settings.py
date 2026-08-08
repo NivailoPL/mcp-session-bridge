@@ -30,6 +30,7 @@ class Settings:
     transport_allowed_hosts: list[str]
     transport_allowed_origins: list[str]
     pdf_storage_max_bytes: int = 1_000_000_000
+    allow_startup_migrations: bool = True
 
     @property
     def issuer_url(self) -> str:
@@ -86,6 +87,7 @@ def load_settings() -> Settings:
         pdf_storage_max_bytes=int(
             os.getenv("BRIDGE_PDF_STORAGE_MAX_BYTES", "1000000000")
         ),
+        allow_startup_migrations=_bool_env("BRIDGE_ALLOW_STARTUP_MIGRATIONS", True),
     )
 
 
@@ -99,3 +101,15 @@ def _required(name: str) -> str:
 def _csv_env(name: str, default: str) -> list[str]:
     raw = os.getenv(name, default)
     return [item.strip() for item in raw.split(",") if item.strip()]
+
+
+def _bool_env(name: str, default: bool) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    normalized = raw.strip().lower()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+    raise RuntimeError(f"{name} must be true or false.")
