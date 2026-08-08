@@ -215,7 +215,8 @@ class SetupWizard:
             if raw in {"q", "quit", "exit"}:
                 self.output("Setup saved. Run mcp-bridge setup to continue.")
                 return 0
-            choice = int(raw or recommended) if (raw or recommended).isdigit() else 0
+            selection = raw or str(recommended)
+            choice = int(selection) if selection.isdigit() else 0
             if choice not in range(1, 10):
                 self.output("Choose a number from 1 to 9.")
                 continue

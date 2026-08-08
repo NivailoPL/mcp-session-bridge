@@ -10,7 +10,12 @@ from bridge_cli.caddy import has_site, replace_site_address
 from bridge_cli.install import ManagedInstaller, SetupAnswers
 from bridge_cli.layout import Layout
 from bridge_cli.presentation import TerminalTheme
-from bridge_cli.setup_wizard import SetupInspector, SetupWizard, render_setup_dashboard
+from bridge_cli.setup_wizard import (
+    SetupInspector,
+    SetupStep,
+    SetupWizard,
+    render_setup_dashboard,
+)
 
 
 class Result:
@@ -188,6 +193,38 @@ def test_readiness_action_reports_attention_when_host_tool_is_missing(
 
     assert wizard.run() == 0
     assert any(line.startswith("ATTENTION Missing host prerequisites: uv") for line in outputs)
+
+
+def test_enter_selects_recommended_activation_step(tmp_path: Path, monkeypatch) -> None:
+    source = source_tree(tmp_path)
+    answers = iter(["", "q"])
+    activated: list[bool] = []
+    wizard = SetupWizard(
+        Layout.for_root(tmp_path / "target"),
+        source,
+        RecordingRunner(),
+        legacy_db=None,
+        legacy_env=None,
+        theme=TerminalTheme(enabled=False),
+        input_fn=lambda _prompt: next(answers),
+        output_fn=lambda _line: None,
+    )
+    steps = [
+        SetupStep(1, "server", "Server readiness", "READY", ""),
+        SetupStep(2, "installation", "Existing installation", "READY", ""),
+        SetupStep(3, "release", "Bridge files", "READY", ""),
+        SetupStep(4, "database", "Database", "READY", ""),
+        SetupStep(5, "administrator", "Administrator", "READY", ""),
+        SetupStep(6, "public_address", "Public address", "READY", ""),
+        SetupStep(7, "service", "Background service", "READY", ""),
+        SetupStep(8, "activate", "Activate installation", "READY", ""),
+        SetupStep(9, "verify", "Verify everything", "WAITING", ""),
+    ]
+    monkeypatch.setattr(wizard, "_steps", lambda: steps)
+    monkeypatch.setattr(wizard, "_activate", lambda: activated.append(True))
+
+    assert wizard.run() == 0
+    assert activated == [True]
 
 
 def test_corrupt_database_is_reported_as_attention(tmp_path: Path) -> None:
