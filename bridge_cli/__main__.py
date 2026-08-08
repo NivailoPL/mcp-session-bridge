@@ -39,7 +39,7 @@ def build_parser() -> argparse.ArgumentParser:
     logs.add_argument("--follow", action="store_true")
     logs.add_argument("--lines", type=int, default=100)
     commands.add_parser("version", help="Show Bridge and schema versions.")
-    migrate = commands.add_parser("migrate", help=argparse.SUPPRESS)
+    migrate = commands.add_parser("migrate", help="Apply explicit database migrations.")
     migrate.add_argument("--db", type=Path)
     update = commands.add_parser("update", help="Check for or install a stable update.")
     update.add_argument("--check", action="store_true")
