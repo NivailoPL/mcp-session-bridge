@@ -19,6 +19,7 @@ from typing import Any
 from cryptography.fernet import Fernet, InvalidToken
 from starlette.requests import Request
 from starlette.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
+from bridge_cli.version import BRIDGE_VERSION
 
 from app.search import (
     COHERE_KEY_SETTING,
@@ -208,6 +209,16 @@ class AdminHandlers:
             {"ok": True, "settings": self._ai_settings_payload()},
             headers=self._no_store_headers(),
         )
+
+    async def api_operational_status(self, request: Request) -> Response:
+        _, error = self._require_admin(request)
+        if error:
+            return error
+        return JSONResponse(
+            {"ok": True, "status": self._operational_status_payload()},
+            headers=self._no_store_headers(),
+        )
+
     async def api_settings(self, request: Request) -> Response:
         _, error = self._require_admin(request)
         if error:
@@ -1197,6 +1208,68 @@ class AdminHandlers:
             return None
         return self.search.maybe_start_rebuild(api_key)
 
+    def _operational_status_payload(self) -> dict[str, Any]:
+        cached: dict[str, Any] = {}
+        path = self.settings.operational_status_file
+        if path is not None:
+            try:
+                candidate = json.loads(path.read_text(encoding="utf-8"))
+                if isinstance(candidate, dict):
+                    cached = candidate
+            except (OSError, json.JSONDecodeError):
+                cached = {}
+
+        update = _public_keys(
+            cached.get("update"),
+            {"state", "current", "latest", "last_checked", "release_url", "error"},
+        )
+        if update.get("state") not in {"current", "available", "unknown"}:
+            update["state"] = "unknown"
+        update.setdefault("current", BRIDGE_VERSION)
+
+        checks = []
+        raw_checks = cached.get("checks")
+        if isinstance(raw_checks, list):
+            for check in raw_checks:
+                public = _public_keys(
+                    check,
+                    {"id", "label", "state", "message", "remediation"},
+                )
+                if public:
+                    checks.append(public)
+
+        version = _public_keys(cached.get("version"), {"current", "database_schema"})
+        version.setdefault("current", BRIDGE_VERSION)
+        version["database_schema"] = self.store.schema_version()
+        installation = _public_keys(
+            cached.get("installation"),
+            {"mode", "public_base_url", "resource_path", "installed_at"},
+        )
+        installation.setdefault("mode", "managed" if path is not None else "unmanaged")
+        installation.setdefault("public_base_url", self.settings.public_base_url)
+        installation.setdefault("resource_path", self.settings.resource_path)
+
+        refreshed_at = None
+        if path is not None:
+            try:
+                refreshed_at = int(path.stat().st_mtime)
+            except OSError:
+                pass
+        return {
+            "schema_version": 1,
+            "overall": cached.get("overall", "unknown"),
+            "version": version,
+            "update": update,
+            "checks": checks,
+            "installation": installation,
+            "last_operation": _public_keys(
+                cached.get("last_operation"),
+                {"operation", "state", "previous_version", "version", "finished_at"},
+            ) or None,
+            "refreshed_at": refreshed_at,
+            "live": {"application": "pass", "database": "pass"},
+        }
+
     def _settings_payload(self) -> dict[str, Any]:
         openai_key = self._read_provider_key("openai")
         cohere_key = self._read_provider_key("cohere")
@@ -1396,6 +1469,12 @@ def _session_payload(session: SessionRecord) -> dict[str, Any]:
         "updated_at": session.updated_at,
         "updated_at_iso": format_timestamp_iso(session.updated_at),
     }
+
+
+def _public_keys(value: Any, allowed: set[str]) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return {}
+    return {key: value[key] for key in allowed if key in value}
 
 
 def _session_group_payload(group: SessionGroupRecord) -> dict[str, Any]:

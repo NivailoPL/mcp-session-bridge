@@ -220,6 +220,14 @@
     .settings-row button { min-height: 2.05rem; padding: .36rem .68rem; font-size: .78rem; border-radius: 8px; }
     .settings-button { display: inline-flex; align-items: center; gap: .42rem; }
     .settings-button svg { width: 15px; height: 15px; }
+    .update-dot {
+      display: inline-block; width: 8px; height: 8px; flex: 0 0 auto;
+      border-radius: 999px; background: var(--warn);
+      box-shadow: 0 0 0 3px rgba(251, 191, 36, .15);
+    }
+    .update-dot[hidden] { display: none; }
+    .settings-button .update-dot { margin-left: .1rem; }
+    .settings-tabs .update-dot { margin-left: auto; }
     .search-wrap { position: relative; }
     .search-wrap svg {
       position: absolute; left: .72rem; top: 50%; transform: translateY(-50%);
@@ -1002,6 +1010,28 @@
     .settings-panel > .settings-section-head h4,
     .mcp-settings-section > .settings-section-head h4 { color: var(--accent-ink); font-weight: 800; letter-spacing: -.01em; }
     .settings-section-head p { margin-top: .3rem; color: var(--muted); font-size: .82rem; line-height: 1.5; }
+    .operational-summary, .operational-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .7rem; }
+    .operational-card {
+      display: grid; gap: .25rem; min-width: 0; padding: .85rem;
+      border: 1px solid var(--stroke); border-radius: var(--r-card);
+      background: rgba(255,255,255,.025);
+    }
+    .operational-card small { color: var(--muted); font-size: .7rem; text-transform: uppercase; letter-spacing: .08em; }
+    .operational-card strong, .operational-card code { overflow-wrap: anywhere; }
+    .operational-card code { color: var(--ink); font-size: .76rem; }
+    .status-check-list { display: grid; gap: .55rem; }
+    .status-check {
+      display: grid; grid-template-columns: .7rem minmax(0, 1fr); gap: .65rem;
+      padding: .75rem; border: 1px solid var(--stroke-soft); border-radius: 9px;
+    }
+    .status-state { width: .6rem; height: .6rem; margin-top: .25rem; border-radius: 999px; background: var(--faint-ink); }
+    .status-state.is-pass { background: var(--ok); }
+    .status-state.is-warn, .status-state.is-waiting { background: var(--warn); }
+    .status-state.is-fail { background: var(--danger); }
+    .status-check-copy { display: grid; gap: .2rem; min-width: 0; }
+    .status-check-copy span, .status-check-copy small { color: var(--muted); line-height: 1.45; }
+    .status-command-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .55rem; }
+    .status-command-list code { display: block; padding: .65rem .75rem; border: 1px solid var(--stroke-soft); border-radius: 8px; background: rgba(0,0,0,.22); }
     .settings-status { min-height: 1.2rem; margin: 0 0 .8rem; color: var(--muted); font-size: .78rem; }
     .settings-status.is-error { color: var(--danger); }
     .settings-status.is-ok { color: var(--ok); }
@@ -1129,6 +1159,8 @@
       .settings-tabs { grid-template-columns: repeat(2, 1fr); border-right: 0; border-bottom: 1px solid var(--stroke-soft); }
       .settings-tabs button { justify-content: center; }
       .settings-content { overflow: visible; }
+      .operational-summary, .operational-grid { grid-template-columns: 1fr; }
+      .status-command-list { grid-template-columns: 1fr; }
       .settings-grid, .index-card, .index-estimate-grid, .probe-config-grid { grid-template-columns: 1fr; }
       .search-command { grid-template-columns: 1fr 1fr; }
       .search-command input { grid-column: 1 / -1; }
@@ -1165,6 +1197,7 @@
         <button id="aiSettingsButton" type="button" class="ghost settings-button">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z"></path><path d="M19.4 15a1.8 1.8 0 0 0 .36 2l.05.05a2.2 2.2 0 1 1-3.11 3.11l-.05-.05a1.8 1.8 0 0 0-2-.36 1.8 1.8 0 0 0-1.1 1.66V21.5a2.2 2.2 0 1 1-4.4 0v-.09A1.8 1.8 0 0 0 8.05 19.75a1.8 1.8 0 0 0-2 .36l-.05.05a2.2 2.2 0 1 1-3.11-3.11l.05-.05a1.8 1.8 0 0 0 .36-2A1.8 1.8 0 0 0 1.64 13.9H1.5a2.2 2.2 0 1 1 0-4.4h.14A1.8 1.8 0 0 0 3.3 8.4a1.8 1.8 0 0 0-.36-2l-.05-.05A2.2 2.2 0 1 1 6 3.24l.05.05a1.8 1.8 0 0 0 2 .36A1.8 1.8 0 0 0 9.15 2V1.9a2.2 2.2 0 1 1 4.4 0V2a1.8 1.8 0 0 0 1.1 1.65 1.8 1.8 0 0 0 2-.36l.05-.05a2.2 2.2 0 1 1 3.11 3.11l-.05.05a1.8 1.8 0 0 0-.36 2A1.8 1.8 0 0 0 21.1 9.5h.1a2.2 2.2 0 1 1 0 4.4h-.1A1.8 1.8 0 0 0 19.4 15z"></path></svg>
           Settings
+          <span id="settingsUpdateDot" class="update-dot" hidden aria-hidden="true"></span>
         </button>
       </div>
 
@@ -1414,6 +1447,7 @@
         <button type="button" data-settings-tab="transcript">MCP</button>
         <button type="button" data-settings-tab="search">Search</button>
         <button type="button" data-settings-tab="api">API</button>
+        <button type="button" data-settings-tab="status">Status <span id="statusUpdateDot" class="update-dot" hidden aria-hidden="true"></span></button>
       </nav>
       <div class="settings-content">
         <p id="aiSettingsStatus" class="settings-status" aria-live="polite"></p>
@@ -1529,6 +1563,30 @@
           <div class="provider-card"><label class="field">OpenAI API key<input id="aiKeyInput" type="password" autocomplete="off" placeholder="Leave blank to keep current key"></label><p id="openaiKeyStatus" class="meta"></p><button type="button" class="danger" id="aiKeyRemoveButton">Remove OpenAI key</button></div>
           <div class="provider-card"><label class="field">Cohere API key<input id="cohereKeyInput" type="password" autocomplete="off" placeholder="Leave blank to keep current key"></label><p id="cohereKeyStatus" class="meta"></p><button type="button" class="danger" id="cohereKeyRemoveButton">Remove Cohere key</button></div>
           <div class="edit-actions"><button type="button" class="primary" id="apiSettingsSave">Save API keys</button></div>
+        </section>
+        <section data-settings-panel="status" class="settings-panel" hidden>
+          <div class="settings-section-head"><div><h4>Bridge status</h4><p>Read-only operational summary. Changes and updates stay in the server CLI.</p></div></div>
+          <p id="bridgeStatusError" class="settings-status" aria-live="polite"></p>
+          <div class="operational-summary">
+            <div class="operational-card"><small>Overall</small><strong id="bridgeStatusOverall">Loading…</strong></div>
+            <div class="operational-card"><small>Version</small><strong id="bridgeStatusVersion">—</strong></div>
+            <div class="operational-card"><small>Update</small><strong id="bridgeStatusUpdate">—</strong><span id="bridgeStatusChecked" class="meta"></span></div>
+          </div>
+          <div>
+            <div class="settings-section-head"><h4>Checks</h4><p>Cached CLI diagnostics plus a live application and database check.</p></div>
+            <div id="bridgeStatusChecks" class="status-check-list"></div>
+          </div>
+          <div class="operational-grid">
+            <div class="operational-card"><small>Public URL</small><code id="bridgeStatusUrl">—</code></div>
+            <div class="operational-card"><small>Database schema</small><strong id="bridgeStatusSchema">—</strong></div>
+            <div class="operational-card"><small>Last operation</small><strong id="bridgeStatusOperation">—</strong></div>
+          </div>
+          <div>
+            <div class="settings-section-head"><h4>Server commands</h4><p>Run these over SSH. The panel never performs system updates.</p></div>
+            <div class="status-command-list">
+              <code>bridge status</code><code>bridge doctor</code><code>bridge logs</code><code>bridge update</code>
+            </div>
+          </div>
         </section>
       </div>
     </div>
@@ -1674,6 +1732,7 @@
         sessionLoadGeneration: 0,
         aiSettings: { configured: false, api_key_preview: "", model: "gpt-5.4-nano", title_max_chars: 72 },
         settings: null,
+        operationalStatus: null,
         searchMode: "basic",
         searchResults: [],
         selectedSearchResult: null,
@@ -1701,6 +1760,7 @@
         aiKeyRemoveButton: document.getElementById("aiKeyRemoveButton"),
         aiModelInput: document.getElementById("aiModelInput"),
         aiSettingsButton: document.getElementById("aiSettingsButton"),
+        settingsUpdateDot: document.getElementById("settingsUpdateDot"),
         aiSettingsClose: document.getElementById("aiSettingsClose"),
         aiSettingsDialog: document.getElementById("aiSettingsDialog"),
         aiSettingsStatus: document.getElementById("aiSettingsStatus"),
@@ -1804,7 +1864,10 @@
         "contextSearchForm", "contextSearchInput", "contextSearchSubmit", "contextSearchStop",
         "contextSearchStatus", "searchResults", "localSearchResults", "searchDetail",
         "transcriptChunkMaxChars", "transcriptChunkMaxLines", "probeHarnessLabel", "probeTargetChars",
-        "probeContentProfile", "probePromptPreview", "probePromptCopy", "probeRecommendations", "probeResults"
+        "probeContentProfile", "probePromptPreview", "probePromptCopy", "probeRecommendations", "probeResults",
+        "statusUpdateDot", "bridgeStatusOverall", "bridgeStatusVersion", "bridgeStatusUpdate",
+        "bridgeStatusChecked", "bridgeStatusChecks", "bridgeStatusUrl", "bridgeStatusSchema",
+        "bridgeStatusOperation", "bridgeStatusError"
       ].map((id) => [id, document.getElementById(id)]));
 
       dom.addGroupButton.addEventListener("click", () => openGroupDialog());
@@ -1969,6 +2032,7 @@
           dom.identity.textContent = state.userDisplayName;
           populateTimezoneSelect();
           await loadSettings();
+          await loadOperationalStatus();
           await refreshAll();
         } catch (error) {
           if (error.status === 401) {
@@ -1989,6 +2053,100 @@
           configured: openai.configured, api_key_preview: openai.preview,
           model: state.settings.general.rename_model, title_max_chars: 72,
         };
+      }
+      async function loadOperationalStatus() {
+        try {
+          const payload = await api("/admin/api/status");
+          state.operationalStatus = payload.status;
+          renderOperationalStatus();
+        } catch (error) {
+          settingsDom.bridgeStatusError.textContent = `Status unavailable: ${error.message}`;
+          settingsDom.bridgeStatusError.classList.add("is-error");
+          renderUpdateDots();
+        }
+      }
+
+      function renderUpdateDots() {
+        const available = state.operationalStatus?.update?.state === "available";
+        dom.settingsUpdateDot.hidden = !available;
+        settingsDom.statusUpdateDot.hidden = !available;
+        dom.aiSettingsButton.setAttribute(
+          "aria-label",
+          available ? "Settings — Bridge update available" : "Settings",
+        );
+      }
+
+      function renderOperationalStatus() {
+        const status = state.operationalStatus;
+        renderUpdateDots();
+        if (!status) return;
+
+        const update = status.update || {};
+        const installation = status.installation || {};
+        const version = status.version || {};
+        const operation = status.last_operation || {};
+        settingsDom.bridgeStatusError.textContent = "";
+        settingsDom.bridgeStatusError.classList.remove("is-error");
+        settingsDom.bridgeStatusOverall.textContent = status.overall || "unknown";
+        settingsDom.bridgeStatusVersion.textContent = version.current || "—";
+        settingsDom.bridgeStatusUpdate.textContent = update.state === "available"
+          ? `${update.latest || "New version"} available`
+          : update.state === "current" ? "Up to date" : "Unknown";
+        settingsDom.bridgeStatusChecked.textContent = operationalTime(update.last_checked || status.refreshed_at);
+        settingsDom.bridgeStatusUrl.textContent = installation.public_base_url || "Not configured";
+        settingsDom.bridgeStatusSchema.textContent = String(version.database_schema ?? "—");
+        settingsDom.bridgeStatusOperation.textContent = operation.operation
+          ? `${operation.operation}: ${operation.state || "unknown"}`
+          : "No recorded operation";
+
+        const checks = Array.isArray(status.checks) ? [...status.checks] : [];
+        for (const [id, stateValue] of Object.entries(status.live || {})) {
+          checks.push({
+            id: `live-${id}`,
+            label: id === "application" ? "Application API" : "Database",
+            state: stateValue,
+            message: "Verified by this authenticated request.",
+          });
+        }
+        settingsDom.bridgeStatusChecks.replaceChildren();
+        if (!checks.length) {
+          const empty = document.createElement("p");
+          empty.className = "meta";
+          empty.textContent = "Run bridge status on the server to populate diagnostics.";
+          settingsDom.bridgeStatusChecks.append(empty);
+          return;
+        }
+        for (const check of checks) {
+          const row = document.createElement("article");
+          row.className = "status-check";
+          const indicator = document.createElement("span");
+          indicator.className = `status-state is-${statusState(check.state)}`;
+          indicator.setAttribute("aria-label", check.state || "unknown");
+          const copy = document.createElement("div");
+          copy.className = "status-check-copy";
+          const label = document.createElement("strong");
+          label.textContent = check.label || check.id || "Check";
+          const message = document.createElement("span");
+          message.textContent = check.message || check.state || "unknown";
+          copy.append(label, message);
+          if (check.remediation) {
+            const remediation = document.createElement("small");
+            remediation.textContent = `Next: ${check.remediation}`;
+            copy.append(remediation);
+          }
+          row.append(indicator, copy);
+          settingsDom.bridgeStatusChecks.append(row);
+        }
+      }
+
+      function statusState(value) {
+        return ["pass", "warn", "waiting", "fail"].includes(value) ? value : "unknown";
+      }
+
+      function operationalTime(value) {
+        if (!value) return "Not checked yet";
+        const date = new Date(typeof value === "number" ? value * 1000 : value);
+        return Number.isNaN(date.getTime()) ? "Last check time unavailable" : `Checked ${date.toLocaleString()}`;
       }
 
       function bindSettingsEvents() {
@@ -2029,9 +2187,11 @@
 
       async function openAiSettingsDialog() {
         selectSettingsTab("general");
+        selectSettingsTab(state.operationalStatus?.update?.state === "available" ? "status" : "general");
         dom.aiSettingsStatus.textContent = "Loading settings...";
         dom.aiSettingsStatus.classList.remove("is-error", "is-ok");
         dom.aiSettingsDialog.showModal();
+        await loadOperationalStatus();
         try {
           await loadSettings();
         } catch (error) {
@@ -2042,7 +2202,7 @@
         fillSettingsForm();
         renderSettingsStatus();
         scheduleIndexEstimate(0);
-        dom.aiModelInput.focus();
+        if (!document.querySelector('[data-settings-panel="general"]').hidden) dom.aiModelInput.focus();
       }
 
       function fillSettingsForm() {
@@ -5128,6 +5288,21 @@
             csrf_token: "demo",
             username: "owner",
             display_timezone: state.displayTimezone,
+          });
+        }
+        if (path === "/admin/api/status" && method === "GET") {
+          return Promise.resolve({
+            ok: true,
+            status: {
+              overall: "pass",
+              version: { current: "0.4.0", database_schema: 1 },
+              update: { state: "current", current: "0.4.0", last_checked: new Date().toISOString() },
+              checks: [{ id: "demo", label: "Demo environment", state: "pass", message: "Offline preview is ready." }],
+              installation: { mode: "demo", public_base_url: "Offline demo" },
+              last_operation: null,
+              refreshed_at: Math.floor(Date.now() / 1000),
+              live: { application: "pass", database: "pass" },
+            },
           });
         }
         if (path === "/admin/api/timezone" && (method === "POST" || method === "PUT")) {

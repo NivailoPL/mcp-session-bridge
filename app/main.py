@@ -283,6 +283,11 @@ async def admin_api_settings(request: Request) -> Response:
     return await admin.api_settings(request)
 
 
+@mcp.custom_route("/admin/api/status", methods=["GET"])
+async def admin_api_operational_status(request: Request) -> Response:
+    return await admin.api_operational_status(request)
+
+
 @mcp.custom_route("/admin/api/settings/general", methods=["PUT"])
 async def admin_api_update_general_settings(request: Request) -> Response:
     return await admin.api_update_general_settings(request)

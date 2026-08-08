@@ -188,6 +188,7 @@ class ManagedInstaller:
                     f"127.0.0.1:8787,localhost:8787,{domain}"
                 ),
                 "BRIDGE_RESTART_REQUEST_FILE": str(self.layout._path("run/mcp-session-bridge/restart-request")),
+                "BRIDGE_OPERATIONAL_STATUS_FILE": str(self.layout.status_file),
                 "BRIDGE_ALLOW_STARTUP_MIGRATIONS": "false",
             },
         )

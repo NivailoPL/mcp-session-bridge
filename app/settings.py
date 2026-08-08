@@ -32,6 +32,7 @@ class Settings:
     pdf_storage_max_bytes: int = 1_000_000_000
     allow_startup_migrations: bool = True
     restart_request_file: Path | None = None
+    operational_status_file: Path | None = None
 
     @property
     def issuer_url(self) -> str:
@@ -92,6 +93,11 @@ def load_settings() -> Settings:
         restart_request_file=(
             Path(value)
             if (value := os.getenv("BRIDGE_RESTART_REQUEST_FILE"))
+            else None
+        ),
+        operational_status_file=(
+            Path(value)
+            if (value := os.getenv("BRIDGE_OPERATIONAL_STATUS_FILE"))
             else None
         ),
     )

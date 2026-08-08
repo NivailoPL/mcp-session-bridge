@@ -1994,6 +1994,52 @@ def test_admin_search_settings_keys_and_basic_search_api(tmp_path, monkeypatch) 
     assert removed.status_code == 200
     assert removed.json()["settings"]["api"]["cohere"]["configured"] is False
 
+
+def test_admin_operational_status_is_authenticated_and_secret_free(tmp_path, monkeypatch) -> None:
+    status_path = tmp_path / "status.json"
+    status_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "overall": "attention",
+                "version": {"current": "0.4.0", "database_schema": 1},
+                "update": {
+                    "state": "available",
+                    "current": "0.4.0",
+                    "latest": "0.4.1",
+                    "release_url": "https://github.test/v0.4.1",
+                },
+                "checks": [
+                    {"id": "service", "label": "Bridge service", "state": "pass", "message": "active"}
+                ],
+                "installation": {
+                    "mode": "managed",
+                    "public_base_url": "https://bridge.example.test",
+                },
+                "last_operation": {"operation": "setup", "state": "complete"},
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("BRIDGE_OPERATIONAL_STATUS_FILE", str(status_path))
+    main = _load_main(tmp_path, monkeypatch)
+    anonymous = TestClient(main.app, base_url="http://127.0.0.1:8787")
+    assert anonymous.get("/admin/api/status").status_code == 401
+
+    client = TestClient(main.app, base_url="http://127.0.0.1:8787")
+    client.post(
+        "/admin/login",
+        data={"username": "owner", "password": "secret-admin-password", "next": "/admin/sessions"},
+        follow_redirects=False,
+    )
+    response = client.get("/admin/api/status")
+
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-store"
+    assert response.json()["status"]["update"]["state"] == "available"
+    assert response.json()["status"]["live"]["application"] == "pass"
+    assert "test-secret" not in response.text
+
 def test_admin_viewer_rag_settings_and_search_overlay_contract() -> None:
     viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
 
@@ -2001,9 +2047,16 @@ def test_admin_viewer_rag_settings_and_search_overlay_contract() -> None:
     assert 'id="searchOpenButton"' in viewer
     assert viewer.count('<dialog id="searchDialog"') == 1
     assert viewer.count('<dialog id="aiSettingsDialog"') == 1
-    for tab in ("general", "search", "api", "transcript"):
+    for tab in ("general", "search", "api", "transcript", "status"):
         assert f'data-settings-tab="{tab}"' in viewer
         assert f'data-settings-panel="{tab}"' in viewer
+
+    assert 'id="settingsUpdateDot"' in viewer
+    assert 'id="statusUpdateDot"' in viewer
+    assert 'id="bridgeStatusChecks"' in viewer
+    assert 'async function loadOperationalStatus' in viewer
+    assert 'function renderOperationalStatus' in viewer
+    assert 'selectSettingsTab(state.operationalStatus?.update?.state === "available" ? "status" : "general")' in viewer
 
     assert 'id="transcriptChunkMaxChars"' in viewer
     assert 'id="transcriptChunkMaxLines"' in viewer
