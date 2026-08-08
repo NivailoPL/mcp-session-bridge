@@ -614,6 +614,9 @@ def test_activation_checks_public_route_after_caddy_reload(tmp_path: Path, monke
         if call and call[-1] == "https://bridge.example.test/healthz"
     )
     assert reload_index < public_health
+    curl_calls = [call for call in runner.calls if call and call[0] == "curl"]
+    assert len(curl_calls) == 2
+    assert all("--retry-connrefused" in call for call in curl_calls)
 
 
 def test_activation_rejects_http_200_without_bridge_health_contract(

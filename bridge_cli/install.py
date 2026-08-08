@@ -602,7 +602,8 @@ exec {current}/.venv/bin/python -m bridge_cli "$@"
         self.runner.run("systemctl", "start", "mcp-session-bridge-status.timer")
         local_health = self.runner.run(
             "curl", "--fail", "--silent", "--show-error", "--retry", "10",
-            "--retry-delay", "1", "--connect-timeout", "3", "--max-time", "5",
+            "--retry-delay", "1", "--retry-connrefused",
+            "--connect-timeout", "3", "--max-time", "5",
             "--retry-max-time", "60", "http://127.0.0.1:8787/healthz",
         )
         _require_health_payload(local_health.stdout, "http://127.0.0.1:8787/healthz")
@@ -610,7 +611,8 @@ exec {current}/.venv/bin/python -m bridge_cli "$@"
         if verify_public:
             public_health = self.runner.run(
                 "curl", "--fail", "--silent", "--show-error", "--retry", "10",
-                "--retry-delay", "1", "--connect-timeout", "3", "--max-time", "5",
+                "--retry-delay", "1", "--retry-connrefused",
+                "--connect-timeout", "3", "--max-time", "5",
                 "--retry-max-time", "60", f"https://{domain}/healthz",
             )
             _require_health_payload(public_health.stdout, f"https://{domain}/healthz")
