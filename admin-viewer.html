@@ -1584,7 +1584,7 @@
           <div>
             <div class="settings-section-head"><h4>Server commands</h4><p>Run these over SSH. The panel never performs system updates.</p></div>
             <div class="status-command-list">
-              <code>bridge status</code><code>bridge doctor</code><code>bridge logs</code><code>bridge update</code>
+              <code>mcp-bridge status</code><code>mcp-bridge doctor</code><code>mcp-bridge logs</code><code>mcp-bridge update</code>
             </div>
           </div>
         </section>
@@ -2112,7 +2112,7 @@
         if (!checks.length) {
           const empty = document.createElement("p");
           empty.className = "meta";
-          empty.textContent = "Run bridge status on the server to populate diagnostics.";
+          empty.textContent = "Run mcp-bridge status on the server to populate diagnostics.";
           settingsDom.bridgeStatusChecks.append(empty);
           return;
         }

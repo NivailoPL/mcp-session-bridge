@@ -251,7 +251,7 @@ class Store:
     def _require_current_schema(self) -> None:
         if not self.db_path.exists():
             raise RuntimeError(
-                "Database is not initialized. Run bridge migrate before starting Bridge."
+                "Database is not initialized. Run mcp-bridge migrate before starting Bridge."
             )
         try:
             with sqlite3.connect(f"file:{self.db_path}?mode=ro", uri=True) as conn:
@@ -265,12 +265,12 @@ class Store:
                 )
         except sqlite3.Error as exc:
             raise RuntimeError(
-                f"Could not read database schema. Run bridge migrate: {exc}"
+                f"Could not read database schema. Run mcp-bridge migrate: {exc}"
             ) from exc
         if version != SCHEMA_VERSION:
             raise RuntimeError(
                 f"Database schema is {version!r}; Bridge requires {SCHEMA_VERSION}. "
-                "Run bridge migrate before starting Bridge."
+                "Run mcp-bridge migrate before starting Bridge."
             )
 
     def schema_version(self) -> int | None:

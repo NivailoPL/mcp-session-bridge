@@ -33,7 +33,7 @@ def test_layout_is_fully_relocatable_for_safe_setup_tests(tmp_path: Path) -> Non
     assert layout.opt_root == tmp_path / "opt/mcp-session-bridge"
     assert layout.env_file == tmp_path / "etc/mcp-session-bridge/bridge.env"
     assert layout.db_path == tmp_path / "var/lib/mcp-session-bridge/bridge.sqlite3"
-    assert layout.command_path == tmp_path / "usr/local/bin/bridge"
+    assert layout.command_path == tmp_path / "usr/local/bin/mcp-bridge"
 
 
 def test_setup_dry_run_makes_no_changes(tmp_path: Path) -> None:

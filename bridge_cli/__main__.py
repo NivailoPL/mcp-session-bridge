@@ -19,7 +19,7 @@ from bridge_cli.runner import SubprocessRunner
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="bridge", description="Install and operate MCP Session Bridge.")
+    parser = argparse.ArgumentParser(prog="mcp-bridge", description="Install and operate MCP Session Bridge.")
     parser.add_argument("--root", type=Path, help=argparse.SUPPRESS)
     commands = parser.add_subparsers(dest="command", required=True)
     setup = commands.add_parser("setup", help="Install, resume, or adopt Bridge.")
@@ -130,7 +130,7 @@ def _setup(args: argparse.Namespace, layout: Layout, runner: SubprocessRunner) -
 def _configure(args: argparse.Namespace, layout: Layout, runner: SubprocessRunner) -> int:
     _require_root("configure")
     if not read_env_file(layout.env_file):
-        raise RuntimeError("Managed configuration is missing. Run bridge setup first.")
+        raise RuntimeError("Managed configuration is missing. Run mcp-bridge setup first.")
     updates: dict[str, str] = {}
     if args.domain:
         domain = args.domain.strip().lower()
@@ -199,13 +199,13 @@ def _print_steps(result: dict[str, object]) -> None:
     label = "PASS" if state in {"complete", "dry_run"} else "WAITING"
     print(f"{label} setup state: {state}")
     if state == "dry_run":
-        print("Next: run bridge setup without --dry-run when you are ready.")
+        print("Next: run mcp-bridge setup without --dry-run when you are ready.")
     elif state == "waiting":
         print(f"Next: {result['next_step']}")
         print("The local Bridge service is installed; public HTTPS is pending DNS.")
     else:
-        print("Next: bridge status")
-        print("Next: bridge doctor")
+        print("Next: mcp-bridge status")
+        print("Next: mcp-bridge doctor")
 
 
 def _print_progress(index: int, total: int, step: str, state: str) -> None:
@@ -224,7 +224,7 @@ def _print_report(report, as_json: bool) -> None:
         if check.remediation:
             print(f"  Next: {check.remediation}")
     if report.update.state == "available":
-        print(f"[UPDATE AVAILABLE] {report.update.latest}; run bridge update")
+        print(f"[UPDATE AVAILABLE] {report.update.latest}; run mcp-bridge update")
     elif report.update.state == "current":
         print("[PASS] Bridge is up to date.")
     else:

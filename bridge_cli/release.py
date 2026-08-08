@@ -336,7 +336,7 @@ class UpdateManager:
     def _installation(self) -> dict[str, Any]:
         installation = read_json(self.layout.installation_file)
         if not installation or installation.get("mode") != "managed":
-            raise RuntimeError("Managed installation metadata is missing. Run bridge setup first.")
+            raise RuntimeError("Managed installation metadata is missing. Run mcp-bridge setup first.")
         return installation
 
     def _switch_release(self, release: Path) -> None:

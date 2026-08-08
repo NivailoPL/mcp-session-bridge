@@ -80,7 +80,7 @@ class Layout:
 
     @property
     def command_path(self) -> Path:
-        return self._path("usr/local/bin/bridge")
+        return self._path("usr/local/bin/mcp-bridge")
 
     @property
     def systemd_root(self) -> Path:

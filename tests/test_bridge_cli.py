@@ -71,7 +71,7 @@ def test_update_env_file_preserves_comments_and_unknown_keys(tmp_path: Path) -> 
 def test_managed_store_requires_explicit_migration(tmp_path: Path) -> None:
     db_path = tmp_path / "bridge.sqlite3"
 
-    with pytest.raises(RuntimeError, match="bridge migrate"):
+    with pytest.raises(RuntimeError, match="mcp-bridge migrate"):
         Store(db_path, allow_startup_migrations=False)
 
     result = migrate_database(db_path)

@@ -26,7 +26,7 @@ apt-get update
 apt-get install -y git curl ca-certificates
 git clone https://github.com/NivailoPL/mcp-session-bridge.git
 cd mcp-session-bridge
-./bridge setup
+./mcp-bridge setup
 ```
 
 The guided CLI installs the locked runtime, initializes or adopts the database, configures an unprivileged systemd service and Caddy HTTPS, and leaves a global `bridge` command.
@@ -36,8 +36,8 @@ Every stage reports `PASS`, `WAITING`, or `FAILED` plus the next action. If DNS 
 Verify the server:
 
 ```bash
-bridge status
-bridge doctor
+mcp-bridge status
+mcp-bridge doctor
 ```
 
 Read the complete [managed server installation guide](docs/managed-installation.md), including adoption, updates, rollback, and the future Agent Plugins boundary. Client/harness connection is intentionally a separate step.
@@ -181,7 +181,7 @@ Then open `http://127.0.0.1:8799/session-viewer.html`.
 | Path | Role |
 | --- | --- |
 | `app/main.py` | FastMCP server, routes, and tool definitions. |
-| `bridge` | Zero-to-managed-install bootstrap command. |
+| `mcp-bridge` | Zero-to-managed-install bootstrap command. |
 | `bridge_cli/` | Setup, status, diagnostics, updates, migrations, and rollback. |
 | `app/oauth.py` | OAuth dynamic registration, login, token exchange, and refresh. |
 | `app/storage.py` | SQLite schema and persistence for sessions, transcripts, and tokens. |

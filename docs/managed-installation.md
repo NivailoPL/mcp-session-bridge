@@ -32,16 +32,16 @@ git clone https://github.com/NivailoPL/mcp-session-bridge.git
 cd mcp-session-bridge
 ```
 
-Optionally preview the managed-system plan without writing to `/opt`, `/etc`, or `/var` (the `./bridge` bootstrap may still install `uv` for your login and create the checkout's local environment):
+Optionally preview the managed-system plan without writing to `/opt`, `/etc`, or `/var` (the `./mcp-bridge` bootstrap may still install `uv` for your login and create the checkout's local environment):
 
 ```bash
-./bridge setup --dry-run
+./mcp-bridge setup --dry-run
 ```
 
 Run the guided setup:
 
 ```bash
-./bridge setup
+./mcp-bridge setup
 ```
 
 The command asks for the public hostname, owner username, and owner password. It then reports every major stage and finishes in one of three states:
@@ -53,7 +53,7 @@ The command asks for the public hostname, owner username, and owner password. It
 If setup reports `WAITING`, create or correct the DNS record, wait for propagation, then run:
 
 ```bash
-bridge status
+mcp-bridge status
 ```
 
 The DNS check turns healthy automatically when the hostname resolves.
@@ -69,7 +69,7 @@ The managed installation uses versioned releases and stable host paths:
 | `/etc/mcp-session-bridge/bridge.env` | Private runtime configuration |
 | `/var/lib/mcp-session-bridge` | SQLite database, context packs, and status state |
 | `/var/backups/mcp-session-bridge` | Setup and update backups |
-| `/usr/local/bin/bridge` | Daily CLI command |
+| `/usr/local/bin/mcp-bridge` | Daily CLI command |
 | `/etc/systemd/system/mcp-session-bridge*.service` | Service, restart helper, and status refresh |
 | `/etc/caddy/conf.d/mcp-session-bridge.caddy` | HTTPS reverse-proxy fragment |
 
@@ -82,20 +82,20 @@ Secrets are written only to the private environment file. Re-running setup prese
 Run the fast report:
 
 ```bash
-bridge status
+mcp-bridge status
 ```
 
 Then run deeper read-only diagnostics:
 
 ```bash
-bridge doctor
+mcp-bridge doctor
 ```
 
 Useful final checks:
 
 ```bash
 curl https://bridge.example.com/healthz
-bridge logs
+mcp-bridge logs
 ```
 
 Open `https://bridge.example.com/admin/sessions`, sign in, and inspect **Settings → Status**. The page mirrors the cached CLI report and live application/database reachability. It does not install updates or run arbitrary server commands.
@@ -111,7 +111,7 @@ https://bridge.example.com/mcp
 Use the guided configuration command instead of editing managed files:
 
 ```bash
-bridge configure --domain new-bridge.example.com --username owner
+mcp-bridge configure --domain new-bridge.example.com --username owner
 ```
 
 The command optionally rotates the owner password, validates the replacement Caddy configuration, reloads HTTPS, and restarts the Bridge. If activation fails, it restores the previous environment and Caddy fragment.
@@ -124,13 +124,13 @@ When setup is run from an older checkout, it detects the checkout's `.env` and `
 Before adoption:
 
 ```bash
-./bridge setup --dry-run
+./mcp-bridge setup --dry-run
 ```
 
 Then run normal setup and confirm:
 
 ```bash
-bridge doctor
+mcp-bridge doctor
 ```
 
 Do not remove the old checkout until the managed service, admin login, sessions, and one MCP client have all been verified.
@@ -140,13 +140,13 @@ Do not remove the old checkout until the managed service, admin login, sessions,
 Check without installing:
 
 ```bash
-bridge update --check
+mcp-bridge update --check
 ```
 
 Install the latest stable release:
 
 ```bash
-bridge update
+mcp-bridge update
 ```
 
 The updater accepts only stable semantic versions, downloads the matching GitHub release asset over HTTPS, verifies its GitHub-provided SHA-256 digest, preflights database migrations on a copy, creates a live backup, switches the release symlink, and verifies the restarted service. A failed activation restores the previous release and database.
@@ -154,7 +154,7 @@ The updater accepts only stable semantic versions, downloads the matching GitHub
 Roll back the most recently completed update:
 
 ```bash
-bridge rollback
+mcp-bridge rollback
 ```
 
 After an update or rollback, reconnect MCP clients so they refresh their tool schemas.
@@ -163,7 +163,7 @@ After an update or rollback, reconnect MCP clients so they refresh their tool sc
 
 A future Agent Plugins adapter can be added without moving host management into a plugin. The compatibility boundary is deliberately narrow:
 
-- `bridge setup`, `status`, `doctor`, `update`, and `rollback` remain stable host operations;
+- `mcp-bridge setup`, `status`, `doctor`, `update`, and `rollback` remain stable host operations;
 - installation and status metadata use versioned JSON files;
 - MCP client or plugin registration stays separate from server installation;
 - adapters may generate or validate client-facing configuration, but must not own the database, release symlink, systemd service, or raw secrets;

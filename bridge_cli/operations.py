@@ -80,7 +80,7 @@ class StatusCollector:
             return CheckResult(
                 "config", "Configuration", "action_required",
                 "Missing required settings: " + ", ".join(missing),
-                "Run bridge setup or bridge configure.",
+                "Run mcp-bridge setup or mcp-bridge configure.",
             )
         return CheckResult("config", "Configuration", "pass", "Required settings are present.")
 
@@ -88,7 +88,7 @@ class StatusCollector:
         if not self.layout.db_path.exists():
             return CheckResult(
                 "database", "Database", "action_required", "Database file is missing.",
-                "Run bridge setup.",
+                "Run mcp-bridge setup.",
             )
         try:
             with sqlite3.connect(f"file:{self.layout.db_path}?mode=ro", uri=True) as conn:
@@ -129,7 +129,7 @@ class StatusCollector:
                 "Public DNS",
                 "waiting",
                 f"{hostname} does not resolve yet.",
-                "Point DNS at this server, wait for propagation, then run bridge status.",
+                "Point DNS at this server, wait for propagation, then run mcp-bridge status.",
             )
         if not addresses:
             return CheckResult(
@@ -137,7 +137,7 @@ class StatusCollector:
                 "Public DNS",
                 "waiting",
                 f"{hostname} has no usable address yet.",
-                "Check the DNS record, then run bridge status.",
+                "Check the DNS record, then run mcp-bridge status.",
             )
         return CheckResult("dns", "Public DNS", "pass", f"{hostname} resolves.")
 
@@ -160,7 +160,7 @@ class StatusCollector:
         except (OSError, ValueError, urllib.error.URLError) as exc:
             return CheckResult(
                 "local_http", "Local health endpoint", "failed", str(exc),
-                "Run bridge logs and bridge doctor.",
+                "Run mcp-bridge logs and mcp-bridge doctor.",
             )
         if response.status == 200 and payload.get("ok") is True:
             return CheckResult("local_http", "Local health endpoint", "pass", "HTTP 200")

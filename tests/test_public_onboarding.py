@@ -177,3 +177,13 @@ def test_github_actions_runs_tests_and_demo() -> None:
     assert "uv run python scripts/demo_session.py" in workflow
     assert "pull_request:" in workflow
     assert "workflow_dispatch:" in workflow
+
+def test_cli_name_does_not_shadow_linux_network_bridge_command() -> None:
+    bootstrap = Path("mcp-bridge")
+    readme = Path("README.md").read_text(encoding="utf-8")
+
+    assert bootstrap.is_file()
+    assert os.access(bootstrap, os.X_OK)
+    assert not Path("bridge").exists()
+    assert "./mcp-bridge setup" in readme
+    assert "\nbridge status" not in readme

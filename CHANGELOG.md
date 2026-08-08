@@ -10,8 +10,8 @@ This project follows a lightweight changelog format inspired by Keep a Changelog
 
 - Added an advanced Settings control for large MCP tool results. Optimized mode is the default and returns transcript chunks, output probes, and downloaded file contents once; Maximum compatibility restores the SDK's duplicated text and structured representations.
 - Added an authenticated, CSRF-protected **Restart Bridge** action backed by a fixed systemd helper unit. The panel tracks configured versus active output mode and reminds owners to refresh tool lists in every harness after restart.
-- Added a guided `bridge setup` flow for managed Linux VPS installations, including legacy database adoption, versioned releases, systemd/Caddy provisioning, and explicit `PASS`, `WAITING`, and `FAILED` states.
-- Added `bridge status`, `doctor`, `logs`, `version`, `update`, and `rollback` operations with versioned machine-readable reports.
+- Added a guided `mcp-bridge setup` flow for managed Linux VPS installations, including legacy database adoption, versioned releases, systemd/Caddy provisioning, and explicit `PASS`, `WAITING`, and `FAILED` states.
+- Added `mcp-bridge status`, `doctor`, `logs`, `version`, `update`, and `rollback` operations with versioned machine-readable reports.
 - Added **Settings → Status** with live health signals, cached diagnostics, update availability, and notification dots on both Settings entry points.
 
 ### Reliability and Operations

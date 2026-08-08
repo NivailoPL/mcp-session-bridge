@@ -104,14 +104,14 @@ class ManagedInstaller:
         }
         atomic_write_json(self.layout.installation_file, manifest)
         state = "complete"
-        next_step = "Run bridge status."
+        next_step = "Run mcp-bridge status."
         if activate:
             self._activate_services()
             if not _dns_resolves(answers.domain.strip().lower()):
                 state = "waiting"
                 next_step = (
                     "DNS is not resolving yet. Point the hostname at this server, "
-                    "wait for propagation, then run bridge status."
+                    "wait for propagation, then run mcp-bridge status."
                 )
         operation = {
             "format_version": 1,
