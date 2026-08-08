@@ -221,7 +221,10 @@ class Store:
         self._lock = Lock()
         if not allow_startup_migrations:
             self._require_current_schema()
+        parent_created = not self.db_path.parent.exists()
         self.db_path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        if parent_created and os.name != "nt":
+            self.db_path.parent.chmod(0o700)
         self._harden_runtime_permissions()
         if allow_startup_migrations:
             self._init_schema()
@@ -231,7 +234,6 @@ class Store:
         if os.name == "nt":
             return
 
-        self.db_path.parent.chmod(0o700)
         for path in (
             self.db_path,
             Path(f"{self.db_path}-wal"),

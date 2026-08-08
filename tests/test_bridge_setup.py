@@ -330,13 +330,19 @@ def test_activation_adopts_existing_caddy_site_and_restarts_service(tmp_path: Pa
     runner = RecordingRunner(active=True)
     monkeypatch.setattr("bridge_cli.install._dns_resolves", lambda _domain: True)
 
-    result = ManagedInstaller(layout, source, runner).install(
+    installer = ManagedInstaller(layout, source, runner)
+    prepared = installer.install(
         SetupAnswers("bridge.example.test", "owner", "long-password"),
         legacy_db=legacy_db,
-        activate=True,
+        activate=False,
     )
+    assert prepared["state"] == "prepared"
+    layout.data_root.chmod(0o700)
+
+    result = installer.activate(legacy_db)
 
     assert result["state"] == "complete"
+    assert layout.data_root.stat().st_mode & 0o777 == 0o750
     assert layout.current_link.resolve() == layout.release_dir(result["version"]).resolve()
     assert runner.calls.index(("systemctl", "stop", "mcp-session-bridge.service")) < runner.calls.index(
         ("systemctl", "restart", "mcp-session-bridge.service")
@@ -344,6 +350,25 @@ def test_activation_adopts_existing_caddy_site_and_restarts_service(tmp_path: Pa
     assert layout.caddyfile.read_text(encoding="utf-8").count("bridge.example.test {") == 1
     assert not layout.caddy_fragment.exists()
     assert Store(layout.db_path, allow_startup_migrations=False).get_session("existing") is not None
+
+
+def test_stage_release_refreshes_a_prepared_release_but_not_the_live_release(tmp_path: Path) -> None:
+    source = source_tree(tmp_path)
+    layout = Layout.for_root(tmp_path / "target")
+    installer = ManagedInstaller(layout, source, RecordingRunner())
+
+    release = installer.stage_release()
+    (source / "app" / "fresh.py").write_text("fresh = True\n", encoding="utf-8")
+    installer.stage_release()
+
+    assert (release / "app" / "fresh.py").exists()
+
+    layout.current_link.parent.mkdir(parents=True, exist_ok=True)
+    layout.current_link.symlink_to(release)
+    (source / "app" / "live_only.py").write_text("live = True\n", encoding="utf-8")
+    installer.stage_release()
+
+    assert not (release / "app" / "live_only.py").exists()
 
 
 def test_activation_failure_restores_legacy_unit_and_restarts_it(tmp_path: Path) -> None:

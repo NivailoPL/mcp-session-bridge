@@ -26,3 +26,14 @@ def test_store_creates_private_runtime_storage(tmp_path) -> None:
     if os.name != "nt":
         assert stat.S_IMODE(db_path.parent.stat().st_mode) == 0o700
         assert stat.S_IMODE(db_path.stat().st_mode) == 0o600
+
+
+def test_store_preserves_permissions_of_existing_runtime_directory(tmp_path) -> None:
+    runtime_dir = tmp_path / "managed-runtime"
+    runtime_dir.mkdir(mode=0o750)
+    runtime_dir.chmod(0o750)
+
+    Store(runtime_dir / "bridge.sqlite3")
+
+    if os.name != "nt":
+        assert stat.S_IMODE(runtime_dir.stat().st_mode) == 0o750

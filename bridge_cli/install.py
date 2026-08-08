@@ -403,7 +403,11 @@ class ManagedInstaller:
 
     def _stage_release(self, version: str) -> Path:
         release_dir = self.layout.release_dir(version)
-        if release_dir.exists():
+        if (
+            release_dir.exists()
+            and self.layout.current_link.is_symlink()
+            and self.layout.current_link.resolve() == release_dir.resolve()
+        ):
             return release_dir
         temporary = release_dir.with_name(f".{version}.staging-{os.getpid()}")
         if temporary.exists():
@@ -416,7 +420,17 @@ class ManagedInstaller:
                 "backups", "secrets", "examples/output", "._*"
             ),
         )
-        temporary.rename(release_dir)
+        previous = release_dir.with_name(f".{version}.previous-{os.getpid()}")
+        if release_dir.exists():
+            release_dir.rename(previous)
+        try:
+            temporary.rename(release_dir)
+        except Exception:
+            if previous.exists():
+                previous.rename(release_dir)
+            raise
+        if previous.exists():
+            shutil.rmtree(previous)
         return release_dir
 
     def _install_database(self, legacy_db: Path | None) -> None:
@@ -552,6 +566,7 @@ exec {current}/.venv/bin/python -m bridge_cli "$@"
         self.runner.run(
             "chown", "root:mcp-session-bridge", str(self.layout.data_root)
         )
+        self.layout.data_root.chmod(0o750)
         self.runner.run("chown", "-R", "root:root", str(self.layout.state_root))
         self.runner.run(
             "chown", "-R", "mcp-session-bridge:mcp-session-bridge",
@@ -589,6 +604,7 @@ exec {current}/.venv/bin/python -m bridge_cli "$@"
         ):
             shutil.copy2(staged, live)
         self.layout.command_path.chmod(0o755)
+        self.layout.data_root.chmod(0o750)
         self.runner.run("chown", "mcp-session-bridge:mcp-session-bridge", str(self.layout.db_path))
         self.runner.run("systemctl", "daemon-reload")
         self.runner.run(
