@@ -264,6 +264,7 @@ def test_runtime_wrapper_sets_socket_group_mode(tmp_path: Path) -> None:
     finally:
         process.terminate()
         process.wait(timeout=5)
+    assert process.returncode == 0
 
 
 def test_bridge_health_probe_retries_during_startup(

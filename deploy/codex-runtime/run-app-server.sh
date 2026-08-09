@@ -12,7 +12,12 @@ chmod 0770 "$runtime_dir"
 
 "$codex_binary" app-server --strict-config --listen "unix://$socket_path" &
 codex_pid=$!
-trap 'kill -TERM "$codex_pid" 2>/dev/null || true' INT TERM
+cleanup() {
+  kill -TERM "$codex_pid" 2>/dev/null || true
+  wait "$codex_pid" 2>/dev/null || true
+  exit 0
+}
+trap cleanup INT TERM
 
 attempt=0
 while [ ! -S "$socket_path" ]; do
