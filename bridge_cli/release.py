@@ -283,18 +283,13 @@ class UpdateManager:
         try:
             preflight_db = backup_dir / "preflight.sqlite3"
             sqlite_backup(self.layout.db_path, preflight_db)
-            self.runner.run(
-                str(release_dir / ".venv/bin/python"), "-m", "bridge_cli",
-                "migrate", "--db", str(preflight_db),
-            )
+            self._migrate_database(release_dir, preflight_db, service_user=False)
             self.runner.run("systemctl", "stop", "mcp-session-bridge.service")
             stopped = True
             sqlite_backup(self.layout.db_path, database_backup)
             live_backup_ready = True
-            self.runner.run(
-                str(release_dir / ".venv/bin/python"), "-m", "bridge_cli",
-                "migrate", "--db", str(self.layout.db_path),
-            )
+            self._set_runtime_database_owner(self.layout.db_path)
+            self._migrate_database(release_dir, self.layout.db_path, service_user=True)
             switch_release(
                 self.layout.current_link,
                 release_dir,
@@ -406,6 +401,36 @@ class UpdateManager:
             if target.exists():
                 target.unlink()
         sqlite_backup(backup, self.layout.db_path)
+        self._set_runtime_database_owner(self.layout.db_path)
+
+    def _migrate_database(
+        self, release_dir: Path, database: Path, *, service_user: bool
+    ) -> None:
+        command = (
+            "env",
+            f"PYTHONPATH={release_dir}",
+            str(release_dir / ".venv/bin/python"),
+            "-c",
+            (
+                "import sys; from pathlib import Path; "
+                "from bridge_cli.migrations import migrate_database; "
+                "migrate_database(Path(sys.argv[1]))"
+            ),
+            str(database),
+        )
+        if service_user and self.layout.root == Path("/"):
+            command = (
+                "runuser", "--user", "mcp-session-bridge", "--", *command
+            )
+        self.runner.run(*command)
+
+    def _set_runtime_database_owner(self, database: Path) -> None:
+        if self.layout.root != Path("/"):
+            return
+        self.runner.run(
+            "chown", "mcp-session-bridge:mcp-session-bridge", str(database)
+        )
+        self.runner.run("chmod", "600", str(database))
 
     @staticmethod
     def _verify_http(installation: dict[str, Any]) -> None:

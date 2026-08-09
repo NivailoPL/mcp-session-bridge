@@ -227,6 +227,40 @@ def test_failed_checkout_deploy_restores_previous_release(tmp_path: Path) -> Non
     assert layout.current_link.resolve() == layout.release_dir("0.4.0").resolve()
 
 
+def test_system_database_migration_runs_as_service_user() -> None:
+    runner = RecordingRunner()
+    manager = UpdateManager(Layout.system(), runner)
+    release = Path("/opt/mcp-session-bridge/releases/test")
+    database = Path("/var/lib/mcp-session-bridge/bridge.sqlite3")
+
+    manager._migrate_database(release, database, service_user=True)
+
+    assert runner.calls[-1] == (
+        "runuser", "--user", "mcp-session-bridge", "--", "env",
+        f"PYTHONPATH={release}", str(release / ".venv/bin/python"),
+        "-c",
+        (
+            "import sys; from pathlib import Path; "
+            "from bridge_cli.migrations import migrate_database; "
+            "migrate_database(Path(sys.argv[1]))"
+        ),
+        str(database),
+    )
+
+
+def test_system_database_owner_is_restored_after_backup_copy() -> None:
+    runner = RecordingRunner()
+    manager = UpdateManager(Layout.system(), runner)
+    database = Path("/var/lib/mcp-session-bridge/bridge.sqlite3")
+
+    manager._set_runtime_database_owner(database)
+
+    assert runner.calls == [
+        ("chown", "mcp-session-bridge:mcp-session-bridge", str(database)),
+        ("chmod", "600", str(database)),
+    ]
+
+
 def test_update_switches_release_and_records_rollback_receipt(tmp_path: Path) -> None:
     layout = _managed_layout(tmp_path)
     archive, digest = _release_archive(tmp_path, "0.4.1")
