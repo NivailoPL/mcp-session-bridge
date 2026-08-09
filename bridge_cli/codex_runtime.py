@@ -500,11 +500,19 @@ class CodexRuntimeManager:
 
     @staticmethod
     def _bridge_http_ready() -> bool:
-        try:
-            with urllib.request.urlopen("http://127.0.0.1:8787/healthz", timeout=3) as response:
-                return response.status == 200
-        except Exception:
-            return False
+        deadline = time.monotonic() + 15
+        while True:
+            try:
+                with urllib.request.urlopen(
+                    "http://127.0.0.1:8787/healthz", timeout=3
+                ) as response:
+                    if response.status == 200:
+                        return True
+            except Exception:
+                pass
+            if time.monotonic() >= deadline:
+                return False
+            time.sleep(0.25)
 
     def _unit_text(self) -> str:
         runtime = self.layout.codex_runtime_current

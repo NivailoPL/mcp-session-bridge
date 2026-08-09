@@ -265,6 +265,34 @@ def test_runtime_wrapper_sets_socket_group_mode(tmp_path: Path) -> None:
         process.wait(timeout=5)
 
 
+def test_bridge_health_probe_retries_during_startup(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    attempts = 0
+
+    class Response:
+        status = 200
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args: object) -> None:
+            return None
+
+    def urlopen(*_args: object, **_kwargs: object) -> Response:
+        nonlocal attempts
+        attempts += 1
+        if attempts < 3:
+            raise ConnectionRefusedError
+        return Response()
+
+    monkeypatch.setattr("bridge_cli.codex_runtime.urllib.request.urlopen", urlopen)
+    monkeypatch.setattr("bridge_cli.codex_runtime.time.sleep", lambda _seconds: None)
+
+    assert CodexRuntimeManager._bridge_http_ready() is True
+    assert attempts == 3
+
+
 def test_release_reconcile_failure_is_best_effort_for_bridge(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
