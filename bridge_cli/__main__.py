@@ -76,6 +76,16 @@ def build_parser() -> argparse.ArgumentParser:
     service_logs = service_actions.add_parser("logs")
     service_logs.add_argument("--lines", type=int, default=100)
     service_logs.add_argument("--json", action="store_true", dest="as_json")
+    codex_runtime = commands.add_parser(
+        "codex-runtime", help="Inspect or control the managed Codex app-server runtime."
+    )
+    codex_actions = codex_runtime.add_subparsers(dest="codex_runtime_action", required=True)
+    for name in ("status", "enable", "repair", "disable", "verify"):
+        command = codex_actions.add_parser(name)
+        command.add_argument("--json", action="store_true", dest="as_json")
+    codex_logs = codex_actions.add_parser("logs")
+    codex_logs.add_argument("--lines", type=int, default=100)
+    codex_logs.add_argument("--json", action="store_true", dest="as_json")
     installation = commands.add_parser("installation", help="Inspect or remove the managed installation.")
     installation_actions = installation.add_subparsers(dest="installation_action", required=True)
     inspect_installation = installation_actions.add_parser("inspect")
@@ -163,6 +173,10 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "service":
             _require_root("service")
             return _service(args, layout, runner)
+        if args.command == "codex-runtime":
+            if args.codex_runtime_action in {"enable", "repair", "disable", "logs"}:
+                _require_root(f"codex-runtime {args.codex_runtime_action}")
+            return _codex_runtime(args, layout, runner)
         if args.command == "installation":
             _require_root("installation")
             return _installation(args, layout, runner)
@@ -322,6 +336,38 @@ def _service(args: argparse.Namespace, layout: Layout, runner: SubprocessRunner)
     if action == "logs" and result["state"] == "failed":
         return 1
     return 0
+
+
+def _codex_runtime(args: argparse.Namespace, layout: Layout, runner: SubprocessRunner) -> int:
+    from bridge_cli.codex_runtime import CodexRuntimeManager
+
+    source_root = Path(__file__).resolve().parents[1]
+    manager = CodexRuntimeManager(layout, runner, source_root)
+    action = args.codex_runtime_action
+    if action == "status":
+        result = manager.inspect()
+    elif action in {"enable", "repair", "disable"}:
+        with operation_lock(layout.operation_lock_file, layout.legacy_operation_lock_file):
+            result = getattr(manager, action)()
+    elif action == "verify":
+        result = manager.verify()
+    elif action == "logs":
+        result = manager.logs(args.lines)
+    else:
+        return 2
+    if getattr(args, "as_json", False):
+        print(json.dumps(result, indent=2, sort_keys=True))
+    elif action == "logs":
+        print(result["logs"])
+    else:
+        runtime = result.get("runtime", {})
+        print(
+            f"{'PASS' if result['state'] == 'complete' else 'FAILED'} "
+            f"{result['operation']}: "
+            f"{'active' if runtime.get('active') else 'inactive'}; "
+            f"version {runtime.get('installed_version') or 'not installed'}"
+        )
+    return 0 if result["state"] == "complete" else 1
 
 
 def _installation(args: argparse.Namespace, layout: Layout, runner: SubprocessRunner) -> int:

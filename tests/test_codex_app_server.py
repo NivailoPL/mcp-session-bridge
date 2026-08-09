@@ -129,6 +129,20 @@ def test_status_and_device_login_expose_no_credentials(tmp_path: Path) -> None:
             "user_code": "ABCD-EFGH",
         }
         assert "token" not in json.dumps(login).lower()
+        await socket.incoming.put(
+            json.dumps(
+                {
+                    "method": "account/login/completed",
+                    "params": {
+                        "loginId": "another-login",
+                        "success": False,
+                        "error": "ignore",
+                    },
+                }
+            )
+        )
+        await asyncio.sleep(0)
+        assert (await client.device_login_status())["login_status"] == "pending"
         await client.cancel_device_login()
         await client.close()
 

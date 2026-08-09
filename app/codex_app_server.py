@@ -10,8 +10,10 @@ from pathlib import Path
 from typing import Any, Protocol
 from urllib.parse import urlparse
 
-CODEX_VERSION = "0.147.0"
+from bridge_cli.codex_contract import CODEX_VERSION
+
 MAX_CHAT_MESSAGE_CHARS = 8_000
+MAX_OWNED_THREADS = 32
 DEFAULT_RPC_TIMEOUT_SECONDS = 15.0
 DEFAULT_TURN_TIMEOUT_SECONDS = 300.0
 
@@ -95,11 +97,11 @@ class CodexAppServerClient:
         self._pending: dict[int, asyncio.Future[Any]] = {}
         self._turns: dict[str, _TurnState] = {}
         self._thread_locks: dict[str, asyncio.Lock] = {}
-        self._threads: set[str] = set()
         self._version: str | None = None
         self._login_payload: dict[str, str] | None = None
-        self._login_result: dict[str, Any] | None = None
+        self._login_outcome: str | None = None
         self._closing = False
+        self._interrupt_tasks: set[asyncio.Task[None]] = set()
 
     async def _connect_unix_socket(self) -> _WebSocket:
         try:
@@ -190,7 +192,6 @@ class CodexAppServerClient:
             raise CodexUnavailableError("Codex App Server connection failed.") from exc
 
     async def _reader(self) -> None:
-        failure: Exception | None = None
         try:
             assert self._ws is not None
             while True:
@@ -212,13 +213,11 @@ class CodexAppServerClient:
                 await self._handle_notification(method, params)
         except asyncio.CancelledError:
             return
-        except Exception as exc:
-            failure = exc
+        except Exception:
+            pass
         finally:
             if not self._closing:
-                self._invalidate_connection(
-                    failure or CodexUnavailableError("Codex App Server disconnected.")
-                )
+                self._invalidate_connection()
 
     def _resolve_response(self, message: dict[str, Any]) -> None:
         request_id = message.get("id")
@@ -260,11 +259,10 @@ class CodexAppServerClient:
 
     async def _handle_notification(self, method: str, params: dict[str, Any]) -> None:
         if method == "account/login/completed":
-            self._login_result = {
-                "success": params.get("success") is True,
-                "error": "Login failed." if params.get("error") else None,
-                "login_id": params.get("loginId"),
-            }
+            login_id = params.get("loginId")
+            if self._login_payload is None or login_id != self._login_payload.get("login_id"):
+                return
+            self._login_outcome = "failed" if params.get("error") else "authenticated"
             return
         if method == "item/agentMessage/delta":
             turn_id = params.get("turnId")
@@ -303,19 +301,34 @@ class CodexAppServerClient:
                     state.future.set_exception(
                         CodexPolicyViolationError("Codex tools are disabled for this chat.")
                     )
-                asyncio.create_task(
-                    self._rpc(
-                        "turn/interrupt",
-                        {"threadId": params.get("threadId"), "turnId": turn_id},
-                    )
-                )
+                self._schedule_interrupt(params.get("threadId"), turn_id)
 
-    def _invalidate_connection(self, failure: Exception) -> None:
+    def _schedule_interrupt(self, thread_id: Any, turn_id: str) -> None:
+        if not isinstance(thread_id, str):
+            return
+
+        async def interrupt() -> None:
+            if self._closing:
+                return
+            try:
+                await self._rpc(
+                    "turn/interrupt",
+                    {"threadId": thread_id, "turnId": turn_id},
+                    ensure_connected=False,
+                )
+            except CodexAppServerError:
+                pass
+
+        task = asyncio.create_task(interrupt())
+        self._interrupt_tasks.add(task)
+        task.add_done_callback(self._interrupt_tasks.discard)
+
+    def _invalidate_connection(self) -> None:
         self._ws = None
         self._version = None
-        self._threads.clear()
         self._thread_locks.clear()
         self._login_payload = None
+        self._login_outcome = None
         for future in list(self._pending.values()):
             if not future.done():
                 future.set_exception(CodexUnavailableError("Codex App Server disconnected."))
@@ -337,7 +350,7 @@ class CodexAppServerClient:
 
     async def start_device_login(self) -> dict[str, str]:
         await self._ensure_connected()
-        if self._login_payload is not None and self._login_result is None:
+        if self._login_payload is not None and self._login_outcome is None:
             return dict(self._login_payload)
         result = await self._rpc("account/login/start", {"type": "chatgptDeviceCode"})
         login_id = result.get("loginId") if isinstance(result, dict) else None
@@ -352,7 +365,7 @@ class CodexAppServerClient:
             or not parsed.netloc
         ):
             raise CodexProtocolError("Codex returned an invalid device login response.")
-        self._login_result = None
+        self._login_outcome = None
         self._login_payload = {
             "login_id": login_id,
             "verification_url": verification_url,
@@ -364,11 +377,10 @@ class CodexAppServerClient:
         status = await self.status()
         if status["authenticated"]:
             self._login_payload = None
-            self._login_result = None
+            self._login_outcome = None
             return {**status, "login_status": "authenticated"}
-        if self._login_result is not None:
-            state = "failed" if self._login_result.get("error") else "cancelled"
-            return {**status, "login_status": state}
+        if self._login_outcome is not None:
+            return {**status, "login_status": self._login_outcome}
         return {**status, "login_status": "pending" if self._login_payload else "signed_out"}
 
     async def cancel_device_login(self) -> None:
@@ -376,13 +388,12 @@ class CodexAppServerClient:
             return
         await self._rpc("account/login/cancel", {"loginId": self._login_payload["login_id"]})
         self._login_payload = None
-        self._login_result = {"success": False, "error": None}
+        self._login_outcome = "cancelled"
 
     async def logout(self) -> None:
         await self._rpc("account/logout", {})
         self._login_payload = None
-        self._login_result = None
-        self._threads.clear()
+        self._login_outcome = None
         self._thread_locks.clear()
 
     async def chat(self, message: str, *, thread_id: str | None = None) -> dict[str, str]:
@@ -393,6 +404,7 @@ class CodexAppServerClient:
             raise ValueError(f"message must be {MAX_CHAT_MESSAGE_CHARS} characters or fewer.")
         await self._ensure_connected()
         if thread_id is None:
+            self._make_thread_capacity()
             result = await self._rpc(
                 "thread/start",
                 {
@@ -413,9 +425,8 @@ class CodexAppServerClient:
             thread_id = thread.get("id") if isinstance(thread, dict) else None
             if not isinstance(thread_id, str) or thread.get("ephemeral") is not True:
                 raise CodexProtocolError("Codex failed to create an ephemeral conversation.")
-            self._threads.add(thread_id)
             self._thread_locks[thread_id] = asyncio.Lock()
-        elif thread_id not in self._threads:
+        elif thread_id not in self._thread_locks:
             raise ValueError("Unknown or expired Codex conversation.")
 
         lock = self._thread_locks[thread_id]
@@ -438,16 +449,26 @@ class CodexAppServerClient:
             try:
                 await asyncio.wait_for(state.future, timeout=self.turn_timeout_seconds)
             except TimeoutError as exc:
-                asyncio.create_task(
-                    self._rpc("turn/interrupt", {"threadId": thread_id, "turnId": turn_id})
-                )
+                self._schedule_interrupt(thread_id, turn_id)
                 raise CodexTimeoutError("Codex response timed out.") from exc
             finally:
                 self._turns.pop(turn_id, None)
             response = "".join(state.fragments).strip()
             if not response:
                 raise CodexProtocolError("Codex returned an empty response.")
+            if self._thread_locks.get(thread_id) is lock:
+                self._thread_locks.pop(thread_id)
+                self._thread_locks[thread_id] = lock
             return {"thread_id": thread_id, "message": response}
+
+    def _make_thread_capacity(self) -> None:
+        if len(self._thread_locks) < MAX_OWNED_THREADS:
+            return
+        for owned_thread_id, lock in tuple(self._thread_locks.items()):
+            if not lock.locked():
+                self._thread_locks.pop(owned_thread_id, None)
+                return
+        raise ValueError("Too many Codex conversations are active.")
 
     async def close(self) -> None:
         self._closing = True
@@ -466,7 +487,13 @@ class CodexAppServerClient:
                 await ws.close()
             except Exception:
                 pass
-        self._invalidate_connection(CodexUnavailableError("Codex App Server closed."))
+        tasks = tuple(self._interrupt_tasks)
+        self._interrupt_tasks.clear()
+        for interrupt_task in tasks:
+            interrupt_task.cancel()
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
+        self._invalidate_connection()
 
 
 def _safe_account(account: Any) -> dict[str, Any] | None:

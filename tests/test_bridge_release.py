@@ -615,6 +615,7 @@ def test_update_switches_release_and_records_rollback_receipt(tmp_path: Path) ->
     assert layout.current_link.resolve() == layout.release_dir("0.4.1").resolve()
     receipt = json.loads(layout.operation_file.read_text(encoding="utf-8"))
     assert receipt["previous_version"] == "0.4.0"
+    assert receipt["codex_runtime"]["state"] == "disabled"
     assert Path(receipt["database_backup"]).exists()
     updated = json.loads(layout.installation_file.read_text(encoding="utf-8"))
     assert updated["commit"] is None
@@ -622,6 +623,7 @@ def test_update_switches_release_and_records_rollback_receipt(tmp_path: Path) ->
 
     rollback = manager.rollback()
     assert rollback["state"] == "complete"
+    assert rollback["codex_runtime"]["state"] == "disabled"
     assert layout.current_link.resolve() == layout.release_dir("0.4.0").resolve()
     restored = json.loads(layout.installation_file.read_text(encoding="utf-8"))
     assert restored["commit"] == "a" * 40

@@ -1744,6 +1744,7 @@
       const INTERNAL_FILE_DRAG_TYPE = "application/x-mcp-session-file";
       const MAX_FILE_BYTES = 1_000_000;
       const MAX_PDF_BYTES = 20_000_000;
+      const MAX_CODEX_TRANSCRIPT_MESSAGES = 100;
       const TEXT_FILE_EXTENSIONS = new Set([".md", ".markdown", ".txt", ".json", ".yaml", ".yml", ".csv", ".tsv"]);
       const ALLOWED_FILE_EXTENSIONS = new Set([...TEXT_FILE_EXTENSIONS, ".pdf"]);
 
@@ -2138,7 +2139,9 @@
             : "/admin/api/codex/status";
           const payload = await api(path);
           state.codex.status = payload.codex;
-          if (payload.codex.authenticated) state.codex.login = null;
+          if (payload.codex.authenticated || (payload.codex.login_status && payload.codex.login_status !== "pending")) {
+            state.codex.login = null;
+          }
           renderCodex();
           if (loginPoll && payload.codex.login_status === "pending" && dom.codexDialog.open) {
             state.codex.pollTimer = window.setTimeout(() => refreshCodexStatus(true), 2000);
@@ -2146,6 +2149,7 @@
           if (payload.codex.authenticated) dom.codexChatInput.focus();
         } catch (error) {
           state.codex.status = { available: false, authenticated: false };
+          state.codex.login = null;
           renderCodex(error.message || "Codex App Server is unavailable.", "error");
         }
       }
@@ -2201,7 +2205,7 @@
       async function sendCodexMessage() {
         const message = dom.codexChatInput.value.trim();
         if (!message || state.codex.busy || !state.codex.status?.authenticated) return;
-        state.codex.messages.push({ role: "user", content: message });
+        pushCodexMessage({ role: "user", content: message });
         dom.codexChatInput.value = "";
         setCodexBusy(true);
         renderCodex();
@@ -2211,10 +2215,10 @@
             body: JSON.stringify({ message, thread_id: state.codex.threadId }),
           });
           state.codex.threadId = payload.chat.thread_id;
-          state.codex.messages.push({ role: "model", content: payload.chat.message });
+          pushCodexMessage({ role: "model", content: payload.chat.message });
           renderCodex();
         } catch (error) {
-          state.codex.messages.push({ role: "error", content: error.message });
+          pushCodexMessage({ role: "error", content: error.message });
           renderCodex(error.message, "error");
         } finally {
           setCodexBusy(false);
@@ -2229,6 +2233,15 @@
         dom.codexLogout.disabled = busy;
         dom.codexChatInput.disabled = busy;
         dom.codexChatSubmit.disabled = busy;
+      }
+
+      function pushCodexMessage(message) {
+        state.codex.messages.push(message);
+        if (state.codex.messages.length > MAX_CODEX_TRANSCRIPT_MESSAGES) {
+          state.codex.messages.splice(
+            0, state.codex.messages.length - MAX_CODEX_TRANSCRIPT_MESSAGES
+          );
+        }
       }
 
       function renderCodex(statusMessage = "", statusKind = "") {

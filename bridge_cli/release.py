@@ -248,6 +248,7 @@ class UpdateManager:
                 )
                 installation["updated_at"] = int(time.time())
                 atomic_write_json(self.layout.installation_file, installation)
+                codex_runtime = self._reconcile_codex_runtime(previous_release)
                 rollback_receipt = {
                     "format_version": 1,
                     "operation": "rollback",
@@ -255,6 +256,7 @@ class UpdateManager:
                     "previous_version": receipt["version"],
                     "version": receipt["previous_version"],
                     "database_backup": str(database_backup),
+                    "codex_runtime": codex_runtime,
                     "finished_at": int(time.time()),
                 }
                 atomic_write_json(self.layout.operation_file, rollback_receipt)
@@ -326,6 +328,7 @@ class UpdateManager:
                 "previous_release_id": previous_release_id,
                 "database_backup": str(database_backup),
                 "finished_at": int(time.time()),
+                "codex_runtime": self._reconcile_codex_runtime(release_dir),
                 **(receipt_fields or {}),
             }
             atomic_write_json(self.layout.operation_file, receipt)
@@ -357,6 +360,21 @@ class UpdateManager:
                 label = "Update" if operation == "update" else "Deploy"
                 raise RuntimeError(f"{label} failed and was rolled back: {exc}") from exc
             raise
+
+    def _reconcile_codex_runtime(self, release_dir: Path) -> dict[str, Any]:
+        try:
+            from bridge_cli.codex_runtime import CodexRuntimeManager
+
+            return CodexRuntimeManager(
+                self.layout, self.runner, release_dir
+            ).reconcile_after_release()
+        except Exception as exc:
+            return {
+                "state": "failed_preserved",
+                "changed": False,
+                "bridge_unchanged": True,
+                "error": str(exc),
+            }
 
     def _prepare_release(self, release: ReleaseInfo) -> Path:
         final = self.layout.release_dir(release.version)

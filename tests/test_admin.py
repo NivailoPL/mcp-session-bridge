@@ -492,6 +492,8 @@ def test_admin_viewer_codex_popup_is_ephemeral_and_lazy_loaded() -> None:
     assert 'messages: []' in viewer
     assert 'body: JSON.stringify({ message, thread_id: state.codex.threadId })' in viewer
     assert 'renderMarkdown(message.content)' in viewer
+    assert 'payload.codex.login_status !== "pending"' in viewer
+    assert "MAX_CODEX_TRANSCRIPT_MESSAGES = 100" in viewer
 
     codex_block = viewer[
         viewer.index('codex: {'):

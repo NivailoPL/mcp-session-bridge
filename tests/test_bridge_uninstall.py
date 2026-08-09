@@ -82,3 +82,54 @@ def test_uninstall_refuses_unverified_legacy_paths_without_explicit_consent(tmp_
         UninstallManager(layout, Runner()).plan(
             export_to=tmp_path / "portable.sqlite3", remove_data=True
         )
+
+
+def test_uninstall_preserves_codex_login_state_without_data_removal(tmp_path: Path) -> None:
+    layout = Layout.for_root(tmp_path / "root")
+    layout.codex_service_unit.parent.mkdir(parents=True)
+    layout.codex_service_unit.write_text("owned", encoding="utf-8")
+    layout.codex_runtime_root.mkdir(parents=True)
+    layout.codex_state_root.mkdir(parents=True)
+    layout.ownership_file.parent.mkdir(parents=True)
+    layout.ownership_file.write_text(
+        '{"owner":"mcp-session-bridge","codex_service_user":"mcp-session-bridge-codex",'
+        f'"paths":["{layout.codex_service_unit}","{layout.codex_runtime_root}",'
+        f'"{layout.codex_state_root}"]}}',
+        encoding="utf-8",
+    )
+    runner = Runner()
+    manager = UninstallManager(layout, runner)
+
+    result = manager.execute(manager.plan(export_to=None, remove_data=False))
+
+    assert result["state"] == "complete"
+    assert not layout.codex_service_unit.exists()
+    assert not layout.codex_runtime_root.exists()
+    assert layout.codex_state_root.exists()
+    assert (
+        "systemctl", "disable", "--now", "mcp-session-bridge-codex.service"
+    ) in runner.calls
+    assert ("userdel", "mcp-session-bridge-codex") not in runner.calls
+
+
+def test_uninstall_with_data_removal_purges_codex_state_and_user(tmp_path: Path) -> None:
+    layout = Layout.for_root(tmp_path / "root")
+    layout.codex_service_unit.parent.mkdir(parents=True)
+    layout.codex_service_unit.write_text("owned", encoding="utf-8")
+    layout.codex_state_root.mkdir(parents=True)
+    layout.ownership_file.parent.mkdir(parents=True)
+    layout.ownership_file.write_text(
+        '{"owner":"mcp-session-bridge","codex_service_user":"mcp-session-bridge-codex",'
+        f'"paths":["{layout.codex_service_unit}","{layout.codex_state_root}"]}}',
+        encoding="utf-8",
+    )
+    runner = Runner()
+    manager = UninstallManager(layout, runner)
+
+    result = manager.execute(
+        manager.plan(export_to=None, remove_data=True)
+    )
+
+    assert result["state"] == "complete"
+    assert not layout.codex_state_root.exists()
+    assert ("userdel", "mcp-session-bridge-codex") in runner.calls
