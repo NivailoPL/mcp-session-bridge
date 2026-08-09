@@ -12,6 +12,7 @@ from bridge_cli.install import ManagedInstaller, SetupAnswers
 from bridge_cli.layout import Layout
 from bridge_cli.__main__ import _configure
 from bridge_cli.operations import StatusCollector
+from bridge_cli.version import BRIDGE_VERSION
 
 
 class RecordingRunner:
@@ -178,7 +179,7 @@ def test_status_collector_reports_managed_installation(tmp_path: Path) -> None:
     report = StatusCollector(layout, runner, probe_http=False).collect()
 
     assert report.installation["mode"] == "prepared"
-    assert report.version["current"] == "0.4.0"
+    assert report.version["current"] == BRIDGE_VERSION
     assert {check.id for check in report.checks} >= {"installation", "config", "database", "service", "caddy"}
     installation = next(check for check in report.checks if check.id == "installation")
     assert installation.state == "action_required"
