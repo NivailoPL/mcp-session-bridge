@@ -84,6 +84,19 @@ def test_uninstall_refuses_unverified_legacy_paths_without_explicit_consent(tmp_
         )
 
 
+def test_database_export_cannot_be_placed_inside_codex_state(tmp_path: Path) -> None:
+    layout = Layout.for_root(tmp_path / "root")
+    Store(layout.db_path).create_session("keep", "Keep", "manual-context")
+    layout.codex_state_root.mkdir(parents=True)
+
+    with pytest.raises(ValueError, match="outside every Bridge-managed path"):
+        UninstallManager(layout, Runner()).plan(
+            export_to=layout.codex_state_root / "export.sqlite3",
+            remove_data=True,
+            allow_unverified=True,
+        )
+
+
 def test_uninstall_preserves_codex_login_state_without_data_removal(tmp_path: Path) -> None:
     layout = Layout.for_root(tmp_path / "root")
     layout.codex_service_unit.parent.mkdir(parents=True)

@@ -164,6 +164,8 @@ def test_account_payload_is_sanitized_and_logout_clears_threads(tmp_path: Path) 
         response = await client.chat("hello")
         assert response == {"thread_id": "thread-1", "message": "Hello from Codex"}
         await client.logout()
+        logout = next(item for item in socket.sent if item.get("method") == "account/logout")
+        assert "params" not in logout
         with pytest.raises(ValueError, match="Unknown or expired Codex conversation"):
             await client.chat("continue", thread_id="thread-1")
         await client.close()
@@ -224,21 +226,63 @@ def test_tool_event_interrupts_turn_and_fails_closed(tmp_path: Path) -> None:
             await self.incoming.put(
                 json.dumps(
                     {
-                        "method": "item/commandExecution/started",
-                        "params": {"threadId": "thread-1", "turnId": "turn-1"},
+                        "method": "item/started",
+                        "params": {
+                            "threadId": "thread-1",
+                            "turnId": "turn-1",
+                            "item": {"id": "item-1", "type": "commandExecution"},
+                        },
                     }
                 )
             )
 
     async def scenario() -> None:
+        socket = ToolCallingSocket(
+            account={"type": "chatgpt", "email": None, "planType": "plus"}
+        )
         client = _client(
             tmp_path,
-            ToolCallingSocket(
-                account={"type": "chatgpt", "email": None, "planType": "plus"}
-            ),
+            socket,
         )
         with pytest.raises(CodexPolicyViolationError, match="disabled"):
             await client.chat("read the filesystem")
+        await asyncio.sleep(0)
+        interrupt = next(item for item in socket.sent if item.get("method") == "turn/interrupt")
+        assert interrupt["params"] == {"threadId": "thread-1", "turnId": "turn-1"}
+        await client.close()
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize(
+    "method",
+    ["item/tool/call", "item/tool/requestUserInput", "mcpServer/elicitation/request"],
+)
+def test_server_tool_requests_are_denied_and_fail_turn(tmp_path: Path, method: str) -> None:
+    class RequestingSocket(FakeWebSocket):
+        async def send(self, raw: str) -> None:
+            message = json.loads(raw)
+            if message.get("method") != "turn/start":
+                await super().send(raw)
+                return
+            self.sent.append(message)
+            await self.incoming.put(json.dumps({
+                "id": message["id"],
+                "result": {"turn": {"id": "turn-1", "items": [], "status": "inProgress"}},
+            }))
+            await self.incoming.put(json.dumps({
+                "id": 900,
+                "method": method,
+                "params": {"threadId": "thread-1", "turnId": "turn-1"},
+            }))
+
+    async def scenario() -> None:
+        socket = RequestingSocket()
+        client = _client(tmp_path, socket)
+        with pytest.raises(CodexPolicyViolationError, match="disabled"):
+            await client.chat("try a tool")
+        denial = next(item for item in socket.sent if item.get("id") == 900)
+        assert denial["error"]["code"] == -32601
         await client.close()
 
     asyncio.run(scenario())

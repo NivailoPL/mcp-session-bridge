@@ -63,7 +63,7 @@ class ControlCenter:
         activation = next(step for step in steps if step.id == "activate")
         verify = next(step for step in steps if step.id == "verify")
         codex = CodexRuntimeManager(
-            self.wizard.layout, self.wizard.runner, self.wizard.source_root
+            self.wizard.layout, self.wizard.runner, self._codex_source_root()
         ).inspect()["runtime"]
         codex_state = "ACTIVE" if codex["active"] else "READY" if codex["installed"] else "NOT INSTALLED"
         return [
@@ -101,7 +101,7 @@ class ControlCenter:
             from bridge_cli.codex_runtime import CodexRuntimeManager
 
             runtime = CodexRuntimeManager(
-                self.wizard.layout, self.wizard.runner, self.wizard.source_root
+                self.wizard.layout, self.wizard.runner, self._codex_source_root()
             ).inspect()["runtime"]
             state = "ACTIVE" if runtime["active"] else "READY" if runtime["installed"] else "NOT INSTALLED"
             return (
@@ -236,7 +236,7 @@ class ControlCenter:
         from bridge_cli.codex_runtime import CodexRuntimeManager
 
         manager = CodexRuntimeManager(
-            self.wizard.layout, self.wizard.runner, self.wizard.source_root
+            self.wizard.layout, self.wizard.runner, self._codex_source_root()
         )
         if action in {"enable", "repair", "disable"}:
             warning = {
@@ -269,6 +269,14 @@ class ControlCenter:
             f"{'active' if runtime.get('active') else 'inactive'}, "
             f"version {runtime.get('installed_version') or 'not installed'}"
         )
+
+    def _codex_source_root(self) -> Path:
+        current = self.wizard.layout.current_link
+        if current.is_symlink():
+            resolved = current.resolve()
+            if (resolved / "deploy/codex-runtime/package-lock.json").exists():
+                return resolved
+        return self.wizard.source_root
         self.wizard.input("Press Enter to return.")
 
     def _deploy_checkout(self) -> None:

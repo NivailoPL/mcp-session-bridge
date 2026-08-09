@@ -35,6 +35,13 @@ _DISABLED_FEATURES = {
     "multi_agent": False,
     "remote_plugin": False,
 }
+_NON_OPERATIONAL_ITEM_TYPES = {
+    "userMessage",
+    "agentMessage",
+    "reasoning",
+    "plan",
+    "contextCompaction",
+}
 
 
 class CodexAppServerError(RuntimeError):
@@ -156,7 +163,7 @@ class CodexAppServerClient:
     async def _rpc(
         self,
         method: str,
-        params: dict[str, Any],
+        params: dict[str, Any] | None,
         *,
         ensure_connected: bool = True,
     ) -> Any:
@@ -170,7 +177,10 @@ class CodexAppServerClient:
         future = asyncio.get_running_loop().create_future()
         self._pending[request_id] = future
         try:
-            await ws.send(json.dumps({"id": request_id, "method": method, "params": params}))
+            request: dict[str, Any] = {"id": request_id, "method": method}
+            if params is not None:
+                request["params"] = params
+            await ws.send(json.dumps(request))
             try:
                 return await asyncio.wait_for(future, timeout=self.rpc_timeout_seconds)
             except TimeoutError as exc:
@@ -210,6 +220,8 @@ class CodexAppServerClient:
                     raise CodexProtocolError("Codex App Server sent an invalid notification.")
                 if "id" in message:
                     await self._deny_server_request(message)
+                    self._fail_tool_event(params)
+                    continue
                 await self._handle_notification(method, params)
         except asyncio.CancelledError:
             return
@@ -270,12 +282,15 @@ class CodexAppServerClient:
             if isinstance(turn_id, str) and isinstance(delta, str):
                 self._turn_state(turn_id).fragments.append(delta)
             return
-        if method == "item/completed":
+        if method in {"item/started", "item/completed"}:
             turn_id = params.get("turnId")
             item = params.get("item")
+            if isinstance(item, dict) and item.get("type") not in _NON_OPERATIONAL_ITEM_TYPES:
+                self._fail_tool_event(params)
+                return
             if isinstance(turn_id, str) and isinstance(item, dict):
                 text = item.get("text")
-                if item.get("type") == "agentMessage" and isinstance(text, str):
+                if method == "item/completed" and item.get("type") == "agentMessage" and isinstance(text, str):
                     self._turn_state(turn_id).fragments[:] = [text]
             return
         if method == "turn/completed":
@@ -294,14 +309,18 @@ class CodexAppServerClient:
                 state.future.set_exception(CodexProtocolError("Codex turn failed."))
             return
         if any(marker.lower() in method.lower() for marker in _TOOL_EVENT_MARKERS):
-            turn_id = params.get("turnId")
-            if isinstance(turn_id, str):
-                state = self._turn_state(turn_id)
-                if not state.future.done():
-                    state.future.set_exception(
-                        CodexPolicyViolationError("Codex tools are disabled for this chat.")
-                    )
-                self._schedule_interrupt(params.get("threadId"), turn_id)
+            self._fail_tool_event(params)
+
+    def _fail_tool_event(self, params: dict[str, Any]) -> None:
+        turn_id = params.get("turnId")
+        if not isinstance(turn_id, str):
+            return
+        state = self._turn_state(turn_id)
+        if not state.future.done():
+            state.future.set_exception(
+                CodexPolicyViolationError("Codex tools are disabled for this chat.")
+            )
+        self._schedule_interrupt(params.get("threadId"), turn_id)
 
     def _schedule_interrupt(self, thread_id: Any, turn_id: str) -> None:
         if not isinstance(thread_id, str):
@@ -391,7 +410,7 @@ class CodexAppServerClient:
         self._login_outcome = "cancelled"
 
     async def logout(self) -> None:
-        await self._rpc("account/logout", {})
+        await self._rpc("account/logout", None)
         self._login_payload = None
         self._login_outcome = None
         self._thread_locks.clear()

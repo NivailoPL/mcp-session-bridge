@@ -11,7 +11,11 @@ from bridge_cli.operation_lock import operation_lock
 from bridge_cli.runner import Runner
 from bridge_cli.service import ServiceManager
 from bridge_cli.files import read_json
-from bridge_cli.codex_runtime import CODEX_SERVICE_UNIT, CODEX_SERVICE_USER
+from bridge_cli.codex_runtime import (
+    CODEX_SERVICE_UNIT,
+    CODEX_SERVICE_USER,
+    CODEX_SOCKET_GROUP,
+)
 
 
 @dataclass(frozen=True)
@@ -118,6 +122,11 @@ class UninstallManager:
                 and ownership.get("codex_service_user") == CODEX_SERVICE_USER
             ):
                 self.runner.run("userdel", CODEX_SERVICE_USER, check=False)
+                self.runner.run(
+                    "gpasswd", "-d", "mcp-session-bridge", CODEX_SOCKET_GROUP, check=False
+                )
+                if ownership.get("codex_socket_group_created") is True:
+                    self.runner.run("groupdel", CODEX_SOCKET_GROUP, check=False)
             self.runner.run("systemctl", "daemon-reload", check=False)
             if self.layout.caddyfile.exists():
                 validation = self.runner.run("caddy", "validate", "--config", str(self.layout.caddyfile), check=False)
@@ -167,4 +176,10 @@ class UninstallManager:
         )
 
     def _managed_roots(self) -> tuple[Path, ...]:
-        return (self.layout.opt_root, self.layout.etc_root, self.layout.data_root, self.layout.backup_root)
+        return (
+            self.layout.opt_root,
+            self.layout.etc_root,
+            self.layout.data_root,
+            self.layout.backup_root,
+            self.layout.codex_state_root,
+        )

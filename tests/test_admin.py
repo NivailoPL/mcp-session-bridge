@@ -1326,6 +1326,12 @@ def test_codex_admin_api_auth_csrf_and_chat_contract(tmp_path, monkeypatch) -> N
     assert started.status_code == 200
     assert started.json()["login"]["user_code"] == "ABCD-EFGH"
     assert client.get("/admin/api/codex/auth/device/status").json()["codex"]["login_status"] == "authenticated"
+    assert client.post(
+        "/admin/api/codex/auth/device/cancel", headers={"x-csrf-token": csrf}
+    ).status_code == 200
+    assert client.post(
+        "/admin/api/codex/logout", headers={"x-csrf-token": csrf}
+    ).status_code == 200
 
     chatted = client.post(
         "/admin/api/codex/chat",
@@ -1374,6 +1380,26 @@ def test_codex_admin_api_sanitizes_unavailable_and_protocol_errors(tmp_path, mon
     assert chat.status_code == 502
     assert chat.json() == {"ok": False, "error": "Codex App Server request failed."}
     assert "bearer" not in chat.text
+
+
+def test_codex_expired_conversation_has_stable_error_code(tmp_path, monkeypatch) -> None:
+    main = _load_main(tmp_path, monkeypatch)
+
+    class ExpiredCodex:
+        async def chat(self, message, *, thread_id=None):
+            raise ValueError("Unknown or expired Codex conversation.")
+
+    main.admin.codex = ExpiredCodex()
+    client, csrf = _admin_client(main)
+    response = client.post(
+        "/admin/api/codex/chat",
+        json={"message": "Continue", "thread_id": "old-thread"},
+        headers={"x-csrf-token": csrf},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["code"] == "codex_conversation_expired"
+    assert response.headers["cache-control"] == "no-store"
 
 
 def _encoded_file(content: bytes, *, filename: str = "notes.md", scope_type: str = "session") -> dict:

@@ -1,6 +1,13 @@
 from __future__ import annotations
 
 import json
+import grp
+import os
+import shutil
+import socket
+import stat
+import subprocess
+import time
 from pathlib import Path
 
 import pytest
@@ -86,9 +93,9 @@ def _source_root(tmp_path: Path) -> Path:
         ),
         encoding="utf-8",
     )
-    lock_dir.joinpath("run-app-server.sh").write_text(
-        '#!/bin/sh\nexec codex app-server --listen "unix://$socket_path"\n',
-        encoding="utf-8",
+    shutil.copy2(
+        Path(__file__).parents[1] / "deploy/codex-runtime/run-app-server.sh",
+        lock_dir / "run-app-server.sh",
     )
     return source
 
@@ -185,6 +192,79 @@ def test_repair_failure_keeps_previous_runtime_current(tmp_path: Path) -> None:
     assert previous.joinpath("marker").read_text(encoding="utf-8") == "keep"
 
 
+def test_repair_restart_failure_rolls_back_runtime_and_unit(tmp_path: Path) -> None:
+    layout = Layout.for_root(tmp_path / "root")
+    runner = RecordingRunner()
+    manager = CodexRuntimeManager(layout, runner, _source_root(tmp_path))
+    manager.enable()
+    previous = layout.codex_runtime_current.resolve()
+    previous.joinpath("marker").write_text("keep", encoding="utf-8")
+    previous_unit = layout.codex_service_unit.read_text(encoding="utf-8")
+    runner.fail_on = ("systemctl", "restart")
+
+    with pytest.raises(RuntimeError, match="forced failure"):
+        manager.repair()
+
+    assert layout.codex_runtime_current.resolve() == previous
+    assert previous.joinpath("marker").read_text(encoding="utf-8") == "keep"
+    assert layout.codex_service_unit.read_text(encoding="utf-8") == previous_unit
+
+
+def test_state_preparation_rejects_symlink_without_touching_target(tmp_path: Path) -> None:
+    layout = Layout.for_root(tmp_path / "root")
+    layout.codex_state_root.mkdir(parents=True)
+    external = tmp_path / "external"
+    external.mkdir(mode=0o755)
+    layout.codex_home.symlink_to(external, target_is_directory=True)
+    manager = CodexRuntimeManager(layout, RecordingRunner(), _source_root(tmp_path))
+
+    with pytest.raises(RuntimeError, match="unsafe Codex state path"):
+        manager.enable()
+
+    assert stat.S_IMODE(external.stat().st_mode) == 0o755
+    assert layout.codex_home.is_symlink()
+
+
+def test_runtime_wrapper_sets_socket_group_mode(tmp_path: Path) -> None:
+    wrapper = Path(__file__).parents[1] / "deploy/codex-runtime/run-app-server.sh"
+    fake = tmp_path / "fake-codex"
+    fake.write_text(
+        "#!/usr/bin/env python3\n"
+        "import signal, socket, sys, time\n"
+        "path = next(x[7:] for x in sys.argv if x.startswith('unix://'))\n"
+        "sock = socket.socket(socket.AF_UNIX)\n"
+        "sock.bind(path)\n"
+        "sock.listen(1)\n"
+        "signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))\n"
+        "while True: time.sleep(1)\n",
+        encoding="utf-8",
+    )
+    fake.chmod(0o755)
+    runtime_dir = tmp_path / "run"
+    runtime_dir.mkdir()
+    socket_path = runtime_dir / "app.sock"
+    group = grp.getgrgid(os.getgid()).gr_name
+    process = subprocess.Popen(
+        ["sh", str(wrapper), str(socket_path), group, str(fake)],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    try:
+        for _ in range(100):
+            if socket_path.exists() and stat.S_IMODE(socket_path.stat().st_mode) == 0o660:
+                break
+            time.sleep(0.05)
+        assert socket_path.exists()
+        assert stat.S_IMODE(socket_path.stat().st_mode) == 0o660
+        probe = socket.socket(socket.AF_UNIX)
+        probe.connect(str(socket_path))
+        probe.close()
+    finally:
+        process.terminate()
+        process.wait(timeout=5)
+
+
 def test_release_reconcile_failure_is_best_effort_for_bridge(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -224,6 +304,7 @@ def test_release_reconcile_skips_unchanged_healthy_runtime(
             }
         },
     )
+    monkeypatch.setattr(manager, "_protocol_ready", lambda: True)
     npm_calls = sum(call[:2] == ("npm", "ci") for call in runner.calls)
 
     result = manager.reconcile_after_release()

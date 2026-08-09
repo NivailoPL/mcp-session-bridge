@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import hashlib
+import asyncio
 import json
 import os
 import shutil
+import stat
 import time
+import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -29,6 +32,19 @@ class CodexRuntimeLock:
     resolved: str
     integrity: str
     digest: str
+
+
+@dataclass(frozen=True)
+class _RuntimeStage:
+    lock: CodexRuntimeLock
+    target: Path
+    previous_current: Path | None
+    previous_target: Path | None
+    previous_unit: str | None
+
+
+class CodexBridgeRecoveryError(RuntimeError):
+    pass
 
 
 def load_runtime_lock(source_root: Path) -> CodexRuntimeLock:
@@ -62,6 +78,7 @@ class CodexRuntimeManager:
         self.layout = layout
         self.runner = runner
         self.source_root = source_root.resolve()
+        self._socket_group_created = False
 
     def inspect(self) -> dict[str, Any]:
         persisted = read_json(self.layout.codex_status_file) or {}
@@ -82,25 +99,32 @@ class CodexRuntimeManager:
                 "unit_enabled": enabled,
                 "active": active,
                 "socket": str(self.layout.codex_socket),
-                "socket_ready": self.layout.codex_socket.exists(),
+                "socket_ready": self._socket_ready(),
                 "last_error": persisted.get("error"),
             },
         }
 
     def enable(self) -> dict[str, Any]:
+        stage: _RuntimeStage | None = None
         try:
-            lock = self._stage_locked_runtime_and_unit()
+            stage = self._stage_locked_runtime_and_unit()
             self.runner.run("systemctl", "enable", "--now", CODEX_SERVICE_UNIT)
             self._require_service_active()
             self._refresh_bridge_socket_membership()
-            self._write_status("complete", desired_enabled=True, lock=lock)
+            self._write_status("complete", desired_enabled=True, lock=stage.lock)
+            self._finalize_stage(stage)
         except Exception as exc:
             if self.layout.codex_service_unit.exists():
                 self.runner.run(
                     "systemctl", "disable", "--now", CODEX_SERVICE_UNIT, check=False
                 )
+            if stage is not None:
+                self._rollback_stage(stage)
             self._write_status(
-                "failed", desired_enabled=False, error=str(exc), bridge_unchanged=True
+                "failed",
+                desired_enabled=False,
+                error=str(exc),
+                bridge_unchanged=not isinstance(exc, CodexBridgeRecoveryError),
             )
             raise
         result = self.inspect()
@@ -110,13 +134,19 @@ class CodexRuntimeManager:
 
     def repair(self) -> dict[str, Any]:
         desired_enabled = bool((read_json(self.layout.codex_status_file) or {}).get("desired_enabled"))
+        stage: _RuntimeStage | None = None
         try:
-            lock = self._stage_locked_runtime_and_unit()
+            stage = self._stage_locked_runtime_and_unit()
             if desired_enabled:
                 self.runner.run("systemctl", "restart", CODEX_SERVICE_UNIT)
                 self._require_service_active()
-            self._write_status("complete", desired_enabled=desired_enabled, lock=lock)
+            self._write_status("complete", desired_enabled=desired_enabled, lock=stage.lock)
+            self._finalize_stage(stage)
         except Exception as exc:
+            if stage is not None:
+                self._rollback_stage(stage)
+                if desired_enabled:
+                    self.runner.run("systemctl", "restart", CODEX_SERVICE_UNIT, check=False)
             self._write_status(
                 "failed",
                 desired_enabled=desired_enabled,
@@ -143,8 +173,8 @@ class CodexRuntimeManager:
         version_result = self.runner.run(str(binary), "--version", check=False)
         version_ok = version_result.returncode == 0 and CODEX_VERSION in version_result.stdout
         service_ok = bool(runtime["active"])
-        socket_ok = bool(runtime["socket_ready"])
-        ok = version_ok and service_ok and socket_ok
+        protocol_ok = service_ok and self._protocol_ready()
+        ok = version_ok and service_ok and protocol_ok
         return {
             "format_version": 1,
             "operation": "codex-runtime.verify",
@@ -153,7 +183,8 @@ class CodexRuntimeManager:
             "checks": {
                 "version": version_ok,
                 "service": service_ok,
-                "socket": socket_ok,
+                "socket": bool(runtime["socket_ready"]),
+                "protocol": protocol_ok,
             },
         }
 
@@ -177,7 +208,7 @@ class CodexRuntimeManager:
         if (
             inspection["installed_version"] == lock.version
             and inspection["active"]
-            and inspection["socket_ready"]
+            and self._protocol_ready()
             and persisted.get("lock_digest") == lock.digest
             and self.layout.codex_service_unit.exists()
             and self.layout.codex_service_unit.read_text(encoding="utf-8") == self._unit_text()
@@ -194,15 +225,25 @@ class CodexRuntimeManager:
             }
         return {"state": "complete", "changed": True, "runtime": result["runtime"]}
 
-    def _stage_locked_runtime_and_unit(self) -> CodexRuntimeLock:
+    def _stage_locked_runtime_and_unit(self) -> _RuntimeStage:
         self._ensure_host_runtime()
-        lock = self._install_locked_runtime()
-        self._prepare_identity_and_state()
-        atomic_write_text(self.layout.codex_service_unit, self._unit_text(), 0o644)
-        self.runner.run("systemctl", "daemon-reload")
-        return lock
+        previous_unit = (
+            self.layout.codex_service_unit.read_text(encoding="utf-8")
+            if self.layout.codex_service_unit.exists()
+            else None
+        )
+        lock, target, previous_current, previous_target = self._install_locked_runtime()
+        stage = _RuntimeStage(lock, target, previous_current, previous_target, previous_unit)
+        try:
+            self._prepare_identity_and_state()
+            atomic_write_text(self.layout.codex_service_unit, self._unit_text(), 0o644)
+            self.runner.run("systemctl", "daemon-reload")
+        except Exception:
+            self._rollback_stage(stage)
+            raise
+        return stage
 
-    def _install_locked_runtime(self) -> CodexRuntimeLock:
+    def _install_locked_runtime(self) -> tuple[CodexRuntimeLock, Path, Path | None, Path | None]:
         lock = load_runtime_lock(self.source_root)
         releases = self.layout.codex_runtime_releases
         releases.mkdir(mode=0o755, parents=True, exist_ok=True)
@@ -212,6 +253,11 @@ class CodexRuntimeManager:
             shutil.rmtree(temporary)
         temporary.mkdir(mode=0o755)
         lock_root = self.source_root / "deploy/codex-runtime"
+        previous_current = (
+            self.layout.codex_runtime_current.resolve()
+            if self.layout.codex_runtime_current.is_symlink()
+            else None
+        )
         shutil.copy2(lock_root / "package.json", temporary / "package.json")
         shutil.copy2(lock_root / "package-lock.json", temporary / "package-lock.json")
         shutil.copy2(lock_root / "run-app-server.sh", temporary / "run-app-server.sh")
@@ -236,12 +282,33 @@ class CodexRuntimeManager:
                 if previous.exists():
                     previous.rename(target)
                 raise
-            if previous.exists():
-                shutil.rmtree(previous)
         finally:
             if temporary.exists():
                 shutil.rmtree(temporary)
-        return lock
+        return lock, target, previous_current, previous if previous.exists() else None
+
+    def _finalize_stage(self, stage: _RuntimeStage) -> None:
+        if stage.previous_target is not None and stage.previous_target.exists():
+            shutil.rmtree(stage.previous_target)
+
+    def _rollback_stage(self, stage: _RuntimeStage) -> None:
+        if stage.target.exists():
+            shutil.rmtree(stage.target)
+        if stage.previous_target is not None and stage.previous_target.exists():
+            stage.previous_target.rename(stage.target)
+        if stage.previous_current is not None and stage.previous_current.exists():
+            switch_release(
+                self.layout.codex_runtime_current,
+                stage.previous_current,
+                temporary_name=".current-codex-runtime-rollback",
+            )
+        else:
+            self.layout.codex_runtime_current.unlink(missing_ok=True)
+        if stage.previous_unit is None:
+            self.layout.codex_service_unit.unlink(missing_ok=True)
+        else:
+            atomic_write_text(self.layout.codex_service_unit, stage.previous_unit, 0o644)
+        self.runner.run("systemctl", "daemon-reload", check=False)
 
     def _ensure_host_runtime(self) -> None:
         if self.layout.root != Path("/"):
@@ -266,6 +333,7 @@ class CodexRuntimeManager:
                 raise RuntimeError("Managed Bridge setup must be active before enabling Codex.")
             if self.runner.run("getent", "group", CODEX_SOCKET_GROUP, check=False).returncode != 0:
                 self.runner.run("groupadd", "--system", CODEX_SOCKET_GROUP)
+                self._socket_group_created = True
             if self.runner.run("getent", "group", CODEX_SERVICE_USER, check=False).returncode != 0:
                 self.runner.run("groupadd", "--system", CODEX_SERVICE_USER)
             if self.runner.run("id", "-u", CODEX_SERVICE_USER, check=False).returncode != 0:
@@ -287,16 +355,22 @@ class CodexRuntimeManager:
             (self.layout.codex_home, 0o700),
             (self.layout.codex_workspace, 0o700),
         ):
-            path.mkdir(mode=mode, parents=True, exist_ok=True)
+            if path.exists() or path.is_symlink():
+                info = path.lstat()
+                if stat.S_ISLNK(info.st_mode) or not stat.S_ISDIR(info.st_mode):
+                    raise RuntimeError(f"Refusing unsafe Codex state path: {path}")
+            else:
+                path.mkdir(mode=mode, parents=True)
             path.chmod(mode)
         if self.layout.root == Path("/"):
-            for path in (
-                self.layout.codex_state_root,
-                self.layout.codex_home,
-                self.layout.codex_workspace,
-            ):
+            self.runner.run(
+                "chown", "--no-dereference", f"root:{CODEX_SERVICE_USER}",
+                str(self.layout.codex_state_root),
+            )
+            for path in (self.layout.codex_home, self.layout.codex_workspace):
                 self.runner.run(
-                    "chown", f"{CODEX_SERVICE_USER}:{CODEX_SERVICE_USER}", str(path)
+                    "chown", "--no-dereference",
+                    f"{CODEX_SERVICE_USER}:{CODEX_SERVICE_USER}", str(path),
                 )
         self._record_ownership()
 
@@ -318,6 +392,8 @@ class CodexRuntimeManager:
         )
         ownership["paths"] = sorted(paths)
         ownership["codex_service_user"] = CODEX_SERVICE_USER
+        if self._socket_group_created:
+            ownership["codex_socket_group_created"] = True
         atomic_write_json(self.layout.ownership_file, ownership, 0o640)
 
     def _write_status(
@@ -367,17 +443,68 @@ class CodexRuntimeManager:
         result = self.runner.run("systemctl", "is-active", CODEX_SERVICE_UNIT, check=False)
         if result.returncode != 0 or result.stdout.strip() != "active":
             raise RuntimeError(result.stderr.strip() or "Codex app-server did not become active.")
+        for _ in range(20):
+            if self._protocol_ready():
+                return
+            time.sleep(0.25)
+        raise RuntimeError("Codex app-server protocol did not become ready.")
 
     def _refresh_bridge_socket_membership(self) -> None:
         if self.layout.root != Path("/"):
             return
-        self.runner.run("systemctl", "restart", "mcp-session-bridge.service")
+        restarted = self.runner.run(
+            "systemctl", "restart", "mcp-session-bridge.service", check=False
+        )
         result = self.runner.run(
             "systemctl", "is-active", "mcp-session-bridge.service", check=False
         )
-        if result.returncode != 0 or result.stdout.strip() != "active":
+        if restarted.returncode != 0 or result.returncode != 0 or result.stdout.strip() != "active":
             self.runner.run("systemctl", "start", "mcp-session-bridge.service", check=False)
-            raise RuntimeError("Bridge did not recover after refreshing socket-group membership.")
+        if not self._bridge_http_ready():
+            self.runner.run("systemctl", "start", "mcp-session-bridge.service", check=False)
+            if not self._bridge_http_ready():
+                raise CodexBridgeRecoveryError(
+                    "Bridge did not recover after refreshing socket-group membership."
+                )
+
+    def _socket_ready(self) -> bool:
+        try:
+            return stat.S_ISSOCK(self.layout.codex_socket.stat().st_mode)
+        except OSError:
+            return False
+
+    def _protocol_ready(self) -> bool:
+        if not self._socket_ready():
+            return False
+        if self.layout.root != Path("/"):
+            return True
+        try:
+            from app.codex_app_server import CodexAppServerClient
+
+            async def probe() -> bool:
+                client = CodexAppServerClient(
+                    socket_path=self.layout.codex_socket,
+                    workspace_dir=self.layout.codex_workspace,
+                    expected_version=CODEX_VERSION,
+                    rpc_timeout_seconds=3.0,
+                )
+                try:
+                    await client.status()
+                    return True
+                finally:
+                    await client.close()
+
+            return asyncio.run(probe())
+        except Exception:
+            return False
+
+    @staticmethod
+    def _bridge_http_ready() -> bool:
+        try:
+            with urllib.request.urlopen("http://127.0.0.1:8787/healthz", timeout=3) as response:
+                return response.status == 200
+        except Exception:
+            return False
 
     def _unit_text(self) -> str:
         runtime = self.layout.codex_runtime_current

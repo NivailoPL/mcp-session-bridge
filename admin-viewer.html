@@ -2218,6 +2218,9 @@
           pushCodexMessage({ role: "model", content: payload.chat.message });
           renderCodex();
         } catch (error) {
+          if (error.code === "codex_conversation_expired") {
+            state.codex.threadId = null;
+          }
           pushCodexMessage({ role: "error", content: error.message });
           renderCodex(error.message, "error");
         } finally {
@@ -5413,6 +5416,7 @@
         if (!response.ok || (payload && payload.ok === false)) {
           const error = new Error((payload && payload.error) || `HTTP ${response.status}`);
           error.status = response.status;
+          error.code = payload && payload.code;
           throw error;
         }
         return payload || { ok: true };

@@ -323,6 +323,16 @@ class AdminHandlers:
         try:
             chat = await self.codex.chat(message, thread_id=thread_id)
         except ValueError as exc:
+            if str(exc) == "Unknown or expired Codex conversation.":
+                return JSONResponse(
+                    {
+                        "ok": False,
+                        "error": str(exc),
+                        "code": "codex_conversation_expired",
+                    },
+                    status_code=400,
+                    headers=self._no_store_headers(),
+                )
             return self._json_error(str(exc), status_code=400)
         except CodexAppServerErrorTypes as exc:
             return self._codex_error(exc)
