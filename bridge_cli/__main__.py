@@ -87,6 +87,10 @@ def build_parser() -> argparse.ArgumentParser:
     uninstall.add_argument("--yes", action="store_true")
     uninstall.add_argument("--allow-unverified-legacy", action="store_true")
     uninstall.add_argument("--json", action="store_true", dest="as_json")
+    deploy = commands.add_parser("deploy", help="Deploy the current committed checkout.")
+    deploy.add_argument("--source", type=Path, help=argparse.SUPPRESS)
+    deploy.add_argument("--yes", action="store_true")
+    deploy.add_argument("--json", action="store_true", dest="as_json")
     update = commands.add_parser("update", help="Check for or install a stable update.")
     update.add_argument("--check", action="store_true")
     commands.add_parser("rollback", help="Restore the previous managed release.")
@@ -132,7 +136,12 @@ def main(argv: list[str] | None = None) -> int:
             os.execvp(command[0], command)
         if args.command == "version":
             report = StatusCollector(layout, runner, probe_http=False).collect()
-            print(f"Bridge {report.version['current']} (database schema {report.version['database_schema']})")
+            revision = report.version.get("commit")
+            suffix = f"; commit {revision[:12]}" if revision else ""
+            print(
+                f"Bridge {report.version['current']} "
+                f"(database schema {report.version['database_schema']}{suffix})"
+            )
             return 0
         if args.command == "migrate":
             _require_root("migrate")
@@ -152,6 +161,9 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "installation":
             _require_root("installation")
             return _installation(args, layout, runner)
+        if args.command == "deploy":
+            _require_root("deploy")
+            return _deploy(args, layout, runner)
         if args.command in {"update", "rollback"}:
             from bridge_cli.release import run_release_command
             _require_root(args.command)
@@ -160,6 +172,56 @@ def main(argv: list[str] | None = None) -> int:
         print(f"FAILED: {exc}", file=sys.stderr)
         return 1
     return 2
+
+
+def _deploy(args: argparse.Namespace, layout: Layout, runner: SubprocessRunner) -> int:
+    from bridge_cli.release import CheckoutDeployer
+
+    installation = read_json(layout.installation_file) or {}
+    source_root = args.source
+    if source_root is None:
+        running_root = Path(__file__).resolve().parents[1]
+        configured = installation.get("source_root")
+        source_root = Path(str(configured)) if configured else running_root
+    manager = CheckoutDeployer(layout, runner)
+    plan = manager.plan(source_root)
+    if plan.already_active:
+        result = {
+            "ok": True,
+            "operation": "deploy",
+            "state": "current",
+            "version": plan.version,
+            "commit": plan.commit,
+            "release_id": plan.release_id,
+        }
+    else:
+        if not args.yes:
+            if not sys.stdin.isatty():
+                raise ValueError("Non-interactive deploy requires --yes.")
+            print("Deploy current committed checkout")
+            print(f"Source: {plan.source_root}")
+            print(f"Branch: {plan.branch}")
+            print(f"Commit: {plan.commit[:12]}")
+            print(f"Release: {plan.release_id}")
+            print("- build an immutable release from Git HEAD")
+            print("- create a final database backup")
+            print("- briefly restart Bridge")
+            print("- verify health and roll back automatically on failure")
+            if plan.untracked_files:
+                print(f"NOTICE {len(plan.untracked_files)} untracked file(s) will not be deployed.")
+            if input("Deploy now? [y/N]: ").strip().lower() not in {"y", "yes"}:
+                print("Deploy cancelled; nothing changed.")
+                return 0
+        result = manager.deploy(plan.source_root, expected_commit=plan.commit)
+    if args.as_json:
+        print(json.dumps(result, indent=2, sort_keys=True))
+    elif result["state"] == "current":
+        print(f"PASS Commit {result['commit'][:12]} is already active.")
+    else:
+        print(f"PASS Deployed commit {result['commit'][:12]} as {result['release_id']}.")
+        print(f"Safety backup: {result['database_backup']}")
+        print("Global mcp-bridge and the background service now use this release.")
+    return 0
 
 
 def _database(args: argparse.Namespace, layout: Layout, runner: SubprocessRunner) -> int:
@@ -504,7 +566,9 @@ def _print_report(report, as_json: bool, theme: TerminalTheme | None = None) -> 
         return
     active_theme = theme or TerminalTheme.detect()
     print(active_theme.heading(f"Bridge status: {report.overall.upper()}"))
-    print(f"Version: {report.version['current']}")
+    revision = report.version.get("commit")
+    suffix = f" ({revision[:12]})" if revision else ""
+    print(f"Version: {report.version['current']}{suffix}")
     for check in report.checks:
         label = check.state.replace("_", " ").upper()
         print(f"[{label}] {check.label}: {check.message}")

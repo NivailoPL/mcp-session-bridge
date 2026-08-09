@@ -38,6 +38,18 @@ class ReleaseInfo:
     notes: str
 
 
+@dataclass(frozen=True)
+class CheckoutPlan:
+    source_root: Path
+    version: str
+    commit: str
+    branch: str
+    release_id: str
+    previous_release: Path
+    already_active: bool
+    untracked_files: tuple[str, ...]
+
+
 class ReleaseClient:
     def __init__(
         self,
@@ -170,89 +182,37 @@ class UpdateManager:
                 return {"ok": True, "state": "current", "version": previous_version}
             self.layout.releases_root.mkdir(mode=0o755, parents=True, exist_ok=True)
             self.layout.backup_root.mkdir(mode=0o700, parents=True, exist_ok=True)
-            previous_release = self.layout.current_link.resolve()
-            backup_dir = self._new_backup_dir("update")
-            database_backup = backup_dir / "bridge.sqlite3"
-            stopped = False
-            live_backup_ready = False
-            try:
-                release_dir = self._prepare_release(release)
-                preflight_db = backup_dir / "preflight.sqlite3"
-                sqlite_backup(self.layout.db_path, preflight_db)
-                self.runner.run(
-                    str(release_dir / ".venv/bin/python"), "-m", "bridge_cli",
-                    "migrate", "--db", str(preflight_db),
-                )
-                self.runner.run("systemctl", "stop", "mcp-session-bridge.service")
-                stopped = True
-                sqlite_backup(self.layout.db_path, database_backup)
-                live_backup_ready = True
-                self.runner.run(
-                    str(release_dir / ".venv/bin/python"), "-m", "bridge_cli",
-                    "migrate", "--db", str(self.layout.db_path),
-                )
-                switch_release(self.layout.current_link, release_dir, temporary_name=".current-update")
-                self.runner.run("systemctl", "start", "mcp-session-bridge.service")
-                active = self.runner.run(
-                    "systemctl", "is-active", "mcp-session-bridge.service", check=False
-                )
-                if active.returncode != 0:
-                    raise RuntimeError(active.stderr.strip() or "Bridge did not become active.")
-                if self.layout.root == Path("/"):
-                    self._verify_http(installation)
-                installation["version"] = release.version
-                installation["updated_at"] = int(time.time())
-                atomic_write_json(self.layout.installation_file, installation)
-                receipt = {
+            release_dir = self._prepare_release(release)
+            result = self._activate_prepared_release(
+                installation,
+                release_dir,
+                operation="update",
+                target_version=release.version,
+                installation_updates={"version": release.version, "updated_at": int(time.time())},
+            )
+            atomic_write_json(
+                self.layout.update_file,
+                {
                     "format_version": 1,
-                    "operation": "update",
-                    "state": "complete",
-                    "previous_version": previous_version,
-                    "version": release.version,
-                    "previous_release": str(previous_release),
-                    "database_backup": str(database_backup),
-                    "finished_at": int(time.time()),
-                }
-                atomic_write_json(self.layout.operation_file, receipt)
-                atomic_write_json(
-                    self.layout.update_file,
-                    {
-                        "format_version": 1,
-                        "state": "current",
-                        "current": release.version,
-                        "latest": release.version,
-                        "last_checked": _now_iso(),
-                        "checked_at": int(time.time()),
-                        "release_url": release.release_url,
-                    },
-                )
-                return {"ok": True, **receipt}
-            except Exception as exc:
-                if stopped:
-                    self.runner.run("systemctl", "stop", "mcp-session-bridge.service", check=False)
-                    switch_release(self.layout.current_link, previous_release, temporary_name=".current-update")
-                    if live_backup_ready:
-                        self._restore_database(database_backup)
-                    self.runner.run("systemctl", "start", "mcp-session-bridge.service", check=False)
-                failed = {
-                    "format_version": 1,
-                    "operation": "update",
-                    "state": "failed_rolled_back" if stopped else "failed",
-                    "previous_version": previous_version,
-                    "version": release.version,
-                    "error": str(exc),
-                    "finished_at": int(time.time()),
-                }
-                atomic_write_json(self.layout.operation_file, failed)
-                if stopped:
-                    raise RuntimeError(f"Update failed and was rolled back: {exc}") from exc
-                raise
+                    "state": "current",
+                    "current": release.version,
+                    "latest": release.version,
+                    "last_checked": _now_iso(),
+                    "checked_at": int(time.time()),
+                    "release_url": release.release_url,
+                },
+            )
+            return result
 
     def rollback(self) -> dict[str, Any]:
         with self.operation_lock():
             receipt = read_json(self.layout.operation_file)
-            if not receipt or receipt.get("operation") != "update" or receipt.get("state") != "complete":
-                raise RuntimeError("No completed update receipt is available for rollback.")
+            if (
+                not receipt
+                or receipt.get("operation") not in {"update", "deploy"}
+                or receipt.get("state") != "complete"
+            ):
+                raise RuntimeError("No completed update or deploy receipt is available for rollback.")
             previous_release = Path(str(receipt["previous_release"]))
             database_backup = Path(str(receipt["database_backup"]))
             if not previous_release.exists() or not database_backup.exists():
@@ -283,6 +243,11 @@ class UpdateManager:
                 ) from exc
             installation = self._installation()
             installation["version"] = str(receipt["previous_version"])
+            if receipt.get("operation") == "deploy":
+                _restore_optional_field(installation, "commit", receipt.get("previous_commit"))
+                _restore_optional_field(
+                    installation, "release_id", receipt.get("previous_release_id")
+                )
             installation["updated_at"] = int(time.time())
             atomic_write_json(self.layout.installation_file, installation)
             rollback_receipt = {
@@ -296,6 +261,95 @@ class UpdateManager:
             }
             atomic_write_json(self.layout.operation_file, rollback_receipt)
             return {"ok": True, **rollback_receipt}
+
+    def _activate_prepared_release(
+        self,
+        installation: dict[str, Any],
+        release_dir: Path,
+        *,
+        operation: str,
+        target_version: str,
+        installation_updates: dict[str, Any],
+        receipt_fields: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        previous_version = str(installation["version"])
+        previous_release = self.layout.current_link.resolve()
+        previous_commit = installation.get("commit")
+        previous_release_id = installation.get("release_id")
+        backup_dir = self._new_backup_dir(operation)
+        database_backup = backup_dir / "bridge.sqlite3"
+        stopped = False
+        live_backup_ready = False
+        try:
+            preflight_db = backup_dir / "preflight.sqlite3"
+            sqlite_backup(self.layout.db_path, preflight_db)
+            self.runner.run(
+                str(release_dir / ".venv/bin/python"), "-m", "bridge_cli",
+                "migrate", "--db", str(preflight_db),
+            )
+            self.runner.run("systemctl", "stop", "mcp-session-bridge.service")
+            stopped = True
+            sqlite_backup(self.layout.db_path, database_backup)
+            live_backup_ready = True
+            self.runner.run(
+                str(release_dir / ".venv/bin/python"), "-m", "bridge_cli",
+                "migrate", "--db", str(self.layout.db_path),
+            )
+            switch_release(
+                self.layout.current_link,
+                release_dir,
+                temporary_name=f".current-{operation}",
+            )
+            self.runner.run("systemctl", "start", "mcp-session-bridge.service")
+            active = self.runner.run(
+                "systemctl", "is-active", "mcp-session-bridge.service", check=False
+            )
+            if active.returncode != 0:
+                raise RuntimeError(active.stderr.strip() or "Bridge did not become active.")
+            if self.layout.root == Path("/"):
+                self._verify_http(installation)
+            installation.update(installation_updates)
+            atomic_write_json(self.layout.installation_file, installation)
+            receipt = {
+                "format_version": 1,
+                "operation": operation,
+                "state": "complete",
+                "previous_version": previous_version,
+                "version": target_version,
+                "previous_release": str(previous_release),
+                "previous_commit": previous_commit,
+                "previous_release_id": previous_release_id,
+                "database_backup": str(database_backup),
+                "finished_at": int(time.time()),
+                **(receipt_fields or {}),
+            }
+            atomic_write_json(self.layout.operation_file, receipt)
+            return {"ok": True, **receipt}
+        except Exception as exc:
+            if stopped:
+                self.runner.run("systemctl", "stop", "mcp-session-bridge.service", check=False)
+                switch_release(
+                    self.layout.current_link,
+                    previous_release,
+                    temporary_name=f".current-{operation}",
+                )
+                if live_backup_ready:
+                    self._restore_database(database_backup)
+                self.runner.run("systemctl", "start", "mcp-session-bridge.service", check=False)
+            failed = {
+                "format_version": 1,
+                "operation": operation,
+                "state": "failed_rolled_back" if stopped else "failed",
+                "previous_version": previous_version,
+                "version": target_version,
+                "error": str(exc),
+                "finished_at": int(time.time()),
+            }
+            atomic_write_json(self.layout.operation_file, failed)
+            if stopped:
+                label = "Update" if operation == "update" else "Deploy"
+                raise RuntimeError(f"{label} failed and was rolled back: {exc}") from exc
+            raise
 
     def _prepare_release(self, release: ReleaseInfo) -> Path:
         final = self.layout.release_dir(release.version)
@@ -381,6 +435,151 @@ class UpdateManager:
         return shared_operation_lock(
             self.layout.operation_lock_file, self.layout.legacy_operation_lock_file
         )
+
+
+class CheckoutDeployer(UpdateManager):
+    def plan(self, source_root: Path) -> CheckoutPlan:
+        source_root = source_root.expanduser().resolve()
+        project = source_root / "pyproject.toml"
+        if not project.exists():
+            raise RuntimeError(f"Checkout is missing pyproject.toml: {source_root}")
+        top_level = self.runner.run(
+            "git", "-C", str(source_root), "rev-parse", "--show-toplevel"
+        ).stdout.strip()
+        if Path(top_level).resolve() != source_root:
+            raise RuntimeError(f"Deploy must run from the repository root: {top_level}")
+        dirty = self.runner.run(
+            "git", "-C", str(source_root), "status", "--porcelain", "--untracked-files=no"
+        ).stdout.strip()
+        if dirty:
+            raise RuntimeError("Checkout has tracked changes. Commit or discard them before deploy.")
+        commit = self.runner.run(
+            "git", "-C", str(source_root), "rev-parse", "HEAD"
+        ).stdout.strip()
+        if not re.fullmatch(r"[0-9a-f]{40}", commit):
+            raise RuntimeError("Checkout HEAD is not a valid Git commit.")
+        branch = self.runner.run(
+            "git", "-C", str(source_root), "branch", "--show-current"
+        ).stdout.strip() or "detached"
+        untracked_raw = self.runner.run(
+            "git", "-C", str(source_root), "ls-files", "--others", "--exclude-standard"
+        ).stdout
+        untracked = tuple(line for line in untracked_raw.splitlines() if line)
+        with project.open("rb") as handle:
+            version = str(tomllib.load(handle).get("project", {}).get("version", ""))
+        _parse_version(version)
+        release_id = f"{version}-git-{commit[:12]}"
+        previous_release = self.layout.current_link.resolve()
+        return CheckoutPlan(
+            source_root=source_root,
+            version=version,
+            commit=commit,
+            branch=branch,
+            release_id=release_id,
+            previous_release=previous_release,
+            already_active=previous_release == self.layout.release_dir(release_id).resolve(),
+            untracked_files=untracked,
+        )
+
+    def deploy(
+        self, source_root: Path, *, expected_commit: str | None = None
+    ) -> dict[str, Any]:
+        with self.operation_lock():
+            plan = self.plan(source_root)
+            if expected_commit is not None and plan.commit != expected_commit:
+                raise RuntimeError(
+                    f"Checkout changed after confirmation: {expected_commit[:12]} -> {plan.commit[:12]}."
+                )
+            if plan.already_active:
+                return {
+                    "ok": True,
+                    "operation": "deploy",
+                    "state": "current",
+                    "version": plan.version,
+                    "commit": plan.commit,
+                    "release_id": plan.release_id,
+                }
+            installation = self._installation()
+            self.layout.releases_root.mkdir(mode=0o755, parents=True, exist_ok=True)
+            self.layout.backup_root.mkdir(mode=0o700, parents=True, exist_ok=True)
+            release_dir = self._prepare_checkout(plan)
+            return self._activate_prepared_release(
+                installation,
+                release_dir,
+                operation="deploy",
+                target_version=plan.version,
+                installation_updates={
+                    "version": plan.version,
+                    "commit": plan.commit,
+                    "release_id": plan.release_id,
+                    "source_root": str(plan.source_root),
+                    "deployed_at": int(time.time()),
+                },
+                receipt_fields={
+                    "commit": plan.commit,
+                    "release_id": plan.release_id,
+                    "branch": plan.branch,
+                    "untracked_files_excluded": len(plan.untracked_files),
+                },
+            )
+
+    def _prepare_checkout(self, plan: CheckoutPlan) -> Path:
+        final = self.layout.release_dir(plan.release_id)
+        metadata_file = final / ".bridge-release.json"
+        if final.exists():
+            metadata = read_json(metadata_file)
+            if metadata.get("commit") != plan.commit:
+                raise RuntimeError(f"Existing release directory does not match {plan.commit}.")
+            return final
+        with tempfile.TemporaryDirectory(
+            prefix=".bridge-deploy-", dir=self.layout.releases_root
+        ) as raw:
+            temporary = Path(raw)
+            archive = temporary / "checkout.tar.gz"
+            extracted = temporary / "checkout"
+            self.runner.run(
+                "git", "-C", str(plan.source_root), "archive", "--format=tar.gz",
+                f"--output={archive}", plan.commit,
+            )
+            safe_extract(archive, extracted)
+            with (extracted / "pyproject.toml").open("rb") as handle:
+                archived_version = str(
+                    tomllib.load(handle).get("project", {}).get("version", "")
+                )
+            if archived_version != plan.version:
+                raise RuntimeError(
+                    f"Archived checkout version changed: {archived_version} != {plan.version}."
+                )
+            staging = final.with_name(f".{plan.release_id}.staging-{os.getpid()}")
+            if staging.exists():
+                shutil.rmtree(staging)
+            shutil.copytree(extracted, staging)
+            try:
+                self.runner.run("uv", "sync", "--frozen", "--no-dev", "--project", str(staging))
+                atomic_write_json(
+                    staging / ".bridge-release.json",
+                    {
+                        "format_version": 1,
+                        "kind": "checkout",
+                        "version": plan.version,
+                        "commit": plan.commit,
+                        "branch": plan.branch,
+                        "created_at": int(time.time()),
+                    },
+                )
+                staging.rename(final)
+            except Exception:
+                if staging.exists():
+                    shutil.rmtree(staging)
+                raise
+        return final
+
+
+def _restore_optional_field(target: dict[str, Any], key: str, value: Any) -> None:
+    if value is None:
+        target.pop(key, None)
+    else:
+        target[key] = value
 
 
 def run_release_command(args: Any, layout: Layout, runner: Runner) -> int:

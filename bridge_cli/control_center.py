@@ -112,6 +112,11 @@ class ControlCenter:
                 MenuItem("uninstall", "Uninstall Bridge", "Preview scoped removal and preserve the database"),
             ],
             "release": [
+                MenuItem(
+                    "deploy",
+                    "Deploy Current Checkout",
+                    "Install the current committed Git revision with backup and rollback",
+                ),
                 MenuItem("stage", "Stage current checkout", "Prepare release files without changing the live service"),
                 MenuItem("update", "Check for update", "Use mcp-bridge update --check"),
             ],
@@ -150,6 +155,8 @@ class ControlCenter:
                 self.wizard._configure_adoption()
         elif section == "installation" and action == "uninstall":
             self._uninstall()
+        elif section == "release" and action == "deploy":
+            self._deploy_checkout()
         elif section == "release" and action == "stage":
             with operation_lock(self.wizard.layout.operation_lock_file, self.wizard.layout.legacy_operation_lock_file):
                 self.wizard.installer.stage_release()
@@ -191,6 +198,40 @@ class ControlCenter:
             self.wizard.input("Press Enter to return.")
         elif section == "verify":
             self._verify_action(action)
+
+    def _deploy_checkout(self) -> None:
+        from bridge_cli.release import CheckoutDeployer
+
+        manager = CheckoutDeployer(self.wizard.layout, self.wizard.runner)
+        plan = manager.plan(self.wizard.source_root)
+        if plan.already_active:
+            self.wizard.output(f"PASS Commit {plan.commit[:12]} is already active.")
+            self.wizard.input("Press Enter to return.")
+            return
+        lines = [
+            "Deploy current committed checkout",
+            f"Source: {plan.source_root}",
+            f"Branch: {plan.branch}",
+            f"Commit: {plan.commit[:12]}",
+            f"Release: {plan.release_id}",
+            "- create a final database backup",
+            "- briefly restart Bridge",
+            "- verify health and roll back automatically on failure",
+        ]
+        if plan.untracked_files:
+            lines.append(
+                f"NOTICE {len(plan.untracked_files)} untracked file(s) will not be deployed."
+            )
+        self.wizard.output("\n".join(lines))
+        if self.wizard.input("Deploy now? [y/N]: ").strip().lower() not in {"y", "yes"}:
+            self.wizard.output("Deploy cancelled; nothing changed.")
+            return
+        result = manager.deploy(plan.source_root, expected_commit=plan.commit)
+        self.wizard.output(
+            f"PASS Deployed commit {result['commit'][:12]} as {result['release_id']}.\n"
+            f"Safety backup: {result['database_backup']}"
+        )
+        self.wizard.input("Press Enter to return.")
 
     def _database_action(self, action: str) -> None:
         if action == "verify":

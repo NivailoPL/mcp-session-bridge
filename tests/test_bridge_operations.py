@@ -186,6 +186,29 @@ def test_status_collector_reports_managed_installation(tmp_path: Path) -> None:
     assert next(check for check in report.checks if check.id == "database").state == "pass"
 
 
+def test_status_collector_reports_deployed_checkout_revision(tmp_path: Path) -> None:
+    layout = Layout.for_root(tmp_path)
+    layout.state_root.mkdir(parents=True)
+    layout.installation_file.write_text(
+        json.dumps(
+            {
+                "mode": "managed",
+                "version": "0.4.0",
+                "commit": "a" * 40,
+                "release_id": "0.4.0-git-aaaaaaaaaaaa",
+                "source_root": "/srv/bridge",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    report = StatusCollector(layout, RecordingRunner(), probe_http=False).collect()
+
+    assert report.version["commit"] == "a" * 40
+    assert report.version["release_id"] == "0.4.0-git-aaaaaaaaaaaa"
+    assert report.installation["source_root"] == "/srv/bridge"
+
+
 def test_repeated_setup_preserves_bridge_secret(tmp_path: Path) -> None:
     source = tmp_path / "source"
     source.mkdir()

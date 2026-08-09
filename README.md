@@ -40,6 +40,14 @@ mcp-bridge status
 mcp-bridge doctor
 ```
 
+After committing changes in the server checkout, deploy that exact Git revision with:
+
+```bash
+./mcp-bridge deploy
+```
+
+Deploy creates an immutable release named with the commit hash, excludes untracked files, makes a final database backup, switches the managed service, verifies health, and automatically restores the previous release and database on failure. After the first checkout deployment, the global `mcp-bridge deploy` command finds the configured source checkout automatically.
+
 Portable database and lifecycle commands are also available without the menu:
 
 ```bash

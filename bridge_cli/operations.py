@@ -53,6 +53,8 @@ class StatusCollector:
             version={
                 "current": str(installation.get("version") or BRIDGE_VERSION),
                 "database_schema": self._schema_version(),
+                "release_id": installation.get("release_id"),
+                "commit": installation.get("commit"),
             },
             update=update,
             checks=checks,
@@ -61,6 +63,7 @@ class StatusCollector:
                 "public_base_url": installation.get("public_base_url"),
                 "resource_path": installation.get("resource_path", "/mcp"),
                 "installed_at": installation.get("installed_at"),
+                "source_root": installation.get("source_root"),
             },
             last_operation=read_json(self.layout.operation_file),
         )
