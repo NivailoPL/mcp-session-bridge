@@ -116,7 +116,14 @@ class CodexAppServerClient:
         except ImportError as exc:  # pragma: no cover - packaging guard
             raise CodexUnavailableError("Codex transport dependency is unavailable.") from exc
         try:
-            return await unix_connect(str(self.socket_path), uri="ws://localhost/")
+            # The pinned app-server's tungstenite transport rejects the
+            # permessage-deflate offer that websockets enables by default.
+            return await unix_connect(
+                str(self.socket_path),
+                uri="ws://localhost/",
+                compression=None,
+                open_timeout=self.rpc_timeout_seconds,
+            )
         except (OSError, TimeoutError) as exc:
             raise CodexUnavailableError("Codex App Server is unavailable.") from exc
 
