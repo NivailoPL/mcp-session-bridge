@@ -349,6 +349,7 @@ class UpdateManager:
     def _prepare_release(self, release: ReleaseInfo) -> Path:
         final = self.layout.release_dir(release.version)
         if final.exists():
+            self._ensure_release_environment(final)
             return final
         with tempfile.TemporaryDirectory(prefix=".bridge-update-", dir=self.layout.releases_root) as raw:
             temporary = Path(raw)
@@ -376,9 +377,36 @@ class UpdateManager:
             if staging.exists():
                 shutil.rmtree(staging)
             shutil.copytree(root, staging)
-            self.runner.run("uv", "sync", "--frozen", "--no-dev", "--project", str(staging))
-            staging.rename(final)
+            try:
+                staging.rename(final)
+                self._ensure_release_environment(final)
+            except Exception:
+                if staging.exists():
+                    shutil.rmtree(staging)
+                if final.exists():
+                    shutil.rmtree(final)
+                raise
         return final
+
+    def _ensure_release_environment(self, release_dir: Path) -> None:
+        python = release_dir / ".venv/bin/python"
+        uvicorn = release_dir / ".venv/bin/uvicorn"
+        expected = f"#!{python}"
+        if uvicorn.exists():
+            first_line = uvicorn.read_text(encoding="utf-8").splitlines()[0]
+            if first_line == expected:
+                return
+        environment = release_dir / ".venv"
+        if environment.exists():
+            shutil.rmtree(environment)
+        self.runner.run(
+            "uv", "sync", "--frozen", "--no-dev", "--project", str(release_dir)
+        )
+        if not uvicorn.exists():
+            raise RuntimeError(f"Release environment is missing executable: {uvicorn}")
+        first_line = uvicorn.read_text(encoding="utf-8").splitlines()[0]
+        if first_line != expected:
+            raise RuntimeError(f"Release executable points outside its immutable directory: {uvicorn}")
 
     def _installation(self) -> dict[str, Any]:
         installation = read_json(self.layout.installation_file)
@@ -555,6 +583,7 @@ class CheckoutDeployer(UpdateManager):
             metadata = read_json(metadata_file)
             if metadata.get("commit") != plan.commit:
                 raise RuntimeError(f"Existing release directory does not match {plan.commit}.")
+            self._ensure_release_environment(final)
             return final
         with tempfile.TemporaryDirectory(
             prefix=".bridge-deploy-", dir=self.layout.releases_root
@@ -580,7 +609,6 @@ class CheckoutDeployer(UpdateManager):
                 shutil.rmtree(staging)
             shutil.copytree(extracted, staging)
             try:
-                self.runner.run("uv", "sync", "--frozen", "--no-dev", "--project", str(staging))
                 atomic_write_json(
                     staging / ".bridge-release.json",
                     {
@@ -593,9 +621,12 @@ class CheckoutDeployer(UpdateManager):
                     },
                 )
                 staging.rename(final)
+                self._ensure_release_environment(final)
             except Exception:
                 if staging.exists():
                     shutil.rmtree(staging)
+                if final.exists():
+                    shutil.rmtree(final)
                 raise
         return final
 

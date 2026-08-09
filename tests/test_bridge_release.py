@@ -39,6 +39,15 @@ class RecordingRunner:
     def run(self, *args: str, check: bool = True):
         self.calls.append(tuple(args))
 
+        if args[:2] == ("uv", "sync"):
+            project = Path(args[args.index("--project") + 1])
+            python = project / ".venv/bin/python"
+            python.parent.mkdir(parents=True, exist_ok=True)
+            python.write_text("", encoding="utf-8")
+            (project / ".venv/bin/uvicorn").write_text(
+                f"#!{python}\n", encoding="utf-8"
+            )
+
         class Result:
             returncode = 1 if self.fail_on and tuple(args[: len(self.fail_on)]) == self.fail_on else 0
             stdout = "active\n" if returncode == 0 else ""
@@ -54,11 +63,6 @@ class CheckoutRunner(RecordingRunner):
     def run(self, *args: str, check: bool = True):
         if args[0] == "git":
             return subprocess.run(args, check=check, capture_output=True, text=True)
-        if args[:2] == ("uv", "sync"):
-            project = Path(args[args.index("--project") + 1])
-            python = project / ".venv/bin/python"
-            python.parent.mkdir(parents=True)
-            python.write_text("", encoding="utf-8")
         return super().run(*args, check=check)
 
 
@@ -197,6 +201,10 @@ def test_checkout_deploy_creates_commit_release_and_switches_current(tmp_path: P
     assert installation["commit"] == plan.commit
     assert installation["release_id"] == result["release_id"]
     assert Path(result["database_backup"]).exists()
+    uv_sync = next(call for call in runner.calls if call[:2] == ("uv", "sync"))
+    assert Path(uv_sync[uv_sync.index("--project") + 1]) == layout.release_dir(
+        result["release_id"]
+    )
 
     rollback = manager.rollback()
 
