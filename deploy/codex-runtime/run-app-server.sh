@@ -30,6 +30,10 @@ while [ ! -S "$socket_path" ]; do
   sleep 0.05
 done
 
+# App-server hardens its socket parent after startup. Re-apply the dedicated
+# sharing group only after the socket exists, so the Bridge can traverse it.
+chgrp "$socket_group" "$runtime_dir"
+chmod 0770 "$runtime_dir"
 chgrp "$socket_group" "$socket_path"
 chmod 0660 "$socket_path"
 wait "$codex_pid"

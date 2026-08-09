@@ -230,8 +230,9 @@ def test_runtime_wrapper_sets_socket_group_mode(tmp_path: Path) -> None:
     fake = tmp_path / "fake-codex"
     fake.write_text(
         "#!/usr/bin/env python3\n"
-        "import signal, socket, sys, time\n"
+        "import os, signal, socket, sys, time\n"
         "path = next(x[7:] for x in sys.argv if x.startswith('unix://'))\n"
+        "os.chmod(os.path.dirname(path), 0o700)\n"
         "sock = socket.socket(socket.AF_UNIX)\n"
         "sock.bind(path)\n"
         "sock.listen(1)\n"
