@@ -1244,6 +1244,105 @@ def _admin_client(main):
     return client, client.get("/admin/api/me").json()["csrf_token"]
 
 
+def test_codex_admin_api_auth_csrf_and_chat_contract(tmp_path, monkeypatch) -> None:
+    main = _load_main(tmp_path, monkeypatch)
+
+    class FakeCodex:
+        async def status(self):
+            return {
+                "available": True,
+                "authenticated": True,
+                "version": "0.147.0",
+                "account": {"type": "chatgpt", "email": "owner@example.com", "plan_type": "plus"},
+            }
+
+        async def start_device_login(self):
+            return {
+                "login_id": "login-1",
+                "verification_url": "https://auth.openai.com/device",
+                "user_code": "ABCD-EFGH",
+            }
+
+        async def device_login_status(self):
+            return {**await self.status(), "login_status": "authenticated"}
+
+        async def cancel_device_login(self):
+            return None
+
+        async def logout(self):
+            return None
+
+        async def chat(self, message, *, thread_id=None):
+            assert message == "Hello"
+            assert thread_id is None
+            return {"thread_id": "thread-1", "message": "Hi from Codex"}
+
+    main.admin.codex = FakeCodex()
+    anonymous = TestClient(main.app, base_url="http://127.0.0.1:8787")
+    assert anonymous.get("/admin/api/codex/status").status_code == 401
+    assert anonymous.post("/admin/api/codex/chat", json={"message": "Hello"}).status_code == 401
+
+    client, csrf = _admin_client(main)
+    status = client.get("/admin/api/codex/status")
+    assert status.status_code == 200
+    assert status.headers["cache-control"] == "no-store"
+    assert status.json()["codex"]["version"] == "0.147.0"
+
+    assert client.post("/admin/api/codex/auth/device/start").status_code == 403
+    started = client.post("/admin/api/codex/auth/device/start", headers={"x-csrf-token": csrf})
+    assert started.status_code == 200
+    assert started.json()["login"]["user_code"] == "ABCD-EFGH"
+    assert client.get("/admin/api/codex/auth/device/status").json()["codex"]["login_status"] == "authenticated"
+
+    chatted = client.post(
+        "/admin/api/codex/chat",
+        json={"message": "Hello", "thread_id": None},
+        headers={"x-csrf-token": csrf},
+    )
+    assert chatted.status_code == 200
+    assert chatted.json() == {
+        "ok": True,
+        "chat": {"thread_id": "thread-1", "message": "Hi from Codex"},
+    }
+    assert chatted.headers["cache-control"] == "no-store"
+
+    assert client.post(
+        "/admin/api/codex/chat",
+        json={"message": "Hello", "unexpected": True},
+        headers={"x-csrf-token": csrf},
+    ).status_code == 400
+
+
+def test_codex_admin_api_sanitizes_unavailable_and_protocol_errors(tmp_path, monkeypatch) -> None:
+    main = _load_main(tmp_path, monkeypatch)
+    from app.codex_app_server import CodexProtocolError, CodexUnavailableError
+
+    class UnavailableCodex:
+        async def status(self):
+            raise CodexUnavailableError("secret-token /var/lib/private/auth.json")
+
+        async def chat(self, message, *, thread_id=None):
+            raise CodexProtocolError("raw frame bearer-secret")
+
+    main.admin.codex = UnavailableCodex()
+    client, csrf = _admin_client(main)
+
+    status = client.get("/admin/api/codex/status")
+    assert status.status_code == 503
+    assert status.json() == {"ok": False, "error": "Codex App Server is unavailable."}
+    assert "secret" not in status.text
+    assert status.headers["cache-control"] == "no-store"
+
+    chat = client.post(
+        "/admin/api/codex/chat",
+        json={"message": "Hello"},
+        headers={"x-csrf-token": csrf},
+    )
+    assert chat.status_code == 502
+    assert chat.json() == {"ok": False, "error": "Codex App Server request failed."}
+    assert "bearer" not in chat.text
+
+
 def _encoded_file(content: bytes, *, filename: str = "notes.md", scope_type: str = "session") -> dict:
     return {
         "scope_type": scope_type,

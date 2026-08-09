@@ -8,6 +8,7 @@ import secrets
 import time
 from contextlib import asynccontextmanager, suppress
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 from mcp.server.auth.middleware.auth_context import get_access_token
@@ -19,6 +20,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
 from app.admin import AdminHandlers
+from app.codex_app_server import CodexAppServerClient
 from app.oauth import OAuthHandlers
 from app.pdf_files import (
     MAX_MCP_PDF_BYTES,
@@ -68,6 +70,8 @@ store = Store(
 logger = logging.getLogger(__name__)
 MCP_REQUEST_MAX_BODY_BYTES = ((MAX_MCP_PDF_BYTES + 2) // 3 * 4) + 262_144
 BRIDGE_RESTART_HELPER_UNIT = "mcp-session-bridge-restart.service"
+CODEX_SOCKET_PATH = Path("/run/mcp-session-bridge-codex/app-server.sock")
+CODEX_WORKSPACE_PATH = Path("/var/lib/mcp-session-bridge-codex/workspace")
 RESTART_REQUEST_TIMEOUT_SECONDS = 5.0
 RESTART_CLEANUP_TIMEOUT_SECONDS = 1.0
 ACTIVE_TOOL_OUTPUT_MODE = configured_tool_output_mode(store)
@@ -113,6 +117,7 @@ async def app_lifespan(_: FastMCP[Any]):
         monitor.cancel()
         with suppress(asyncio.CancelledError):
             await monitor
+        await codex.close()
 
 
 mcp = FastMCP(
@@ -136,6 +141,10 @@ mcp = FastMCP(
 )
 
 oauth = OAuthHandlers(settings, store)
+codex = CodexAppServerClient(
+    socket_path=CODEX_SOCKET_PATH,
+    workspace_dir=CODEX_WORKSPACE_PATH,
+)
 
 
 async def _request_service_restart() -> None:
@@ -186,6 +195,7 @@ admin = AdminHandlers(
     ROOT / "admin-viewer.html",
     active_tool_output_mode=ACTIVE_TOOL_OUTPUT_MODE,
     restart_requester=_request_service_restart,
+    codex_client=codex,
 )
 
 
@@ -286,6 +296,36 @@ async def admin_api_settings(request: Request) -> Response:
 @mcp.custom_route("/admin/api/status", methods=["GET"])
 async def admin_api_operational_status(request: Request) -> Response:
     return await admin.api_operational_status(request)
+
+
+@mcp.custom_route("/admin/api/codex/status", methods=["GET"])
+async def admin_api_codex_status(request: Request) -> Response:
+    return await admin.api_codex_status(request)
+
+
+@mcp.custom_route("/admin/api/codex/auth/device/start", methods=["POST"])
+async def admin_api_codex_device_login_start(request: Request) -> Response:
+    return await admin.api_codex_device_login_start(request)
+
+
+@mcp.custom_route("/admin/api/codex/auth/device/status", methods=["GET"])
+async def admin_api_codex_device_login_status(request: Request) -> Response:
+    return await admin.api_codex_device_login_status(request)
+
+
+@mcp.custom_route("/admin/api/codex/auth/device/cancel", methods=["POST"])
+async def admin_api_codex_device_login_cancel(request: Request) -> Response:
+    return await admin.api_codex_device_login_cancel(request)
+
+
+@mcp.custom_route("/admin/api/codex/logout", methods=["POST"])
+async def admin_api_codex_logout(request: Request) -> Response:
+    return await admin.api_codex_logout(request)
+
+
+@mcp.custom_route("/admin/api/codex/chat", methods=["POST"])
+async def admin_api_codex_chat(request: Request) -> Response:
+    return await admin.api_codex_chat(request)
 
 
 @mcp.custom_route("/admin/api/settings/general", methods=["PUT"])

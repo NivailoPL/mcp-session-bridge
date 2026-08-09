@@ -21,6 +21,15 @@ from starlette.requests import Request
 from starlette.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
 from bridge_cli.version import BRIDGE_VERSION
 
+from app.codex_app_server import (
+    MAX_CHAT_MESSAGE_CHARS,
+    CodexAppServerClient,
+    CodexPolicyViolationError,
+    CodexProtocolError,
+    CodexTimeoutError,
+    CodexUnavailableError,
+)
+
 from app.search import (
     COHERE_KEY_SETTING,
     OPENAI_KEY_SETTING,
@@ -87,6 +96,13 @@ AI_RENAME_ENDPOINT = "https://api.openai.com/v1/chat/completions"
 SESSION_TITLE_MAX_CHARS = 72
 ADMIN_FILE_UPLOAD_MAX_BODY_BYTES = ((MAX_ADMIN_PDF_BYTES + 2) // 3 * 4) + 16_384
 ADMIN_FILE_EDIT_MAX_BODY_BYTES = (MAX_SESSION_FILE_BYTES * 6) + 16_384
+CODEX_CHAT_MAX_BODY_BYTES = MAX_CHAT_MESSAGE_CHARS * 4 + 1_024
+CodexAppServerErrorTypes = (
+    CodexUnavailableError,
+    CodexProtocolError,
+    CodexTimeoutError,
+    CodexPolicyViolationError,
+)
 ADMIN_FILE_EXTENSIONS = {
     ".md": "text/markdown",
     ".markdown": "text/markdown",
@@ -109,6 +125,7 @@ class AdminHandlers:
         *,
         active_tool_output_mode: str = DEFAULT_TOOL_OUTPUT_MODE,
         restart_requester: Callable[[], Awaitable[None]] | None = None,
+        codex_client: CodexAppServerClient | None = None,
     ):
         self.settings = settings
         self.store = store
@@ -117,6 +134,7 @@ class AdminHandlers:
         self.search = SearchService(store)
         self.active_tool_output_mode = active_tool_output_mode
         self.restart_requester = restart_requester
+        self.codex = codex_client
 
     async def index(self, request: Request) -> Response:
         return RedirectResponse("/admin/sessions", status_code=303)
@@ -218,6 +236,97 @@ class AdminHandlers:
             {"ok": True, "status": self._operational_status_payload()},
             headers=self._no_store_headers(),
         )
+
+    async def api_codex_status(self, request: Request) -> Response:
+        _, error = self._require_admin(request)
+        if error:
+            return error
+        if self.codex is None:
+            return self._codex_unavailable()
+        try:
+            status = await self.codex.status()
+        except CodexAppServerErrorTypes as exc:
+            return self._codex_error(exc)
+        return JSONResponse({"ok": True, "codex": status}, headers=self._no_store_headers())
+
+    async def api_codex_device_login_start(self, request: Request) -> Response:
+        _, error = self._require_admin_mutation(request)
+        if error:
+            return error
+        if self.codex is None:
+            return self._codex_unavailable()
+        try:
+            login = await self.codex.start_device_login()
+        except CodexAppServerErrorTypes as exc:
+            return self._codex_error(exc)
+        return JSONResponse({"ok": True, "login": login}, headers=self._no_store_headers())
+
+    async def api_codex_device_login_status(self, request: Request) -> Response:
+        _, error = self._require_admin(request)
+        if error:
+            return error
+        if self.codex is None:
+            return self._codex_unavailable()
+        try:
+            status = await self.codex.device_login_status()
+        except CodexAppServerErrorTypes as exc:
+            return self._codex_error(exc)
+        return JSONResponse({"ok": True, "codex": status}, headers=self._no_store_headers())
+
+    async def api_codex_device_login_cancel(self, request: Request) -> Response:
+        _, error = self._require_admin_mutation(request)
+        if error:
+            return error
+        if self.codex is None:
+            return self._codex_unavailable()
+        try:
+            await self.codex.cancel_device_login()
+        except CodexAppServerErrorTypes as exc:
+            return self._codex_error(exc)
+        return JSONResponse({"ok": True}, headers=self._no_store_headers())
+
+    async def api_codex_logout(self, request: Request) -> Response:
+        _, error = self._require_admin_mutation(request)
+        if error:
+            return error
+        if self.codex is None:
+            return self._codex_unavailable()
+        try:
+            await self.codex.logout()
+        except CodexAppServerErrorTypes as exc:
+            return self._codex_error(exc)
+        return JSONResponse({"ok": True}, headers=self._no_store_headers())
+
+    async def api_codex_chat(self, request: Request) -> Response:
+        _, error = self._require_admin_mutation(request)
+        if error:
+            return error
+        if self.codex is None:
+            return self._codex_unavailable()
+        payload, parse_error = await _bounded_json_body(
+            request,
+            max_bytes=CODEX_CHAT_MAX_BODY_BYTES,
+        )
+        if parse_error:
+            return parse_error
+        if "message" not in payload or not set(payload) <= {"message", "thread_id"}:
+            return self._json_error(
+                "Chat requires message and accepts optional thread_id.",
+                status_code=400,
+            )
+        message = payload.get("message")
+        thread_id = payload.get("thread_id")
+        if not isinstance(message, str):
+            return self._json_error("message must be a string.", status_code=400)
+        if thread_id is not None and not isinstance(thread_id, str):
+            return self._json_error("thread_id must be a string or null.", status_code=400)
+        try:
+            chat = await self.codex.chat(message, thread_id=thread_id)
+        except ValueError as exc:
+            return self._json_error(str(exc), status_code=400)
+        except CodexAppServerErrorTypes as exc:
+            return self._codex_error(exc)
+        return JSONResponse({"ok": True, "chat": chat}, headers=self._no_store_headers())
 
     async def api_settings(self, request: Request) -> Response:
         _, error = self._require_admin(request)
@@ -1445,6 +1554,22 @@ class AdminHandlers:
     @staticmethod
     def _json_error(message: str, status_code: int) -> JSONResponse:
         return JSONResponse({"ok": False, "error": message}, status_code=status_code, headers=AdminHandlers._no_store_headers())
+
+    @classmethod
+    def _codex_unavailable(cls) -> JSONResponse:
+        return JSONResponse(
+            {"ok": False, "error": "Codex App Server is unavailable."},
+            status_code=503,
+            headers={**cls._no_store_headers(), "Retry-After": "2"},
+        )
+
+    @classmethod
+    def _codex_error(cls, error: Exception) -> JSONResponse:
+        if isinstance(error, CodexUnavailableError):
+            return cls._codex_unavailable()
+        if isinstance(error, CodexTimeoutError):
+            return cls._json_error("Codex App Server request timed out.", status_code=504)
+        return cls._json_error("Codex App Server request failed.", status_code=502)
 
     @staticmethod
     def _admin_headers() -> dict[str, str]:
