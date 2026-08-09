@@ -131,7 +131,7 @@ def test_enable_stages_locked_runtime_and_hardened_unit(tmp_path: Path) -> None:
     assert "User=mcp-session-bridge-codex" in unit
     assert "Group=mcp-session-bridge-codex" in unit
     assert "SupplementaryGroups=mcp-session-bridge-codex-socket" in unit
-    assert "RuntimeDirectoryMode=0700" in unit
+    assert "RuntimeDirectoryMode=0770" in unit
     assert "UMask=0077" in unit
     assert "run-app-server.sh" in unit
     wrapper = layout.codex_runtime_current / "run-app-server.sh"
