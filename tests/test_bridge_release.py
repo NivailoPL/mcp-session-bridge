@@ -7,6 +7,7 @@ import shutil
 import subprocess
 import tarfile
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from app.storage import Store
@@ -141,6 +142,100 @@ class StubClient:
 
     def download(self, release: ReleaseInfo, destination: Path) -> None:
         shutil.copy2(self.archive, destination)
+
+
+def test_explicit_update_always_refreshes_release_status(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    refreshes: list[bool] = []
+
+    class StubUpdateManager:
+        def __init__(self, layout: Layout, runner: RecordingRunner) -> None:
+            pass
+
+        def check(self, *, force: bool = False) -> dict[str, str]:
+            refreshes.append(force)
+            return {"state": "current", "current": "0.4.0"}
+
+    monkeypatch.setattr(release_module, "UpdateManager", StubUpdateManager)
+
+    result = release_module.run_release_command(
+        SimpleNamespace(command="update", check=False),
+        Layout.for_root(tmp_path),
+        RecordingRunner(),
+    )
+
+    assert result == 0
+    assert refreshes == [True]
+
+
+def test_update_check_reports_available_release_without_installing(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    class StubUpdateManager:
+        def __init__(self, layout: Layout, runner: RecordingRunner) -> None:
+            pass
+
+        def check(self, *, force: bool = False) -> dict[str, str]:
+            assert force is True
+            return {
+                "state": "available",
+                "current": "0.4.0",
+                "latest": "0.4.1",
+            }
+
+        def update(self, release: ReleaseInfo | None = None) -> dict[str, str]:
+            raise AssertionError("--check must not install an update")
+
+    monkeypatch.setattr(release_module, "UpdateManager", StubUpdateManager)
+
+    result = release_module.run_release_command(
+        SimpleNamespace(command="update", check=True),
+        Layout.for_root(tmp_path),
+        RecordingRunner(),
+    )
+
+    assert result == 0
+
+
+def test_update_declined_by_user_does_not_install(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    release = ReleaseInfo(
+        version="0.4.1",
+        asset_url="https://github.test/asset",
+        release_url="https://github.test/release",
+        digest="a" * 64,
+        notes="Changes",
+    )
+
+    class StubClient:
+        def latest(self) -> ReleaseInfo:
+            return release
+
+    class StubUpdateManager:
+        client = StubClient()
+
+        def __init__(self, layout: Layout, runner: RecordingRunner) -> None:
+            pass
+
+        def check(self, *, force: bool = False) -> dict[str, str]:
+            assert force is True
+            return {"state": "available", "current": "0.4.0", "latest": "0.4.1"}
+
+        def update(self, release: ReleaseInfo | None = None) -> dict[str, str]:
+            raise AssertionError("a declined update must not be installed")
+
+    monkeypatch.setattr(release_module, "UpdateManager", StubUpdateManager)
+    monkeypatch.setattr("builtins.input", lambda prompt: "n")
+
+    result = release_module.run_release_command(
+        SimpleNamespace(command="update", check=False),
+        Layout.for_root(tmp_path),
+        RecordingRunner(),
+    )
+
+    assert result == 0
 
 
 def _managed_layout(tmp_path: Path) -> Layout:

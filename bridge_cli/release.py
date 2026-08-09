@@ -731,7 +731,7 @@ def run_release_command(args: Any, layout: Layout, runner: Runner) -> int:
         print(f"PASS Rolled back to Bridge {result['version']}.")
         return 0
 
-    status = manager.check(force=bool(args.check))
+    status = manager.check(force=True)
     if args.check or status.get("state") != "available":
         if status.get("state") == "available":
             print(f"UPDATE AVAILABLE: {status.get('current')} -> {status.get('latest')}")
