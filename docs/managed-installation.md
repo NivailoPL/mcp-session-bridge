@@ -211,3 +211,19 @@ A future Agent Plugins adapter can be added without moving host management into 
 - provider-specific screenshots and harness instructions remain optional documentation.
 
 This leaves room for a v2 adapter targeting the [Agent Plugins standard](https://agent-plugins.org/) while keeping v1 installations deterministic and recoverable.
+## Setup control center
+
+Run `mcp-bridge setup` from an SSH terminal. The control center lets you inspect every section before choosing an action. Arrow navigation is used on a capable TTY; a numbered menu remains available for `TERM=dumb`. Opening a section or selecting Return does not acquire the operation lock and does not modify the server.
+
+The Database section can verify, create a portable backup, import by complete replacement, migrate, optimize, or reset. Import never mutates the supplied source file. It stages and migrates a copy, makes a final verified backup of the current database after stopping Bridge, performs the replacement, verifies service-user WAL access, and rolls back on failure.
+
+Portable database files contain conversations and other sensitive runtime rows. A DB-only restore preserves conversations, groups, and uploaded files, but credentials encrypted or hashed against a different installation secret may not remain usable. Reconnect harnesses and re-enter provider keys after restoring into a fresh configuration.
+
+Preview removal before executing it:
+
+```bash
+mcp-bridge installation uninstall --dry-run --remove-data \
+  --output /root/mcp-bridge-database-export.sqlite3
+```
+
+The uninstaller verifies the export before removing selected managed data. It does not remove the Git checkout, Caddy itself, unrelated Caddy files, or unrelated host services.

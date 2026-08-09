@@ -29,7 +29,7 @@ cd mcp-session-bridge
 ./mcp-bridge setup
 ```
 
-The resumable CLI installs the global `mcp-bridge` command as soon as setup starts, shows the state of each setup area, lets you configure only the section you want, and keeps all prepared service changes inactive until you explicitly choose **Activate installation**. Activation takes a final SQLite backup, switches systemd/Caddy, verifies the service, and restores the previous service configuration if verification fails.
+The resumable CLI installs the global `mcp-bridge` command as soon as setup starts. In a normal SSH terminal, use Up/Down, Enter, Escape, and `q` to browse status-aware submenus; `TERM=dumb` retains a numbered fallback. Browsing and Return do not change the server. Prepared service changes remain inactive until you explicitly choose **Activate Managed Installation**. Activation takes a final SQLite backup, switches systemd/Caddy, verifies the service, and restores the previous service configuration if verification fails.
 
 Setup distinguishes `DETECTED`, `NEEDS INPUT`, `READY`, `ACTIVE`, `WAITING`, and `FAILED`, always showing what exists and what should happen next. Headings use the Indygo terminal accent when color is supported; set `NO_COLOR=1` or pass global `--no-color` for plain output.
 
@@ -39,6 +39,19 @@ Verify the server:
 mcp-bridge status
 mcp-bridge doctor
 ```
+
+Portable database and lifecycle commands are also available without the menu:
+
+```bash
+mcp-bridge database inspect --json
+mcp-bridge database verify
+mcp-bridge database backup --output /safe/path/bridge.sqlite3
+mcp-bridge database import /safe/path/bridge.sqlite3 --replace
+mcp-bridge service inspect
+mcp-bridge installation uninstall --dry-run --remove-data --output /safe/path/bridge.sqlite3
+```
+
+Database import replaces the complete current database; it does not merge records. Bridge creates and verifies a final safety backup after stopping the service, swaps the prepared SQLite file atomically, checks WAL write access as the service user, and restores the previous database on failure. The portable database is sensitive: it contains conversations, uploaded files, OAuth/application rows, and settings. When restoring it into an installation with a new `BRIDGE_SECRET_KEY`, reconnect harnesses and re-enter encrypted provider keys.
 
 Read the complete [managed server installation guide](docs/managed-installation.md), including adoption, updates, rollback, and the future Agent Plugins boundary. Client/harness connection is intentionally a separate step.
 

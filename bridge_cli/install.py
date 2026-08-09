@@ -16,6 +16,7 @@ from app.security import password_hash
 from bridge_cli.caddy import has_site
 from bridge_cli.config import read_env_file, update_env_file
 from bridge_cli.files import atomic_write_json, atomic_write_text, read_json
+from bridge_cli.health import require_health_payload, verify_local_health
 from bridge_cli.layout import Layout
 from bridge_cli.migrations import migrate_database
 from bridge_cli.runner import Runner
@@ -297,6 +298,40 @@ class ManagedInstaller:
             }
         )
         atomic_write_json(self.layout.installation_file, installation)
+        atomic_write_json(
+            self.layout.ownership_file,
+            {
+                "format_version": 1,
+                "owner": "mcp-session-bridge",
+                "paths": [
+                    str(path)
+                    for path in (
+                        self.layout.service_unit,
+                        self.layout.restart_path_unit,
+                        self.layout.restart_service_unit,
+                        self.layout.status_service_unit,
+                        self.layout.status_timer_unit,
+                        self.layout.caddy_fragment,
+                        self.layout.command_path,
+                        self.layout.opt_root,
+                        self.layout.env_file,
+                        self.layout.db_path,
+                        Path(f"{self.layout.db_path}-wal"),
+                        Path(f"{self.layout.db_path}-shm"),
+                        self.layout.context_packs_dir,
+                        self.layout.pending_root,
+                        self.layout.installation_file,
+                        self.layout.status_file,
+                        self.layout.update_file,
+                        self.layout.operation_file,
+                        self.layout.setup_file,
+                        self.layout.database_status_file,
+                        self.layout.ownership_file,
+                    )
+                ],
+            },
+            0o640,
+        )
         operation = {
             "format_version": 1,
             "operation": "setup",
@@ -651,13 +686,7 @@ exec {current}/.venv/bin/python -m bridge_cli "$@"
         self.runner.run("systemctl", "restart", "mcp-session-bridge.service")
         self.runner.run("systemctl", "start", "mcp-session-bridge-restart.path")
         self.runner.run("systemctl", "start", "mcp-session-bridge-status.timer")
-        local_health = self.runner.run(
-            "curl", "--fail", "--silent", "--show-error", "--retry", "10",
-            "--retry-delay", "1", "--retry-connrefused",
-            "--connect-timeout", "3", "--max-time", "5",
-            "--retry-max-time", "60", "http://127.0.0.1:8787/healthz",
-        )
-        _require_health_payload(local_health.stdout, "http://127.0.0.1:8787/healthz")
+        verify_local_health(self.runner)
         self.runner.run("systemctl", "reload", "caddy")
         if verify_public:
             public_health = self.runner.run(
@@ -666,7 +695,7 @@ exec {current}/.venv/bin/python -m bridge_cli "$@"
                 "--connect-timeout", "3", "--max-time", "5",
                 "--retry-max-time", "60", f"https://{domain}/healthz",
             )
-            _require_health_payload(public_health.stdout, f"https://{domain}/healthz")
+            require_health_payload(public_health.stdout, f"https://{domain}/healthz")
 
     def _refresh_database_backup(self, backup_dir: Path | None) -> None:
         if backup_dir is None or not self.layout.db_path.exists():
@@ -785,15 +814,6 @@ def _dns_resolves(hostname: str) -> bool:
     except socket.gaierror:
         return False
     return bool(addresses)
-
-
-def _require_health_payload(raw: str, url: str) -> None:
-    try:
-        payload = json.loads(raw)
-    except json.JSONDecodeError as exc:
-        raise RuntimeError(f"{url} returned invalid health JSON.") from exc
-    if not isinstance(payload, dict) or payload.get("ok") is not True:
-        raise RuntimeError(f"{url} did not return the Bridge health contract.")
 
 
 def _bootstrap_launcher(source_root: Path) -> str:

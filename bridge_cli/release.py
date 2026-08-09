@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import fcntl
-import hashlib
 import hmac
 import json
 import os
@@ -13,7 +11,6 @@ import time
 import tomllib
 import urllib.error
 import urllib.request
-from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -21,8 +18,9 @@ from typing import Any, BinaryIO, Callable
 
 from bridge_cli.files import atomic_write_json, read_json
 from bridge_cli.layout import Layout
+from bridge_cli.operation_lock import operation_lock as shared_operation_lock
 from bridge_cli.runner import Runner
-from bridge_cli.system_files import sqlite_backup, switch_release
+from bridge_cli.system_files import sha256_file, sqlite_backup, switch_release
 
 
 LATEST_RELEASE_URL = (
@@ -308,7 +306,7 @@ class UpdateManager:
             archive = temporary / "release.tar.gz"
             extracted = temporary / "extracted"
             self.client.download(release, archive)
-            digest = _sha256_file(archive)
+            digest = sha256_file(archive)
             if not hmac.compare_digest(digest, release.digest):
                 raise RuntimeError("Release SHA-256 does not match GitHub asset digest.")
             safe_extract(archive, extracted)
@@ -379,19 +377,10 @@ class UpdateManager:
             else:
                 raise RuntimeError(f"Post-update verification failed for {url}: {last_error}")
 
-    @contextmanager
     def operation_lock(self):
-        self.layout.state_root.mkdir(mode=0o750, parents=True, exist_ok=True)
-        lock_path = self.layout.state_root / "operations.lock"
-        with lock_path.open("a+", encoding="utf-8") as handle:
-            try:
-                fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-            except BlockingIOError as exc:
-                raise RuntimeError("Another Bridge setup, update, or rollback is running.") from exc
-            try:
-                yield
-            finally:
-                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+        return shared_operation_lock(
+            self.layout.operation_lock_file, self.layout.legacy_operation_lock_file
+        )
 
 
 def run_release_command(args: Any, layout: Layout, runner: Runner) -> int:
@@ -429,11 +418,3 @@ def run_release_command(args: Any, layout: Layout, runner: Runner) -> int:
 
 def _now_iso() -> str:
     return datetime.now(UTC).isoformat()
-
-
-def _sha256_file(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for block in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(block)
-    return digest.hexdigest()

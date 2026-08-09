@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import sqlite3
 from pathlib import Path
 
@@ -23,3 +24,11 @@ def switch_release(current_link: Path, release: Path, *, temporary_name: str) ->
         temporary.unlink()
     temporary.symlink_to(release)
     temporary.replace(current_link)
+
+
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for block in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()

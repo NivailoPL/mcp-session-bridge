@@ -207,39 +207,20 @@ class SetupWizard:
         self.installer = ManagedInstaller(layout, source_root, runner)
 
     def run(self) -> int:
-        while True:
-            steps = self._steps()
-            self.output(render_setup_dashboard(steps, self.theme))
-            recommended = self._recommended(steps)
-            raw = self.input(f"Step [{recommended}]: ").strip().lower()
-            if raw in {"q", "quit", "exit"}:
-                self.output("Setup saved. Run mcp-bridge setup to continue.")
-                return 0
-            selection = raw or str(recommended)
-            choice = int(selection) if selection.isdigit() else 0
-            if choice not in range(1, 10):
-                self.output("Choose a number from 1 to 9.")
-                continue
-            if choice == 1:
-                readiness = next(step for step in steps if step.id == "server")
-                self.output(f"{readiness.state} {readiness.detail}")
-            elif choice == 2:
-                self._configure_adoption()
-            elif choice == 3:
-                self.installer.stage_release()
-                self.output("PASS Bridge release staged; the live service was not changed.")
-            elif choice == 4:
-                self._prepare_database()
-            elif choice == 5:
-                self._configure_administrator()
-            elif choice == 6:
-                self._configure_public_address()
-            elif choice == 7:
-                self._prepare_service()
-            elif choice == 8:
-                self._activate()
-            else:
-                self._verify()
+        from bridge_cli.control_center import ControlCenter
+        from bridge_cli.terminal_menu import PlainMenuDriver, PromptToolkitMenuDriver
+
+        interactive_stdio = self.input is input and self.output is print
+        driver = (
+            PromptToolkitMenuDriver()
+            if interactive_stdio and __import__("os").environ.get("TERM") != "dumb"
+            else PlainMenuDriver(self.input, self.output)
+        )
+        try:
+            return ControlCenter(self, driver).run()
+        except KeyboardInterrupt:
+            self.output("\nSetup cancelled; no pending menu action was executed.")
+            return 130
 
     def _steps(self) -> list[SetupStep]:
         return SetupInspector(
@@ -339,14 +320,14 @@ class SetupWizard:
         self.installer.stage_service()
         self.output("PASS Managed service files staged; the live service was not changed.")
 
-    def _activate(self) -> None:
+    def _activate(self, *, confirmed: bool = False) -> None:
         self.output(
             self.theme.heading("Activation plan")
             + "\n  - create a final backup\n  - briefly stop the current Bridge\n"
             + "  - take the final SQLite copy\n  - switch and verify the managed service\n"
             + "  - restore the previous service automatically on failure"
         )
-        if self.input("Activate now? [y/N]: ").strip().lower() not in {"y", "yes"}:
+        if not confirmed and self.input("Activate now? [y/N]: ").strip().lower() not in {"y", "yes"}:
             self.output("Activation cancelled; the current service was not changed.")
             return
         result = self.installer.activate(self.legacy_db if self._adopt() else None)

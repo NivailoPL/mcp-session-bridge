@@ -15,6 +15,10 @@ from bridge_cli.files import atomic_write_json, atomic_write_text, read_json
 from bridge_cli.install import ManagedInstaller, SetupAnswers, url_hostname
 from bridge_cli.layout import Layout
 from bridge_cli.migrations import migrate_database
+from bridge_cli.database import DatabaseManager
+from bridge_cli.operation_lock import operation_lock
+from bridge_cli.service import ServiceManager
+from bridge_cli.uninstall import UninstallManager
 from bridge_cli.operations import StatusCollector
 from bridge_cli.presentation import TerminalTheme
 from bridge_cli.runner import SubprocessRunner
@@ -47,6 +51,42 @@ def build_parser() -> argparse.ArgumentParser:
     commands.add_parser("version", help="Show Bridge and schema versions.")
     migrate = commands.add_parser("migrate", help="Apply explicit database migrations.")
     migrate.add_argument("--db", type=Path)
+    database = commands.add_parser("database", help="Inspect and manage the Bridge database.")
+    database_actions = database.add_subparsers(dest="database_action", required=True)
+    for name in ("inspect", "verify", "migrate"):
+        command = database_actions.add_parser(name)
+        command.add_argument("--json", action="store_true", dest="as_json")
+    backup = database_actions.add_parser("backup")
+    backup.add_argument("--output", type=Path, required=True)
+    backup.add_argument("--json", action="store_true", dest="as_json")
+    import_db = database_actions.add_parser("import")
+    import_db.add_argument("source", type=Path)
+    import_db.add_argument("--replace", action="store_true", required=True)
+    import_db.add_argument("--yes", action="store_true")
+    import_db.add_argument("--json", action="store_true", dest="as_json")
+    for name in ("optimize", "reset"):
+        command = database_actions.add_parser(name)
+        command.add_argument("--yes", action="store_true")
+        command.add_argument("--json", action="store_true", dest="as_json")
+    service = commands.add_parser("service", help="Inspect or control the Bridge service.")
+    service_actions = service.add_subparsers(dest="service_action", required=True)
+    for name in ("inspect", "start", "stop", "restart", "verify"):
+        command = service_actions.add_parser(name)
+        command.add_argument("--json", action="store_true", dest="as_json")
+    service_logs = service_actions.add_parser("logs")
+    service_logs.add_argument("--lines", type=int, default=100)
+    service_logs.add_argument("--json", action="store_true", dest="as_json")
+    installation = commands.add_parser("installation", help="Inspect or remove the managed installation.")
+    installation_actions = installation.add_subparsers(dest="installation_action", required=True)
+    inspect_installation = installation_actions.add_parser("inspect")
+    inspect_installation.add_argument("--json", action="store_true", dest="as_json")
+    uninstall = installation_actions.add_parser("uninstall")
+    uninstall.add_argument("--output", type=Path)
+    uninstall.add_argument("--remove-data", action="store_true")
+    uninstall.add_argument("--dry-run", action="store_true")
+    uninstall.add_argument("--yes", action="store_true")
+    uninstall.add_argument("--allow-unverified-legacy", action="store_true")
+    uninstall.add_argument("--json", action="store_true", dest="as_json")
     update = commands.add_parser("update", help="Check for or install a stable update.")
     update.add_argument("--check", action="store_true")
     commands.add_parser("rollback", help="Restore the previous managed release.")
@@ -63,10 +103,9 @@ def main(argv: list[str] | None = None) -> int:
             if args.command == "setup" and args.dry_run:
                 return _setup(args, layout, runner)
             _require_root(args.command)
-            from bridge_cli.release import UpdateManager
-            with UpdateManager(layout, runner).operation_lock():
-                if args.command == "setup":
-                    return _setup(args, layout, runner)
+            if args.command == "setup":
+                return _setup(args, layout, runner)
+            with operation_lock(layout.operation_lock_file, layout.legacy_operation_lock_file):
                 return _configure(args, layout, runner)
         if args.command in {"status", "doctor"}:
             if getattr(args, "refresh", False):
@@ -97,8 +136,22 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if args.command == "migrate":
             _require_root("migrate")
-            print(json.dumps(migrate_database(args.db or layout.db_path), indent=2))
+            result = (
+                migrate_database(args.db)
+                if args.db is not None
+                else DatabaseManager(layout, runner).migrate()
+            )
+            print(json.dumps(result, indent=2))
             return 0
+        if args.command == "database":
+            _require_root("database")
+            return _database(args, layout, runner)
+        if args.command == "service":
+            _require_root("service")
+            return _service(args, layout, runner)
+        if args.command == "installation":
+            _require_root("installation")
+            return _installation(args, layout, runner)
         if args.command in {"update", "rollback"}:
             from bridge_cli.release import run_release_command
             _require_root(args.command)
@@ -107,6 +160,129 @@ def main(argv: list[str] | None = None) -> int:
         print(f"FAILED: {exc}", file=sys.stderr)
         return 1
     return 2
+
+
+def _database(args: argparse.Namespace, layout: Layout, runner: SubprocessRunner) -> int:
+    manager = DatabaseManager(layout, runner)
+    action = args.database_action
+    if action == "inspect":
+        result: dict[str, object] = {
+            "format_version": 1,
+            "operation": "database.inspect",
+            "state": "complete",
+            "database": manager.inspect().to_dict(),
+        }
+    elif action == "verify":
+        result = manager.verify()
+    elif action == "migrate":
+        result = manager.migrate()
+    elif action == "backup":
+        result = manager.backup(args.output)
+    elif action == "import":
+        source = args.source.expanduser().resolve()
+        incoming = manager.inspect(source)
+        current = manager.inspect()
+        if not incoming.healthy:
+            raise ValueError(incoming.error or "Import source is not a healthy Bridge database.")
+        if not args.yes:
+            if not sys.stdin.isatty():
+                raise ValueError("Non-interactive database import requires --replace --yes.")
+            print("This operation will REPLACE the complete current database.")
+            print(f"Current database: {current.sessions} sessions")
+            print(f"Imported database: {incoming.sessions} sessions")
+            print("A final safety backup will be created before replacement.")
+            print("Expected downtime: a brief service restart.")
+            if input("Replace the database now? [y/N]: ").strip().lower() not in {"y", "yes"}:
+                print("Database import cancelled; nothing changed.")
+                return 0
+        result = manager.import_replace(source)
+    elif action in {"optimize", "reset"}:
+        if not args.yes:
+            if not sys.stdin.isatty():
+                raise ValueError(f"Non-interactive database {action} requires --yes.")
+            warning = (
+                "Reset will REPLACE the complete current database with an empty database."
+                if action == "reset"
+                else "Optimize will rebuild and replace the current SQLite file."
+            )
+            print(warning)
+            if input(f"Continue with {action}? [y/N]: ").strip().lower() not in {"y", "yes"}:
+                print(f"Database {action} cancelled; nothing changed.")
+                return 0
+        result = manager.reset() if action == "reset" else manager.optimize()
+    else:
+        return 2
+    if getattr(args, "as_json", False):
+        print(json.dumps(result, indent=2, sort_keys=True))
+    else:
+        print(f"PASS {result['operation']}: {result['state']}")
+        database = result.get("database") or result.get("after") or result.get("artifact")
+        if isinstance(database, dict):
+            print(f"Database: {database.get('path')}")
+            print(f"Sessions: {database.get('sessions', 0)}")
+        if result.get("backup"):
+            print(f"Safety backup: {result['backup']}")
+        if result.get("credentials_notice"):
+            print(f"NOTICE {result['credentials_notice']}")
+    return 0
+
+
+def _service(args: argparse.Namespace, layout: Layout, runner: SubprocessRunner) -> int:
+    manager = ServiceManager(layout, runner)
+    action = args.service_action
+    result = manager.logs(args.lines) if action == "logs" else manager.inspect() if action in {"inspect", "verify"} else manager.mutate(action)
+    if getattr(args, "as_json", False):
+        print(json.dumps(result, indent=2, sort_keys=True))
+    else:
+        if action == "logs":
+            print(result["logs"])
+        else:
+            service = result["service"]
+            print(f"PASS {result['operation']}: {'active' if service['active'] else 'inactive'}")
+    if action == "verify" and not result["service"]["active"]:
+        return 1
+    if action == "logs" and result["state"] == "failed":
+        return 1
+    return 0
+
+
+def _installation(args: argparse.Namespace, layout: Layout, runner: SubprocessRunner) -> int:
+    if args.installation_action == "inspect":
+        installation = read_json(layout.installation_file) or {}
+        result = {
+            "format_version": 1,
+            "operation": "installation.inspect",
+            "state": "complete",
+            "installation": installation,
+        }
+    else:
+        manager = UninstallManager(layout, runner)
+        plan = manager.plan(
+            export_to=args.output,
+            remove_data=args.remove_data,
+            allow_unverified=args.allow_unverified_legacy,
+        )
+        if not args.dry_run and not args.yes:
+            if not sys.stdin.isatty():
+                raise ValueError("Non-interactive uninstall requires --yes (or use --dry-run).")
+            print("Uninstall plan:")
+            for target in plan.targets:
+                print(f"  - remove {target}")
+            if plan.database_export:
+                print(f"  - first export and verify the database at {plan.database_export}")
+            if input("Execute this uninstall plan? [y/N]: ").strip().lower() not in {"y", "yes"}:
+                print("Uninstall cancelled; nothing changed.")
+                return 0
+        result = manager.execute(plan, dry_run=args.dry_run)
+    if getattr(args, "as_json", False):
+        print(json.dumps(result, indent=2, sort_keys=True))
+    else:
+        print(f"PASS {result['operation']}: {result['state']}")
+        if result.get("database_export"):
+            print(f"Database export: {result['database_export']}")
+        if result.get("note"):
+            print(result["note"])
+    return 0
 
 
 def _setup(args: argparse.Namespace, layout: Layout, runner: SubprocessRunner) -> int:

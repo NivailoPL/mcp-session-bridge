@@ -16,6 +16,8 @@ from bridge_cli.setup_wizard import (
     SetupWizard,
     render_setup_dashboard,
 )
+from bridge_cli.control_center import ControlCenter
+from bridge_cli.terminal_menu import MenuItem, PlainMenuDriver, render_status
 
 
 class Result:
@@ -199,7 +201,7 @@ def test_readiness_action_reports_attention_when_host_tool_is_missing(
 ) -> None:
     source = source_tree(tmp_path)
     outputs: list[str] = []
-    answers = iter(["1", "q"])
+    answers = iter(["2", "q", "q"])
     monkeypatch.setattr(
         "bridge_cli.setup_wizard.shutil.which",
         lambda name: None if name == "uv" else f"/usr/bin/{name}",
@@ -216,12 +218,13 @@ def test_readiness_action_reports_attention_when_host_tool_is_missing(
     )
 
     assert wizard.run() == 0
-    assert any(line.startswith("ATTENTION Missing host prerequisites: uv") for line in outputs)
+    assert any("Server readiness: (ATTENTION)" in line for line in outputs)
+    assert any("Missing host prerequisites: uv" in line for line in outputs)
 
 
-def test_enter_selects_recommended_activation_step(tmp_path: Path, monkeypatch) -> None:
+def test_activation_action_is_available_from_service_submenu(tmp_path: Path, monkeypatch) -> None:
     source = source_tree(tmp_path)
-    answers = iter(["", "q"])
+    answers = iter(["8", "2", "q", "q"])
     activated: list[bool] = []
     wizard = SetupWizard(
         Layout.for_root(tmp_path / "target"),
@@ -249,6 +252,45 @@ def test_enter_selects_recommended_activation_step(tmp_path: Path, monkeypatch) 
 
     assert wizard.run() == 0
     assert activated == [True]
+
+
+def test_plain_menu_return_and_disabled_action_do_not_mutate() -> None:
+    outputs: list[str] = []
+    answers = iter(["1", "2"])
+    driver = PlainMenuDriver(lambda _prompt: next(answers), outputs.append)
+    items = [
+        MenuItem("blocked", "Blocked", disabled_reason="not ready"),
+        MenuItem("return", "Return"),
+    ]
+
+    assert driver.choose("Database", items) == ""
+    assert driver.choose("Database", items) == "return"
+    assert any("unavailable: not ready" in line for line in outputs)
+
+
+def test_statuses_use_parentheses_and_semantic_terminal_colors() -> None:
+    assert render_status("ACTIVE", color=False) == "(ACTIVE)"
+    assert "\x1b[38;2;34;197;94m(ACTIVE)" in render_status("ACTIVE", color=True)
+    assert "\x1b[38;2;56;189;248m(READY)" in render_status("READY", color=True)
+    assert "\x1b[38;2;248;113;113m(FAILED)" in render_status("FAILED", color=True)
+
+
+def test_full_install_is_first_and_sections_do_not_repeat_inspect_actions(tmp_path: Path) -> None:
+    wizard = SetupWizard(
+        Layout.for_root(tmp_path / "target"),
+        source_tree(tmp_path),
+        RecordingRunner(),
+        legacy_db=None,
+        legacy_env=None,
+        theme=TerminalTheme(enabled=False),
+        input_fn=lambda _prompt: "q",
+        output_fn=lambda _line: None,
+    )
+    center = ControlCenter(wizard, PlainMenuDriver())
+
+    assert center._main_items()[0].id == "full_install"
+    for section in ("server", "installation", "release", "administrator", "public_address", "service"):
+        assert all(not item.label.startswith("Inspect") for item in center._actions(section))
 
 
 def test_corrupt_database_is_reported_as_attention(tmp_path: Path) -> None:

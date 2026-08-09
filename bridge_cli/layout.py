@@ -71,6 +71,10 @@ class Layout:
         return self.state_root / "update.json"
 
     @property
+    def database_status_file(self) -> Path:
+        return self.state_root / "database-status.json"
+
+    @property
     def operation_file(self) -> Path:
         return self.state_root / "last-operation.json"
 
@@ -121,6 +125,18 @@ class Layout:
     @property
     def command_path(self) -> Path:
         return self._path("usr/local/bin/mcp-bridge")
+
+    @property
+    def operation_lock_file(self) -> Path:
+        return self._path("run/lock/mcp-session-bridge/operations.lock")
+
+    @property
+    def legacy_operation_lock_file(self) -> Path:
+        return self.state_root / "operations.lock"
+
+    @property
+    def ownership_file(self) -> Path:
+        return self.state_root / "ownership.json"
 
     @property
     def systemd_root(self) -> Path:

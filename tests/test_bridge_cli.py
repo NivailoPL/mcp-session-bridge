@@ -10,6 +10,7 @@ from app.storage import Store
 from bridge_cli.config import update_env_file
 from bridge_cli.database_probe import verify_writable_database
 from bridge_cli.migrations import CURRENT_SCHEMA_VERSION, migrate_database
+from bridge_cli.__main__ import build_parser
 from bridge_cli.status import CheckResult, StatusReport, UpdateStatus
 
 
@@ -104,3 +105,15 @@ def test_database_probe_enables_wal_and_verifies_write_access(tmp_path: Path) ->
 
     with sqlite3.connect(db_path) as connection:
         assert connection.execute("PRAGMA journal_mode").fetchone() == ("wal",)
+
+
+def test_database_command_contract_parses_explicit_replace_and_yes() -> None:
+    args = build_parser().parse_args(
+        ["database", "import", "/tmp/portable.sqlite3", "--replace", "--yes", "--json"]
+    )
+
+    assert args.command == "database"
+    assert args.database_action == "import"
+    assert args.replace is True
+    assert args.yes is True
+    assert args.as_json is True
