@@ -187,6 +187,8 @@ cd /root/mcp-session-bridge
 
 Checkout deploy refuses tracked uncommitted changes and packages `Git HEAD`, not the mutable working directory. Each commit receives its own release directory such as `0.4.0-git-0997bfe07951`. Untracked files are reported and excluded. The deploy transaction preflights migrations, creates a final SQLite backup after stopping Bridge, atomically switches `current`, verifies the restarted service, and restores the previous release and database on failure. Once a checkout release is active, global `mcp-bridge deploy` uses the `source_root` recorded in installation metadata.
 
+The default deploy path must move forward: a lower semantic version, an older commit at the same version, or a divergent checkout is rejected. Only an intentional expert recovery may bypass this protection with `--allow-downgrade`; confirmation, backup, health verification, and rollback still apply.
+
 Check without installing:
 
 ```bash

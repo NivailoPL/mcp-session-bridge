@@ -10,6 +10,7 @@ from pathlib import Path
 
 import pytest
 from app.storage import Store
+import bridge_cli.release as release_module
 
 from bridge_cli.files import atomic_write_json
 from bridge_cli.layout import Layout
@@ -184,6 +185,25 @@ def _checkout(tmp_path: Path) -> Path:
     return source
 
 
+def _commit_change(source: Path, name: str = "marker.txt") -> str:
+    marker = source / name
+    marker.write_text(f"change-{name}\n", encoding="utf-8")
+    subprocess.run(("git", "-C", str(source), "add", name), check=True)
+    subprocess.run(
+        (
+            "git", "-C", str(source), "-c", "user.name=Test", "-c",
+            "user.email=test@example.test", "commit", "-qm", f"Add {name}",
+        ),
+        check=True,
+    )
+    return subprocess.run(
+        ("git", "-C", str(source), "rev-parse", "HEAD"),
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+
+
 def test_checkout_deploy_creates_commit_release_and_switches_current(tmp_path: Path) -> None:
     layout = _managed_layout(tmp_path)
     source = _checkout(tmp_path)
@@ -224,6 +244,157 @@ def test_checkout_deploy_rejects_tracked_uncommitted_changes(tmp_path: Path) -> 
         CheckoutDeployer(layout, CheckoutRunner()).plan(source)
 
 
+def test_checkout_deploy_rejects_older_semantic_version_without_override(tmp_path: Path) -> None:
+    layout = _managed_layout(tmp_path)
+    installation = json.loads(layout.installation_file.read_text(encoding="utf-8"))
+    installation.update({"version": "0.5.0"})
+    atomic_write_json(layout.installation_file, installation)
+    source = _checkout(tmp_path)
+    manager = CheckoutDeployer(layout, CheckoutRunner())
+
+    with pytest.raises(RuntimeError, match="older than active Bridge 0.5.0"):
+        manager.plan(source)
+
+    override = manager.plan(source, allow_downgrade=True)
+    assert override.downgrade_override is True
+
+    result = manager.deploy(source, allow_downgrade=True)
+    assert result["state"] == "complete"
+    assert result["downgrade_override"] is True
+
+
+def test_checkout_deploy_rejects_older_commit_at_same_version(tmp_path: Path) -> None:
+    layout = _managed_layout(tmp_path)
+    source = _checkout(tmp_path)
+    first = subprocess.run(
+        ("git", "-C", str(source), "rev-parse", "HEAD"),
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    second = _commit_change(source)
+    installation = json.loads(layout.installation_file.read_text(encoding="utf-8"))
+    installation.update(
+        {"commit": second, "release_id": f"0.4.0-git-{second[:12]}"}
+    )
+    atomic_write_json(layout.installation_file, installation)
+    subprocess.run(("git", "-C", str(source), "checkout", "-q", first), check=True)
+
+    with pytest.raises(RuntimeError, match="older commit"):
+        CheckoutDeployer(layout, CheckoutRunner()).plan(source)
+
+
+def test_checkout_deploy_allows_fast_forward_commit(tmp_path: Path) -> None:
+    layout = _managed_layout(tmp_path)
+    source = _checkout(tmp_path)
+    first = subprocess.run(
+        ("git", "-C", str(source), "rev-parse", "HEAD"),
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    second = _commit_change(source)
+    installation = json.loads(layout.installation_file.read_text(encoding="utf-8"))
+    installation.update(
+        {"commit": first, "release_id": f"0.4.0-git-{first[:12]}"}
+    )
+    atomic_write_json(layout.installation_file, installation)
+
+    plan = CheckoutDeployer(layout, CheckoutRunner()).plan(source)
+
+    assert plan.commit == second
+    assert plan.downgrade_override is False
+
+
+def test_checkout_deploy_rejects_divergent_commit_without_override(tmp_path: Path) -> None:
+    layout = _managed_layout(tmp_path)
+    source = _checkout(tmp_path)
+    base = subprocess.run(
+        ("git", "-C", str(source), "rev-parse", "HEAD"),
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    active = _commit_change(source, "active.txt")
+    subprocess.run(("git", "-C", str(source), "checkout", "-q", base), check=True)
+    _commit_change(source, "divergent.txt")
+    installation = json.loads(layout.installation_file.read_text(encoding="utf-8"))
+    installation.update(
+        {"commit": active, "release_id": f"0.4.0-git-{active[:12]}"}
+    )
+    atomic_write_json(layout.installation_file, installation)
+
+    with pytest.raises(RuntimeError, match="not a fast-forward"):
+        CheckoutDeployer(layout, CheckoutRunner()).plan(source)
+
+
+def test_checkout_deploy_rejects_higher_version_on_divergent_history(tmp_path: Path) -> None:
+    layout = _managed_layout(tmp_path)
+    source = _checkout(tmp_path)
+    base = subprocess.run(
+        ("git", "-C", str(source), "rev-parse", "HEAD"),
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    active = _commit_change(source, "active.txt")
+    subprocess.run(("git", "-C", str(source), "checkout", "-q", base), check=True)
+    project = source / "pyproject.toml"
+    project.write_text(
+        project.read_text(encoding="utf-8").replace("version='0.4.0'", "version='0.4.1'"),
+        encoding="utf-8",
+    )
+    subprocess.run(("git", "-C", str(source), "add", "pyproject.toml"), check=True)
+    subprocess.run(
+        (
+            "git", "-C", str(source), "-c", "user.name=Test", "-c",
+            "user.email=test@example.test", "commit", "-qm", "Bump divergent version",
+        ),
+        check=True,
+    )
+    installation = json.loads(layout.installation_file.read_text(encoding="utf-8"))
+    installation.update(
+        {"commit": active, "release_id": f"0.4.0-git-{active[:12]}"}
+    )
+    atomic_write_json(layout.installation_file, installation)
+
+    with pytest.raises(RuntimeError, match="not a fast-forward"):
+        CheckoutDeployer(layout, CheckoutRunner()).plan(source)
+
+
+def test_checkout_deploy_rejects_invalid_active_commit_metadata(tmp_path: Path) -> None:
+    layout = _managed_layout(tmp_path)
+    installation = json.loads(layout.installation_file.read_text(encoding="utf-8"))
+    installation["commit"] = "not-a-full-commit"
+    atomic_write_json(layout.installation_file, installation)
+
+    with pytest.raises(RuntimeError, match="commit metadata is invalid"):
+        CheckoutDeployer(layout, CheckoutRunner()).plan(_checkout(tmp_path))
+
+
+def test_checkout_deploy_ignores_git_replacement_objects(tmp_path: Path) -> None:
+    layout = _managed_layout(tmp_path)
+    source = _checkout(tmp_path)
+    base = subprocess.run(
+        ("git", "-C", str(source), "rev-parse", "HEAD"),
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    active = _commit_change(source, "active.txt")
+    subprocess.run(("git", "-C", str(source), "checkout", "-q", base), check=True)
+    target = _commit_change(source, "divergent.txt")
+    subprocess.run(("git", "-C", str(source), "replace", target, active), check=True)
+    installation = json.loads(layout.installation_file.read_text(encoding="utf-8"))
+    installation.update(
+        {"commit": active, "release_id": f"0.4.0-git-{active[:12]}"}
+    )
+    atomic_write_json(layout.installation_file, installation)
+
+    with pytest.raises(RuntimeError, match="not a fast-forward"):
+        CheckoutDeployer(layout, CheckoutRunner()).plan(source)
+
+
 def test_failed_checkout_deploy_restores_previous_release(tmp_path: Path) -> None:
     layout = _managed_layout(tmp_path)
     source = _checkout(tmp_path)
@@ -233,6 +404,59 @@ def test_failed_checkout_deploy_restores_previous_release(tmp_path: Path) -> Non
         CheckoutDeployer(layout, runner).deploy(source)
 
     assert layout.current_link.resolve() == layout.release_dir("0.4.0").resolve()
+
+
+def test_receipt_write_failure_restores_previous_installation_metadata(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    layout = _managed_layout(tmp_path)
+    source = _checkout(tmp_path)
+    manager = CheckoutDeployer(layout, CheckoutRunner())
+    original_write = release_module.atomic_write_json
+    failed = False
+
+    def fail_completed_receipt(path: Path, value: dict, *args: object) -> None:
+        nonlocal failed
+        if path == layout.operation_file and value.get("state") == "complete" and not failed:
+            failed = True
+            raise OSError("forced receipt failure")
+        original_write(path, value, *args)
+
+    monkeypatch.setattr(release_module, "atomic_write_json", fail_completed_receipt)
+
+    with pytest.raises(RuntimeError, match="rolled back"):
+        manager.deploy(source)
+
+    assert layout.current_link.resolve() == layout.release_dir("0.4.0").resolve()
+    installation = json.loads(layout.installation_file.read_text(encoding="utf-8"))
+    assert installation["version"] == "0.4.0"
+    assert "commit" not in installation
+    assert "release_id" not in installation
+
+
+def test_rollback_receipt_failure_restores_current_runtime_and_metadata(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    layout = _managed_layout(tmp_path)
+    source = _checkout(tmp_path)
+    manager = CheckoutDeployer(layout, CheckoutRunner())
+    deployed = manager.deploy(source)
+    original_write = release_module.atomic_write_json
+
+    def fail_rollback_receipt(path: Path, value: dict, *args: object) -> None:
+        if path == layout.operation_file and value.get("operation") == "rollback":
+            raise OSError("forced rollback receipt failure")
+        original_write(path, value, *args)
+
+    monkeypatch.setattr(release_module, "atomic_write_json", fail_rollback_receipt)
+
+    with pytest.raises(RuntimeError, match="current release and database were restored"):
+        manager.rollback()
+
+    assert layout.current_link.resolve() == layout.release_dir(deployed["release_id"]).resolve()
+    installation = json.loads(layout.installation_file.read_text(encoding="utf-8"))
+    assert installation["commit"] == deployed["commit"]
+    assert installation["release_id"] == deployed["release_id"]
 
 
 def test_system_database_migration_runs_as_service_user() -> None:
@@ -281,6 +505,14 @@ def test_update_switches_release_and_records_rollback_receipt(tmp_path: Path) ->
     )
     runner = RecordingRunner()
     manager = UpdateManager(layout, runner, StubClient(info, archive))
+    installation = json.loads(layout.installation_file.read_text(encoding="utf-8"))
+    installation.update(
+        {
+            "commit": "a" * 40,
+            "release_id": "0.4.0-git-aaaaaaaaaaaa",
+        }
+    )
+    atomic_write_json(layout.installation_file, installation)
 
     result = manager.update(info)
 
@@ -289,10 +521,16 @@ def test_update_switches_release_and_records_rollback_receipt(tmp_path: Path) ->
     receipt = json.loads(layout.operation_file.read_text(encoding="utf-8"))
     assert receipt["previous_version"] == "0.4.0"
     assert Path(receipt["database_backup"]).exists()
+    updated = json.loads(layout.installation_file.read_text(encoding="utf-8"))
+    assert updated["commit"] is None
+    assert updated["release_id"] == "0.4.1"
 
     rollback = manager.rollback()
     assert rollback["state"] == "complete"
     assert layout.current_link.resolve() == layout.release_dir("0.4.0").resolve()
+    restored = json.loads(layout.installation_file.read_text(encoding="utf-8"))
+    assert restored["commit"] == "a" * 40
+    assert restored["release_id"] == "0.4.0-git-aaaaaaaaaaaa"
 
 
 def test_failed_update_restores_previous_release_and_database(tmp_path: Path) -> None:

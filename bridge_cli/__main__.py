@@ -90,6 +90,11 @@ def build_parser() -> argparse.ArgumentParser:
     deploy = commands.add_parser("deploy", help="Deploy the current committed checkout.")
     deploy.add_argument("--source", type=Path, help=argparse.SUPPRESS)
     deploy.add_argument("--yes", action="store_true")
+    deploy.add_argument(
+        "--allow-downgrade",
+        action="store_true",
+        help="Allow an older or non-fast-forward checkout after an explicit warning.",
+    )
     deploy.add_argument("--json", action="store_true", dest="as_json")
     update = commands.add_parser("update", help="Check for or install a stable update.")
     update.add_argument("--check", action="store_true")
@@ -184,18 +189,23 @@ def _deploy(args: argparse.Namespace, layout: Layout, runner: SubprocessRunner) 
         configured = installation.get("source_root")
         source_root = Path(str(configured)) if configured else running_root
     manager = CheckoutDeployer(layout, runner)
-    plan = manager.plan(source_root)
-    if plan.already_active:
-        result = {
-            "ok": True,
-            "operation": "deploy",
-            "state": "current",
-            "version": plan.version,
-            "commit": plan.commit,
-            "release_id": plan.release_id,
-        }
+    if args.yes:
+        result = manager.deploy(
+            source_root,
+            allow_downgrade=args.allow_downgrade,
+        )
     else:
-        if not args.yes:
+        plan = manager.plan(source_root, allow_downgrade=args.allow_downgrade)
+        if plan.already_active:
+            result = {
+                "ok": True,
+                "operation": "deploy",
+                "state": "current",
+                "version": plan.version,
+                "commit": plan.commit,
+                "release_id": plan.release_id,
+            }
+        else:
             if not sys.stdin.isatty():
                 raise ValueError("Non-interactive deploy requires --yes.")
             print("Deploy current committed checkout")
@@ -203,6 +213,8 @@ def _deploy(args: argparse.Namespace, layout: Layout, runner: SubprocessRunner) 
             print(f"Branch: {plan.branch}")
             print(f"Commit: {plan.commit[:12]}")
             print(f"Release: {plan.release_id}")
+            if plan.downgrade_override:
+                print("WARNING: downgrade/non-fast-forward protection was explicitly overridden.")
             print("- build an immutable release from Git HEAD")
             print("- create a final database backup")
             print("- briefly restart Bridge")
@@ -212,7 +224,11 @@ def _deploy(args: argparse.Namespace, layout: Layout, runner: SubprocessRunner) 
             if input("Deploy now? [y/N]: ").strip().lower() not in {"y", "yes"}:
                 print("Deploy cancelled; nothing changed.")
                 return 0
-        result = manager.deploy(plan.source_root, expected_commit=plan.commit)
+            result = manager.deploy(
+                plan.source_root,
+                expected_commit=plan.commit,
+                allow_downgrade=args.allow_downgrade,
+            )
     if args.as_json:
         print(json.dumps(result, indent=2, sort_keys=True))
     elif result["state"] == "current":

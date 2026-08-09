@@ -48,6 +48,7 @@ class CheckoutPlan:
     previous_release: Path
     already_active: bool
     untracked_files: tuple[str, ...]
+    downgrade_override: bool
 
 
 class ReleaseClient:
@@ -188,7 +189,12 @@ class UpdateManager:
                 release_dir,
                 operation="update",
                 target_version=release.version,
-                installation_updates={"version": release.version, "updated_at": int(time.time())},
+                installation_updates={
+                    "version": release.version,
+                    "commit": None,
+                    "release_id": release.version,
+                    "updated_at": int(time.time()),
+                },
             )
             atomic_write_json(
                 self.layout.update_file,
@@ -217,6 +223,7 @@ class UpdateManager:
             database_backup = Path(str(receipt["database_backup"]))
             if not previous_release.exists() or not database_backup.exists():
                 raise RuntimeError("Rollback release or database backup is missing.")
+            current_installation = self._installation()
             current_release = self.layout.current_link.resolve()
             safety_dir = self._new_backup_dir("rollback-safety")
             current_database_backup = safety_dir / "bridge.sqlite3"
@@ -233,33 +240,33 @@ class UpdateManager:
                     raise RuntimeError(active.stderr.strip() or "Bridge did not become active.")
                 if self.layout.root == Path("/"):
                     self._verify_http(self._installation())
+                installation = dict(current_installation)
+                installation["version"] = str(receipt["previous_version"])
+                _restore_optional_field(installation, "commit", receipt.get("previous_commit"))
+                _restore_optional_field(
+                    installation, "release_id", receipt.get("previous_release_id")
+                )
+                installation["updated_at"] = int(time.time())
+                atomic_write_json(self.layout.installation_file, installation)
+                rollback_receipt = {
+                    "format_version": 1,
+                    "operation": "rollback",
+                    "state": "complete",
+                    "previous_version": receipt["version"],
+                    "version": receipt["previous_version"],
+                    "database_backup": str(database_backup),
+                    "finished_at": int(time.time()),
+                }
+                atomic_write_json(self.layout.operation_file, rollback_receipt)
             except Exception as exc:
                 self.runner.run("systemctl", "stop", "mcp-session-bridge.service", check=False)
                 switch_release(self.layout.current_link, current_release, temporary_name=".current-update")
                 self._restore_database(current_database_backup)
                 self.runner.run("systemctl", "start", "mcp-session-bridge.service", check=False)
+                atomic_write_json(self.layout.installation_file, current_installation)
                 raise RuntimeError(
                     f"Rollback failed; the current release and database were restored: {exc}"
                 ) from exc
-            installation = self._installation()
-            installation["version"] = str(receipt["previous_version"])
-            if receipt.get("operation") == "deploy":
-                _restore_optional_field(installation, "commit", receipt.get("previous_commit"))
-                _restore_optional_field(
-                    installation, "release_id", receipt.get("previous_release_id")
-                )
-            installation["updated_at"] = int(time.time())
-            atomic_write_json(self.layout.installation_file, installation)
-            rollback_receipt = {
-                "format_version": 1,
-                "operation": "rollback",
-                "state": "complete",
-                "previous_version": receipt["version"],
-                "version": receipt["previous_version"],
-                "database_backup": str(database_backup),
-                "finished_at": int(time.time()),
-            }
-            atomic_write_json(self.layout.operation_file, rollback_receipt)
             return {"ok": True, **rollback_receipt}
 
     def _activate_prepared_release(
@@ -273,6 +280,7 @@ class UpdateManager:
         receipt_fields: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         previous_version = str(installation["version"])
+        previous_installation = dict(installation)
         previous_release = self.layout.current_link.resolve()
         previous_commit = installation.get("commit")
         previous_release_id = installation.get("release_id")
@@ -280,6 +288,7 @@ class UpdateManager:
         database_backup = backup_dir / "bridge.sqlite3"
         stopped = False
         live_backup_ready = False
+        installation_published = False
         try:
             preflight_db = backup_dir / "preflight.sqlite3"
             sqlite_backup(self.layout.db_path, preflight_db)
@@ -305,6 +314,7 @@ class UpdateManager:
                 self._verify_http(installation)
             installation.update(installation_updates)
             atomic_write_json(self.layout.installation_file, installation)
+            installation_published = True
             receipt = {
                 "format_version": 1,
                 "operation": operation,
@@ -331,6 +341,8 @@ class UpdateManager:
                 if live_backup_ready:
                     self._restore_database(database_backup)
                 self.runner.run("systemctl", "start", "mcp-session-bridge.service", check=False)
+            if installation_published:
+                atomic_write_json(self.layout.installation_file, previous_installation)
             failed = {
                 "format_version": 1,
                 "operation": operation,
@@ -491,36 +503,66 @@ class UpdateManager:
 
 
 class CheckoutDeployer(UpdateManager):
-    def plan(self, source_root: Path) -> CheckoutPlan:
+    def plan(
+        self, source_root: Path, *, allow_downgrade: bool = False
+    ) -> CheckoutPlan:
         source_root = source_root.expanduser().resolve()
         project = source_root / "pyproject.toml"
         if not project.exists():
             raise RuntimeError(f"Checkout is missing pyproject.toml: {source_root}")
         top_level = self.runner.run(
-            "git", "-C", str(source_root), "rev-parse", "--show-toplevel"
+            "git", "--no-replace-objects", "-C", str(source_root),
+            "rev-parse", "--show-toplevel"
         ).stdout.strip()
         if Path(top_level).resolve() != source_root:
             raise RuntimeError(f"Deploy must run from the repository root: {top_level}")
         dirty = self.runner.run(
-            "git", "-C", str(source_root), "status", "--porcelain", "--untracked-files=no"
+            "git", "--no-replace-objects", "-C", str(source_root),
+            "status", "--porcelain", "--untracked-files=no"
         ).stdout.strip()
         if dirty:
             raise RuntimeError("Checkout has tracked changes. Commit or discard them before deploy.")
         commit = self.runner.run(
-            "git", "-C", str(source_root), "rev-parse", "HEAD"
+            "git", "--no-replace-objects", "-C", str(source_root), "rev-parse", "HEAD"
         ).stdout.strip()
         if not re.fullmatch(r"[0-9a-f]{40}", commit):
             raise RuntimeError("Checkout HEAD is not a valid Git commit.")
         branch = self.runner.run(
-            "git", "-C", str(source_root), "branch", "--show-current"
+            "git", "--no-replace-objects", "-C", str(source_root), "branch", "--show-current"
         ).stdout.strip() or "detached"
         untracked_raw = self.runner.run(
-            "git", "-C", str(source_root), "ls-files", "--others", "--exclude-standard"
+            "git", "--no-replace-objects", "-C", str(source_root),
+            "ls-files", "--others", "--exclude-standard"
         ).stdout
         untracked = tuple(line for line in untracked_raw.splitlines() if line)
         with project.open("rb") as handle:
             version = str(tomllib.load(handle).get("project", {}).get("version", ""))
         _parse_version(version)
+        installation = self._installation()
+        current_version = str(installation["version"])
+        current_commit_raw = installation.get("commit")
+        if current_commit_raw is None:
+            current_commit = None
+        elif isinstance(current_commit_raw, str) and re.fullmatch(
+            r"[0-9a-f]{40}", current_commit_raw
+        ):
+            current_commit = current_commit_raw
+        else:
+            raise RuntimeError(
+                "Managed installation commit metadata is invalid. "
+                "Run mcp-bridge setup to inspect or repair the installation."
+            )
+        rejection_reason = self._transition_rejection_reason(
+            source_root,
+            version,
+            commit,
+            current_version,
+            current_commit,
+        )
+        if rejection_reason and not allow_downgrade:
+            raise RuntimeError(
+                rejection_reason + " Re-run with --allow-downgrade only if intentional."
+            )
         release_id = f"{version}-git-{commit[:12]}"
         previous_release = self.layout.current_link.resolve()
         return CheckoutPlan(
@@ -532,13 +574,51 @@ class CheckoutDeployer(UpdateManager):
             previous_release=previous_release,
             already_active=previous_release == self.layout.release_dir(release_id).resolve(),
             untracked_files=untracked,
+            downgrade_override=rejection_reason is not None,
+        )
+
+    def _transition_rejection_reason(
+        self,
+        source_root: Path,
+        target_version: str,
+        target_commit: str,
+        current_version: str,
+        current_commit: str | None,
+    ) -> str | None:
+        if _version_tuple(target_version) < _version_tuple(current_version):
+            return (
+                f"Checkout version {target_version} is older than active Bridge "
+                f"{current_version}."
+            )
+        if current_commit in {None, target_commit}:
+            return None
+        merge_base = self.runner.run(
+            "git", "--no-replace-objects", "-C", str(source_root),
+            "merge-base", current_commit, target_commit,
+            check=False,
+        )
+        common_commit = merge_base.stdout.strip() if merge_base.returncode == 0 else ""
+        if common_commit == current_commit:
+            return None
+        if common_commit == target_commit:
+            return (
+                f"Checkout commit {target_commit[:12]} is an older commit than "
+                f"active {current_commit[:12]}."
+            )
+        return (
+            f"Checkout commit {target_commit[:12]} is not a fast-forward from "
+            f"active {current_commit[:12]}."
         )
 
     def deploy(
-        self, source_root: Path, *, expected_commit: str | None = None
+        self,
+        source_root: Path,
+        *,
+        expected_commit: str | None = None,
+        allow_downgrade: bool = False,
     ) -> dict[str, Any]:
         with self.operation_lock():
-            plan = self.plan(source_root)
+            plan = self.plan(source_root, allow_downgrade=allow_downgrade)
             if expected_commit is not None and plan.commit != expected_commit:
                 raise RuntimeError(
                     f"Checkout changed after confirmation: {expected_commit[:12]} -> {plan.commit[:12]}."
@@ -551,6 +631,7 @@ class CheckoutDeployer(UpdateManager):
                     "version": plan.version,
                     "commit": plan.commit,
                     "release_id": plan.release_id,
+                    "downgrade_override": plan.downgrade_override,
                 }
             installation = self._installation()
             self.layout.releases_root.mkdir(mode=0o755, parents=True, exist_ok=True)
@@ -573,6 +654,7 @@ class CheckoutDeployer(UpdateManager):
                     "release_id": plan.release_id,
                     "branch": plan.branch,
                     "untracked_files_excluded": len(plan.untracked_files),
+                    "downgrade_override": plan.downgrade_override,
                 },
             )
 
@@ -592,8 +674,8 @@ class CheckoutDeployer(UpdateManager):
             archive = temporary / "checkout.tar.gz"
             extracted = temporary / "checkout"
             self.runner.run(
-                "git", "-C", str(plan.source_root), "archive", "--format=tar.gz",
-                f"--output={archive}", plan.commit,
+                "git", "--no-replace-objects", "-C", str(plan.source_root),
+                "archive", "--format=tar.gz", f"--output={archive}", plan.commit,
             )
             safe_extract(archive, extracted)
             with (extracted / "pyproject.toml").open("rb") as handle:

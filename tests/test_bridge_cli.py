@@ -120,8 +120,11 @@ def test_database_command_contract_parses_explicit_replace_and_yes() -> None:
 
 
 def test_deploy_command_contract_supports_confirmation_and_json() -> None:
-    args = build_parser().parse_args(["deploy", "--yes", "--json"])
+    args = build_parser().parse_args(
+        ["deploy", "--yes", "--allow-downgrade", "--json"]
+    )
 
     assert args.command == "deploy"
     assert args.yes is True
+    assert args.allow_downgrade is True
     assert args.as_json is True

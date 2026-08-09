@@ -97,6 +97,8 @@ def test_import_replaces_complete_database_and_preserves_source(tmp_path: Path) 
     create_database(layout.db_path, "old")
     source = tmp_path / "incoming.sqlite3"
     create_database(source, "new-a", "new-b")
+    with sqlite3.connect(source) as connection:
+        connection.execute("PRAGMA wal_checkpoint(TRUNCATE)")
     before = source.read_bytes()
     manager = DatabaseManager(layout, Runner(active=True))
 
