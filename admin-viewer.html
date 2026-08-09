@@ -1129,6 +1129,20 @@
     .search-detail { display: grid; align-content: start; gap: .9rem; }
     .search-detail h4, .search-detail p { margin: 0; }
     .search-detail-snippet { padding: 1rem; border: 1px solid var(--stroke); border-radius: var(--r-card); background: rgba(255,255,255,.025); white-space: pre-wrap; line-height: 1.6; }
+    .codex-dialog { width: min(48rem, calc(100vw - 2rem)); height: min(44rem, calc(100vh - 2rem)); max-width: none; max-height: none; }
+    .codex-dialog[open] { display: grid; grid-template-rows: auto auto minmax(0,1fr) auto; }
+    .codex-account { display: flex; flex-wrap: wrap; align-items: center; gap: .55rem; padding: .8rem 1rem; border-bottom: 1px solid var(--stroke-soft); }
+    .codex-account .settings-status { flex: 1 1 15rem; margin: 0; }
+    .codex-login { display: grid; gap: .65rem; padding: .8rem; border: 1px solid var(--stroke); border-radius: 9px; background: rgba(255,255,255,.025); }
+    .codex-login code { width: fit-content; padding: .45rem .65rem; border-radius: 7px; background: rgba(0,0,0,.28); font-size: 1rem; letter-spacing: .08em; }
+    .codex-transcript { min-height: 0; overflow: auto; display: grid; align-content: start; gap: .7rem; padding: 1rem; }
+    .codex-empty { color: var(--muted); text-align: center; align-self: center; padding: 2rem 1rem; }
+    .codex-message { display: grid; gap: .25rem; max-width: 88%; padding: .7rem .8rem; border: 1px solid var(--stroke-soft); border-radius: 10px; line-height: 1.5; overflow-wrap: anywhere; }
+    .codex-message small { color: var(--faint-ink); font-size: .66rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+    .codex-message.is-user { justify-self: end; border-color: transparent; background: var(--accent); color: #fff; }
+    .codex-message.is-model { justify-self: start; background: var(--glass); }
+    .codex-chat-form { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: .6rem; padding: .8rem 1rem 1rem; border-top: 1px solid var(--stroke-soft); }
+    .codex-chat-form textarea { min-height: 4.5rem; max-height: 11rem; resize: vertical; }
 
     /* ---------- responsive ---------- */
     @media (max-width: 920px) {
@@ -1138,7 +1152,7 @@
       .topbar { flex-direction: column; align-items: stretch; }
       .top-actions { justify-content: flex-start; }
       #fileWorkspaceDialog { width: calc(100vw - 1rem); height: calc(100vh - 1rem); }
-      .settings-dialog, .search-dialog { width: calc(100vw - 1rem); height: calc(100vh - 1rem); max-height: none; }
+      .settings-dialog, .search-dialog, .codex-dialog { width: calc(100vw - 1rem); height: calc(100vh - 1rem); max-height: none; }
       .exchange-grid, .field-grid { grid-template-columns: 1fr; }
       .turn + .turn { border-left: 0; border-top: 1px solid var(--stroke-soft); }
       .chat.bubbles .message { max-width: 92%; }
@@ -1190,6 +1204,10 @@
       </section>
 
       <div class="settings-row" aria-label="Admin menu">
+        <button id="codexOpenButton" type="button" class="ghost settings-button" aria-haspopup="dialog" aria-controls="codexDialog">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a5 5 0 0 1 4.8 3.6A5 5 0 0 1 18 16.4 5 5 0 0 1 8.2 18 5 5 0 0 1 6 8.5 5 5 0 0 1 12 3z"></path><path d="m9.5 9.5 5 5m0-5-5 5"></path></svg>
+          Codex
+        </button>
         <button id="searchOpenButton" type="button" class="ghost search-launcher" aria-haspopup="dialog" aria-controls="searchDialog">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
           Search
@@ -1613,6 +1631,31 @@
     </div>
   </dialog>
 
+  <dialog id="codexDialog" class="codex-dialog" aria-labelledby="codexHeading">
+    <div class="dialog-head">
+      <div><h3 id="codexHeading">Codex</h3><p class="meta">Private test conversation through this server's managed Codex App Server.</p></div>
+      <button type="button" class="ghost" id="codexClose">Close</button>
+    </div>
+    <section class="codex-account" aria-live="polite">
+      <p id="codexStatus" class="settings-status">Checking Codex…</p>
+      <button id="codexLoginStart" type="button">Sign in with OpenAI</button>
+      <button id="codexLogout" type="button" class="danger" hidden>Sign out of Codex</button>
+      <div id="codexLoginPanel" class="codex-login" hidden>
+        <span>Open the secure OpenAI page and enter this one-time code:</span>
+        <code id="codexUserCode"></code>
+        <div class="edit-actions">
+          <a id="codexVerificationLink" class="button primary" href="#" target="_blank" rel="noopener noreferrer">Open OpenAI</a>
+          <button id="codexLoginCancel" type="button" class="ghost">Cancel</button>
+        </div>
+      </div>
+    </section>
+    <div id="codexTranscript" class="codex-transcript" aria-live="polite"></div>
+    <form id="codexChatForm" class="codex-chat-form">
+      <textarea id="codexChatInput" maxlength="8000" placeholder="Message Codex…" aria-label="Message Codex"></textarea>
+      <button id="codexChatSubmit" type="submit" class="primary">Send</button>
+    </form>
+  </dialog>
+
   <script type="application/json" id="demo-data">{"ok":true,"schema":"mcp-session-bridge.viewer.v1","generated_at":1780321400,"generated_at_iso":"2026-06-01T13:43:20.000Z","session_count":4,"turn_count":22,"sessions":[{"session_id":"demo-2026-06-01-empty-followup","title":"Short follow-up session","title_is_auto":false,"context_pack_id":"manual-context","created_at":1780316600,"updated_at":1780317350,"exchange_count":1,"deleted_exchange_count":0},{"session_id":"demo-2026-06-01-incident-debugging","title":"Debugging a virtual environment issue","title_is_auto":false,"context_pack_id":"local-development","created_at":1780311200,"updated_at":1780313270,"exchange_count":3,"deleted_exchange_count":0},{"session_id":"demo-2026-06-01-ui-review","title":"Admin viewer UI review","title_is_auto":false,"context_pack_id":"viewer-design-refresh","created_at":1780305600,"updated_at":1780308330,"exchange_count":4,"deleted_exchange_count":1},{"session_id":"demo-2026-06-01-product-planning","title":"Product planning with Claude and GPT","title_is_auto":false,"context_pack_id":"public-release-notes","created_at":1780301400,"updated_at":1780303470,"exchange_count":3,"deleted_exchange_count":0}],"transcripts":{"demo-2026-06-01-product-planning":{"session_id":"demo-2026-06-01-product-planning","title":"Product planning with Claude and GPT","exchange_count":3,"turn_count":6,"char_count":2104,"sha256":"synthetic-preview-only","context_pack_id":"public-release-notes","turn_sequence":["USER","Claude","USER","GPT-5","USER","Claude"],"turns":[{"turn":1,"speaker":"USER","exchange_id":100,"created_at":"2026-06-01T08:10:00.000Z","created_at_display":null,"chars":103,"content":"We are preparing MCP Session Bridge for a public v0.1 release. What should the README make clear first?"},{"turn":2,"speaker":"Claude","exchange_id":100,"created_at":"2026-06-01T08:11:30.000Z","created_at_display":"Monday June 1, 2026 at 08:11","chars":226,"content":"Lead with the core promise: this is a small remote MCP server for shared, multi-model conversation memory. The README should show the quickest useful path, then explain tools, security assumptions, and the current limitations."},{"turn":3,"speaker":"USER","exchange_id":101,"created_at":"2026-06-01T08:21:00.000Z","created_at_display":null,"chars":50,"content":"Can you turn that into a concise launch checklist?"},{"turn":4,"speaker":"GPT-5","exchange_id":101,"created_at":"2026-06-01T08:22:30.000Z","created_at_display":"Monday June 1, 2026 at 08:22","chars":191,"content":"Yes. Suggested checklist: README quickstart, .env.example, MIT license, security policy, contributing notes, changelog, demo script, examples, and a CI workflow that runs tests plus the demo."},{"turn":5,"speaker":"USER","exchange_id":102,"created_at":"2026-06-01T08:32:00.000Z","created_at_display":null,"chars":80,"content":"The docs feel a little dense. What would make them easier for a new contributor?"},{"turn":6,"speaker":"Claude","exchange_id":102,"created_at":"2026-06-01T08:33:30.000Z","created_at_display":"Monday June 1, 2026 at 08:33","chars":199,"content":"Split the mental model from the operational steps. A first-time reader should find installation, client setup, model instructions, deployment, security, limitations, and operations as separate paths."}]},"demo-2026-06-01-ui-review":{"session_id":"demo-2026-06-01-ui-review","title":"Admin viewer UI review","exchange_count":4,"turn_count":8,"char_count":2480,"sha256":"synthetic-preview-only","context_pack_id":"viewer-design-refresh","turn_sequence":["USER","USER","USER","Claude","USER","GPT-5","USER","Claude"],"turns":[{"turn":1,"speaker":"USER","exchange_id":103,"created_at":"2026-06-01T09:20:00.000Z","created_at_display":null,"chars":113,"content":"The current admin panel works, but it feels a bit plain. I want it to stay practical while looking more polished."},{"turn":2,"speaker":"USER","exchange_id":103,"created_at":"2026-06-01T09:21:30.000Z","created_at_display":"Monday June 1, 2026 at 09:21","chars":196,"content":"The best direction is a calmer operational dashboard: stronger spacing rhythm, clearer active selection, better exchange cards, and more deliberate typography. Keep it dense enough for repeat use."},{"turn":3,"speaker":"USER","exchange_id":104,"created_at":"2026-06-01T09:31:00.000Z","created_at_display":null,"chars":66,"content":"Should the redesign use a big hero or decorative visual treatment?"},{"turn":4,"speaker":"Claude","exchange_id":104,"created_at":"2026-06-01T09:32:30.000Z","created_at_display":"Monday June 1, 2026 at 09:32","chars":150,"content":"No. This is an admin tool, so the first screen should be the working surface itself: session list, summary, transcript corrections, and clear actions."},{"turn":5,"speaker":"USER","exchange_id":105,"created_at":"2026-06-01T09:42:00.000Z","created_at_display":null,"chars":44,"content":"What UI states should the redesign preserve?"},{"turn":6,"speaker":"GPT-5","exchange_id":105,"created_at":"2026-06-01T09:43:30.000Z","created_at_display":"Monday June 1, 2026 at 09:43","chars":157,"content":"Keep loading, empty, selected, editing, deleted, error, and success states. Also preserve responsive behavior for narrow screens and long transcript content."},{"turn":7,"speaker":"USER","exchange_id":106,"created_at":"2026-06-01T09:53:00.000Z","created_at_display":null,"chars":74,"content":"The delete and restore actions need better affordance. Any recommendation?"},{"turn":8,"speaker":"Claude","exchange_id":106,"created_at":"2026-06-01T09:54:30.000Z","created_at_display":"Monday June 1, 2026 at 09:54","chars":166,"content":"Use restrained destructive styling for delete, a clear restored/saved status message, and make deleted exchanges visually distinct without making the text unreadable."}]},"demo-2026-06-01-incident-debugging":{"session_id":"demo-2026-06-01-incident-debugging","title":"Debugging a virtual environment issue","exchange_count":3,"turn_count":6,"char_count":1920,"sha256":"synthetic-preview-only","context_pack_id":"local-development","turn_sequence":["USER","USER","USER","GPT-5","USER","Claude"],"turns":[{"turn":1,"speaker":"USER","exchange_id":107,"created_at":"2026-06-01T10:53:20.000Z","created_at_display":null,"chars":70,"content":"uv run sometimes hangs on my mounted workspace. Is the project broken?"},{"turn":2,"speaker":"USER","exchange_id":107,"created_at":"2026-06-01T10:54:50.000Z","created_at_display":"Monday June 1, 2026 at 10:54","chars":192,"content":"The project is likely fine. The symptom points to the mounted filesystem and virtual environment metadata rather than app logic. Rebuilding .venv on the host where tests run is the safer path."},{"turn":3,"speaker":"USER","exchange_id":108,"created_at":"2026-06-01T11:04:20.000Z","created_at_display":null,"chars":41,"content":"What should we document for contributors?"},{"turn":4,"speaker":"GPT-5","exchange_id":108,"created_at":"2026-06-01T11:05:50.000Z","created_at_display":"Monday June 1, 2026 at 11:05","chars":171,"content":"Tell contributors to run uv sync locally on their own machine, avoid committing .venv, and rebuild the environment if packages look inconsistent after moving the checkout."},{"turn":5,"speaker":"USER","exchange_id":109,"created_at":"2026-06-01T11:15:20.000Z","created_at_display":null,"chars":33,"content":"Could this affect GitHub Actions?"},{"turn":6,"speaker":"Claude","exchange_id":109,"created_at":"2026-06-01T11:16:50.000Z","created_at_display":"Monday June 1, 2026 at 11:16","chars":160,"content":"No, GitHub Actions creates a fresh checkout and a fresh Python environment. That makes CI a useful independent signal for whether the project itself is healthy."}]},"demo-2026-06-01-empty-followup":{"session_id":"demo-2026-06-01-empty-followup","title":"Short follow-up session","exchange_count":1,"turn_count":2,"char_count":937,"sha256":"synthetic-preview-only","context_pack_id":"manual-context","turn_sequence":["USER","USER"],"turns":[{"turn":1,"speaker":"USER","exchange_id":110,"created_at":"2026-06-01T12:23:20.000Z","created_at_display":null,"chars":59,"content":"Give me a tiny explanation of what MCP Session Bridge does."},{"turn":2,"speaker":"USER","exchange_id":110,"created_at":"2026-06-01T12:24:50.000Z","created_at_display":"Monday June 1, 2026 at 12:24","chars":209,"content":"It gives multiple model clients one shared transcript store, so Claude, ChatGPT, Codex, or another MCP client can pick up the same conversation history through tools instead of relying on a single chat window."}]}}}</script>
   <script>
     (() => {
@@ -1749,6 +1792,7 @@
         displayTimezone: localStorage.getItem("mcp-admin:timezone") || "UTC",
         revealedSensitiveSessionLists: new Set(),
         revealedSensitiveThreads: new Set(),
+        codex: { status: null, login: null, threadId: null, messages: [], busy: false, pollTimer: 0 },
       };
       let statusTimer = 0;
       let pdfJsPromise = null;
@@ -1764,6 +1808,20 @@
         aiSettingsClose: document.getElementById("aiSettingsClose"),
         aiSettingsDialog: document.getElementById("aiSettingsDialog"),
         aiSettingsStatus: document.getElementById("aiSettingsStatus"),
+        codexOpenButton: document.getElementById("codexOpenButton"),
+        codexDialog: document.getElementById("codexDialog"),
+        codexClose: document.getElementById("codexClose"),
+        codexStatus: document.getElementById("codexStatus"),
+        codexLoginStart: document.getElementById("codexLoginStart"),
+        codexLogout: document.getElementById("codexLogout"),
+        codexLoginPanel: document.getElementById("codexLoginPanel"),
+        codexUserCode: document.getElementById("codexUserCode"),
+        codexVerificationLink: document.getElementById("codexVerificationLink"),
+        codexLoginCancel: document.getElementById("codexLoginCancel"),
+        codexTranscript: document.getElementById("codexTranscript"),
+        codexChatForm: document.getElementById("codexChatForm"),
+        codexChatInput: document.getElementById("codexChatInput"),
+        codexChatSubmit: document.getElementById("codexChatSubmit"),
         copyButton: document.getElementById("copyButton"),
         copySessionIdButton: document.getElementById("copySessionIdButton"),
         demoBanner: document.getElementById("demoBanner"),
@@ -1876,6 +1934,20 @@
         if (group) openGroupDialog(group);
       });
       dom.aiSettingsButton.addEventListener("click", () => openAiSettingsDialog());
+      dom.codexOpenButton.addEventListener("click", () => openCodexDialog());
+      dom.codexClose.addEventListener("click", () => dom.codexDialog.close());
+      dom.codexLoginStart.addEventListener("click", () => startCodexLogin());
+      dom.codexLoginCancel.addEventListener("click", () => cancelCodexLogin());
+      dom.codexLogout.addEventListener("click", () => logoutCodex());
+      dom.codexChatForm.addEventListener("submit", (event) => {
+        event.preventDefault();
+        sendCodexMessage();
+      });
+      dom.codexDialog.addEventListener("close", () => {
+        window.clearTimeout(state.codex.pollTimer);
+        state.codex.pollTimer = 0;
+        dom.codexOpenButton.focus();
+      });
       dom.groupSensitiveButton.addEventListener("click", () => {
         const next = dom.groupSensitiveButton.getAttribute("aria-pressed") !== "true";
         dom.groupSensitiveButton.setAttribute("aria-pressed", String(next));
@@ -1899,6 +1971,7 @@
       bindDialogBackdropClose(dom.sessionMoveDialog, dom.sessionMoveCancel);
       bindDialogBackdropClose(dom.fileWorkspaceDialog, dom.fileWorkspaceClose);
       bindDialogBackdropClose(dom.aiSettingsDialog, dom.aiSettingsClose);
+      bindDialogBackdropClose(dom.codexDialog, dom.codexClose);
       bindDialogBackdropClose(settingsDom.searchDialog, settingsDom.searchClose);
       dom.groupCancelButton.addEventListener("click", () => dom.groupDialog.close());
       dom.groupDialogClose.addEventListener("click", () => dom.groupDialog.close());
@@ -2043,6 +2116,162 @@
           const ok = await enableDemo();
           if (!ok) setStatus(error.message, "error");
         }
+      }
+
+      async function openCodexDialog() {
+        if (!dom.codexDialog.open) dom.codexDialog.showModal();
+        renderCodex();
+        if (demo.enabled) {
+          state.codex.status = { available: false, authenticated: false };
+          renderCodex("Codex is unavailable in offline demo mode.", "warn");
+          return;
+        }
+        await refreshCodexStatus();
+      }
+
+      async function refreshCodexStatus(loginPoll = false) {
+        window.clearTimeout(state.codex.pollTimer);
+        state.codex.pollTimer = 0;
+        try {
+          const path = loginPoll
+            ? "/admin/api/codex/auth/device/status"
+            : "/admin/api/codex/status";
+          const payload = await api(path);
+          state.codex.status = payload.codex;
+          if (payload.codex.authenticated) state.codex.login = null;
+          renderCodex();
+          if (loginPoll && payload.codex.login_status === "pending" && dom.codexDialog.open) {
+            state.codex.pollTimer = window.setTimeout(() => refreshCodexStatus(true), 2000);
+          }
+          if (payload.codex.authenticated) dom.codexChatInput.focus();
+        } catch (error) {
+          state.codex.status = { available: false, authenticated: false };
+          renderCodex(error.message || "Codex App Server is unavailable.", "error");
+        }
+      }
+
+      async function startCodexLogin() {
+        if (state.codex.busy) return;
+        setCodexBusy(true);
+        try {
+          const payload = await api("/admin/api/codex/auth/device/start", { method: "POST" });
+          state.codex.login = payload.login;
+          renderCodex("Complete sign-in in the OpenAI window.", "");
+          state.codex.pollTimer = window.setTimeout(() => refreshCodexStatus(true), 1500);
+        } catch (error) {
+          renderCodex(error.message, "error");
+        } finally {
+          setCodexBusy(false);
+        }
+      }
+
+      async function cancelCodexLogin() {
+        window.clearTimeout(state.codex.pollTimer);
+        state.codex.pollTimer = 0;
+        if (state.codex.busy) return;
+        setCodexBusy(true);
+        try {
+          await api("/admin/api/codex/auth/device/cancel", { method: "POST" });
+          state.codex.login = null;
+          await refreshCodexStatus();
+        } catch (error) {
+          renderCodex(error.message, "error");
+        } finally {
+          setCodexBusy(false);
+        }
+      }
+
+      async function logoutCodex() {
+        if (state.codex.busy) return;
+        setCodexBusy(true);
+        try {
+          await api("/admin/api/codex/logout", { method: "POST" });
+          state.codex.status = { available: true, authenticated: false };
+          state.codex.login = null;
+          state.codex.threadId = null;
+          state.codex.messages = [];
+          renderCodex("Signed out. The test conversation was cleared.", "ok");
+        } catch (error) {
+          renderCodex(error.message, "error");
+        } finally {
+          setCodexBusy(false);
+        }
+      }
+
+      async function sendCodexMessage() {
+        const message = dom.codexChatInput.value.trim();
+        if (!message || state.codex.busy || !state.codex.status?.authenticated) return;
+        state.codex.messages.push({ role: "user", content: message });
+        dom.codexChatInput.value = "";
+        setCodexBusy(true);
+        renderCodex();
+        try {
+          const payload = await api("/admin/api/codex/chat", {
+            method: "POST",
+            body: JSON.stringify({ message, thread_id: state.codex.threadId }),
+          });
+          state.codex.threadId = payload.chat.thread_id;
+          state.codex.messages.push({ role: "model", content: payload.chat.message });
+          renderCodex();
+        } catch (error) {
+          state.codex.messages.push({ role: "error", content: error.message });
+          renderCodex(error.message, "error");
+        } finally {
+          setCodexBusy(false);
+          dom.codexChatInput.focus();
+        }
+      }
+
+      function setCodexBusy(busy) {
+        state.codex.busy = busy;
+        dom.codexLoginStart.disabled = busy;
+        dom.codexLoginCancel.disabled = busy;
+        dom.codexLogout.disabled = busy;
+        dom.codexChatInput.disabled = busy;
+        dom.codexChatSubmit.disabled = busy;
+      }
+
+      function renderCodex(statusMessage = "", statusKind = "") {
+        const status = state.codex.status;
+        const authenticated = Boolean(status?.authenticated);
+        const available = status?.available !== false;
+        const account = status?.account;
+        const accountLabel = account?.email || (account?.type === "api_key" ? "API key account" : "OpenAI account");
+        dom.codexStatus.textContent = statusMessage || (authenticated
+          ? `Connected as ${accountLabel}${account?.plan_type ? ` (${account.plan_type})` : ""}.`
+          : available ? "Sign in with OpenAI to start a private test conversation." : "Codex App Server is unavailable.");
+        dom.codexStatus.className = `settings-status${statusKind ? ` ${statusKind}` : ""}`;
+        dom.codexLoginStart.hidden = authenticated || Boolean(state.codex.login) || !available;
+        dom.codexLogout.hidden = !authenticated;
+        dom.codexLoginPanel.hidden = !state.codex.login || authenticated;
+        if (state.codex.login && !authenticated) {
+          dom.codexUserCode.textContent = state.codex.login.user_code || "";
+          dom.codexVerificationLink.href = state.codex.login.verification_url || "#";
+        }
+        dom.codexChatForm.hidden = !authenticated;
+        dom.codexTranscript.replaceChildren();
+        if (!state.codex.messages.length) {
+          const empty = document.createElement("p");
+          empty.className = "codex-empty";
+          empty.textContent = authenticated
+            ? "Start a test conversation. It exists only in this browser tab and is not written to the Bridge database."
+            : "No conversation is stored while Codex is signed out.";
+          dom.codexTranscript.appendChild(empty);
+        } else {
+          for (const message of state.codex.messages) {
+            const item = document.createElement("article");
+            item.className = `codex-message ${message.role === "user" ? "is-user" : "is-model"}`;
+            const label = document.createElement("small");
+            label.textContent = message.role === "user" ? "You" : message.role === "error" ? "Error" : "Codex";
+            const body = document.createElement("div");
+            if (message.role === "model") body.innerHTML = renderMarkdown(message.content);
+            else body.textContent = message.content;
+            item.append(label, body);
+            dom.codexTranscript.appendChild(item);
+          }
+          dom.codexTranscript.scrollTop = dom.codexTranscript.scrollHeight;
+        }
+        setCodexBusy(state.codex.busy);
       }
 
       async function loadSettings() {

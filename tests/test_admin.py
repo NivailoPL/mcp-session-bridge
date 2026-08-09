@@ -475,6 +475,37 @@ def test_admin_viewer_exposes_large_tool_result_compatibility_controls() -> None
     assert "!payload.tool_output.restart_pending && !payload.tool_output.restart_required" in viewer
 
 
+def test_admin_viewer_codex_popup_is_ephemeral_and_lazy_loaded() -> None:
+    viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
+
+    assert 'id="codexOpenButton"' in viewer
+    assert 'aria-controls="codexDialog"' in viewer
+    assert 'id="codexDialog"' in viewer
+    assert 'id="codexLoginStart"' in viewer
+    assert 'id="codexLoginCancel"' in viewer
+    assert 'id="codexLogout"' in viewer
+    assert 'id="codexChatForm"' in viewer
+    assert 'id="codexTranscript"' in viewer
+    assert 'async function openCodexDialog()' in viewer
+    assert 'await refreshCodexStatus();' in viewer
+    assert 'threadId: null' in viewer
+    assert 'messages: []' in viewer
+    assert 'body: JSON.stringify({ message, thread_id: state.codex.threadId })' in viewer
+    assert 'renderMarkdown(message.content)' in viewer
+
+    codex_block = viewer[
+        viewer.index('codex: {'):
+        viewer.index('let statusTimer')
+    ]
+    assert "localStorage" not in codex_block
+    assert "sessionStorage" not in codex_block
+    init_block = viewer[
+        viewer.index("async function init()"):
+        viewer.index("async function openCodexDialog()")
+    ]
+    assert "/admin/api/codex" not in init_block
+
+
 def test_deployment_includes_narrow_restart_helper() -> None:
     helper = Path("deploy/mcp-session-bridge-restart.service").read_text(encoding="utf-8")
 
