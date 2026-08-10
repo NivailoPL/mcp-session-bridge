@@ -468,6 +468,7 @@ class UpdateManager:
             "env",
             f"PYTHONPATH={release_dir}",
             str(release_dir / ".venv/bin/python"),
+            "-P",
             "-c",
             (
                 "import sys; from pathlib import Path; "

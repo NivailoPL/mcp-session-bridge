@@ -554,7 +554,7 @@ def test_rollback_receipt_failure_restores_current_runtime_and_metadata(
     assert installation["release_id"] == deployed["release_id"]
 
 
-def test_system_database_migration_runs_as_service_user() -> None:
+def test_system_database_migration_runs_as_service_user_with_safe_import_path() -> None:
     runner = RecordingRunner()
     manager = UpdateManager(Layout.system(), runner)
     release = Path("/opt/mcp-session-bridge/releases/test")
@@ -565,6 +565,7 @@ def test_system_database_migration_runs_as_service_user() -> None:
     assert runner.calls[-1] == (
         "runuser", "--user", "mcp-session-bridge", "--", "env",
         f"PYTHONPATH={release}", str(release / ".venv/bin/python"),
+        "-P",
         "-c",
         (
             "import sys; from pathlib import Path; "
