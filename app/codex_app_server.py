@@ -13,6 +13,7 @@ from urllib.parse import urlparse
 from bridge_cli.codex_contract import CODEX_VERSION
 
 MAX_CHAT_MESSAGE_CHARS = 8_000
+MAX_STRUCTURED_INPUT_CHARS = 500_000
 MAX_OWNED_THREADS = 32
 DEFAULT_RPC_TIMEOUT_SECONDS = 15.0
 DEFAULT_TURN_TIMEOUT_SECONDS = 300.0
@@ -428,31 +429,74 @@ class CodexAppServerClient:
             raise ValueError("message must not be empty.")
         if len(normalized) > MAX_CHAT_MESSAGE_CHARS:
             raise ValueError(f"message must be {MAX_CHAT_MESSAGE_CHARS} characters or fewer.")
-        await self._ensure_connected()
         if thread_id is None:
-            self._make_thread_capacity()
-            result = await self._rpc(
-                "thread/start",
-                {
-                    "cwd": str(self.workspace_dir),
-                    "ephemeral": True,
-                    "approvalPolicy": "never",
-                    "approvalsReviewer": "user",
-                    "sandbox": "read-only",
-                    "personality": "none",
-                    "config": {
-                        "features": dict(_DISABLED_FEATURES),
-                        "web_search": "disabled",
-                        "mcp_servers": {},
-                    },
-                },
-            )
-            thread = result.get("thread") if isinstance(result, dict) else None
-            thread_id = thread.get("id") if isinstance(thread, dict) else None
-            if not isinstance(thread_id, str) or thread.get("ephemeral") is not True:
-                raise CodexProtocolError("Codex failed to create an ephemeral conversation.")
-            self._thread_locks[thread_id] = asyncio.Lock()
+            thread_id = await self._start_restricted_thread()
         elif thread_id not in self._thread_locks:
+            raise ValueError("Unknown or expired Codex conversation.")
+
+        response = await self._run_text_turn(thread_id, normalized, {})
+        return {"thread_id": thread_id, "message": response}
+
+    async def extract_structured(
+        self,
+        message: str,
+        *,
+        model: str,
+        effort: str,
+        output_schema: dict[str, Any],
+    ) -> dict[str, Any]:
+        normalized = message.strip()
+        if not normalized:
+            raise ValueError("message must not be empty.")
+        if len(normalized) > MAX_STRUCTURED_INPUT_CHARS:
+            raise ValueError(f"message must be {MAX_STRUCTURED_INPUT_CHARS} characters or fewer.")
+        thread_id = await self._start_restricted_thread()
+        response = await self._run_text_turn(
+            thread_id,
+            normalized,
+            {"model": model, "effort": effort, "outputSchema": output_schema},
+        )
+        try:
+            result = json.loads(response)
+        except json.JSONDecodeError as exc:
+            raise CodexProtocolError("Codex returned invalid structured output.") from exc
+        if not isinstance(result, dict):
+            raise CodexProtocolError("Codex returned invalid structured output.")
+        return result
+
+    async def _start_restricted_thread(self) -> str:
+        await self._ensure_connected()
+        self._make_thread_capacity()
+        result = await self._rpc(
+            "thread/start",
+            {
+                "cwd": str(self.workspace_dir),
+                "ephemeral": True,
+                "approvalPolicy": "never",
+                "approvalsReviewer": "user",
+                "sandbox": "read-only",
+                "personality": "none",
+                "config": {
+                    "features": dict(_DISABLED_FEATURES),
+                    "web_search": "disabled",
+                    "mcp_servers": {},
+                },
+            },
+        )
+        thread = result.get("thread") if isinstance(result, dict) else None
+        thread_id = thread.get("id") if isinstance(thread, dict) else None
+        if not isinstance(thread_id, str) or thread.get("ephemeral") is not True:
+            raise CodexProtocolError("Codex failed to create an ephemeral conversation.")
+        self._thread_locks[thread_id] = asyncio.Lock()
+        return thread_id
+
+    async def _run_text_turn(
+        self,
+        thread_id: str,
+        message: str,
+        options: dict[str, Any],
+    ) -> str:
+        if thread_id not in self._thread_locks:
             raise ValueError("Unknown or expired Codex conversation.")
 
         lock = self._thread_locks[thread_id]
@@ -463,8 +507,9 @@ class CodexAppServerClient:
                 "turn/start",
                 {
                     "threadId": thread_id,
-                    "input": [{"type": "text", "text": normalized}],
+                    "input": [{"type": "text", "text": message}],
                     "clientUserMessageId": str(uuid.uuid4()),
+                    **options,
                 },
             )
             turn = result.get("turn") if isinstance(result, dict) else None
@@ -477,6 +522,9 @@ class CodexAppServerClient:
             except TimeoutError as exc:
                 self._schedule_interrupt(thread_id, turn_id)
                 raise CodexTimeoutError("Codex response timed out.") from exc
+            except asyncio.CancelledError:
+                self._schedule_interrupt(thread_id, turn_id)
+                raise
             finally:
                 self._turns.pop(turn_id, None)
             response = "".join(state.fragments).strip()
@@ -485,7 +533,7 @@ class CodexAppServerClient:
             if self._thread_locks.get(thread_id) is lock:
                 self._thread_locks.pop(thread_id)
                 self._thread_locks[thread_id] = lock
-            return {"thread_id": thread_id, "message": response}
+            return response
 
     def _make_thread_capacity(self) -> None:
         if len(self._thread_locks) < MAX_OWNED_THREADS:

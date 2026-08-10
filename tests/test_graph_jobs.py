@@ -1,0 +1,74 @@
+from __future__ import annotations
+
+from app.storage import Store
+
+
+def _session_with_exchange(store: Store, session_id: str, *, created_at: int) -> int:
+    store.create_session(session_id, session_id, "manual-context")
+    exchange = store.save_exchange(session_id, "model", f"user {session_id}", f"assistant {session_id}")
+    with store._connect() as connection:
+        connection.execute(
+            "UPDATE exchanges SET created_at = ?, assistant_created_at = ? WHERE exchange_id = ?",
+            (created_at, created_at, exchange.exchange_id),
+        )
+    return exchange.exchange_id
+
+
+def test_eligibility_uses_per_session_inactivity_and_is_idempotent(tmp_path) -> None:
+    store = Store(tmp_path / "bridge.sqlite3")
+    draft = store.unlock_graph_profile("owner")
+    store.update_graph_draft({**draft, "inactivity_hours": 1}, "owner")
+    store.activate_graph_draft("owner")
+    old_exchange = _session_with_exchange(store, "old", created_at=1_000)
+    _session_with_exchange(store, "recent", created_at=9_000)
+    store.set_graph_enabled(True)
+
+    first = store.enqueue_eligible_graph_jobs(now=10_000)
+    second = store.enqueue_eligible_graph_jobs(now=10_000)
+
+    assert [(job["session_id"], job["source_exchange_id"]) for job in first] == [("old", old_exchange)]
+    assert second == []
+    assert len(store.list_graph_jobs()) == 1
+
+
+def test_sensitive_sessions_are_excluded_by_default(tmp_path) -> None:
+    store = Store(tmp_path / "bridge.sqlite3")
+    store.create_session_group("Private", "#f59e0b", "lock", "private")
+    store.update_session_group("private", is_sensitive=True)
+    _session_with_exchange(store, "secret", created_at=1_000)
+    store.set_session_group("secret", "private")
+    store.set_graph_enabled(True)
+
+    assert store.enqueue_eligible_graph_jobs(now=100_000) == []
+
+
+def test_job_claim_is_leased_and_expired_lease_is_recoverable(tmp_path) -> None:
+    store = Store(tmp_path / "bridge.sqlite3")
+    _session_with_exchange(store, "one", created_at=1_000)
+    store.set_graph_enabled(True)
+    [queued] = store.enqueue_eligible_graph_jobs(now=100_000)
+
+    claimed = store.claim_graph_job("worker-a", now=100_000, lease_seconds=30)
+    assert claimed["job_id"] == queued["job_id"]
+    assert claimed["status"] == "running"
+    assert store.claim_graph_job("worker-b", now=100_010, lease_seconds=30) is None
+
+    reclaimed = store.claim_graph_job("worker-b", now=100_031, lease_seconds=30)
+    assert reclaimed["job_id"] == queued["job_id"]
+    assert reclaimed["lease_owner"] == "worker-b"
+    assert reclaimed["attempts"] == 2
+
+
+def test_graph_off_interrupts_running_jobs_and_blocks_claims(tmp_path) -> None:
+    store = Store(tmp_path / "bridge.sqlite3")
+    _session_with_exchange(store, "one", created_at=1_000)
+    store.set_graph_enabled(True)
+    store.enqueue_eligible_graph_jobs(now=100_000)
+    running = store.claim_graph_job("worker", now=100_000)
+    assert running is not None
+
+    store.set_graph_enabled(False)
+
+    [job] = store.list_graph_jobs()
+    assert job["status"] == "interrupted"
+    assert store.claim_graph_job("worker", now=100_100) is None

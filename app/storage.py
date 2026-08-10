@@ -11,6 +11,11 @@ from pathlib import Path
 from threading import Lock
 from typing import Any
 
+from app.graph_config import (
+    GRAPH_SCHEMA_VERSION,
+    default_graph_profile,
+    validate_graph_draft,
+)
 from app.time_format import format_timestamp_iso
 from app.tool_output import (
     DEFAULT_TOOL_OUTPUT_MODE,
@@ -21,7 +26,9 @@ from app.tool_output import (
 )
 
 UNCATEGORIZED_GROUP_ID = "uncategorized"
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
+GRAPH_ENABLED_SETTING = "graph.enabled"
+GRAPH_ACTIVE_PROFILE_SETTING = "graph.active_profile_id"
 
 SYSTEM_SESSION_GROUPS = (
     {
@@ -464,6 +471,126 @@ class Store:
                     after_json TEXT,
                     created_at INTEGER NOT NULL
                 );
+
+                CREATE TABLE IF NOT EXISTS graph_extractor_profiles (
+                    profile_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    version INTEGER NOT NULL UNIQUE,
+                    provider TEXT NOT NULL,
+                    model TEXT NOT NULL,
+                    effort TEXT NOT NULL,
+                    prompt TEXT NOT NULL,
+                    max_concepts INTEGER NOT NULL,
+                    inactivity_hours INTEGER NOT NULL,
+                    include_sensitive INTEGER NOT NULL DEFAULT 0,
+                    schema_version TEXT NOT NULL,
+                    created_by TEXT NOT NULL,
+                    created_at INTEGER NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS graph_extractor_drafts (
+                    draft_id INTEGER PRIMARY KEY CHECK (draft_id = 1),
+                    base_profile_id INTEGER NOT NULL,
+                    provider TEXT NOT NULL,
+                    model TEXT NOT NULL,
+                    effort TEXT NOT NULL,
+                    prompt TEXT NOT NULL,
+                    max_concepts INTEGER NOT NULL,
+                    inactivity_hours INTEGER NOT NULL,
+                    include_sensitive INTEGER NOT NULL DEFAULT 0,
+                    updated_by TEXT NOT NULL,
+                    updated_at INTEGER NOT NULL,
+                    FOREIGN KEY(base_profile_id) REFERENCES graph_extractor_profiles(profile_id)
+                );
+
+                CREATE TABLE IF NOT EXISTS graph_jobs (
+                    job_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    session_id TEXT NOT NULL,
+                    source_exchange_id INTEGER NOT NULL,
+                    profile_id INTEGER NOT NULL,
+                    schema_version TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    attempts INTEGER NOT NULL DEFAULT 0,
+                    max_attempts INTEGER NOT NULL DEFAULT 3,
+                    available_at INTEGER NOT NULL,
+                    lease_owner TEXT,
+                    lease_expires_at INTEGER,
+                    started_at INTEGER,
+                    completed_at INTEGER,
+                    error_code TEXT,
+                    error_message TEXT,
+                    created_at INTEGER NOT NULL,
+                    updated_at INTEGER NOT NULL,
+                    FOREIGN KEY(session_id) REFERENCES sessions(session_id) ON DELETE CASCADE,
+                    FOREIGN KEY(source_exchange_id) REFERENCES exchanges(exchange_id),
+                    FOREIGN KEY(profile_id) REFERENCES graph_extractor_profiles(profile_id),
+                    UNIQUE(session_id, source_exchange_id, profile_id, schema_version)
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_graph_jobs_claim
+                    ON graph_jobs(status, available_at, lease_expires_at, job_id);
+
+                CREATE TABLE IF NOT EXISTS graph_extractions (
+                    extraction_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    job_id INTEGER NOT NULL UNIQUE,
+                    session_id TEXT NOT NULL,
+                    source_exchange_id INTEGER NOT NULL,
+                    profile_id INTEGER NOT NULL,
+                    schema_version TEXT NOT NULL,
+                    result_json TEXT NOT NULL,
+                    created_at INTEGER NOT NULL,
+                    FOREIGN KEY(job_id) REFERENCES graph_jobs(job_id),
+                    FOREIGN KEY(session_id) REFERENCES sessions(session_id) ON DELETE CASCADE,
+                    FOREIGN KEY(source_exchange_id) REFERENCES exchanges(exchange_id),
+                    FOREIGN KEY(profile_id) REFERENCES graph_extractor_profiles(profile_id)
+                );
+
+                CREATE TABLE IF NOT EXISTS graph_extraction_concepts (
+                    extraction_concept_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    extraction_id INTEGER NOT NULL,
+                    ordinal INTEGER NOT NULL,
+                    canonical_name TEXT NOT NULL,
+                    concept_type TEXT NOT NULL,
+                    summary TEXT NOT NULL,
+                    FOREIGN KEY(extraction_id) REFERENCES graph_extractions(extraction_id) ON DELETE CASCADE,
+                    UNIQUE(extraction_id, ordinal)
+                );
+
+                CREATE TABLE IF NOT EXISTS graph_extraction_evidence (
+                    evidence_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    extraction_concept_id INTEGER NOT NULL,
+                    exchange_id INTEGER NOT NULL,
+                    quote TEXT NOT NULL,
+                    FOREIGN KEY(extraction_concept_id) REFERENCES graph_extraction_concepts(extraction_concept_id) ON DELETE CASCADE,
+                    FOREIGN KEY(exchange_id) REFERENCES exchanges(exchange_id)
+                );
+
+                CREATE TABLE IF NOT EXISTS graph_session_current (
+                    session_id TEXT PRIMARY KEY,
+                    extraction_id INTEGER NOT NULL UNIQUE,
+                    updated_at INTEGER NOT NULL,
+                    FOREIGN KEY(session_id) REFERENCES sessions(session_id) ON DELETE CASCADE,
+                    FOREIGN KEY(extraction_id) REFERENCES graph_extractions(extraction_id)
+                );
+
+                CREATE TABLE IF NOT EXISTS graph_lab_runs (
+                    lab_run_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    session_id TEXT NOT NULL,
+                    source_exchange_id INTEGER NOT NULL,
+                    settings_json TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    result_json TEXT,
+                    error_code TEXT,
+                    error_message TEXT,
+                    created_by TEXT NOT NULL,
+                    created_at INTEGER NOT NULL,
+                    started_at INTEGER,
+                    completed_at INTEGER,
+                    FOREIGN KEY(session_id) REFERENCES sessions(session_id) ON DELETE CASCADE,
+                    FOREIGN KEY(source_exchange_id) REFERENCES exchanges(exchange_id)
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_graph_lab_runs_created
+                    ON graph_lab_runs(created_at DESC, lab_run_id DESC);
                 """
             )
             self._ensure_column(conn, "refresh_tokens", "resource", "TEXT")
@@ -499,6 +626,7 @@ class Store:
             )
             self._seed_system_session_groups(conn)
             self._demote_legacy_system_session_groups(conn)
+            self._seed_graph_config(conn)
             conn.execute(
                 """
                 UPDATE sessions
@@ -518,6 +646,39 @@ class Store:
                 "INSERT OR IGNORE INTO schema_migrations(version, applied_at) VALUES (?, ?)",
                 (SCHEMA_VERSION, int(time.time())),
             )
+
+    @staticmethod
+    def _seed_graph_config(conn: sqlite3.Connection) -> None:
+        now = int(time.time())
+        profile = default_graph_profile()
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO graph_extractor_profiles (
+                profile_id, version, provider, model, effort, prompt,
+                max_concepts, inactivity_hours, include_sensitive,
+                schema_version, created_by, created_at
+            ) VALUES (1, 1, ?, ?, ?, ?, ?, ?, ?, ?, 'system', ?)
+            """,
+            (
+                profile["provider"],
+                profile["model"],
+                profile["effort"],
+                profile["prompt"],
+                profile["max_concepts"],
+                profile["inactivity_hours"],
+                int(profile["include_sensitive"]),
+                GRAPH_SCHEMA_VERSION,
+                now,
+            ),
+        )
+        conn.execute(
+            "INSERT OR IGNORE INTO app_settings(key, value, updated_at) VALUES (?, '1', ?)",
+            (GRAPH_ACTIVE_PROFILE_SETTING, now),
+        )
+        conn.execute(
+            "INSERT OR IGNORE INTO app_settings(key, value, updated_at) VALUES (?, 'false', ?)",
+            (GRAPH_ENABLED_SETTING, now),
+        )
 
     @staticmethod
     def _ensure_column(conn: sqlite3.Connection, table: str, column: str, definition: str) -> None:
@@ -768,6 +929,730 @@ class Store:
                 (key, value, updated_at),
             )
         return {"key": key, "value": value, "updated_at": updated_at}
+
+    def get_graph_config(self) -> dict[str, Any]:
+        with self._lock, self._connect() as conn:
+            active_row = conn.execute(
+                """
+                SELECT p.*
+                FROM graph_extractor_profiles p
+                JOIN app_settings s
+                  ON s.key = ? AND CAST(s.value AS INTEGER) = p.profile_id
+                """,
+                (GRAPH_ACTIVE_PROFILE_SETTING,),
+            ).fetchone()
+            draft_row = conn.execute(
+                "SELECT * FROM graph_extractor_drafts WHERE draft_id = 1"
+            ).fetchone()
+            enabled_row = conn.execute(
+                "SELECT value FROM app_settings WHERE key = ?",
+                (GRAPH_ENABLED_SETTING,),
+            ).fetchone()
+        if active_row is None:
+            raise RuntimeError("Graph active extractor profile is missing.")
+        draft = _graph_draft_row(draft_row) if draft_row else None
+        return {
+            "enabled": bool(enabled_row and enabled_row["value"] == "true"),
+            "locked": draft is None,
+            "active_profile": _graph_profile_row(active_row),
+            "draft": draft,
+        }
+
+    def unlock_graph_profile(self, actor: str) -> dict[str, Any]:
+        now = int(time.time())
+        with self._lock, self._connect() as conn:
+            existing = conn.execute(
+                "SELECT * FROM graph_extractor_drafts WHERE draft_id = 1"
+            ).fetchone()
+            if existing:
+                return _graph_draft_row(existing)
+            active = conn.execute(
+                """
+                SELECT p.* FROM graph_extractor_profiles p
+                JOIN app_settings s
+                  ON s.key = ? AND CAST(s.value AS INTEGER) = p.profile_id
+                """,
+                (GRAPH_ACTIVE_PROFILE_SETTING,),
+            ).fetchone()
+            if active is None:
+                raise RuntimeError("Graph active extractor profile is missing.")
+            conn.execute(
+                """
+                INSERT INTO graph_extractor_drafts (
+                    draft_id, base_profile_id, provider, model, effort, prompt,
+                    max_concepts, inactivity_hours, include_sensitive, updated_by, updated_at
+                ) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    active["profile_id"],
+                    active["provider"],
+                    active["model"],
+                    active["effort"],
+                    active["prompt"],
+                    active["max_concepts"],
+                    active["inactivity_hours"],
+                    active["include_sensitive"],
+                    actor,
+                    now,
+                ),
+            )
+            row = conn.execute(
+                "SELECT * FROM graph_extractor_drafts WHERE draft_id = 1"
+            ).fetchone()
+        assert row is not None
+        return _graph_draft_row(row)
+
+    def update_graph_draft(self, payload: dict[str, Any], actor: str) -> dict[str, Any]:
+        values = validate_graph_draft(payload)
+        now = int(time.time())
+        with self._lock, self._connect() as conn:
+            if conn.execute(
+                "SELECT 1 FROM graph_extractor_drafts WHERE draft_id = 1"
+            ).fetchone() is None:
+                raise ValueError("Unlock the extractor profile before editing it.")
+            conn.execute(
+                """
+                UPDATE graph_extractor_drafts
+                SET provider = ?, model = ?, effort = ?, prompt = ?,
+                    max_concepts = ?, inactivity_hours = ?, include_sensitive = ?,
+                    updated_by = ?, updated_at = ?
+                WHERE draft_id = 1
+                """,
+                (
+                    values["provider"],
+                    values["model"],
+                    values["effort"],
+                    values["prompt"],
+                    values["max_concepts"],
+                    values["inactivity_hours"],
+                    int(values["include_sensitive"]),
+                    actor,
+                    now,
+                ),
+            )
+            row = conn.execute(
+                "SELECT * FROM graph_extractor_drafts WHERE draft_id = 1"
+            ).fetchone()
+        assert row is not None
+        return _graph_draft_row(row)
+
+    def discard_graph_draft(self) -> None:
+        with self._lock, self._connect() as conn:
+            conn.execute("DELETE FROM graph_extractor_drafts WHERE draft_id = 1")
+
+    def activate_graph_draft(self, actor: str) -> dict[str, Any]:
+        now = int(time.time())
+        with self._lock, self._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            draft = conn.execute(
+                "SELECT * FROM graph_extractor_drafts WHERE draft_id = 1"
+            ).fetchone()
+            if draft is None:
+                raise ValueError("Unlock and edit the extractor profile before activating it.")
+            version = int(
+                conn.execute("SELECT COALESCE(MAX(version), 0) + 1 FROM graph_extractor_profiles").fetchone()[0]
+            )
+            cursor = conn.execute(
+                """
+                INSERT INTO graph_extractor_profiles (
+                    version, provider, model, effort, prompt, max_concepts,
+                    inactivity_hours, include_sensitive, schema_version, created_by, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    version,
+                    draft["provider"],
+                    draft["model"],
+                    draft["effort"],
+                    draft["prompt"],
+                    draft["max_concepts"],
+                    draft["inactivity_hours"],
+                    draft["include_sensitive"],
+                    GRAPH_SCHEMA_VERSION,
+                    actor,
+                    now,
+                ),
+            )
+            profile_id = int(cursor.lastrowid)
+            conn.execute(
+                """
+                INSERT INTO app_settings(key, value, updated_at) VALUES (?, ?, ?)
+                ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
+                """,
+                (GRAPH_ACTIVE_PROFILE_SETTING, str(profile_id), now),
+            )
+            conn.execute("DELETE FROM graph_extractor_drafts WHERE draft_id = 1")
+            row = conn.execute(
+                "SELECT * FROM graph_extractor_profiles WHERE profile_id = ?",
+                (profile_id,),
+            ).fetchone()
+        assert row is not None
+        return _graph_profile_row(row)
+
+    def set_graph_enabled(self, enabled: bool) -> dict[str, Any]:
+        if not isinstance(enabled, bool):
+            raise ValueError("enabled must be a boolean.")
+        now = int(time.time())
+        with self._lock, self._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            conn.execute(
+                """
+                INSERT INTO app_settings(key, value, updated_at) VALUES (?, ?, ?)
+                ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
+                """,
+                (GRAPH_ENABLED_SETTING, "true" if enabled else "false", now),
+            )
+            if not enabled:
+                conn.execute(
+                    """
+                    UPDATE graph_jobs
+                    SET status = 'interrupted', lease_owner = NULL, lease_expires_at = NULL,
+                        completed_at = ?, updated_at = ?, error_code = 'graph_disabled',
+                        error_message = 'Graph was turned off.'
+                    WHERE status = 'running'
+                    """,
+                    (now, now),
+                )
+        return self.get_graph_config()
+
+    def enqueue_eligible_graph_jobs(self, *, now: int | None = None) -> list[dict[str, Any]]:
+        current_time = int(time.time()) if now is None else int(now)
+        created_ids: list[int] = []
+        with self._lock, self._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            enabled = conn.execute(
+                "SELECT value FROM app_settings WHERE key = ?",
+                (GRAPH_ENABLED_SETTING,),
+            ).fetchone()
+            if enabled is None or enabled["value"] != "true":
+                return []
+            profile = conn.execute(
+                """
+                SELECT p.* FROM graph_extractor_profiles p
+                JOIN app_settings s
+                  ON s.key = ? AND CAST(s.value AS INTEGER) = p.profile_id
+                """,
+                (GRAPH_ACTIVE_PROFILE_SETTING,),
+            ).fetchone()
+            if profile is None:
+                return []
+            cutoff = current_time - int(profile["inactivity_hours"]) * 3600
+            candidates = conn.execute(
+                """
+                SELECT
+                    s.session_id,
+                    MAX(CASE WHEN e.deleted_at IS NULL THEN e.exchange_id END) AS source_exchange_id,
+                    MAX(CASE WHEN e.deleted_at IS NULL THEN COALESCE(e.assistant_created_at, e.created_at) END) AS last_activity
+                FROM sessions s
+                JOIN session_groups g ON g.group_id = s.group_id AND g.deleted_at IS NULL
+                LEFT JOIN exchanges e ON e.session_id = s.session_id
+                WHERE (? = 1 OR g.is_sensitive = 0)
+                GROUP BY s.session_id
+                HAVING source_exchange_id IS NOT NULL AND last_activity <= ?
+                ORDER BY last_activity ASC, s.session_id ASC
+                """,
+                (int(profile["include_sensitive"]), cutoff),
+            ).fetchall()
+            for candidate in candidates:
+                cursor = conn.execute(
+                    """
+                    INSERT OR IGNORE INTO graph_jobs (
+                        session_id, source_exchange_id, profile_id, schema_version,
+                        status, available_at, created_at, updated_at
+                    ) VALUES (?, ?, ?, ?, 'queued', ?, ?, ?)
+                    """,
+                    (
+                        candidate["session_id"],
+                        candidate["source_exchange_id"],
+                        profile["profile_id"],
+                        profile["schema_version"],
+                        current_time,
+                        current_time,
+                        current_time,
+                    ),
+                )
+                if cursor.rowcount:
+                    created_ids.append(int(cursor.lastrowid))
+            if not created_ids:
+                return []
+            placeholders = ",".join("?" for _ in created_ids)
+            rows = conn.execute(
+                f"SELECT * FROM graph_jobs WHERE job_id IN ({placeholders}) ORDER BY job_id",
+                created_ids,
+            ).fetchall()
+        return [_graph_job_row(row) for row in rows]
+
+    def claim_graph_job(
+        self,
+        lease_owner: str,
+        *,
+        now: int | None = None,
+        lease_seconds: int = 300,
+    ) -> dict[str, Any] | None:
+        current_time = int(time.time()) if now is None else int(now)
+        if not lease_owner.strip():
+            raise ValueError("lease_owner must not be empty.")
+        if lease_seconds < 1:
+            raise ValueError("lease_seconds must be positive.")
+        with self._lock, self._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            enabled = conn.execute(
+                "SELECT value FROM app_settings WHERE key = ?",
+                (GRAPH_ENABLED_SETTING,),
+            ).fetchone()
+            if enabled is None or enabled["value"] != "true":
+                return None
+            row = conn.execute(
+                """
+                SELECT * FROM graph_jobs
+                WHERE (
+                    status = 'queued'
+                    OR (status = 'retryable_failed' AND available_at <= ? AND attempts < max_attempts)
+                    OR (status = 'running' AND lease_expires_at IS NOT NULL AND lease_expires_at <= ?)
+                )
+                ORDER BY available_at ASC, job_id ASC
+                LIMIT 1
+                """,
+                (current_time, current_time),
+            ).fetchone()
+            if row is None:
+                return None
+            conn.execute(
+                """
+                UPDATE graph_jobs
+                SET status = 'running', attempts = attempts + 1, lease_owner = ?,
+                    lease_expires_at = ?, started_at = COALESCE(started_at, ?),
+                    completed_at = NULL, error_code = NULL, error_message = NULL,
+                    updated_at = ?
+                WHERE job_id = ?
+                """,
+                (
+                    lease_owner.strip(),
+                    current_time + lease_seconds,
+                    current_time,
+                    current_time,
+                    row["job_id"],
+                ),
+            )
+            claimed = conn.execute(
+                "SELECT * FROM graph_jobs WHERE job_id = ?", (row["job_id"],)
+            ).fetchone()
+        assert claimed is not None
+        return _graph_job_row(claimed)
+
+    def list_graph_jobs(self, *, limit: int = 100, status: str | None = None) -> list[dict[str, Any]]:
+        safe_limit = max(1, min(int(limit), 500))
+        with self._lock, self._connect() as conn:
+            if status is None:
+                rows = conn.execute(
+                    "SELECT * FROM graph_jobs ORDER BY created_at DESC, job_id DESC LIMIT ?",
+                    (safe_limit,),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    "SELECT * FROM graph_jobs WHERE status = ? ORDER BY created_at DESC, job_id DESC LIMIT ?",
+                    (status, safe_limit),
+                ).fetchall()
+        return [_graph_job_row(row) for row in rows]
+
+    def get_graph_job_context(self, job_id: int) -> dict[str, Any] | None:
+        with self._lock, self._connect() as conn:
+            row = conn.execute(
+                """
+                SELECT
+                    j.*,
+                    p.version AS profile_version,
+                    p.provider,
+                    p.model,
+                    p.effort,
+                    p.prompt,
+                    p.max_concepts,
+                    p.inactivity_hours,
+                    p.include_sensitive
+                FROM graph_jobs j
+                JOIN graph_extractor_profiles p ON p.profile_id = j.profile_id
+                WHERE j.job_id = ?
+                """,
+                (job_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        payload = _graph_job_row(row)
+        payload["profile"] = {
+            "profile_id": row["profile_id"],
+            "version": row["profile_version"],
+            "provider": row["provider"],
+            "model": row["model"],
+            "effort": row["effort"],
+            "prompt": row["prompt"],
+            "max_concepts": row["max_concepts"],
+            "inactivity_hours": row["inactivity_hours"],
+            "include_sensitive": bool(row["include_sensitive"]),
+            "schema_version": row["schema_version"],
+        }
+        return payload
+
+    def publish_graph_extraction(
+        self,
+        job_id: int,
+        result: dict[str, Any],
+        *,
+        now: int | None = None,
+    ) -> dict[str, Any]:
+        current_time = int(time.time()) if now is None else int(now)
+        with self._lock, self._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            job = conn.execute(
+                "SELECT * FROM graph_jobs WHERE job_id = ?", (job_id,)
+            ).fetchone()
+            if job is None or job["status"] != "running":
+                raise ValueError("Graph job is no longer publishable.")
+            cursor = conn.execute(
+                """
+                INSERT INTO graph_extractions (
+                    job_id, session_id, source_exchange_id, profile_id,
+                    schema_version, result_json, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    job_id,
+                    job["session_id"],
+                    job["source_exchange_id"],
+                    job["profile_id"],
+                    job["schema_version"],
+                    json.dumps(result, ensure_ascii=False, separators=(",", ":")),
+                    current_time,
+                ),
+            )
+            extraction_id = int(cursor.lastrowid)
+            for ordinal, concept in enumerate(result["concepts"]):
+                concept_cursor = conn.execute(
+                    """
+                    INSERT INTO graph_extraction_concepts (
+                        extraction_id, ordinal, canonical_name, concept_type, summary
+                    ) VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (
+                        extraction_id,
+                        ordinal,
+                        concept["canonical_name"],
+                        concept["type"],
+                        concept["summary"],
+                    ),
+                )
+                extraction_concept_id = int(concept_cursor.lastrowid)
+                conn.executemany(
+                    """
+                    INSERT INTO graph_extraction_evidence (
+                        extraction_concept_id, exchange_id, quote
+                    ) VALUES (?, ?, ?)
+                    """,
+                    [
+                        (extraction_concept_id, item["exchange_id"], item["quote"])
+                        for item in concept["evidence"]
+                    ],
+                )
+            conn.execute(
+                """
+                INSERT INTO graph_session_current(session_id, extraction_id, updated_at)
+                VALUES (?, ?, ?)
+                ON CONFLICT(session_id) DO UPDATE SET
+                    extraction_id = excluded.extraction_id,
+                    updated_at = excluded.updated_at
+                """,
+                (job["session_id"], extraction_id, current_time),
+            )
+            conn.execute(
+                """
+                UPDATE graph_jobs
+                SET status = 'completed', completed_at = ?, updated_at = ?,
+                    lease_owner = NULL, lease_expires_at = NULL,
+                    error_code = NULL, error_message = NULL
+                WHERE job_id = ?
+                """,
+                (current_time, current_time, job_id),
+            )
+        analysis = self.get_graph_analysis(str(job["session_id"]))
+        if analysis is None:
+            raise RuntimeError("Graph extraction was not published.")
+        return analysis
+
+    def fail_graph_job(
+        self,
+        job_id: int,
+        *,
+        error_code: str,
+        error_message: str,
+        retryable: bool,
+        now: int | None = None,
+    ) -> dict[str, Any] | None:
+        current_time = int(time.time()) if now is None else int(now)
+        with self._lock, self._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            row = conn.execute(
+                "SELECT * FROM graph_jobs WHERE job_id = ?", (job_id,)
+            ).fetchone()
+            if row is None or row["status"] != "running":
+                return _graph_job_row(row) if row else None
+            will_retry = retryable and int(row["attempts"]) < int(row["max_attempts"])
+            status = "retryable_failed" if will_retry else "terminal_failed"
+            available_at = current_time + min(60 * (2 ** max(int(row["attempts"]) - 1, 0)), 3600)
+            conn.execute(
+                """
+                UPDATE graph_jobs
+                SET status = ?, available_at = ?, completed_at = ?, updated_at = ?,
+                    lease_owner = NULL, lease_expires_at = NULL,
+                    error_code = ?, error_message = ?
+                WHERE job_id = ?
+                """,
+                (
+                    status,
+                    available_at,
+                    current_time,
+                    current_time,
+                    error_code[:80],
+                    error_message[:500],
+                    job_id,
+                ),
+            )
+            updated = conn.execute(
+                "SELECT * FROM graph_jobs WHERE job_id = ?", (job_id,)
+            ).fetchone()
+        return _graph_job_row(updated) if updated else None
+
+    def get_graph_analysis(self, session_id: str) -> dict[str, Any] | None:
+        with self._lock, self._connect() as conn:
+            extraction = conn.execute(
+                """
+                SELECT e.*, p.version AS profile_version, p.model, p.effort
+                FROM graph_session_current c
+                JOIN graph_extractions e ON e.extraction_id = c.extraction_id
+                JOIN graph_extractor_profiles p ON p.profile_id = e.profile_id
+                WHERE c.session_id = ?
+                """,
+                (session_id,),
+            ).fetchone()
+            if extraction is None:
+                return None
+            concepts = conn.execute(
+                """
+                SELECT * FROM graph_extraction_concepts
+                WHERE extraction_id = ? ORDER BY ordinal ASC
+                """,
+                (extraction["extraction_id"],),
+            ).fetchall()
+            concept_payloads: list[dict[str, Any]] = []
+            for concept in concepts:
+                evidence = conn.execute(
+                    """
+                    SELECT exchange_id, quote FROM graph_extraction_evidence
+                    WHERE extraction_concept_id = ? ORDER BY evidence_id ASC
+                    """,
+                    (concept["extraction_concept_id"],),
+                ).fetchall()
+                concept_payloads.append(
+                    {
+                        "extraction_concept_id": concept["extraction_concept_id"],
+                        "canonical_name": concept["canonical_name"],
+                        "type": concept["concept_type"],
+                        "summary": concept["summary"],
+                        "evidence": [dict(item) for item in evidence],
+                    }
+                )
+        return {
+            "extraction_id": extraction["extraction_id"],
+            "job_id": extraction["job_id"],
+            "session_id": extraction["session_id"],
+            "source_exchange_id": extraction["source_exchange_id"],
+            "profile_id": extraction["profile_id"],
+            "profile_version": extraction["profile_version"],
+            "model": extraction["model"],
+            "effort": extraction["effort"],
+            "schema_version": extraction["schema_version"],
+            "created_at": extraction["created_at"],
+            "concepts": concept_payloads,
+        }
+
+    def list_graph_analysis_sessions(self, *, limit: int = 200) -> list[dict[str, Any]]:
+        safe_limit = max(1, min(int(limit), 500))
+        with self._lock, self._connect() as conn:
+            active = conn.execute(
+                "SELECT value FROM app_settings WHERE key = ?",
+                (GRAPH_ACTIVE_PROFILE_SETTING,),
+            ).fetchone()
+            active_profile_id = int(active["value"]) if active else 0
+            active_profile = conn.execute(
+                "SELECT include_sensitive FROM graph_extractor_profiles WHERE profile_id = ?",
+                (active_profile_id,),
+            ).fetchone()
+            include_sensitive = bool(active_profile and active_profile["include_sensitive"])
+            rows = conn.execute(
+                """
+                SELECT
+                    s.session_id, s.title, s.group_id, g.name AS group_name,
+                    g.is_sensitive,
+                    MAX(CASE WHEN x.deleted_at IS NULL THEN x.exchange_id END) AS latest_exchange_id,
+                    MAX(CASE WHEN x.deleted_at IS NULL THEN COALESCE(x.assistant_created_at, x.created_at) END) AS last_activity,
+                    e.extraction_id, e.source_exchange_id, e.profile_id, e.created_at AS extracted_at,
+                    p.version AS profile_version,
+                    (SELECT j.status FROM graph_jobs j WHERE j.session_id = s.session_id ORDER BY j.created_at DESC, j.job_id DESC LIMIT 1) AS latest_job_status,
+                    (SELECT j.error_code FROM graph_jobs j WHERE j.session_id = s.session_id ORDER BY j.created_at DESC, j.job_id DESC LIMIT 1) AS latest_job_error_code,
+                    COUNT(DISTINCT c.extraction_concept_id) AS concept_count
+                FROM sessions s
+                JOIN session_groups g ON g.group_id = s.group_id
+                LEFT JOIN exchanges x ON x.session_id = s.session_id
+                LEFT JOIN graph_session_current current ON current.session_id = s.session_id
+                LEFT JOIN graph_extractions e ON e.extraction_id = current.extraction_id
+                LEFT JOIN graph_extractor_profiles p ON p.profile_id = e.profile_id
+                LEFT JOIN graph_extraction_concepts c ON c.extraction_id = e.extraction_id
+                GROUP BY s.session_id
+                ORDER BY last_activity DESC, s.session_id ASC
+                LIMIT ?
+                """,
+                (safe_limit,),
+            ).fetchall()
+        payloads: list[dict[str, Any]] = []
+        for row in rows:
+            if row["is_sensitive"] and not include_sensitive:
+                freshness = "excluded"
+            elif row["latest_exchange_id"] is None:
+                freshness = "empty"
+            elif row["extraction_id"] is None:
+                freshness = "never_scanned"
+            elif int(row["profile_id"]) != active_profile_id:
+                freshness = "stale_profile"
+            elif int(row["source_exchange_id"]) != int(row["latest_exchange_id"]):
+                freshness = "stale_source"
+            else:
+                freshness = "current"
+            payloads.append(
+                {
+                    "session_id": row["session_id"],
+                    "title": row["title"],
+                    "group_id": row["group_id"],
+                    "group_name": row["group_name"],
+                    "is_sensitive": bool(row["is_sensitive"]),
+                    "latest_exchange_id": row["latest_exchange_id"],
+                    "last_activity": row["last_activity"],
+                    "extraction_id": row["extraction_id"],
+                    "source_exchange_id": row["source_exchange_id"],
+                    "profile_id": row["profile_id"],
+                    "profile_version": row["profile_version"],
+                    "extracted_at": row["extracted_at"],
+                    "concept_count": row["concept_count"] or 0,
+                    "freshness": freshness,
+                    "latest_job_status": row["latest_job_status"],
+                    "latest_job_error_code": row["latest_job_error_code"],
+                }
+            )
+        return payloads
+
+    def create_graph_lab_run(
+        self,
+        session_id: str,
+        source_exchange_id: int,
+        settings: dict[str, Any],
+        actor: str,
+        *,
+        now: int | None = None,
+    ) -> dict[str, Any]:
+        current_time = int(time.time()) if now is None else int(now)
+        with self._lock, self._connect() as conn:
+            cursor = conn.execute(
+                """
+                INSERT INTO graph_lab_runs (
+                    session_id, source_exchange_id, settings_json, status,
+                    created_by, created_at
+                ) VALUES (?, ?, ?, 'queued', ?, ?)
+                """,
+                (
+                    session_id,
+                    source_exchange_id,
+                    json.dumps(settings, ensure_ascii=False, separators=(",", ":")),
+                    actor,
+                    current_time,
+                ),
+            )
+            run_id = int(cursor.lastrowid)
+        run = self.get_graph_lab_run(run_id)
+        assert run is not None
+        return run
+
+    def start_graph_lab_run(self, lab_run_id: int, *, now: int | None = None) -> dict[str, Any]:
+        current_time = int(time.time()) if now is None else int(now)
+        with self._lock, self._connect() as conn:
+            cursor = conn.execute(
+                "UPDATE graph_lab_runs SET status = 'running', started_at = ? WHERE lab_run_id = ? AND status = 'queued'",
+                (current_time, lab_run_id),
+            )
+            if cursor.rowcount != 1:
+                raise ValueError("Lab run is not queued.")
+        run = self.get_graph_lab_run(lab_run_id)
+        assert run is not None
+        return run
+
+    def complete_graph_lab_run(
+        self,
+        lab_run_id: int,
+        result: dict[str, Any],
+        *,
+        now: int | None = None,
+    ) -> dict[str, Any]:
+        current_time = int(time.time()) if now is None else int(now)
+        with self._lock, self._connect() as conn:
+            cursor = conn.execute(
+                """
+                UPDATE graph_lab_runs
+                SET status = 'completed', result_json = ?, completed_at = ?,
+                    error_code = NULL, error_message = NULL
+                WHERE lab_run_id = ? AND status = 'running'
+                """,
+                (json.dumps(result, ensure_ascii=False, separators=(",", ":")), current_time, lab_run_id),
+            )
+            if cursor.rowcount != 1:
+                raise ValueError("Lab run is no longer completable.")
+        run = self.get_graph_lab_run(lab_run_id)
+        assert run is not None
+        return run
+
+    def fail_graph_lab_run(
+        self,
+        lab_run_id: int,
+        *,
+        error_code: str,
+        error_message: str,
+        now: int | None = None,
+    ) -> dict[str, Any]:
+        current_time = int(time.time()) if now is None else int(now)
+        with self._lock, self._connect() as conn:
+            conn.execute(
+                """
+                UPDATE graph_lab_runs
+                SET status = 'failed', error_code = ?, error_message = ?, completed_at = ?
+                WHERE lab_run_id = ? AND status IN ('queued', 'running')
+                """,
+                (error_code[:80], error_message[:500], current_time, lab_run_id),
+            )
+        run = self.get_graph_lab_run(lab_run_id)
+        if run is None:
+            raise ValueError("Unknown Lab run.")
+        return run
+
+    def get_graph_lab_run(self, lab_run_id: int) -> dict[str, Any] | None:
+        with self._lock, self._connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM graph_lab_runs WHERE lab_run_id = ?", (lab_run_id,)
+            ).fetchone()
+        return _graph_lab_row(row) if row else None
+
+    def list_graph_lab_runs(self, *, limit: int = 100) -> list[dict[str, Any]]:
+        safe_limit = max(1, min(int(limit), 500))
+        with self._lock, self._connect() as conn:
+            rows = conn.execute(
+                "SELECT * FROM graph_lab_runs ORDER BY created_at DESC, lab_run_id DESC LIMIT ?",
+                (safe_limit,),
+            ).fetchall()
+        return [_graph_lab_row(row) for row in rows]
 
     def set_tool_output_mode_if_restart_not_pending(self, mode: str) -> bool:
         updated_at = int(time.time())
@@ -2410,4 +3295,76 @@ def _output_probe_row(row: sqlite3.Row) -> dict[str, Any]:
         "created_by": row["created_by"],
         "created_at": row["created_at"],
         "reported_at": row["reported_at"],
+    }
+
+
+def _graph_profile_row(row: sqlite3.Row) -> dict[str, Any]:
+    return {
+        "profile_id": row["profile_id"],
+        "version": row["version"],
+        "provider": row["provider"],
+        "model": row["model"],
+        "effort": row["effort"],
+        "prompt": row["prompt"],
+        "max_concepts": row["max_concepts"],
+        "inactivity_hours": row["inactivity_hours"],
+        "include_sensitive": bool(row["include_sensitive"]),
+        "schema_version": row["schema_version"],
+        "created_by": row["created_by"],
+        "created_at": row["created_at"],
+    }
+
+
+def _graph_draft_row(row: sqlite3.Row) -> dict[str, Any]:
+    return {
+        "draft_id": row["draft_id"],
+        "base_profile_id": row["base_profile_id"],
+        "provider": row["provider"],
+        "model": row["model"],
+        "effort": row["effort"],
+        "prompt": row["prompt"],
+        "max_concepts": row["max_concepts"],
+        "inactivity_hours": row["inactivity_hours"],
+        "include_sensitive": bool(row["include_sensitive"]),
+        "updated_by": row["updated_by"],
+        "updated_at": row["updated_at"],
+    }
+
+
+def _graph_job_row(row: sqlite3.Row) -> dict[str, Any]:
+    return {
+        "job_id": row["job_id"],
+        "session_id": row["session_id"],
+        "source_exchange_id": row["source_exchange_id"],
+        "profile_id": row["profile_id"],
+        "schema_version": row["schema_version"],
+        "status": row["status"],
+        "attempts": row["attempts"],
+        "max_attempts": row["max_attempts"],
+        "available_at": row["available_at"],
+        "lease_owner": row["lease_owner"],
+        "lease_expires_at": row["lease_expires_at"],
+        "started_at": row["started_at"],
+        "completed_at": row["completed_at"],
+        "error_code": row["error_code"],
+        "error_message": row["error_message"],
+        "created_at": row["created_at"],
+        "updated_at": row["updated_at"],
+    }
+
+
+def _graph_lab_row(row: sqlite3.Row) -> dict[str, Any]:
+    return {
+        "lab_run_id": row["lab_run_id"],
+        "session_id": row["session_id"],
+        "source_exchange_id": row["source_exchange_id"],
+        "settings": json.loads(row["settings_json"]),
+        "status": row["status"],
+        "result": json.loads(row["result_json"]) if row["result_json"] else None,
+        "error_code": row["error_code"],
+        "error_message": row["error_message"],
+        "created_by": row["created_by"],
+        "created_at": row["created_at"],
+        "started_at": row["started_at"],
+        "completed_at": row["completed_at"],
     }

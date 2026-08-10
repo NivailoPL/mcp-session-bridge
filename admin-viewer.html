@@ -165,15 +165,27 @@
       z-index: 1;
       display: grid;
       grid-template-columns: minmax(19rem, 23rem) minmax(0, 1fr);
-      min-height: 100vh;
+      min-height: calc(100vh - 3.65rem);
     }
+
+    .workspace-bar {
+      position: sticky; top: 0; z-index: 30;
+      height: 3.65rem; display: flex; align-items: center; justify-content: center;
+      padding: 0 1.2rem; border-bottom: 1px solid var(--stroke-soft);
+      background: rgba(11, 13, 18, .88); backdrop-filter: blur(18px);
+    }
+    .workspace-nav { display: flex; align-items: center; gap: .28rem; padding: .28rem; border: 1px solid var(--stroke-soft); border-radius: 11px; background: rgba(255,255,255,.025); }
+    .workspace-nav a, .workspace-nav span { min-width: 6.4rem; padding: .47rem .9rem; border-radius: 8px; color: var(--muted); text-decoration: none; text-align: center; font-size: .82rem; font-weight: 700; }
+    .workspace-nav a:hover { color: var(--text); background: var(--glass-2); }
+    .workspace-nav [aria-current="page"] { color: #fff; background: var(--accent-soft); box-shadow: inset 0 0 0 1px rgba(122,125,240,.24); }
+    .workspace-nav [aria-disabled="true"] { opacity: .38; cursor: not-allowed; }
 
     /* ---------- sidebar (solid, no glass) ---------- */
     .sidebar {
       position: sticky;
-      top: 0;
+      top: 3.65rem;
       align-self: start;
-      height: 100vh;
+      height: calc(100vh - 3.65rem);
       display: flex;
       flex-direction: column;
       border-right: 1px solid var(--stroke-soft);
@@ -187,7 +199,7 @@
       padding: 1.15rem 1.2rem;
       border-bottom: 1px solid var(--stroke-soft);
     }
-    .brand-lockup { display: block; width: min(100%, 220px); height: auto; }
+    .brand-lockup { display: block; width: min(100%, 264px); height: auto; }
 
     .settings-row {
       display: flex;
@@ -1167,6 +1179,13 @@
   </style>
 </head>
 <body>
+  <header class="workspace-bar">
+    <nav class="workspace-nav" aria-label="Admin workspaces">
+      <a href="/admin/sessions" aria-current="page">Sessions</a>
+      <a href="/admin/graph">Graph</a>
+      <span aria-disabled="true">Contexts</span>
+    </nav>
+  </header>
   <main class="shell">
     <aside class="sidebar">
       <section class="brand">

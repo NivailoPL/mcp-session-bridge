@@ -21,6 +21,7 @@ from starlette.responses import JSONResponse, Response
 
 from app.admin import AdminHandlers
 from app.codex_app_server import CodexAppServerClient
+from app.graph_runtime import GraphRuntime
 from app.oauth import OAuthHandlers
 from app.pdf_files import (
     MAX_MCP_PDF_BYTES,
@@ -106,17 +107,32 @@ async def _search_index_monitor() -> None:
             logger.exception("Automatic search index refresh check failed")
 
 
+async def _graph_pipeline_monitor() -> None:
+    while True:
+        try:
+            await graph_runtime.run_once()
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception("Automatic Graph pipeline check failed")
+        await asyncio.sleep(30)
+
+
 @asynccontextmanager
 async def app_lifespan(_: FastMCP[Any]):
     monitor = asyncio.create_task(_search_index_monitor())
+    graph_monitor = asyncio.create_task(_graph_pipeline_monitor())
     try:
         # Reaching this point is the final startup step before the app is ready to serve.
         await asyncio.to_thread(store.clear_tool_output_restart_pending)
         yield {}
     finally:
         monitor.cancel()
+        graph_monitor.cancel()
         with suppress(asyncio.CancelledError):
             await monitor
+        with suppress(asyncio.CancelledError):
+            await graph_monitor
         await codex.close()
 
 
@@ -145,6 +161,7 @@ codex = CodexAppServerClient(
     socket_path=CODEX_SOCKET_PATH,
     workspace_dir=CODEX_WORKSPACE_PATH,
 )
+graph_runtime = GraphRuntime(store, codex)
 
 
 async def _request_service_restart() -> None:
@@ -196,6 +213,7 @@ admin = AdminHandlers(
     active_tool_output_mode=ACTIVE_TOOL_OUTPUT_MODE,
     restart_requester=_request_service_restart,
     codex_client=codex,
+    graph_runtime=graph_runtime,
 )
 
 
@@ -247,6 +265,11 @@ async def admin_index(request: Request) -> Response:
 @mcp.custom_route("/admin/sessions", methods=["GET"])
 async def admin_sessions_page(request: Request) -> Response:
     return await admin.sessions_page(request)
+
+
+@mcp.custom_route("/admin/graph", methods=["GET"])
+async def admin_graph_page(request: Request) -> Response:
+    return await admin.graph_page(request)
 
 
 @mcp.custom_route("/admin/login", methods=["GET"])
@@ -301,6 +324,61 @@ async def admin_api_operational_status(request: Request) -> Response:
 @mcp.custom_route("/admin/api/codex/status", methods=["GET"])
 async def admin_api_codex_status(request: Request) -> Response:
     return await admin.api_codex_status(request)
+
+
+@mcp.custom_route("/admin/api/graph/config", methods=["GET"])
+async def admin_api_graph_config(request: Request) -> Response:
+    return await admin.api_graph_config(request)
+
+
+@mcp.custom_route("/admin/api/graph/jobs", methods=["GET"])
+async def admin_api_graph_jobs(request: Request) -> Response:
+    return await admin.api_graph_jobs(request)
+
+
+@mcp.custom_route("/admin/api/graph/analysis", methods=["GET"])
+async def admin_api_graph_analysis_list(request: Request) -> Response:
+    return await admin.api_graph_analysis_list(request)
+
+
+@mcp.custom_route("/admin/api/graph/analysis/{session_id}", methods=["GET"])
+async def admin_api_graph_analysis(request: Request) -> Response:
+    return await admin.api_graph_analysis(request)
+
+
+@mcp.custom_route("/admin/api/graph/lab", methods=["GET"])
+async def admin_api_graph_lab_runs(request: Request) -> Response:
+    return await admin.api_graph_lab_runs(request)
+
+
+@mcp.custom_route("/admin/api/graph/lab", methods=["POST"])
+async def admin_api_graph_lab_start(request: Request) -> Response:
+    return await admin.api_graph_lab_start(request)
+
+
+@mcp.custom_route("/admin/api/graph/config/unlock", methods=["POST"])
+async def admin_api_graph_unlock(request: Request) -> Response:
+    return await admin.api_graph_unlock(request)
+
+
+@mcp.custom_route("/admin/api/graph/config/draft", methods=["PUT"])
+async def admin_api_graph_update_draft(request: Request) -> Response:
+    return await admin.api_graph_update_draft(request)
+
+
+@mcp.custom_route("/admin/api/graph/config/activate", methods=["POST"])
+async def admin_api_graph_activate(request: Request) -> Response:
+    return await admin.api_graph_activate(request)
+
+
+@mcp.custom_route("/admin/api/graph/config/draft", methods=["DELETE"])
+async def admin_api_graph_discard_draft(request: Request) -> Response:
+    return await admin.api_graph_discard_draft(request)
+
+
+@mcp.custom_route("/admin/api/graph/state", methods=["PUT"])
+async def admin_api_graph_state(request: Request) -> Response:
+    return await admin.api_graph_state(request)
 
 
 @mcp.custom_route("/admin/api/codex/auth/device/start", methods=["POST"])
@@ -437,6 +515,11 @@ async def admin_pdfjs_asset(request: Request) -> Response:
 @mcp.custom_route("/admin/assets/brand/{asset_path:path}", methods=["GET"])
 async def admin_brand_asset(request: Request) -> Response:
     return await admin.brand_asset(request)
+
+
+@mcp.custom_route("/admin/assets/{asset_name}", methods=["GET"])
+async def admin_graph_asset(request: Request) -> Response:
+    return await admin.graph_asset(request)
 
 
 @mcp.custom_route("/admin/api/sessions/{session_id}/files", methods=["POST"])

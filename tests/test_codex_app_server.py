@@ -195,6 +195,57 @@ def test_chat_uses_ephemeral_read_only_tool_free_thread(tmp_path: Path) -> None:
     asyncio.run(scenario())
 
 
+def test_structured_extraction_passes_model_effort_and_output_schema(tmp_path: Path) -> None:
+    class StructuredSocket(FakeWebSocket):
+        async def send(self, raw: str) -> None:
+            message = json.loads(raw)
+            if message.get("method") != "turn/start":
+                await super().send(raw)
+                return
+            self.sent.append(message)
+            await self.incoming.put(json.dumps({
+                "id": message["id"],
+                "result": {"turn": {"id": "turn-1", "items": [], "status": "inProgress"}},
+            }))
+            await self.incoming.put(json.dumps({
+                "method": "item/agentMessage/delta",
+                "params": {
+                    "threadId": "thread-1",
+                    "turnId": "turn-1",
+                    "itemId": "item-1",
+                    "delta": '{"concepts":[]}',
+                },
+            }))
+            await self.incoming.put(json.dumps({
+                "method": "turn/completed",
+                "params": {
+                    "threadId": "thread-1",
+                    "turn": {"id": "turn-1", "items": [], "status": "completed"},
+                },
+            }))
+
+    async def scenario() -> None:
+        socket = StructuredSocket(account={"type": "chatgpt", "planType": "plus"})
+        client = _client(tmp_path, socket)
+        schema = {"type": "object", "additionalProperties": False, "properties": {"concepts": {"type": "array"}}, "required": ["concepts"]}
+
+        result = await client.extract_structured(
+            "extract concepts", model="gpt-5.6-sol", effort="high", output_schema=schema
+        )
+
+        assert result == {"concepts": []}
+        start = next(item for item in socket.sent if item.get("method") == "turn/start")
+        assert start["params"]["model"] == "gpt-5.6-sol"
+        assert start["params"]["effort"] == "high"
+        assert start["params"]["outputSchema"] == schema
+        thread = next(item for item in socket.sent if item.get("method") == "thread/start")
+        assert thread["params"]["sandbox"] == "read-only"
+        assert thread["params"]["config"]["mcp_servers"] == {}
+        await client.close()
+
+    asyncio.run(scenario())
+
+
 def test_incompatible_runtime_is_rejected(tmp_path: Path) -> None:
     async def scenario() -> None:
         client = _client(tmp_path, FakeWebSocket(version="0.146.0"))

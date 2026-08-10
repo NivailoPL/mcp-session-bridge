@@ -1,0 +1,123 @@
+from __future__ import annotations
+
+from typing import Any
+
+
+GRAPH_CONCEPT_TYPES = {
+    "person",
+    "project",
+    "organization",
+    "technology",
+    "place",
+    "topic",
+    "decision",
+    "other",
+}
+
+GRAPH_EXTRACTION_OUTPUT_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["concepts"],
+    "properties": {
+        "concepts": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["canonical_name", "type", "summary", "evidence"],
+                "properties": {
+                    "canonical_name": {"type": "string", "minLength": 1, "maxLength": 160},
+                    "type": {"type": "string", "enum": sorted(GRAPH_CONCEPT_TYPES)},
+                    "summary": {"type": "string", "minLength": 1, "maxLength": 1_000},
+                    "evidence": {
+                        "type": "array",
+                        "minItems": 1,
+                        "items": {
+                            "type": "object",
+                            "additionalProperties": False,
+                            "required": ["exchange_id", "quote"],
+                            "properties": {
+                                "exchange_id": {"type": "integer", "minimum": 1},
+                                "quote": {"type": "string", "minLength": 1, "maxLength": 2_000},
+                            },
+                        },
+                    },
+                },
+            },
+        }
+    },
+}
+
+
+class GraphExtractionError(ValueError):
+    """Raised when model output cannot become production Graph data."""
+
+
+def validate_extraction_result(
+    result: Any,
+    source_by_exchange: dict[int, str],
+    *,
+    max_concepts: int,
+) -> dict[str, Any]:
+    if not isinstance(result, dict) or set(result) != {"concepts"}:
+        raise GraphExtractionError("Extraction output must contain only concepts.")
+    concepts = result.get("concepts")
+    if not isinstance(concepts, list) or not concepts:
+        raise GraphExtractionError("Extraction output must contain at least one concept.")
+    if len(concepts) > max_concepts:
+        raise GraphExtractionError("Extraction output exceeds the configured concept limit.")
+
+    validated: list[dict[str, Any]] = []
+    names: set[str] = set()
+    for concept in concepts:
+        if not isinstance(concept, dict) or set(concept) != {
+            "canonical_name",
+            "type",
+            "summary",
+            "evidence",
+        }:
+            raise GraphExtractionError("Each concept must match the production schema.")
+        name = _bounded_string(concept["canonical_name"], "canonical_name", 160)
+        folded = name.casefold()
+        if folded in names:
+            raise GraphExtractionError("Extraction output contains duplicate canonical names.")
+        names.add(folded)
+        concept_type = _bounded_string(concept["type"], "type", 40).lower()
+        if concept_type not in GRAPH_CONCEPT_TYPES:
+            raise GraphExtractionError("Extraction output contains an unsupported concept type.")
+        summary = _bounded_string(concept["summary"], "summary", 1_000)
+        evidence = concept["evidence"]
+        if not isinstance(evidence, list) or not evidence:
+            raise GraphExtractionError("Every concept must include evidence.")
+        validated_evidence: list[dict[str, Any]] = []
+        for item in evidence:
+            if not isinstance(item, dict) or set(item) != {"exchange_id", "quote"}:
+                raise GraphExtractionError("Evidence must contain exchange_id and quote.")
+            exchange_id = item["exchange_id"]
+            if isinstance(exchange_id, bool) or not isinstance(exchange_id, int):
+                raise GraphExtractionError("Evidence exchange_id must be an integer.")
+            source = source_by_exchange.get(exchange_id)
+            quote = _bounded_string(item["quote"], "quote", 2_000)
+            if source is None or quote not in source:
+                raise GraphExtractionError("Evidence quote must appear literally in its source exchange.")
+            validated_evidence.append({"exchange_id": exchange_id, "quote": quote})
+        validated.append(
+            {
+                "canonical_name": name,
+                "type": concept_type,
+                "summary": summary,
+                "evidence": validated_evidence,
+            }
+        )
+    return {"concepts": validated}
+
+
+def _bounded_string(value: Any, field: str, maximum: int) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise GraphExtractionError(f"{field} must be a non-empty string.")
+    normalized = value.strip()
+    if len(normalized) > maximum:
+        raise GraphExtractionError(f"{field} is too long.")
+    return normalized
+

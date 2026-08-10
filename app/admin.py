@@ -21,6 +21,8 @@ from starlette.requests import Request
 from starlette.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
 from bridge_cli.version import BRIDGE_VERSION
 
+from app.graph_config import GraphConfigError
+from app.graph_runtime import GraphRuntime
 from app.codex_app_server import (
     MAX_CHAT_MESSAGE_CHARS,
     CodexAppServerClient,
@@ -132,16 +134,20 @@ class AdminHandlers:
         active_tool_output_mode: str = DEFAULT_TOOL_OUTPUT_MODE,
         restart_requester: Callable[[], Awaitable[None]] | None = None,
         codex_client: CodexAppServerClient | None = None,
+        graph_runtime: GraphRuntime | None = None,
     ):
         self.settings = settings
         self.store = store
         self.html_path = html_path
+        self.graph_html_path = html_path.parent / "graph-viewer.html"
+        self.graph_asset_dir = html_path.parent
         self.brand_dir = html_path.parent / "brand"
         self.pdfjs_dir = html_path.parent / "vendor" / "pdfjs"
         self.search = SearchService(store)
         self.active_tool_output_mode = active_tool_output_mode
         self.restart_requester = restart_requester
         self.codex = codex_client
+        self.graph_runtime = graph_runtime
 
     async def index(self, request: Request) -> Response:
         return RedirectResponse("/admin/sessions", status_code=303)
@@ -155,6 +161,38 @@ class AdminHandlers:
         except OSError:
             return HTMLResponse("Admin viewer is not installed.", status_code=500, headers=self._no_store_headers())
         return HTMLResponse(body, headers=self._admin_headers())
+
+    async def graph_page(self, request: Request) -> Response:
+        _, error = self._require_admin(request)
+        if error:
+            return error
+        try:
+            body = self.graph_html_path.read_text(encoding="utf-8")
+        except OSError:
+            return HTMLResponse("Graph workspace is not installed.", status_code=500, headers=self._no_store_headers())
+        return HTMLResponse(body, headers=self._admin_headers())
+
+    async def graph_asset(self, request: Request) -> Response:
+        _, error = self._require_admin(request)
+        if error:
+            return error
+        asset_name = str(request.path_params.get("asset_name", ""))
+        media_types = {
+            "graph-viewer.css": "text/css",
+            "graph-data.css": "text/css",
+            "graph-viewer.js": "text/javascript",
+        }
+        media_type = media_types.get(asset_name)
+        if media_type is None:
+            return Response(status_code=404)
+        asset_path = self.graph_asset_dir / asset_name
+        if not asset_path.is_file():
+            return Response(status_code=404)
+        return FileResponse(
+            asset_path,
+            media_type=media_type,
+            headers={**self._no_store_headers(), "X-Content-Type-Options": "nosniff"},
+        )
 
     async def login_get(self, request: Request) -> Response:
         next_path = _safe_next(request.query_params.get("next"))
@@ -344,6 +382,158 @@ class AdminHandlers:
         except CodexAppServerErrorTypes as exc:
             return self._codex_error(exc)
         return JSONResponse({"ok": True, "chat": chat}, headers=self._no_store_headers())
+
+    async def api_graph_config(self, request: Request) -> Response:
+        _, error = self._require_admin(request)
+        if error:
+            return error
+        return JSONResponse(
+            {"ok": True, "config": self.store.get_graph_config()},
+            headers=self._no_store_headers(),
+        )
+
+    async def api_graph_jobs(self, request: Request) -> Response:
+        _, error = self._require_admin(request)
+        if error:
+            return error
+        status = request.query_params.get("status")
+        jobs = self.store.list_graph_jobs(status=status or None)
+        return JSONResponse({"ok": True, "jobs": jobs}, headers=self._no_store_headers())
+
+    async def api_graph_analysis_list(self, request: Request) -> Response:
+        _, error = self._require_admin(request)
+        if error:
+            return error
+        return JSONResponse(
+            {"ok": True, "sessions": self.store.list_graph_analysis_sessions()},
+            headers=self._no_store_headers(),
+        )
+
+    async def api_graph_analysis(self, request: Request) -> Response:
+        _, error = self._require_admin(request)
+        if error:
+            return error
+        session_id = str(request.path_params.get("session_id", ""))
+        analysis = self.store.get_graph_analysis(session_id)
+        if analysis is None:
+            return self._json_error("No production Graph analysis for this session.", status_code=404)
+        return JSONResponse({"ok": True, "analysis": analysis}, headers=self._no_store_headers())
+
+    async def api_graph_lab_runs(self, request: Request) -> Response:
+        _, error = self._require_admin(request)
+        if error:
+            return error
+        return JSONResponse(
+            {"ok": True, "runs": self.store.list_graph_lab_runs()},
+            headers=self._no_store_headers(),
+        )
+
+    async def api_graph_lab_start(self, request: Request) -> Response:
+        session, error = self._require_admin_mutation(request)
+        if error:
+            return error
+        if self.graph_runtime is None:
+            return self._json_error("Graph runtime is unavailable.", status_code=503)
+        payload, parse_error = await _json_body(request)
+        if parse_error:
+            return parse_error
+        session_id = payload.get("session_id")
+        overrides = payload.get("settings", {})
+        if not isinstance(session_id, str) or not session_id.strip():
+            return self._json_error("session_id must be a non-empty string.", status_code=400)
+        if not isinstance(overrides, dict):
+            return self._json_error("settings must be an object.", status_code=400)
+        try:
+            run = await self.graph_runtime.start_lab_run(
+                session_id.strip(), overrides, actor=session["username"]
+            )
+        except (GraphConfigError, ValueError) as exc:
+            return self._json_error(str(exc), status_code=400)
+        return JSONResponse(
+            {"ok": True, "run": run},
+            status_code=202,
+            headers=self._no_store_headers(),
+        )
+
+    async def api_graph_unlock(self, request: Request) -> Response:
+        session, error = self._require_admin_mutation(request)
+        if error:
+            return error
+        self.store.unlock_graph_profile(session["username"])
+        return self._graph_config_response()
+
+    async def api_graph_update_draft(self, request: Request) -> Response:
+        session, error = self._require_admin_mutation(request)
+        if error:
+            return error
+        payload, parse_error = await _json_body(request)
+        if parse_error:
+            return parse_error
+        try:
+            self.store.update_graph_draft(payload, session["username"])
+        except (GraphConfigError, ValueError) as exc:
+            return self._json_error(str(exc), status_code=400)
+        return self._graph_config_response()
+
+    async def api_graph_activate(self, request: Request) -> Response:
+        session, error = self._require_admin_mutation(request)
+        if error:
+            return error
+        try:
+            self.store.activate_graph_draft(session["username"])
+        except ValueError as exc:
+            return self._json_error(str(exc), status_code=400)
+        return self._graph_config_response()
+
+    async def api_graph_discard_draft(self, request: Request) -> Response:
+        _, error = self._require_admin_mutation(request)
+        if error:
+            return error
+        self.store.discard_graph_draft()
+        return self._graph_config_response()
+
+    async def api_graph_state(self, request: Request) -> Response:
+        _, error = self._require_admin_mutation(request)
+        if error:
+            return error
+        payload, parse_error = await _json_body(request)
+        if parse_error:
+            return parse_error
+        enabled = payload.get("enabled")
+        if not isinstance(enabled, bool):
+            return self._json_error("enabled must be a boolean.", status_code=400)
+        if enabled:
+            if self.codex is None:
+                return self._graph_provider_not_ready()
+            try:
+                status = await self.codex.status()
+            except CodexAppServerErrorTypes:
+                return self._graph_provider_not_ready()
+            if status.get("authenticated") is not True:
+                return self._graph_provider_not_ready()
+        if self.graph_runtime is not None:
+            await self.graph_runtime.set_enabled(enabled)
+        else:
+            self.store.set_graph_enabled(enabled)
+        return self._graph_config_response()
+
+    def _graph_config_response(self) -> JSONResponse:
+        return JSONResponse(
+            {"ok": True, "config": self.store.get_graph_config()},
+            headers=self._no_store_headers(),
+        )
+
+    @classmethod
+    def _graph_provider_not_ready(cls) -> JSONResponse:
+        return JSONResponse(
+            {
+                "ok": False,
+                "error": "Configure and sign in to Codex before enabling Graph.",
+                "code": "graph_provider_not_ready",
+            },
+            status_code=409,
+            headers=cls._no_store_headers(),
+        )
 
     async def api_settings(self, request: Request) -> Response:
         _, error = self._require_admin(request)
