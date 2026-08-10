@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 170" width="320" height="170" role="img" aria-label="Lockup pionowy na ciemnym">
+  <title>Lockup pionowy na ciemnym</title>
+  <defs>
+    
+  </defs>
+  <g transform="translate(100 24) scale(1.2) translate(-10 -16)">
+    <g fill="#6C5CF2">
+      <rect x="16.9" y="44" width="6.2" height="8" rx="3.1"></rect>
+      <rect x="24.9" y="40.93" width="6.2" height="11.07" rx="3.1"></rect>
+      <rect x="40.9" y="31.54" width="6.2" height="20.46" rx="3.1"></rect>
+      <rect x="48.9" y="40.93" width="6.2" height="11.07" rx="3.1"></rect>
+      <rect x="56.9" y="44" width="6.2" height="8" rx="3.1"></rect>
+      <rect x="64.9" y="40.93" width="6.2" height="11.07" rx="3.1"></rect>
+      <rect x="72.9" y="31.54" width="6.2" height="20.46" rx="3.1"></rect>
+      <rect x="88.9" y="40.93" width="6.2" height="11.07" rx="3.1"></rect>
+      <rect x="96.9" y="44" width="6.2" height="8" rx="3.1"></rect>
+    </g>
+    <g fill="#B3A9FF">
+      <rect x="32.4" y="22" width="7.2" height="35" rx="3.6"></rect>
+      <rect x="80.4" y="22" width="7.2" height="35" rx="3.6"></rect>
+    </g>
+  </g>
+  <text x="160" y="120" text-anchor="middle" font-family="IBM Plex Mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14" font-weight="500" letter-spacing="5" fill="#8A80F5">MCP</text>
+  <text x="160" y="152" text-anchor="middle" font-family="Instrument Sans, system-ui, -apple-system, Segoe UI, Helvetica Neue, sans-serif" font-size="28" font-weight="600" letter-spacing="-0.6" fill="#ECEDF2">Session Bridge</text>
+</svg>

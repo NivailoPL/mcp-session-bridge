@@ -114,6 +114,12 @@ ADMIN_FILE_EXTENSIONS = {
     ".tsv": "text/tab-separated-values",
     ".pdf": "application/pdf",
 }
+BRAND_ASSET_MEDIA_TYPES = {
+    ".json": "application/json",
+    ".png": "image/png",
+    ".svg": "image/svg+xml",
+    ".webmanifest": "application/manifest+json",
+}
 
 
 class AdminHandlers:
@@ -130,6 +136,7 @@ class AdminHandlers:
         self.settings = settings
         self.store = store
         self.html_path = html_path
+        self.brand_dir = html_path.parent / "brand"
         self.pdfjs_dir = html_path.parent / "vendor" / "pdfjs"
         self.search = SearchService(store)
         self.active_tool_output_mode = active_tool_output_mode
@@ -909,6 +916,37 @@ class AdminHandlers:
         return FileResponse(
             asset_path,
             media_type="text/javascript",
+            headers={
+                "Cache-Control": "private, max-age=31536000, immutable",
+                "X-Content-Type-Options": "nosniff",
+            },
+        )
+
+    async def brand_asset(self, request: Request) -> Response:
+        _, error = self._require_admin(request)
+        if error:
+            return error
+        asset_name = str(request.path_params.get("asset_path", "")).strip("/")
+        relative_path = Path(asset_name)
+        if (
+            not asset_name
+            or relative_path.is_absolute()
+            or any(part in {"", ".", ".."} for part in relative_path.parts)
+        ):
+            return Response(status_code=404)
+        media_type = BRAND_ASSET_MEDIA_TYPES.get(relative_path.suffix.lower())
+        if media_type is None:
+            return Response(status_code=404)
+        try:
+            brand_root = self.brand_dir.resolve()
+            asset_path = (self.brand_dir / relative_path).resolve()
+            if not asset_path.is_relative_to(brand_root) or not asset_path.is_file():
+                return Response(status_code=404)
+        except OSError:
+            return Response(status_code=404)
+        return FileResponse(
+            asset_path,
+            media_type=media_type,
             headers={
                 "Cache-Control": "private, max-age=31536000, immutable",
                 "X-Content-Type-Options": "nosniff",

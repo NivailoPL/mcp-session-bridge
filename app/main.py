@@ -434,6 +434,11 @@ async def admin_pdfjs_asset(request: Request) -> Response:
     return await admin.pdfjs_asset(request)
 
 
+@mcp.custom_route("/admin/assets/brand/{asset_path:path}", methods=["GET"])
+async def admin_brand_asset(request: Request) -> Response:
+    return await admin.brand_asset(request)
+
+
 @mcp.custom_route("/admin/api/sessions/{session_id}/files", methods=["POST"])
 async def admin_api_upload_file(request: Request) -> Response:
     return await admin.api_upload_file(request)

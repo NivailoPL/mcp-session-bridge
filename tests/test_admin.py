@@ -18,6 +18,21 @@ from app.time_format import DISPLAY_TIMEZONE_SETTING_KEY
 from tests.pdf_samples import make_pdf
 
 
+def test_admin_viewer_uses_brand_lockup_and_tab_assets() -> None:
+    viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
+    head = viewer[: viewer.index("</head>")]
+    brand = viewer[viewer.index('<section class="brand">') : viewer.index('<div class="settings-row"')]
+
+    assert 'rel="icon" type="image/png" sizes="16x16"' in head
+    assert 'rel="icon" type="image/png" sizes="32x32"' in head
+    assert 'rel="apple-touch-icon" sizes="180x180"' in head
+    assert 'rel="manifest" href="/admin/assets/brand/manifest.webmanifest"' in head
+    assert 'src="/admin/assets/brand/svg/lockup-horizontal-dark.svg"' in brand
+    assert 'class="brand-lockup"' in brand
+    assert 'class="brand-mark"' not in brand
+
+
+
 def test_admin_viewer_group_ui_contract() -> None:
     viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
 
@@ -33,6 +48,34 @@ def test_admin_viewer_group_ui_contract() -> None:
     assert 'spanCls("group-file-identity")' in viewer
     assert 'setStatus(`Selected ${sessionId}.`, "ok");' not in viewer
     assert 'spanCls("file-meta", "No files")' not in viewer
+
+
+def test_admin_brand_assets_require_login_and_serve_png(tmp_path, monkeypatch) -> None:
+    main = _load_main(tmp_path, monkeypatch)
+    anonymous = TestClient(main.app, base_url="http://127.0.0.1:8787")
+
+    login_required = anonymous.get(
+        "/admin/assets/brand/png/icon-indigo-16.png",
+        follow_redirects=False,
+    )
+    assert login_required.status_code == 303
+    assert login_required.headers["location"].startswith("/admin/login")
+
+    client = TestClient(main.app, base_url="http://127.0.0.1:8787")
+    login = client.post(
+        "/admin/login",
+        data={"username": "owner", "password": "secret-admin-password", "next": "/admin/sessions"},
+        follow_redirects=False,
+    )
+    assert login.status_code == 303
+
+    asset = client.get("/admin/assets/brand/png/icon-indigo-16.png")
+    assert asset.status_code == 200
+    assert asset.headers["content-type"].startswith("image/png")
+    assert len(asset.content) > 0
+    assert client.get("/admin/assets/brand/png/missing.png").status_code == 404
+
+
 
 
 def test_admin_viewer_compacts_unselected_sessions() -> None:

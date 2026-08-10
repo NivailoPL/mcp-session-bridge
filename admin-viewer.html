@@ -4,6 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>MCP Session Bridge · Admin</title>
+  <link rel="icon" type="image/png" sizes="16x16" href="/admin/assets/brand/png/icon-indigo-16.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/admin/assets/brand/png/icon-indigo-32.png">
+  <link rel="icon" type="image/png" sizes="48x48" href="/admin/assets/brand/png/icon-indigo-48.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/admin/assets/brand/png/icon-indigo-180.png">
+  <link rel="mask-icon" href="/admin/assets/brand/svg/mark-mono-white.svg" color="#6C5CF2">
+  <link rel="manifest" href="/admin/assets/brand/manifest.webmanifest">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -178,37 +184,10 @@
     .brand {
       display: flex;
       align-items: center;
-      gap: .8rem;
       padding: 1.15rem 1.2rem;
       border-bottom: 1px solid var(--stroke-soft);
     }
-    .brand-mark {
-      flex: 0 0 auto;
-      width: 40px;
-      height: 40px;
-      border-radius: 11px;
-      display: grid;
-      place-items: center;
-      background: #383c8f;
-    }
-    .brand-mark svg { width: 22px; height: 22px; display: block; }
-    .brand-text { min-width: 0; }
-    .brand-text h1 {
-      margin: 0;
-      font-size: 1.02rem;
-      font-weight: 700;
-      letter-spacing: -.01em;
-      line-height: 1.1;
-    }
-    .brand-text .tag {
-      display: inline-flex;
-      align-items: center;
-      gap: .35rem;
-      margin-top: .2rem;
-      font-size: .72rem;
-      color: var(--muted);
-    }
-    .tag-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--ok); }
+    .brand-lockup { display: block; width: min(100%, 220px); height: auto; }
 
     .settings-row {
       display: flex;
@@ -1191,16 +1170,7 @@
   <main class="shell">
     <aside class="sidebar">
       <section class="brand">
-        <span class="brand-mark" aria-hidden="true">
-          <svg viewBox="0 0 24 24" fill="none" stroke="#0a0a12" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M4 8c0-2 1.4-3.5 4-3.5S12 6 12 8s1.4 3.5 4 3.5S20 10 20 8"></path>
-            <path d="M4 16c0 2 1.4 3.5 4 3.5S12 18 12 16s1.4-3.5 4-3.5S20 14 20 16"></path>
-          </svg>
-        </span>
-        <div class="brand-text">
-          <h1>MCP&nbsp;Bridge <span style="color:var(--accent-ink);font-weight:500">Admin</span></h1>
-          <span class="tag"><span class="tag-dot"></span> Transcript corrections</span>
-        </div>
+        <img class="brand-lockup" src="/admin/assets/brand/svg/lockup-horizontal-dark.svg" alt="MCP Session Bridge">
       </section>
 
       <div class="settings-row" aria-label="Admin menu">
