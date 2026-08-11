@@ -2,6 +2,13 @@ from __future__ import annotations
 
 import asyncio
 
+import pytest
+
+from app.codex_app_server import (
+    CodexIncompatibleVersionError,
+    CodexPolicyViolationError,
+    CodexProtocolError,
+)
 from app.graph_runtime import GraphRuntime
 from app.storage import Store
 
@@ -86,7 +93,9 @@ def test_invalid_later_result_keeps_last_good_analysis(tmp_path) -> None:
     asyncio.run(GraphRuntime(store, InvalidCodex(), worker_id="two").run_once(now=20_000))
 
     assert store.get_graph_analysis("s1")["extraction_id"] == first_analysis["extraction_id"]
-    assert store.list_graph_jobs()[0]["status"] == "terminal_failed"
+    job = store.list_graph_jobs()[0]
+    assert job["status"] == "retryable_failed"
+    assert job["error_code"] == "evidence_quote_not_literal"
 
 
 def test_evidence_cannot_cite_transcript_framing_labels(tmp_path) -> None:
@@ -104,4 +113,84 @@ def test_evidence_cannot_cite_transcript_framing_labels(tmp_path) -> None:
     asyncio.run(GraphRuntime(store, LabelCitingCodex(), worker_id="labels").run_once(now=10_000))
 
     assert store.get_graph_analysis("s1") is None
-    assert store.list_graph_jobs()[0]["status"] == "terminal_failed"
+    job = store.list_graph_jobs()[0]
+    assert job["status"] == "retryable_failed"
+    assert job["error_code"] == "evidence_quote_not_literal"
+    assert job["error_message"] == "Evidence quote must appear literally in its source exchange."
+
+
+def test_codex_protocol_failure_is_retryable_and_specific(tmp_path) -> None:
+    store, _ = _ready_store(tmp_path)
+
+    class Codex:
+        async def extract_structured(self, message, **kwargs):
+            raise CodexProtocolError("Codex returned invalid structured output.")
+
+    asyncio.run(GraphRuntime(store, Codex(), worker_id="protocol").run_once(now=10_000))
+
+    job = store.list_graph_jobs()[0]
+    assert job["status"] == "retryable_failed"
+    assert job["error_code"] == "codex_protocol_error"
+    assert job["error_message"] == "Codex returned invalid structured output."
+
+
+def test_codex_policy_violation_is_terminal_and_specific(tmp_path) -> None:
+    store, _ = _ready_store(tmp_path)
+
+    class Codex:
+        async def extract_structured(self, message, **kwargs):
+            raise CodexPolicyViolationError("Codex tools are disabled for this chat.")
+
+    asyncio.run(GraphRuntime(store, Codex(), worker_id="policy").run_once(now=10_000))
+
+    job = store.list_graph_jobs()[0]
+    assert job["status"] == "terminal_failed"
+    assert job["error_code"] == "codex_policy_violation"
+    assert job["error_message"] == "Codex tools are disabled for this chat."
+
+
+def test_codex_version_mismatch_is_terminal_and_specific(tmp_path) -> None:
+    store, _ = _ready_store(tmp_path)
+
+    class Codex:
+        async def extract_structured(self, message, **kwargs):
+            raise CodexIncompatibleVersionError("Incompatible Codex App Server version.")
+
+    asyncio.run(GraphRuntime(store, Codex(), worker_id="version").run_once(now=10_000))
+
+    job = store.list_graph_jobs()[0]
+    assert job["status"] == "terminal_failed"
+    assert job["error_code"] == "codex_version_incompatible"
+    assert job["error_message"] == "Incompatible Codex App Server version."
+
+
+@pytest.mark.parametrize(
+    ("source_error", "expected_code", "expected_message"),
+    [
+        ("oversized", "source_exchange_too_large", "A single exchange exceeds the Graph source limit."),
+        ("empty", "source_transcript_empty", "The session has no eligible source exchanges."),
+    ],
+)
+def test_source_failures_are_terminal_and_specific(
+    tmp_path, monkeypatch, source_error, expected_code, expected_message
+) -> None:
+    store, exchange_id = _ready_store(tmp_path)
+    if source_error == "oversized":
+        monkeypatch.setattr("app.graph_runtime.MAX_GRAPH_SOURCE_CHARS", 10)
+    else:
+        store.enqueue_eligible_graph_jobs(now=10_000)
+        with store._connect() as connection:
+            connection.execute(
+                "UPDATE exchanges SET deleted_at = 9999 WHERE exchange_id = ?", (exchange_id,)
+            )
+
+    class Codex:
+        async def extract_structured(self, message, **kwargs):
+            raise AssertionError("Codex must not run for invalid source input")
+
+    asyncio.run(GraphRuntime(store, Codex(), worker_id="source").run_once(now=10_000))
+
+    job = store.list_graph_jobs()[0]
+    assert job["status"] == "terminal_failed"
+    assert job["error_code"] == expected_code
+    assert job["error_message"] == expected_message

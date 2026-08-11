@@ -9,6 +9,7 @@ import pytest
 
 from app.codex_app_server import (
     CodexAppServerClient,
+    CodexIncompatibleVersionError,
     CodexPolicyViolationError,
     CodexProtocolError,
 )
@@ -249,7 +250,7 @@ def test_structured_extraction_passes_model_effort_and_output_schema(tmp_path: P
 def test_incompatible_runtime_is_rejected(tmp_path: Path) -> None:
     async def scenario() -> None:
         client = _client(tmp_path, FakeWebSocket(version="0.146.0"))
-        with pytest.raises(CodexProtocolError, match="expected 0.147.0"):
+        with pytest.raises(CodexIncompatibleVersionError, match="expected 0.147.0"):
             await client.status()
         await client.close()
 

@@ -8,6 +8,7 @@ from contextlib import suppress
 from typing import Any, Protocol
 
 from app.codex_app_server import (
+    CodexIncompatibleVersionError,
     CodexPolicyViolationError,
     CodexProtocolError,
     CodexTimeoutError,
@@ -322,6 +323,56 @@ class GraphRuntime:
                 )
             )
             raise
+        except GraphExtractionError as exc:
+            await asyncio.to_thread(
+                self.store.fail_graph_job,
+                job["job_id"],
+                lease_owner=lease_owner,
+                error_code=exc.code,
+                error_message=str(exc),
+                retryable=exc.retryable,
+                now=now,
+            )
+        except CodexPolicyViolationError as exc:
+            await asyncio.to_thread(
+                self.store.fail_graph_job,
+                job["job_id"],
+                lease_owner=lease_owner,
+                error_code="codex_policy_violation",
+                error_message=str(exc),
+                retryable=False,
+                now=now,
+            )
+        except CodexIncompatibleVersionError as exc:
+            await asyncio.to_thread(
+                self.store.fail_graph_job,
+                job["job_id"],
+                lease_owner=lease_owner,
+                error_code="codex_version_incompatible",
+                error_message=str(exc),
+                retryable=False,
+                now=now,
+            )
+        except CodexProtocolError as exc:
+            await asyncio.to_thread(
+                self.store.fail_graph_job,
+                job["job_id"],
+                lease_owner=lease_owner,
+                error_code="codex_protocol_error",
+                error_message=str(exc),
+                retryable=True,
+                now=now,
+            )
+        except ValueError as exc:
+            await asyncio.to_thread(
+                self.store.fail_graph_job,
+                job["job_id"],
+                lease_owner=lease_owner,
+                error_code="invalid_graph_input",
+                error_message=str(exc),
+                retryable=False,
+                now=now,
+            )
         except (CodexUnavailableError, CodexTimeoutError):
             await asyncio.to_thread(
                 self.store.fail_graph_job,
@@ -330,16 +381,6 @@ class GraphRuntime:
                 error_code="provider_unavailable",
                 error_message="Codex is temporarily unavailable.",
                 retryable=True,
-                now=now,
-            )
-        except (CodexProtocolError, CodexPolicyViolationError, GraphExtractionError, ValueError):
-            await asyncio.to_thread(
-                self.store.fail_graph_job,
-                job["job_id"],
-                lease_owner=lease_owner,
-                error_code="invalid_extraction",
-                error_message="The extraction result failed the production contract.",
-                retryable=False,
                 now=now,
             )
         except Exception:
@@ -368,12 +409,20 @@ class GraphRuntime:
             if blocks and total + len(block) > MAX_GRAPH_SOURCE_CHARS:
                 break
             if len(block) > MAX_GRAPH_SOURCE_CHARS:
-                raise GraphExtractionError("A single exchange exceeds the Graph source limit.")
+                raise GraphExtractionError(
+                    "A single exchange exceeds the Graph source limit.",
+                    code="source_exchange_too_large",
+                    retryable=False,
+                )
             blocks.append((exchange.exchange_id, block))
             total += len(block)
         blocks.reverse()
         if not blocks:
-            raise GraphExtractionError("The session has no eligible source exchanges.")
+            raise GraphExtractionError(
+                "The session has no eligible source exchanges.",
+                code="source_transcript_empty",
+                retryable=False,
+            )
         included_ids = {exchange_id for exchange_id, _ in blocks}
         source_by_exchange = {
             exchange.exchange_id: (

@@ -29,6 +29,7 @@ UNCATEGORIZED_GROUP_ID = "uncategorized"
 SCHEMA_VERSION = 2
 GRAPH_ENABLED_SETTING = "graph.enabled"
 GRAPH_ACTIVE_PROFILE_SETTING = "graph.active_profile_id"
+GRAPH_FAILURE_RECOVERY_SETTING = "graph.recovered_terminal_failures_v1"
 
 SYSTEM_SESSION_GROUPS = (
     {
@@ -529,6 +530,9 @@ class Store:
                 CREATE INDEX IF NOT EXISTS idx_graph_jobs_claim
                     ON graph_jobs(status, available_at, lease_expires_at, job_id);
 
+                CREATE INDEX IF NOT EXISTS idx_graph_jobs_latest_session
+                    ON graph_jobs(session_id, created_at DESC, job_id DESC);
+
                 CREATE TABLE IF NOT EXISTS graph_extractions (
                     extraction_id INTEGER PRIMARY KEY AUTOINCREMENT,
                     job_id INTEGER NOT NULL UNIQUE,
@@ -627,6 +631,7 @@ class Store:
             self._seed_system_session_groups(conn)
             self._demote_legacy_system_session_groups(conn)
             self._seed_graph_config(conn)
+            self._recover_legacy_graph_failures(conn)
             conn.execute(
                 """
                 UPDATE sessions
@@ -678,6 +683,31 @@ class Store:
         conn.execute(
             "INSERT OR IGNORE INTO app_settings(key, value, updated_at) VALUES (?, 'false', ?)",
             (GRAPH_ENABLED_SETTING, now),
+        )
+
+    @staticmethod
+    def _recover_legacy_graph_failures(conn: sqlite3.Connection) -> None:
+        migrated = conn.execute(
+            "SELECT 1 FROM app_settings WHERE key = ?",
+            (GRAPH_FAILURE_RECOVERY_SETTING,),
+        ).fetchone()
+        if migrated is not None:
+            return
+        now = int(time.time())
+        conn.execute(
+            """
+            UPDATE graph_jobs
+            SET status = 'retryable_failed', attempts = 0, available_at = ?,
+                lease_owner = NULL, lease_expires_at = NULL, completed_at = NULL,
+                updated_at = ?
+            WHERE status = 'terminal_failed'
+              AND error_code IN ('invalid_extraction', 'lease_exhausted')
+            """,
+            (now, now),
+        )
+        conn.execute(
+            "INSERT INTO app_settings(key, value, updated_at) VALUES (?, 'true', ?)",
+            (GRAPH_FAILURE_RECOVERY_SETTING, now),
         )
 
     @staticmethod
@@ -1569,8 +1599,14 @@ class Store:
                     MAX(CASE WHEN x.deleted_at IS NULL THEN COALESCE(x.assistant_created_at, x.created_at) END) AS last_activity,
                     e.extraction_id, e.source_exchange_id, e.profile_id, e.created_at AS extracted_at,
                     p.version AS profile_version,
-                    (SELECT j.status FROM graph_jobs j WHERE j.session_id = s.session_id ORDER BY j.created_at DESC, j.job_id DESC LIMIT 1) AS latest_job_status,
-                    (SELECT j.error_code FROM graph_jobs j WHERE j.session_id = s.session_id ORDER BY j.created_at DESC, j.job_id DESC LIMIT 1) AS latest_job_error_code,
+                    latest_job.job_id AS latest_job_id,
+                    latest_job.source_exchange_id AS latest_job_source_exchange_id,
+                    latest_job.status AS latest_job_status,
+                    latest_job.attempts AS latest_job_attempts,
+                    latest_job.max_attempts AS latest_job_max_attempts,
+                    latest_job.error_code AS latest_job_error_code,
+                    latest_job.error_message AS latest_job_error_message,
+                    latest_job.updated_at AS latest_job_updated_at,
                     COUNT(DISTINCT c.extraction_concept_id) AS concept_count
                 FROM sessions s
                 JOIN session_groups g ON g.group_id = s.group_id
@@ -1579,6 +1615,11 @@ class Store:
                 LEFT JOIN graph_extractions e ON e.extraction_id = current.extraction_id
                 LEFT JOIN graph_extractor_profiles p ON p.profile_id = e.profile_id
                 LEFT JOIN graph_extraction_concepts c ON c.extraction_id = e.extraction_id
+                LEFT JOIN graph_jobs latest_job ON latest_job.job_id = (
+                    SELECT j.job_id FROM graph_jobs j
+                    WHERE j.session_id = s.session_id
+                    ORDER BY j.created_at DESC, j.job_id DESC LIMIT 1
+                )
                 GROUP BY s.session_id
                 ORDER BY last_activity DESC, s.session_id ASC
                 LIMIT ?
@@ -1615,8 +1656,14 @@ class Store:
                     "extracted_at": row["extracted_at"],
                     "concept_count": row["concept_count"] or 0,
                     "freshness": freshness,
+                    "latest_job_id": row["latest_job_id"],
+                    "latest_job_source_exchange_id": row["latest_job_source_exchange_id"],
                     "latest_job_status": row["latest_job_status"],
+                    "latest_job_attempts": row["latest_job_attempts"],
+                    "latest_job_max_attempts": row["latest_job_max_attempts"],
                     "latest_job_error_code": row["latest_job_error_code"],
+                    "latest_job_error_message": row["latest_job_error_message"],
+                    "latest_job_updated_at": row["latest_job_updated_at"],
                 }
             )
         return payloads

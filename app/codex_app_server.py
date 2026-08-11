@@ -57,6 +57,10 @@ class CodexProtocolError(CodexAppServerError):
     pass
 
 
+class CodexIncompatibleVersionError(CodexProtocolError):
+    pass
+
+
 class CodexTimeoutError(CodexAppServerError):
     pass
 
@@ -159,7 +163,7 @@ class CodexAppServerClient:
                 match = _VERSION_PATTERN.search(user_agent)
                 version = match.group(1) if match else None
                 if version != self.expected_version:
-                    raise CodexProtocolError(
+                    raise CodexIncompatibleVersionError(
                         f"Incompatible Codex App Server version; expected {self.expected_version}."
                     )
                 self._version = version

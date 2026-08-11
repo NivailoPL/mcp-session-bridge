@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from app.storage import Store
+import pytest
+
+from app.storage import GRAPH_FAILURE_RECOVERY_SETTING, Store
 
 
 def _session_with_exchange(store: Store, session_id: str, *, created_at: int) -> int:
@@ -12,6 +14,63 @@ def _session_with_exchange(store: Store, session_id: str, *, created_at: int) ->
             (created_at, created_at, exchange.exchange_id),
         )
     return exchange.exchange_id
+
+
+def test_graph_jobs_has_latest_session_lookup_index(tmp_path) -> None:
+    store = Store(tmp_path / "bridge.sqlite3")
+
+    with store._connect() as connection:
+        columns = connection.execute(
+            "PRAGMA index_info(idx_graph_jobs_latest_session)"
+        ).fetchall()
+
+    assert [column["name"] for column in columns] == ["session_id", "created_at", "job_id"]
+    with store._connect() as connection:
+        plan = connection.execute(
+            """
+            EXPLAIN QUERY PLAN
+            SELECT job_id FROM graph_jobs
+            WHERE session_id = ?
+            ORDER BY created_at DESC, job_id DESC LIMIT 1
+            """,
+            ("session",),
+        ).fetchall()
+    assert any(
+        "USING COVERING INDEX idx_graph_jobs_latest_session" in row["detail"] for row in plan
+    )
+
+
+@pytest.mark.parametrize("error_code", ["invalid_extraction", "lease_exhausted"])
+def test_legacy_terminal_graph_failures_are_recovered_once(tmp_path, error_code) -> None:
+    db_path = tmp_path / "bridge.sqlite3"
+    store = Store(db_path)
+    _session_with_exchange(store, "legacy", created_at=1_000)
+    store.set_graph_enabled(True)
+    [queued] = store.enqueue_eligible_graph_jobs(now=100_000)
+    with store._connect() as connection:
+        connection.execute(
+            """
+            UPDATE graph_jobs SET status = 'terminal_failed', attempts = max_attempts,
+                error_code = ?, error_message = 'legacy failure', completed_at = 100001
+            WHERE job_id = ?
+            """,
+            (error_code, queued["job_id"]),
+        )
+        connection.execute("DELETE FROM app_settings WHERE key = ?", (GRAPH_FAILURE_RECOVERY_SETTING,))
+
+    migrated = Store(db_path)
+    [job] = migrated.list_graph_jobs()
+    assert job["status"] == "retryable_failed"
+    assert job["attempts"] == 0
+    assert job["completed_at"] is None
+    retry_now = job["available_at"] + 1
+    assert migrated.claim_graph_job("worker", now=retry_now) is not None
+
+    migrated.fail_graph_job(
+        job["job_id"], lease_owner="worker", error_code=error_code,
+        error_message="failed again", retryable=False, now=retry_now + 1,
+    )
+    assert Store(db_path).list_graph_jobs()[0]["status"] == "terminal_failed"
 
 
 def test_eligibility_uses_per_session_inactivity_and_is_idempotent(tmp_path) -> None:

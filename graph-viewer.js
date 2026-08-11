@@ -1,4 +1,4 @@
-const state = { csrf: null, config: null, codexReady: false };
+const state = { csrf: null, config: null, codexReady: false, analysisDetailGeneration: 0 };
 
 const dom = {
   enabled: document.querySelector("#graphEnabled"), stateWord: document.querySelector("#graphStateWord"),
@@ -74,7 +74,40 @@ dom.discard.addEventListener("click", async () => { try { await mutate("/admin/a
 
 function cell(text) { const td = document.createElement("td"); td.textContent = text; return td; }
 function pill(value) { const span = document.createElement("span"); span.className = `status-pill ${value}`; span.textContent = value.replaceAll("_", " "); return span; }
-function formatTime(value) { return value ? new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(value * 1000)) : "—"; }
+const dateTimeFormatter = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" });
+function formatTime(value) { return value ? dateTimeFormatter.format(new Date(value * 1000)) : "—"; }
+
+function diagnosticLine(label, value) {
+  const item = document.createElement("div");
+  const term = document.createElement("dt"); term.textContent = label;
+  const detail = document.createElement("dd"); detail.textContent = value ?? "—";
+  item.append(term, detail); return item;
+}
+
+function renderJobDiagnostic(job) {
+  const wrapper = document.createElement("dl"); wrapper.className = "job-detail-grid";
+  wrapper.append(
+    diagnosticLine("Job", `#${job.job_id}`),
+    diagnosticLine("Status", job.status.replaceAll("_", " ")),
+    diagnosticLine("Source", `Exchange #${job.source_exchange_id}`),
+    diagnosticLine("Attempts", `${job.attempts}/${job.max_attempts}`),
+    diagnosticLine("Updated", formatTime(job.updated_at)),
+    diagnosticLine("Started", formatTime(job.started_at)),
+    diagnosticLine("Completed", formatTime(job.completed_at)),
+  );
+  if (job.error_code || job.error_message) {
+    const error = document.createElement("div"); error.className = "job-detail-error";
+    const heading = document.createElement("strong"); heading.textContent = job.error_code || "Processing error";
+    const message = document.createElement("p"); message.textContent = job.error_message || "No additional error details were recorded.";
+    error.append(heading, message); wrapper.append(error);
+  }
+  return wrapper;
+}
+
+function renderJobDetail(job) {
+  const detailRow = document.createElement("tr"); detailRow.className = "job-detail-row"; detailRow.hidden = true;
+  const detailCell = document.createElement("td"); detailCell.colSpan = 5; detailRow.append(detailCell); return { detailRow, detailCell };
+}
 
 async function loadProcessing() {
   try {
@@ -84,18 +117,58 @@ async function loadProcessing() {
       const row = document.createElement("tr"); const empty = cell("No Graph jobs yet. Eligible sessions will appear after Graph is enabled."); empty.colSpan = 5; row.append(empty); dom.jobsBody.append(row); return;
     }
     for (const job of jobs) {
-      const row = document.createElement("tr"); row.append(cell(job.session_id)); const status = document.createElement("td"); status.append(pill(job.status)); row.append(status, cell(`#${job.source_exchange_id}`), cell(`${job.attempts}/${job.max_attempts}`), cell(formatTime(job.updated_at))); dom.jobsBody.append(row);
+      const row = document.createElement("tr");
+      const sessionCell = document.createElement("td");
+      const trigger = document.createElement("button"); trigger.type = "button"; trigger.className = "job-detail-trigger";
+      trigger.textContent = job.session_id; trigger.setAttribute("aria-expanded", "false");
+      sessionCell.append(trigger); row.append(sessionCell);
+      const status = document.createElement("td"); status.append(pill(job.status));
+      row.append(status, cell(`#${job.source_exchange_id}`), cell(`${job.attempts}/${job.max_attempts}`), cell(formatTime(job.updated_at)));
+      const { detailRow, detailCell } = renderJobDetail(job);
+      trigger.addEventListener("click", () => {
+        if (!detailCell.hasChildNodes()) detailCell.append(renderJobDiagnostic(job));
+        detailRow.hidden = !detailRow.hidden;
+        trigger.setAttribute("aria-expanded", String(!detailRow.hidden));
+      });
+      dom.jobsBody.append(row, detailRow);
     }
   } catch (error) { setStatus(error.message, true); }
 }
 
-async function loadAnalysisDetail(sessionId) {
+function appendAnalysisDiagnostic(session) {
+  if (!session.latest_job_error_code && !session.latest_job_error_message) return;
+  const diagnostic = document.createElement("section"); diagnostic.className = "analysis-diagnostic";
+  const heading = document.createElement("strong"); heading.textContent = session.latest_job_error_code || "Latest processing error";
+  const message = document.createElement("p"); message.textContent = session.latest_job_error_message || "No additional error details were recorded.";
+  diagnostic.append(heading, message); dom.analysisDetail.append(diagnostic);
+}
+
+function renderUnavailableAnalysis(session) {
+  dom.analysisDetail.replaceChildren();
+  const heading = document.createElement("h3"); heading.textContent = session.title;
+  const intro = document.createElement("p");
+  intro.textContent = session.latest_job_status ? "This session does not have a validated production extraction yet." : "This session has not entered Graph processing yet.";
+  const details = document.createElement("dl"); details.className = "job-detail-grid";
+  details.append(
+    diagnosticLine("Job", session.latest_job_id == null ? "—" : `#${session.latest_job_id}`),
+    diagnosticLine("Session", session.session_id),
+    diagnosticLine("Job status", session.latest_job_status?.replaceAll("_", " ") || "not queued"),
+    diagnosticLine("Attempts", session.latest_job_attempts == null ? "—" : `${session.latest_job_attempts}/${session.latest_job_max_attempts}`),
+    diagnosticLine("Source", session.latest_job_source_exchange_id == null ? "—" : `Exchange #${session.latest_job_source_exchange_id}`),
+    diagnosticLine("Updated", formatTime(session.latest_job_updated_at)),
+  );
+  dom.analysisDetail.append(heading, intro, details); appendAnalysisDiagnostic(session);
+}
+
+async function loadAnalysisDetail(session, generation) {
   try {
-    const { analysis } = await request(`/admin/api/graph/analysis/${encodeURIComponent(sessionId)}`);
+    const { analysis } = await request(`/admin/api/graph/analysis/${encodeURIComponent(session.session_id)}`);
+    if (generation !== state.analysisDetailGeneration) return;
     dom.analysisDetail.replaceChildren();
-    const heading = document.createElement("h3"); heading.textContent = sessionId;
+    const heading = document.createElement("h3"); heading.textContent = session.title;
     const meta = document.createElement("p"); meta.textContent = `Profile v${analysis.profile_version} · ${analysis.model} · source #${analysis.source_exchange_id}`;
     dom.analysisDetail.append(heading, meta);
+    appendAnalysisDiagnostic(session);
     for (const concept of analysis.concepts) {
       const card = document.createElement("section"); card.className = "concept-card";
       const head = document.createElement("div"); head.className = "concept-head";
@@ -105,7 +178,10 @@ async function loadAnalysisDetail(sessionId) {
       for (const item of concept.evidence) { const quote = document.createElement("blockquote"); quote.className = "evidence"; quote.textContent = item.quote; const source = document.createElement("small"); source.textContent = `Exchange #${item.exchange_id}`; quote.append(source); card.append(quote); }
       dom.analysisDetail.append(card);
     }
-  } catch (error) { dom.analysisDetail.textContent = error.message; }
+  } catch (error) {
+    if (generation !== state.analysisDetailGeneration) return;
+    dom.analysisDetail.textContent = error.message;
+  }
 }
 
 async function loadAnalysis() {
@@ -118,7 +194,12 @@ async function loadAnalysis() {
       const button = document.createElement("button"); button.type = "button"; button.className = "analysis-session";
       const title = document.createElement("strong"); title.textContent = session.title; const status = pill(session.freshness);
       const meta = document.createElement("small"); meta.textContent = `${session.group_name} · ${session.concept_count} concepts${session.latest_job_status ? ` · job ${session.latest_job_status}` : ""}`;
-      button.append(title, status, meta); if (session.extraction_id) button.addEventListener("click", () => loadAnalysisDetail(session.session_id)); else button.disabled = true; dom.analysisSessions.append(button);
+      button.append(title, status, meta);
+      button.addEventListener("click", () => {
+        const generation = ++state.analysisDetailGeneration;
+        if (session.extraction_id) loadAnalysisDetail(session, generation);
+        else renderUnavailableAnalysis(session);
+      }); dom.analysisSessions.append(button);
     }
   } catch (error) { setStatus(error.message, true); }
 }

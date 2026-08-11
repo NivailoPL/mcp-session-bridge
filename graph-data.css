@@ -9,6 +9,18 @@ table { width: 100%; border-collapse: collapse; font-size: .78rem; }
 th, td { padding: .75rem .85rem; text-align: left; border-bottom: 1px solid var(--stroke); white-space: nowrap; }
 th { color: var(--faint); font-size: .66rem; text-transform: uppercase; letter-spacing: .1em; }
 tbody tr:last-child td { border-bottom: 0; }
+.job-detail-trigger { min-height: auto; width: 100%; padding: 0; border: 0; border-radius: 3px; background: transparent; text-align: left; font: inherit; }
+.job-detail-trigger:hover { border: 0; background: transparent; color: #c7c2ff; }
+.job-detail-trigger:focus-visible { outline: 2px solid var(--accent2); outline-offset: 3px; }
+.job-detail-trigger::after { content: "  ›"; color: var(--faint); }
+.job-detail-trigger[aria-expanded="true"]::after { content: "  ⌄"; }
+.job-detail-row td { padding: 0; white-space: normal; background: rgba(0,0,0,.16); }
+.job-detail-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: .75rem 1rem; margin: 0; padding: .85rem; }
+.job-detail-grid > div { min-width: 0; }
+.job-detail-grid dt { color: var(--faint); font-size: .65rem; text-transform: uppercase; letter-spacing: .08em; }
+.job-detail-grid dd { margin: .15rem 0 0; overflow-wrap: anywhere; color: #c7cad5; }
+.job-detail-error, .analysis-diagnostic { grid-column: 1/-1; padding: .7rem .8rem; border: 1px solid rgba(251,113,133,.24); border-radius: 9px; background: rgba(251,113,133,.06); color: #fda4af; }
+.job-detail-error p, .analysis-diagnostic p { margin: .25rem 0 0; color: #d8a3ad; overflow-wrap: anywhere; }
 .status-pill { display: inline-flex; padding: .22rem .5rem; border: 1px solid var(--stroke); border-radius: 999px; font: 600 .67rem "Geist Mono", monospace; }
 .status-pill.completed, .status-pill.current { color: var(--ok); border-color: rgba(52,211,153,.25); background: rgba(52,211,153,.07); }
 .status-pill.running, .status-pill.queued { color: #b8b2ff; border-color: rgba(139,124,255,.28); background: var(--accent-soft); }
@@ -22,6 +34,7 @@ tbody tr:last-child td { border-bottom: 0; }
 .analysis-detail { padding: 1rem; min-height: 12rem; }
 .analysis-detail > p { color: var(--muted); }
 .analysis-detail h3 { margin: .1rem 0; }
+.analysis-diagnostic { margin: .8rem 0; }
 .concept-card { padding: .8rem 0; border-top: 1px solid var(--stroke); }
 .concept-card:first-of-type { margin-top: .8rem; }
 .concept-head { display: flex; justify-content: space-between; gap: 1rem; }
@@ -29,7 +42,7 @@ tbody tr:last-child td { border-bottom: 0; }
 .concept-card p { font-size: .8rem; color: var(--muted); }
 .evidence { margin: .5rem 0 0; padding: .65rem; border-left: 2px solid var(--accent2); background: rgba(0,0,0,.2); color: #c7cad5; font-size: .75rem; }
 .evidence small { display: block; color: var(--faint); margin-top: .3rem; }
-@media (max-width: 800px) { .analysis-layout { grid-template-columns: 1fr; } .section-heading { align-items: stretch; } .workspace-section { margin-top: 2.5rem; } }
+@media (max-width: 800px) { .analysis-layout { grid-template-columns: 1fr; } .section-heading { align-items: stretch; } .workspace-section { margin-top: 2.5rem; } .job-detail-grid { grid-template-columns: 1fr; } }
 .lab-layout { display: grid; grid-template-columns: minmax(18rem, 1fr) minmax(18rem, 1fr); gap: 1rem; align-items: start; }
 .lab-form { display: grid; gap: 1rem; padding: 1rem; }
 .lab-form label { display: grid; gap: .4rem; font-size: .77rem; font-weight: 700; }

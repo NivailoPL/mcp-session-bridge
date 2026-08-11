@@ -154,3 +154,54 @@ def test_processing_and_analysis_apis_require_auth_and_return_durable_state(tmp_
     assert client.get("/admin/api/graph/lab").json() == {"ok": True, "runs": []}
     missing = client.get("/admin/api/graph/analysis/unknown")
     assert missing.status_code == 404
+
+
+def test_failed_graph_job_details_reach_processing_and_analysis_ui(tmp_path, monkeypatch) -> None:
+    main = _load_main(tmp_path, monkeypatch)
+    client, _ = _admin_client(main)
+    draft = main.store.unlock_graph_profile("owner")
+    main.store.update_graph_draft({**draft, "inactivity_hours": 1}, "owner")
+    main.store.activate_graph_draft("owner")
+    main.store.create_session("failed-session", "Failed Graph session", "manual-context")
+    exchange = main.store.save_exchange(
+        "failed-session", "model", "A durable Graph decision.", "The decision is stored."
+    )
+    with main.store._connect() as connection:
+        connection.execute(
+            "UPDATE exchanges SET created_at = 1000, assistant_created_at = 1000 WHERE exchange_id = ?",
+            (exchange.exchange_id,),
+        )
+    main.store.set_graph_enabled(True)
+    main.store.enqueue_eligible_graph_jobs(now=10_000)
+    job = main.store.claim_graph_job("test-worker", now=10_000, lease_seconds=30)
+    assert job is not None
+    main.store.fail_graph_job(
+        job["job_id"],
+        lease_owner="test-worker",
+        error_code="evidence_quote_not_literal",
+        error_message="Evidence quote must appear literally in its source exchange.",
+        retryable=False,
+        now=10_001,
+    )
+
+    processing = client.get("/admin/api/graph/jobs").json()["jobs"][0]
+    assert processing["error_code"] == "evidence_quote_not_literal"
+    assert processing["error_message"] == "Evidence quote must appear literally in its source exchange."
+
+    analysis = client.get("/admin/api/graph/analysis").json()["sessions"][0]
+    assert analysis["latest_job_id"] == job["job_id"]
+    assert analysis["latest_job_status"] == "terminal_failed"
+    assert analysis["latest_job_attempts"] == 1
+    assert analysis["latest_job_max_attempts"] == 3
+    assert analysis["latest_job_error_code"] == "evidence_quote_not_literal"
+    assert analysis["latest_job_error_message"] == "Evidence quote must appear literally in its source exchange."
+
+    script = client.get("/admin/assets/graph-viewer.js").text
+    assert "renderJobDetail" in script
+    assert "job.error_code" in script
+    assert "job.error_message" in script
+    assert "renderUnavailableAnalysis" in script
+    assert "session.latest_job_error_code" in script
+    assert "analysisDetailGeneration" in script
+    assert "generation !== state.analysisDetailGeneration" in script
+    assert "button.disabled = true" not in script
