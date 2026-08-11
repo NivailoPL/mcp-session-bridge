@@ -1,6 +1,9 @@
 .graph-content { scroll-margin-top: 4.75rem; }
 .workspace-section { scroll-margin-top: 5rem; margin-top: 3.5rem; }
 .section-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 1.2rem; margin-bottom: 1rem; }
+.section-actions { display: flex; gap: .55rem; flex-wrap: wrap; justify-content: flex-end; }
+.danger { color: #fda4af; border-color: rgba(251,113,133,.3); background: rgba(251,113,133,.08); }
+.danger:hover { border-color: rgba(251,113,133,.5); background: rgba(251,113,133,.14); }
 .section-heading h2 { margin: 0; }
 .section-heading p:last-child { margin: .25rem 0 0; color: var(--muted); font-size: .82rem; }
 .data-card { border: 1px solid var(--stroke); border-radius: 14px; background: rgba(255,255,255,.025); }
@@ -42,7 +45,7 @@ tbody tr:last-child td { border-bottom: 0; }
 .concept-card p { font-size: .8rem; color: var(--muted); }
 .evidence { margin: .5rem 0 0; padding: .65rem; border-left: 2px solid var(--accent2); background: rgba(0,0,0,.2); color: #c7cad5; font-size: .75rem; }
 .evidence small { display: block; color: var(--faint); margin-top: .3rem; }
-@media (max-width: 800px) { .analysis-layout { grid-template-columns: 1fr; } .section-heading { align-items: stretch; } .workspace-section { margin-top: 2.5rem; } .job-detail-grid { grid-template-columns: 1fr; } }
+@media (max-width: 800px) { .analysis-layout { grid-template-columns: 1fr; } .section-heading { align-items: stretch; } .section-actions { justify-content: flex-start; } .workspace-section { margin-top: 2.5rem; } .job-detail-grid { grid-template-columns: 1fr; } }
 .lab-layout { display: grid; grid-template-columns: minmax(18rem, 1fr) minmax(18rem, 1fr); gap: 1rem; align-items: start; }
 .lab-form { display: grid; gap: 1rem; padding: 1rem; }
 .lab-form label { display: grid; gap: .4rem; font-size: .77rem; font-weight: 700; }

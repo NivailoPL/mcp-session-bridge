@@ -1167,22 +1167,11 @@ class Store:
             if profile is None:
                 return []
             cutoff = current_time - int(profile["inactivity_hours"]) * 3600
-            candidates = conn.execute(
-                """
-                SELECT
-                    s.session_id,
-                    MAX(CASE WHEN e.deleted_at IS NULL THEN e.exchange_id END) AS source_exchange_id,
-                    MAX(CASE WHEN e.deleted_at IS NULL THEN COALESCE(e.assistant_created_at, e.created_at) END) AS last_activity
-                FROM sessions s
-                JOIN session_groups g ON g.group_id = s.group_id AND g.deleted_at IS NULL
-                LEFT JOIN exchanges e ON e.session_id = s.session_id
-                WHERE (? = 1 OR g.is_sensitive = 0)
-                GROUP BY s.session_id
-                HAVING source_exchange_id IS NOT NULL AND last_activity <= ?
-                ORDER BY last_activity ASC, s.session_id ASC
-                """,
-                (int(profile["include_sensitive"]), cutoff),
-            ).fetchall()
+            candidates = self._graph_job_candidates(
+                conn,
+                include_sensitive=bool(profile["include_sensitive"]),
+                inactivity_cutoff=cutoff,
+            )
             for candidate in candidates:
                 cursor = conn.execute(
                     """
@@ -1211,6 +1200,109 @@ class Store:
                 created_ids,
             ).fetchall()
         return [_graph_job_row(row) for row in rows]
+
+    @staticmethod
+    def _graph_job_candidates(
+        conn: sqlite3.Connection,
+        *,
+        include_sensitive: bool,
+        inactivity_cutoff: int | None,
+    ) -> sqlite3.Cursor:
+        return conn.execute(
+            """
+            SELECT
+                s.session_id,
+                MAX(CASE WHEN e.deleted_at IS NULL THEN e.exchange_id END) AS source_exchange_id,
+                MAX(CASE WHEN e.deleted_at IS NULL THEN COALESCE(e.assistant_created_at, e.created_at) END) AS last_activity
+            FROM sessions s
+            JOIN session_groups g ON g.group_id = s.group_id AND g.deleted_at IS NULL
+            LEFT JOIN exchanges e ON e.session_id = s.session_id
+            WHERE (? = 1 OR g.is_sensitive = 0)
+            GROUP BY s.session_id
+            HAVING source_exchange_id IS NOT NULL
+               AND (? IS NULL OR last_activity <= ?)
+            ORDER BY last_activity ASC, s.session_id ASC
+            """,
+            (
+                int(include_sensitive),
+                inactivity_cutoff,
+                inactivity_cutoff,
+            ),
+        )
+
+    def reset_graph_scan(self, *, now: int | None = None) -> dict[str, int]:
+        current_time = int(time.time()) if now is None else int(now)
+        with self._lock, self._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            enabled = conn.execute(
+                "SELECT value FROM app_settings WHERE key = ?",
+                (GRAPH_ENABLED_SETTING,),
+            ).fetchone()
+            if enabled is None or enabled["value"] != "true":
+                raise ValueError("Enable Graph before starting a fresh scan.")
+            profile = conn.execute(
+                """
+                SELECT p.* FROM graph_extractor_profiles p
+                JOIN app_settings s
+                  ON s.key = ? AND CAST(s.value AS INTEGER) = p.profile_id
+                """,
+                (GRAPH_ACTIVE_PROFILE_SETTING,),
+            ).fetchone()
+            if profile is None:
+                raise ValueError("Graph has no active extractor profile.")
+
+            running_lease = conn.execute(
+                """
+                SELECT MAX(lease_expires_at) FROM graph_jobs
+                WHERE status = 'running' AND lease_expires_at IS NOT NULL
+                """
+            ).fetchone()[0]
+            fresh_jobs_available_at = max(
+                current_time,
+                int(running_lease) if running_lease is not None else current_time,
+            )
+            deleted_jobs = int(conn.execute("SELECT COUNT(*) FROM graph_jobs").fetchone()[0])
+            deleted_extractions = int(
+                conn.execute("SELECT COUNT(*) FROM graph_extractions").fetchone()[0]
+            )
+            conn.execute("DELETE FROM graph_extraction_evidence")
+            conn.execute("DELETE FROM graph_extraction_concepts")
+            conn.execute("DELETE FROM graph_session_current")
+            conn.execute("DELETE FROM graph_extractions")
+            conn.execute("DELETE FROM graph_jobs")
+
+            candidates = self._graph_job_candidates(
+                conn,
+                include_sensitive=bool(profile["include_sensitive"]),
+                inactivity_cutoff=None,
+            )
+            changes_before = conn.total_changes
+            conn.executemany(
+                """
+                INSERT INTO graph_jobs (
+                    session_id, source_exchange_id, profile_id, schema_version,
+                    status, available_at, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, 'queued', ?, ?, ?)
+                """,
+                (
+                    (
+                        candidate["session_id"],
+                        candidate["source_exchange_id"],
+                        profile["profile_id"],
+                        profile["schema_version"],
+                        fresh_jobs_available_at,
+                        current_time,
+                        current_time,
+                    )
+                    for candidate in candidates
+                ),
+            )
+            queued_jobs = conn.total_changes - changes_before
+        return {
+            "deleted_jobs": deleted_jobs,
+            "deleted_extractions": deleted_extractions,
+            "queued_jobs": queued_jobs,
+        }
 
     def claim_graph_job(
         self,
@@ -1260,7 +1352,7 @@ class Store:
                 """
                 SELECT * FROM graph_jobs
                 WHERE (
-                    status = 'queued'
+                    (status = 'queued' AND available_at <= ?)
                     OR (status = 'retryable_failed' AND available_at <= ? AND attempts < max_attempts)
                     OR (status = 'running' AND lease_expires_at IS NOT NULL
                         AND lease_expires_at <= ? AND attempts < max_attempts)
@@ -1268,7 +1360,7 @@ class Store:
                 ORDER BY available_at ASC, job_id ASC
                 LIMIT 1
                 """,
-                (current_time, current_time),
+                (current_time, current_time, current_time),
             ).fetchone()
             if row is None:
                 return None

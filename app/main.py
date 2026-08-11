@@ -336,6 +336,11 @@ async def admin_api_graph_jobs(request: Request) -> Response:
     return await admin.api_graph_jobs(request)
 
 
+@mcp.custom_route("/admin/api/graph/rescan", methods=["POST"])
+async def admin_api_graph_rescan(request: Request) -> Response:
+    return await admin.api_graph_rescan(request)
+
+
 @mcp.custom_route("/admin/api/graph/analysis", methods=["GET"])
 async def admin_api_graph_analysis_list(request: Request) -> Response:
     return await admin.api_graph_analysis_list(request)

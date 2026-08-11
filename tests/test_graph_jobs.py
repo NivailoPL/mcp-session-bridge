@@ -90,6 +90,92 @@ def test_eligibility_uses_per_session_inactivity_and_is_idempotent(tmp_path) -> 
     assert len(store.list_graph_jobs()) == 1
 
 
+def test_reset_graph_scan_deletes_production_results_and_queues_every_allowed_session(tmp_path) -> None:
+    store = Store(tmp_path / "bridge.sqlite3")
+    old_exchange = _session_with_exchange(store, "old", created_at=1_000)
+    recent_exchange = _session_with_exchange(store, "recent", created_at=9_900)
+    store.create_session_group("Private", "#f59e0b", "lock", "private")
+    store.update_session_group("private", is_sensitive=True)
+    _session_with_exchange(store, "secret", created_at=1_000)
+    store.set_session_group("secret", "private")
+    draft = store.unlock_graph_profile("owner")
+    store.update_graph_draft({**draft, "inactivity_hours": 1}, "owner")
+    store.activate_graph_draft("owner")
+    store.set_graph_enabled(True)
+    [queued] = store.enqueue_eligible_graph_jobs(now=10_000)
+    lab_run = store.create_graph_lab_run(
+        "old",
+        old_exchange,
+        {"model": "gpt-5.6-sol", "effort": "high"},
+        "owner",
+        now=10_000,
+    )
+    running = store.claim_graph_job("worker", now=10_000, lease_seconds=30)
+    assert running is not None
+    store.publish_graph_extraction(
+        running["job_id"],
+        {
+            "concepts": [
+                {
+                    "canonical_name": "Old result",
+                    "type": "decision",
+                    "summary": "This result should be deleted by the reset.",
+                    "evidence": [{"exchange_id": old_exchange, "quote": "user old"}],
+                }
+            ]
+        },
+        lease_owner="worker",
+        now=10_001,
+    )
+
+    result = store.reset_graph_scan(now=10_100)
+
+    assert result == {"deleted_jobs": 1, "deleted_extractions": 1, "queued_jobs": 2}
+    jobs = sorted(store.list_graph_jobs(), key=lambda job: job["session_id"])
+    assert [(job["session_id"], job["source_exchange_id"], job["status"]) for job in jobs] == [
+        ("old", old_exchange, "queued"),
+        ("recent", recent_exchange, "queued"),
+    ]
+    assert all(job["job_id"] != queued["job_id"] for job in jobs)
+    assert store.get_graph_analysis("old") is None
+    assert store.get_graph_lab_run(lab_run["lab_run_id"]) == lab_run
+    with store._connect() as connection:
+        assert connection.execute("SELECT COUNT(*) FROM graph_extractions").fetchone()[0] == 0
+        assert connection.execute("SELECT COUNT(*) FROM graph_extraction_concepts").fetchone()[0] == 0
+        assert connection.execute("SELECT COUNT(*) FROM graph_extraction_evidence").fetchone()[0] == 0
+        assert connection.execute("SELECT COUNT(*) FROM graph_session_current").fetchone()[0] == 0
+
+
+def test_reset_graph_scan_requires_graph_to_be_enabled(tmp_path) -> None:
+    store = Store(tmp_path / "bridge.sqlite3")
+
+    with pytest.raises(ValueError, match="Enable Graph before starting a fresh scan"):
+        store.reset_graph_scan(now=100_000)
+
+
+def test_reset_graph_scan_waits_for_the_previous_running_lease(tmp_path) -> None:
+    db_path = tmp_path / "bridge.sqlite3"
+    first_runtime = Store(db_path)
+    _session_with_exchange(first_runtime, "one", created_at=1_000)
+    first_runtime.set_graph_enabled(True)
+    first_runtime.enqueue_eligible_graph_jobs(now=100_000)
+    running = first_runtime.claim_graph_job(
+        "worker-a", now=100_000, lease_seconds=30
+    )
+    assert running is not None
+    assert running["lease_expires_at"] == 100_030
+
+    second_runtime = Store(db_path)
+    second_runtime.reset_graph_scan(now=100_010)
+
+    [fresh_job] = second_runtime.list_graph_jobs()
+    assert fresh_job["available_at"] == 100_030
+    assert second_runtime.claim_graph_job("worker-b", now=100_029) is None
+    claimed = second_runtime.claim_graph_job("worker-b", now=100_030)
+    assert claimed is not None
+    assert claimed["job_id"] == fresh_job["job_id"]
+
+
 def test_sensitive_sessions_are_excluded_by_default(tmp_path) -> None:
     store = Store(tmp_path / "bridge.sqlite3")
     store.create_session_group("Private", "#f59e0b", "lock", "private")

@@ -156,6 +156,92 @@ def test_processing_and_analysis_apis_require_auth_and_return_durable_state(tmp_
     assert missing.status_code == 404
 
 
+def test_rescan_all_api_requires_csrf_and_returns_reset_counts(tmp_path, monkeypatch) -> None:
+    main = _load_main(tmp_path, monkeypatch)
+    main.store.create_session("fresh-session", "Fresh session", "manual-context")
+    exchange = main.store.save_exchange(
+        "fresh-session", "model", "Recent user text", "Recent model text"
+    )
+    main.store.set_graph_enabled(True)
+    main.store.reset_graph_scan()
+    existing = main.store.claim_graph_job("test-worker", lease_seconds=30)
+    assert existing is not None
+    main.store.publish_graph_extraction(
+        existing["job_id"],
+        {
+            "concepts": [
+                {
+                    "canonical_name": "Existing result",
+                    "type": "decision",
+                    "summary": "This result must survive a blocked reset.",
+                    "evidence": [
+                        {"exchange_id": exchange.exchange_id, "quote": "Recent user text"}
+                    ],
+                }
+            ]
+        },
+        lease_owner="test-worker",
+    )
+    client, csrf = _admin_client(main)
+
+    assert client.post("/admin/api/graph/rescan").status_code == 403
+
+    class LoggedOutCodex:
+        async def status(self):
+            return {"available": True, "authenticated": False, "account": None}
+
+    main.admin.codex = LoggedOutCodex()
+    blocked = client.post(
+        "/admin/api/graph/rescan",
+        headers={"x-csrf-token": csrf},
+    )
+    assert blocked.status_code == 409
+    assert blocked.json()["code"] == "graph_provider_not_ready"
+    [preserved] = main.store.list_graph_jobs()
+    assert preserved["job_id"] == existing["job_id"]
+    assert preserved["status"] == "completed"
+    assert main.store.get_graph_analysis("fresh-session") is not None
+
+    class ReadyCodex:
+        async def status(self):
+            return {
+                "available": True,
+                "authenticated": True,
+                "account": {"type": "chatgpt"},
+            }
+
+    main.admin.codex = ReadyCodex()
+    response = client.post(
+        "/admin/api/graph/rescan",
+        headers={"x-csrf-token": csrf},
+    )
+
+    assert response.status_code == 202
+    assert response.json() == {
+        "ok": True,
+        "reset": {"deleted_jobs": 1, "deleted_extractions": 1, "queued_jobs": 1},
+    }
+    [job] = main.store.list_graph_jobs()
+    assert job["session_id"] == "fresh-session"
+    assert job["job_id"] != existing["job_id"]
+    assert main.store.get_graph_analysis("fresh-session") is None
+
+    script = client.get("/admin/assets/graph-viewer.js").text
+    page = client.get("/admin/graph").text
+    assert "/admin/api/graph/rescan" in script
+    assert "window.confirm" in script
+    assert 'id="rescanAll" class="danger" type="button" disabled' in page
+    assert "dataGeneration" in script
+    assert "async function loadProcessing(generation = state.dataGeneration)" in script
+    assert "async function loadAnalysis(generation = state.dataGeneration)" in script
+    assert script.count("if (generation !== state.dataGeneration) return;") == 4
+    assert "const generation = ++state.dataGeneration" in script
+    assert "loadProcessing(generation), loadAnalysis(generation)" in script
+    assert "dom.refreshProcessing.disabled = state.rescanBusy" in script
+    assert "dom.refreshAnalysis.disabled = state.rescanBusy" in script
+    assert "!state.config || !config.enabled || !state.codexReady || state.rescanBusy" in script
+
+
 def test_failed_graph_job_details_reach_processing_and_analysis_ui(tmp_path, monkeypatch) -> None:
     main = _load_main(tmp_path, monkeypatch)
     client, _ = _admin_client(main)

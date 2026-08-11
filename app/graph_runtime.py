@@ -60,15 +60,15 @@ class GraphRuntime:
         self.lease_seconds = lease_seconds
         self.heartbeat_interval_seconds = heartbeat_interval_seconds
         self._active_task: asyncio.Task[None] | None = None
+        self._controlled_cancellations: set[asyncio.Task[None]] = set()
         self._lab_tasks: set[asyncio.Task[None]] = set()
         self._run_lock = asyncio.Lock()
+        self._reset_lock = asyncio.Lock()
 
     async def set_enabled(self, enabled: bool) -> dict[str, Any]:
         config = await asyncio.to_thread(self.store.set_graph_enabled, enabled)
         if not enabled and self._active_task is not None and not self._active_task.done():
-            self._active_task.cancel()
-            with suppress(asyncio.CancelledError):
-                await self._active_task
+            await self._cancel_active_task()
         if not enabled:
             lab_tasks = tuple(task for task in self._lab_tasks if not task.done())
             for task in lab_tasks:
@@ -76,6 +76,26 @@ class GraphRuntime:
             if lab_tasks:
                 await asyncio.gather(*lab_tasks, return_exceptions=True)
         return config
+
+    async def reset_all(self, *, now: int | None = None) -> dict[str, int]:
+        async with self._reset_lock:
+            while self._run_lock.locked():
+                task = self._active_task
+                if task is not None and not task.done():
+                    await self._cancel_active_task()
+                else:
+                    await asyncio.sleep(0.01)
+            async with self._run_lock:
+                return await asyncio.to_thread(self.store.reset_graph_scan, now=now)
+
+    async def _cancel_active_task(self) -> None:
+        task = self._active_task
+        if task is None or task.done():
+            return
+        self._controlled_cancellations.add(task)
+        task.cancel()
+        with suppress(asyncio.CancelledError):
+            await task
 
     async def run_once(self, *, now: int | None = None) -> None:
         if self._run_lock.locked():
@@ -121,13 +141,14 @@ class GraphRuntime:
             try:
                 await task
             except asyncio.CancelledError:
-                if not lease_lost.is_set():
+                if not lease_lost.is_set() and task not in self._controlled_cancellations:
                     raise
             finally:
                 heartbeat.cancel()
                 await asyncio.gather(heartbeat, return_exceptions=True)
                 if self._active_task is task:
                     self._active_task = None
+                self._controlled_cancellations.discard(task)
 
     async def _heartbeat(
         self,

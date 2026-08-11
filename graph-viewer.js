@@ -1,4 +1,4 @@
-const state = { csrf: null, config: null, codexReady: false, analysisDetailGeneration: 0 };
+const state = { csrf: null, config: null, codexReady: false, dataGeneration: 0, analysisDetailGeneration: 0, rescanBusy: false };
 
 const dom = {
   enabled: document.querySelector("#graphEnabled"), stateWord: document.querySelector("#graphStateWord"),
@@ -13,7 +13,7 @@ const dom = {
   includeSensitive: document.querySelector("#includeSensitive"),
   jobsBody: document.querySelector("#jobsBody"), analysisSessions: document.querySelector("#analysisSessions"),
   analysisDetail: document.querySelector("#analysisDetail"), refreshProcessing: document.querySelector("#refreshProcessing"),
-  refreshAnalysis: document.querySelector("#refreshAnalysis"),
+  refreshAnalysis: document.querySelector("#refreshAnalysis"), rescanAll: document.querySelector("#rescanAll"),
   labForm: document.querySelector("#labForm"), labSession: document.querySelector("#labSession"),
   labModel: document.querySelector("#labModel"), labEffort: document.querySelector("#labEffort"),
   labPrompt: document.querySelector("#labPrompt"), labMaxConcepts: document.querySelector("#labMaxConcepts"),
@@ -36,6 +36,10 @@ function editableProfile() { return state.config.draft || state.config.active_pr
 
 function render() {
   const config = state.config;
+  dom.rescanAll.disabled = !state.config || !config.enabled || !state.codexReady || state.rescanBusy;
+  dom.refreshProcessing.disabled = state.rescanBusy;
+  dom.refreshAnalysis.disabled = state.rescanBusy;
+  if (!config) return;
   const profile = editableProfile();
   const editing = !config.locked;
   dom.enabled.checked = config.enabled;
@@ -109,9 +113,10 @@ function renderJobDetail(job) {
   const detailCell = document.createElement("td"); detailCell.colSpan = 5; detailRow.append(detailCell); return { detailRow, detailCell };
 }
 
-async function loadProcessing() {
+async function loadProcessing(generation = state.dataGeneration) {
   try {
     const { jobs } = await request("/admin/api/graph/jobs");
+    if (generation !== state.dataGeneration) return;
     dom.jobsBody.replaceChildren();
     if (!jobs.length) {
       const row = document.createElement("tr"); const empty = cell("No Graph jobs yet. Eligible sessions will appear after Graph is enabled."); empty.colSpan = 5; row.append(empty); dom.jobsBody.append(row); return;
@@ -132,7 +137,10 @@ async function loadProcessing() {
       });
       dom.jobsBody.append(row, detailRow);
     }
-  } catch (error) { setStatus(error.message, true); }
+  } catch (error) {
+    if (generation !== state.dataGeneration) return;
+    setStatus(error.message, true);
+  }
 }
 
 function appendAnalysisDiagnostic(session) {
@@ -184,9 +192,11 @@ async function loadAnalysisDetail(session, generation) {
   }
 }
 
-async function loadAnalysis() {
+async function loadAnalysis(generation = state.dataGeneration) {
   try {
-    const { sessions } = await request("/admin/api/graph/analysis"); dom.analysisSessions.replaceChildren(); dom.labSession.replaceChildren();
+    const { sessions } = await request("/admin/api/graph/analysis");
+    if (generation !== state.dataGeneration) return;
+    dom.analysisSessions.replaceChildren(); dom.labSession.replaceChildren();
     const placeholder = document.createElement("option"); placeholder.value = ""; placeholder.textContent = "Select a session"; dom.labSession.append(placeholder);
     if (!sessions.length) { const empty = document.createElement("p"); empty.textContent = "No sessions are available yet."; dom.analysisSessions.append(empty); return; }
     for (const session of sessions) {
@@ -201,7 +211,10 @@ async function loadAnalysis() {
         else renderUnavailableAnalysis(session);
       }); dom.analysisSessions.append(button);
     }
-  } catch (error) { setStatus(error.message, true); }
+  } catch (error) {
+    if (generation !== state.dataGeneration) return;
+    setStatus(error.message, true);
+  }
 }
 
 async function loadLab() {
@@ -223,9 +236,27 @@ async function loadLab() {
   } catch (error) { setStatus(error.message, true); }
 }
 
-dom.refreshProcessing.addEventListener("click", loadProcessing);
-dom.refreshAnalysis.addEventListener("click", loadAnalysis);
+dom.refreshProcessing.addEventListener("click", () => loadProcessing());
+dom.refreshAnalysis.addEventListener("click", () => loadAnalysis());
 dom.refreshLab.addEventListener("click", loadLab);
+dom.rescanAll.addEventListener("click", async () => {
+  const confirmed = window.confirm("Delete every production Graph scan and job, then queue a fresh scan of all allowed sessions? Lab runs will be preserved.");
+  if (!confirmed) return;
+  const generation = ++state.dataGeneration;
+  state.analysisDetailGeneration += 1;
+  state.rescanBusy = true; render(); setStatus("Deleting old scans and creating a fresh queue…");
+  try {
+    const { reset } = await request("/admin/api/graph/rescan", { method: "POST" });
+    const emptyDetail = document.createElement("p"); emptyDetail.textContent = "Select a session to inspect its new scan when processing completes.";
+    dom.analysisDetail.replaceChildren(emptyDetail);
+    setStatus(`Fresh scan queued for ${reset.queued_jobs} sessions. Deleted ${reset.deleted_extractions} extractions and ${reset.deleted_jobs} old jobs.`);
+    await Promise.all([loadProcessing(generation), loadAnalysis(generation)]);
+  } catch (error) {
+    setStatus(error.message, true);
+  } finally {
+    state.rescanBusy = false; render();
+  }
+});
 dom.labForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   try {

@@ -111,6 +111,44 @@ def test_cancelled_runtime_releases_job_for_retry(tmp_path):
     assert job["lease_expires_at"] is None
 
 
+def test_reset_cancels_active_job_without_stopping_runtime_and_requeues_all(tmp_path):
+    store = _store(tmp_path)
+    _session(store, "recent", created_at=9_900)
+    started = asyncio.Event()
+    cancelled = asyncio.Event()
+    calls = 0
+
+    class Codex:
+        async def extract_structured(self, message, **kwargs):
+            nonlocal calls
+            calls += 1
+            if calls > 1:
+                exchange_id = int(re.search(r"Exchange (\d+)", message).group(1))
+                return _result(exchange_id, "Fresh scan after reset")
+            started.set()
+            try:
+                await asyncio.Event().wait()
+            except asyncio.CancelledError:
+                cancelled.set()
+                raise
+
+    async def run():
+        runtime = GraphRuntime(store, Codex(), worker_id="reset")
+        worker = asyncio.create_task(runtime.run_once(now=10_000))
+        await started.wait()
+        result = await runtime.reset_all(now=10_100)
+        await worker
+        await runtime.run_once(now=10_101)
+        return result
+
+    result = asyncio.run(run())
+
+    assert result == {"deleted_jobs": 1, "deleted_extractions": 0, "queued_jobs": 2}
+    assert cancelled.is_set()
+    assert sorted(job["session_id"] for job in store.list_graph_jobs()) == ["recent", "s1"]
+    assert sorted(job["status"] for job in store.list_graph_jobs()) == ["completed", "queued"]
+
+
 def test_cancellation_waits_for_claim_and_releases_claimed_job(tmp_path, monkeypatch):
     store = _store(tmp_path)
     entered = threading.Event()

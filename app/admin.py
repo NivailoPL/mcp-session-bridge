@@ -400,6 +400,24 @@ class AdminHandlers:
         jobs = self.store.list_graph_jobs(status=status or None)
         return JSONResponse({"ok": True, "jobs": jobs}, headers=self._no_store_headers())
 
+    async def api_graph_rescan(self, request: Request) -> Response:
+        _, error = self._require_admin_mutation(request)
+        if error:
+            return error
+        if self.graph_runtime is None:
+            return self._json_error("Graph runtime is unavailable.", status_code=503)
+        if not await self._graph_provider_is_ready():
+            return self._graph_provider_not_ready()
+        try:
+            result = await self.graph_runtime.reset_all()
+        except ValueError as exc:
+            return self._json_error(str(exc), status_code=409)
+        return JSONResponse(
+            {"ok": True, "reset": result},
+            status_code=202,
+            headers=self._no_store_headers(),
+        )
+
     async def api_graph_analysis_list(self, request: Request) -> Response:
         _, error = self._require_admin(request)
         if error:
@@ -503,13 +521,7 @@ class AdminHandlers:
         if not isinstance(enabled, bool):
             return self._json_error("enabled must be a boolean.", status_code=400)
         if enabled:
-            if self.codex is None:
-                return self._graph_provider_not_ready()
-            try:
-                status = await self.codex.status()
-            except CodexAppServerErrorTypes:
-                return self._graph_provider_not_ready()
-            if status.get("authenticated") is not True:
+            if not await self._graph_provider_is_ready():
                 return self._graph_provider_not_ready()
         if self.graph_runtime is not None:
             await self.graph_runtime.set_enabled(enabled)
@@ -522,6 +534,15 @@ class AdminHandlers:
             {"ok": True, "config": self.store.get_graph_config()},
             headers=self._no_store_headers(),
         )
+
+    async def _graph_provider_is_ready(self) -> bool:
+        if self.codex is None:
+            return False
+        try:
+            status = await self.codex.status()
+        except CodexAppServerErrorTypes:
+            return False
+        return status.get("authenticated") is True
 
     @classmethod
     def _graph_provider_not_ready(cls) -> JSONResponse:
