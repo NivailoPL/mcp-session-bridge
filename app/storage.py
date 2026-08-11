@@ -1202,13 +1202,38 @@ class Store:
             ).fetchone()
             if enabled is None or enabled["value"] != "true":
                 return None
+            conn.execute(
+                """
+                UPDATE graph_jobs
+                SET status = 'terminal_failed', completed_at = ?, updated_at = ?,
+                    lease_owner = NULL, lease_expires_at = NULL,
+                    error_code = 'lease_exhausted',
+                    error_message = 'Graph worker lease expired after the final attempt.'
+                WHERE status = 'running'
+                  AND lease_expires_at IS NOT NULL
+                  AND lease_expires_at <= ?
+                  AND attempts >= max_attempts
+                """,
+                (current_time, current_time, current_time),
+            )
+            active = conn.execute(
+                """
+                SELECT 1 FROM graph_jobs
+                WHERE status = 'running' AND lease_expires_at > ?
+                LIMIT 1
+                """,
+                (current_time,),
+            ).fetchone()
+            if active is not None:
+                return None
             row = conn.execute(
                 """
                 SELECT * FROM graph_jobs
                 WHERE (
                     status = 'queued'
                     OR (status = 'retryable_failed' AND available_at <= ? AND attempts < max_attempts)
-                    OR (status = 'running' AND lease_expires_at IS NOT NULL AND lease_expires_at <= ?)
+                    OR (status = 'running' AND lease_expires_at IS NOT NULL
+                        AND lease_expires_at <= ? AND attempts < max_attempts)
                 )
                 ORDER BY available_at ASC, job_id ASC
                 LIMIT 1
@@ -1239,6 +1264,41 @@ class Store:
             ).fetchone()
         assert claimed is not None
         return _graph_job_row(claimed)
+
+    def renew_graph_job_lease(
+        self,
+        job_id: int,
+        lease_owner: str,
+        *,
+        now: int | None = None,
+        lease_seconds: int = 300,
+    ) -> bool:
+        current_time = int(time.time()) if now is None else int(now)
+        normalized_owner = lease_owner.strip()
+        if not normalized_owner:
+            raise ValueError("lease_owner must not be empty.")
+        if lease_seconds < 1:
+            raise ValueError("lease_seconds must be positive.")
+        with self._lock, self._connect() as conn:
+            cursor = conn.execute(
+                """
+                UPDATE graph_jobs
+                SET lease_expires_at = ?, updated_at = ?
+                WHERE job_id = ?
+                  AND status = 'running'
+                  AND lease_owner = ?
+                  AND lease_expires_at IS NOT NULL
+                  AND lease_expires_at > ?
+                """,
+                (
+                    current_time + lease_seconds,
+                    current_time,
+                    job_id,
+                    normalized_owner,
+                    current_time,
+                ),
+            )
+        return cursor.rowcount == 1
 
     def list_graph_jobs(self, *, limit: int = 100, status: str | None = None) -> list[dict[str, Any]]:
         safe_limit = max(1, min(int(limit), 500))
@@ -1297,6 +1357,7 @@ class Store:
         job_id: int,
         result: dict[str, Any],
         *,
+        lease_owner: str,
         now: int | None = None,
     ) -> dict[str, Any]:
         current_time = int(time.time()) if now is None else int(now)
@@ -1305,7 +1366,13 @@ class Store:
             job = conn.execute(
                 "SELECT * FROM graph_jobs WHERE job_id = ?", (job_id,)
             ).fetchone()
-            if job is None or job["status"] != "running":
+            if (
+                job is None
+                or job["status"] != "running"
+                or job["lease_owner"] != lease_owner
+                or job["lease_expires_at"] is None
+                or int(job["lease_expires_at"]) <= current_time
+            ):
                 raise ValueError("Graph job is no longer publishable.")
             cursor = conn.execute(
                 """
@@ -1381,6 +1448,7 @@ class Store:
         self,
         job_id: int,
         *,
+        lease_owner: str,
         error_code: str,
         error_message: str,
         retryable: bool,
@@ -1392,7 +1460,13 @@ class Store:
             row = conn.execute(
                 "SELECT * FROM graph_jobs WHERE job_id = ?", (job_id,)
             ).fetchone()
-            if row is None or row["status"] != "running":
+            if (
+                row is None
+                or row["status"] != "running"
+                or row["lease_owner"] != lease_owner
+                or row["lease_expires_at"] is None
+                or int(row["lease_expires_at"]) <= current_time
+            ):
                 return _graph_job_row(row) if row else None
             will_retry = retryable and int(row["attempts"]) < int(row["max_attempts"])
             status = "retryable_failed" if will_retry else "terminal_failed"

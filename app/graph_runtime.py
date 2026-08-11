@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import copy
+import logging
+import uuid
 from contextlib import suppress
 from typing import Any, Protocol
 
@@ -20,7 +22,10 @@ from app.graph_config import validate_graph_draft
 from app.storage import Store
 
 
+logger = logging.getLogger(__name__)
 MAX_GRAPH_SOURCE_CHARS = 440_000
+DEFAULT_GRAPH_LEASE_SECONDS = 360
+DEFAULT_GRAPH_HEARTBEAT_INTERVAL_SECONDS = 60.0
 
 
 class StructuredCodex(Protocol):
@@ -35,12 +40,27 @@ class StructuredCodex(Protocol):
 
 
 class GraphRuntime:
-    def __init__(self, store: Store, codex: StructuredCodex, *, worker_id: str = "bridge-graph"):
+    def __init__(
+        self,
+        store: Store,
+        codex: StructuredCodex,
+        *,
+        worker_id: str = "bridge-graph",
+        lease_seconds: int = DEFAULT_GRAPH_LEASE_SECONDS,
+        heartbeat_interval_seconds: float = DEFAULT_GRAPH_HEARTBEAT_INTERVAL_SECONDS,
+    ):
+        if lease_seconds < 1:
+            raise ValueError("lease_seconds must be positive.")
+        if not 0 < heartbeat_interval_seconds < lease_seconds:
+            raise ValueError("heartbeat interval must be positive and shorter than the lease.")
         self.store = store
         self.codex = codex
         self.worker_id = worker_id
+        self.lease_seconds = lease_seconds
+        self.heartbeat_interval_seconds = heartbeat_interval_seconds
         self._active_task: asyncio.Task[None] | None = None
         self._lab_tasks: set[asyncio.Task[None]] = set()
+        self._run_lock = asyncio.Lock()
 
     async def set_enabled(self, enabled: bool) -> dict[str, Any]:
         config = await asyncio.to_thread(self.store.set_graph_enabled, enabled)
@@ -57,21 +77,84 @@ class GraphRuntime:
         return config
 
     async def run_once(self, *, now: int | None = None) -> None:
-        await asyncio.to_thread(self.store.enqueue_eligible_graph_jobs, now=now)
-        job = await asyncio.to_thread(
-            self.store.claim_graph_job,
-            self.worker_id,
-            now=now,
-        )
-        if job is None:
+        if self._run_lock.locked():
             return
-        task = asyncio.create_task(self._process_job(job, now=now))
-        self._active_task = task
-        try:
-            await task
-        finally:
-            if self._active_task is task:
-                self._active_task = None
+        async with self._run_lock:
+            await asyncio.to_thread(self.store.enqueue_eligible_graph_jobs, now=now)
+            lease_owner = f"{self.worker_id}:{uuid.uuid4().hex}"
+            claim_task = asyncio.create_task(
+                asyncio.to_thread(
+                    self.store.claim_graph_job,
+                    lease_owner,
+                    now=now,
+                    lease_seconds=self.lease_seconds,
+                )
+            )
+            try:
+                job = await asyncio.shield(claim_task)
+            except asyncio.CancelledError:
+                job = await claim_task
+                if job is not None:
+                    await asyncio.shield(
+                        asyncio.to_thread(
+                            self.store.fail_graph_job,
+                            job["job_id"],
+                            lease_owner=lease_owner,
+                            error_code="worker_interrupted",
+                            error_message="Graph worker was interrupted after claiming a job.",
+                            retryable=True,
+                            now=now,
+                        )
+                    )
+                raise
+            if job is None:
+                return
+            task = asyncio.create_task(
+                self._process_job(job, lease_owner=lease_owner, now=now)
+            )
+            lease_lost = asyncio.Event()
+            heartbeat = asyncio.create_task(
+                self._heartbeat(job["job_id"], lease_owner, task, lease_lost)
+            )
+            self._active_task = task
+            try:
+                await task
+            except asyncio.CancelledError:
+                if not lease_lost.is_set():
+                    raise
+            finally:
+                heartbeat.cancel()
+                await asyncio.gather(heartbeat, return_exceptions=True)
+                if self._active_task is task:
+                    self._active_task = None
+
+    async def _heartbeat(
+        self,
+        job_id: int,
+        lease_owner: str,
+        task: asyncio.Task[None],
+        lease_lost: asyncio.Event,
+    ) -> None:
+        while not task.done():
+            await asyncio.sleep(self.heartbeat_interval_seconds)
+            if task.done():
+                return
+            try:
+                renewed = await asyncio.to_thread(
+                    self.store.renew_graph_job_lease,
+                    job_id,
+                    lease_owner,
+                    lease_seconds=self.lease_seconds,
+                )
+            except Exception:
+                logger.exception(
+                    "Graph job lease heartbeat failed", extra={"job_id": job_id}
+                )
+                renewed = False
+            if not renewed:
+                lease_lost.set()
+                task.cancel()
+                return
 
     async def start_lab_run(
         self,
@@ -191,11 +274,17 @@ class GraphRuntime:
                 now=now,
             )
 
-    async def _process_job(self, job: dict[str, Any], *, now: int | None) -> None:
-        context = await asyncio.to_thread(self.store.get_graph_job_context, job["job_id"])
-        if context is None:
-            return
+    async def _process_job(
+        self,
+        job: dict[str, Any],
+        *,
+        lease_owner: str,
+        now: int | None,
+    ) -> None:
         try:
+            context = await asyncio.to_thread(self.store.get_graph_job_context, job["job_id"])
+            if context is None:
+                raise RuntimeError("Graph job context is unavailable.")
             prompt, source_by_exchange = await asyncio.to_thread(
                 self._build_prompt,
                 context,
@@ -217,14 +306,27 @@ class GraphRuntime:
                 self.store.publish_graph_extraction,
                 job["job_id"],
                 validated,
+                lease_owner=lease_owner,
                 now=now,
             )
         except asyncio.CancelledError:
+            await asyncio.shield(
+                asyncio.to_thread(
+                    self.store.fail_graph_job,
+                    job["job_id"],
+                    lease_owner=lease_owner,
+                    error_code="worker_interrupted",
+                    error_message="Graph worker was interrupted before completion.",
+                    retryable=True,
+                    now=now,
+                )
+            )
             raise
         except (CodexUnavailableError, CodexTimeoutError):
             await asyncio.to_thread(
                 self.store.fail_graph_job,
                 job["job_id"],
+                lease_owner=lease_owner,
                 error_code="provider_unavailable",
                 error_message="Codex is temporarily unavailable.",
                 retryable=True,
@@ -234,6 +336,7 @@ class GraphRuntime:
             await asyncio.to_thread(
                 self.store.fail_graph_job,
                 job["job_id"],
+                lease_owner=lease_owner,
                 error_code="invalid_extraction",
                 error_message="The extraction result failed the production contract.",
                 retryable=False,
@@ -243,6 +346,7 @@ class GraphRuntime:
             await asyncio.to_thread(
                 self.store.fail_graph_job,
                 job["job_id"],
+                lease_owner=lease_owner,
                 error_code="worker_failure",
                 error_message="Unexpected Graph worker failure.",
                 retryable=True,

@@ -119,21 +119,22 @@ async def _graph_pipeline_monitor() -> None:
 
 
 @asynccontextmanager
-async def app_lifespan(_: FastMCP[Any]):
-    monitor = asyncio.create_task(_search_index_monitor())
-    graph_monitor = asyncio.create_task(_graph_pipeline_monitor())
-    try:
-        # Reaching this point is the final startup step before the app is ready to serve.
-        await asyncio.to_thread(store.clear_tool_output_restart_pending)
-        yield {}
-    finally:
-        monitor.cancel()
-        graph_monitor.cancel()
-        with suppress(asyncio.CancelledError):
-            await monitor
-        with suppress(asyncio.CancelledError):
-            await graph_monitor
-        await codex.close()
+async def app_lifespan(_: Any):
+    async with mcp.session_manager.run():
+        monitor = asyncio.create_task(_search_index_monitor())
+        graph_monitor = asyncio.create_task(_graph_pipeline_monitor())
+        try:
+            # Reaching this point is the final startup step before the app is ready to serve.
+            await asyncio.to_thread(store.clear_tool_output_restart_pending)
+            yield {}
+        finally:
+            monitor.cancel()
+            graph_monitor.cancel()
+            with suppress(asyncio.CancelledError):
+                await monitor
+            with suppress(asyncio.CancelledError):
+                await graph_monitor
+            await codex.close()
 
 
 mcp = FastMCP(
@@ -148,7 +149,6 @@ mcp = FastMCP(
     streamable_http_path=settings.resource_path,
     json_response=True,
     stateless_http=True,
-    lifespan=app_lifespan,
     transport_security=TransportSecuritySettings(
         enable_dns_rebinding_protection=True,
         allowed_hosts=settings.transport_allowed_hosts,
@@ -1165,8 +1165,10 @@ def _group_payload(group: Any) -> dict[str, Any] | None:
     }
 
 
+mcp_http_app = mcp.streamable_http_app()
+mcp_http_app.router.lifespan_context = app_lifespan
 app = RequestBodyLimitMiddleware(
-    mcp.streamable_http_app(),
+    mcp_http_app,
     path=settings.resource_path,
     max_bytes=MCP_REQUEST_MAX_BODY_BYTES,
 )
