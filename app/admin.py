@@ -1711,79 +1711,198 @@ class AdminHandlers:
         return Fernet(key)
 
     def _login_form(self, next_path: str, error: str | None = None, status_code: int = 200) -> HTMLResponse:
-        error_html = f'<p class="error">{html.escape(error)}</p>' if error else ""
+        error_html = (
+            '<div class="login-alert" role="alert">'
+            '<span class="alert-dot" aria-hidden="true"></span>'
+            f'<span>{html.escape(error)}</span>'
+            '</div>'
+            if error
+            else ""
+        )
         escaped_next = html.escape(next_path, quote=True)
+        try:
+            brand_svg = (self.brand_dir / "svg" / "lockup-horizontal-dark.svg").read_text(encoding="utf-8")
+        except OSError:
+            brand_svg = '<span class="fallback-wordmark"><span>MCP</span> Session Bridge</span>'
         body = f"""<!doctype html>
-<html lang="pl">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>MCP Session Bridge Admin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
   <style>
     :root {{
-      color-scheme: light;
-      --bg: #f7f7f4;
-      --text: #1f2933;
-      --muted: #68727d;
-      --border: #d8ddd5;
-      --accent: #176b5b;
-      --danger: #a33a32;
+      color-scheme: dark;
+      --bg-base: #0a0b0f;
+      --panel: #15161d;
+      --text: #ecedf2;
+      --muted: #8e93a6;
+      --faint: #6e7387;
+      --stroke: rgba(255, 255, 255, .1);
+      --stroke-soft: rgba(255, 255, 255, .065);
+      --accent: #6c5cf2;
+      --accent-hover: #7c70f5;
+      --accent-text: #b3a9ff;
+      --accent-soft: rgba(108, 92, 242, .16);
+      --danger: #fb7185;
+      --danger-soft: rgba(251, 113, 133, .12);
     }}
     * {{ box-sizing: border-box; }}
+    html, body {{ min-height: 100%; margin: 0; }}
     body {{
-      margin: 0;
       min-height: 100vh;
       display: grid;
       place-items: center;
-      background: var(--bg);
+      padding: 1.5rem;
+      overflow-x: hidden;
+      background:
+        radial-gradient(58rem 38rem at 8% -8%, rgba(108, 92, 242, .2), transparent 66%),
+        radial-gradient(42rem 30rem at 105% 108%, rgba(74, 66, 196, .16), transparent 68%),
+        var(--bg-base);
       color: var(--text);
-      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-family: Manrope, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+      -webkit-font-smoothing: antialiased;
     }}
-    main {{
-      width: min(92vw, 28rem);
-      padding: 2rem;
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      background: #fff;
-      box-shadow: 0 18px 40px rgb(31 41 51 / 10%);
+    body::before {{
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      opacity: .26;
+      background-image: linear-gradient(rgba(255, 255, 255, .025) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, .025) 1px, transparent 1px);
+      background-size: 48px 48px;
+      mask-image: linear-gradient(to bottom, black, transparent 78%);
     }}
-    h1 {{ margin: 0 0 .35rem; font-size: 1.45rem; }}
-    p {{ margin: 0 0 1.25rem; color: var(--muted); }}
-    label {{ display: block; margin-top: 1rem; font-weight: 650; }}
-    input {{
-      width: 100%;
-      margin-top: .4rem;
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: .7rem .75rem;
-      font: inherit;
+    button, input {{ font: inherit; color: inherit; }}
+    button:focus-visible, input:focus-visible {{ outline: 2px solid var(--accent-hover); outline-offset: 3px; }}
+    .login-shell {{
+      position: relative;
+      z-index: 1;
+      display: grid;
+      grid-template-columns: minmax(0, 1.08fr) minmax(20rem, .92fr);
+      width: min(100%, 68rem);
+      min-height: min(36rem, calc(100vh - 3rem));
+      overflow: hidden;
+      border: 1px solid var(--stroke);
+      border-radius: 22px;
+      background: rgba(21, 22, 29, .86);
+      box-shadow: 0 32px 90px rgba(0, 0, 0, .55), 0 0 0 1px rgba(108, 92, 242, .035);
+      backdrop-filter: blur(20px);
     }}
-    button {{
-      width: 100%;
-      margin-top: 1.25rem;
-      border: 0;
-      border-radius: 6px;
-      background: var(--accent);
-      color: #fff;
-      padding: .75rem 1rem;
-      font: inherit;
-      font-weight: 700;
-      cursor: pointer;
+    .login-visual {{
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      min-width: 0;
+      padding: clamp(2.2rem, 5vw, 4.5rem);
+      overflow: hidden;
+      border-right: 1px solid var(--stroke-soft);
+      background:
+        radial-gradient(28rem 22rem at 10% 6%, rgba(108, 92, 242, .17), transparent 72%),
+        linear-gradient(145deg, rgba(255, 255, 255, .035), transparent 58%);
     }}
-    .error {{ color: var(--danger); font-weight: 650; }}
+    .login-visual::after {{
+      content: "";
+      position: absolute;
+      right: -9rem;
+      bottom: -12rem;
+      width: 26rem;
+      height: 26rem;
+      border: 1px solid rgba(179, 169, 255, .12);
+      border-radius: 50%;
+      box-shadow: 0 0 0 3.2rem rgba(179, 169, 255, .025), 0 0 0 6.4rem rgba(179, 169, 255, .018);
+      pointer-events: none;
+    }}
+    .login-logo {{ position: relative; z-index: 1; width: min(100%, 27rem); margin-bottom: clamp(4rem, 11vh, 8rem); }}
+    .login-logo svg {{ display: block; width: 100%; height: auto; }}
+    .fallback-wordmark {{ display: block; color: var(--text); font-size: 1.5rem; font-weight: 700; letter-spacing: -.04em; }}
+    .fallback-wordmark span {{ margin-right: .45rem; color: var(--accent-text); font-family: "Geist Mono", ui-monospace, monospace; font-size: .78em; letter-spacing: .12em; }}
+    .eyebrow {{ margin: 0 0 1rem; color: var(--accent-text); font-family: "Geist Mono", ui-monospace, monospace; font-size: .68rem; font-weight: 500; letter-spacing: .18em; text-transform: uppercase; }}
+    h1, h2 {{ letter-spacing: -.055em; }}
+    h1 {{ max-width: 28rem; margin: 0 0 1rem; font-size: clamp(2.35rem, 5vw, 4rem); line-height: .98; }}
+    .visual-copy {{ max-width: 30rem; margin: 0; color: var(--muted); font-size: 1rem; line-height: 1.75; }}
+    .visual-bottom {{ position: relative; z-index: 1; display: flex; align-items: center; gap: .85rem; margin-top: 3rem; color: var(--faint); }}
+    .signal-mark {{ display: grid; place-items: center; width: 2.5rem; height: 2.5rem; flex: 0 0 auto; border: 1px solid rgba(179, 169, 255, .3); border-radius: 10px; background: var(--accent); box-shadow: 0 10px 24px rgba(108, 92, 242, .23); }}
+    .signal-mark::before {{ content: ""; width: 1.05rem; height: 1.05rem; border: 2px solid #ecedf2; border-radius: 50%; box-shadow: 0 0 0 4px rgba(201, 194, 255, .45); }}
+    .mono {{ font-family: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace; }}
+    .visual-meta {{ display: grid; gap: .2rem; }}
+    .visual-meta .mono {{ color: var(--accent-text); font-size: .65rem; letter-spacing: .13em; }}
+    .visual-meta span:last-child {{ font-size: .74rem; }}
+    .login-form-panel {{ display: grid; place-items: center; padding: clamp(2rem, 5vw, 4rem); background: rgba(10, 11, 15, .22); }}
+    .login-form-wrap {{ width: min(100%, 22rem); }}
+    .form-header {{ margin-bottom: 2rem; }}
+    .form-header h2 {{ margin: 0 0 .65rem; font-size: clamp(1.8rem, 3vw, 2.25rem); line-height: 1; }}
+    .form-header p:last-child {{ margin: 0; color: var(--muted); font-size: .9rem; line-height: 1.6; }}
+    .login-alert {{ display: flex; align-items: flex-start; gap: .65rem; margin: 0 0 1.25rem; padding: .8rem .9rem; border: 1px solid rgba(251, 113, 133, .28); border-radius: 10px; background: var(--danger-soft); color: #fecdd3; font-size: .82rem; line-height: 1.45; }}
+    .alert-dot {{ width: .5rem; height: .5rem; flex: 0 0 auto; margin-top: .32rem; border-radius: 50%; background: var(--danger); box-shadow: 0 0 0 4px rgba(251, 113, 133, .12); }}
+    .login-form {{ display: grid; gap: 1rem; }}
+    .field {{ display: grid; gap: .45rem; }}
+    label {{ color: #d6d8e2; font-size: .78rem; font-weight: 600; letter-spacing: .01em; }}
+    input {{ width: 100%; min-height: 3rem; padding: .75rem .85rem; border: 1px solid var(--stroke); border-radius: 10px; background: rgba(0, 0, 0, .28); transition: border-color .16s ease, box-shadow .16s ease, background .16s ease; }}
+    input::placeholder {{ color: var(--faint); }}
+    input:hover {{ border-color: rgba(255, 255, 255, .16); }}
+    input:focus {{ outline: none; border-color: var(--accent); background: rgba(0, 0, 0, .38); box-shadow: 0 0 0 3px var(--accent-soft); }}
+    .login-submit {{ display: flex; align-items: center; justify-content: space-between; width: 100%; min-height: 3.1rem; margin-top: .35rem; padding: .75rem .9rem .75rem 1rem; border: 1px solid rgba(179, 169, 255, .24); border-radius: 10px; background: var(--accent); color: #fff; font-size: .86rem; font-weight: 700; cursor: pointer; box-shadow: 0 12px 25px rgba(108, 92, 242, .2); transition: background .16s ease, transform .16s ease, box-shadow .16s ease; }}
+    .login-submit:hover {{ background: var(--accent-hover); box-shadow: 0 15px 30px rgba(108, 92, 242, .3); transform: translateY(-1px); }}
+    .login-submit:active {{ transform: translateY(0); }}
+    .login-submit svg {{ width: 1rem; height: 1rem; }}
+    .login-footer {{ display: flex; align-items: center; gap: .5rem; margin: 1.7rem 0 0; color: var(--faint); font-size: .7rem; line-height: 1.5; }}
+    .status-dot {{ width: .42rem; height: .42rem; flex: 0 0 auto; border-radius: 50%; background: #34d399; box-shadow: 0 0 0 4px rgba(52, 211, 153, .1); }}
+    @media (max-width: 760px) {{
+      body {{ padding: .8rem; }}
+      .login-shell {{ grid-template-columns: 1fr; min-height: auto; border-radius: 17px; }}
+      .login-visual {{ min-height: 23rem; padding: 2.1rem; border-right: 0; border-bottom: 1px solid var(--stroke-soft); }}
+      .login-logo {{ width: min(100%, 23rem); margin-bottom: 4rem; }}
+      h1 {{ font-size: clamp(2.25rem, 12vw, 3.2rem); }}
+      .login-form-panel {{ padding: 2.1rem; }}
+    }}
+    @media (max-width: 390px) {{
+      .login-visual, .login-form-panel {{ padding: 1.5rem; }}
+      .login-visual {{ min-height: 21rem; }}
+    }}
   </style>
 </head>
 <body>
-  <main>
-    <h1>Admin panel</h1>
-    <p>MCP Session Bridge</p>
-    {error_html}
-    <form method="post" action="/admin/login">
-      <input type="hidden" name="next" value="{escaped_next}">
-      <label>Login <input name="username" autocomplete="username" required></label>
-      <label>Password <input name="password" type="password" autocomplete="current-password" required></label>
-      <button type="submit">Log in</button>
-    </form>
+  <main class="login-shell">
+    <section class="login-visual" aria-label="MCP Session Bridge">
+      <div>
+        <div class="login-logo">{brand_svg}</div>
+        <p class="eyebrow">Private workspace</p>
+        <h1>Keep the bridge in view.</h1>
+        <p class="visual-copy">A focused space for conversations, context, and the work around them.</p>
+      </div>
+      <div class="visual-bottom">
+        <span class="signal-mark" aria-hidden="true"></span>
+        <span class="visual-meta"><span class="mono">ADMIN / ACCESS</span><span>Protected session workspace</span></span>
+      </div>
+    </section>
+    <section class="login-form-panel" aria-labelledby="login-title">
+      <div class="login-form-wrap">
+        <div class="form-header">
+          <p class="eyebrow">Secure access</p>
+          <h2 id="login-title">Welcome back</h2>
+          <p>Sign in to continue to your admin workspace.</p>
+        </div>
+        {error_html}
+        <form class="login-form" method="post" action="/admin/login">
+          <input type="hidden" name="next" value="{escaped_next}">
+          <div class="field">
+            <label for="username">Username</label>
+            <input id="username" name="username" autocomplete="username" placeholder="Enter your username" required>
+          </div>
+          <div class="field">
+            <label for="password">Password</label>
+            <input id="password" name="password" type="password" autocomplete="current-password" placeholder="Enter your password" required>
+          </div>
+          <button class="login-submit" type="submit"><span>Log in</span><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3 8h9m-4-4 4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        </form>
+        <p class="login-footer"><span class="status-dot" aria-hidden="true"></span><span>Your session is private and protected.</span></p>
+      </div>
+    </section>
   </main>
 </body>
 </html>"""

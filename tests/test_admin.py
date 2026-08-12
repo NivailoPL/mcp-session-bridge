@@ -32,6 +32,31 @@ def test_admin_viewer_uses_brand_lockup_and_tab_assets() -> None:
     assert 'class="brand-mark"' not in brand
 
 
+def test_admin_login_uses_dark_branding_and_inline_lockup(tmp_path, monkeypatch) -> None:
+    main = _load_main(tmp_path, monkeypatch)
+    client = TestClient(main.app, base_url="http://127.0.0.1:8787")
+
+    response = client.get("/admin/login?next=/admin/sessions")
+
+    assert response.status_code == 200
+    assert '<html lang="en">' in response.text
+    assert "color-scheme: dark" in response.text
+    assert 'class="login-shell"' in response.text
+    assert 'class="login-logo"' in response.text
+    assert '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 404 96"' in response.text
+    assert "/admin/assets/brand/svg/lockup-horizontal-dark.svg" not in response.text
+    assert 'action="/admin/login"' in response.text
+
+    invalid = client.post(
+        "/admin/login",
+        data={"username": "owner", "password": "wrong", "next": "/admin/sessions"},
+        follow_redirects=False,
+    )
+    assert invalid.status_code == 401
+    assert 'class="login-alert" role="alert"' in invalid.text
+    assert "Invalid username or password." in invalid.text
+
+
 
 def test_admin_viewer_group_ui_contract() -> None:
     viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
@@ -518,37 +543,12 @@ def test_admin_viewer_exposes_large_tool_result_compatibility_controls() -> None
     assert "!payload.tool_output.restart_pending && !payload.tool_output.restart_required" in viewer
 
 
-def test_admin_viewer_codex_popup_is_ephemeral_and_lazy_loaded() -> None:
+def test_admin_viewer_does_not_expose_codex_workspace() -> None:
     viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
 
-    assert 'id="codexOpenButton"' in viewer
-    assert 'aria-controls="codexDialog"' in viewer
-    assert 'id="codexDialog"' in viewer
-    assert 'id="codexLoginStart"' in viewer
-    assert 'id="codexLoginCancel"' in viewer
-    assert 'id="codexLogout"' in viewer
-    assert 'id="codexChatForm"' in viewer
-    assert 'id="codexTranscript"' in viewer
-    assert 'async function openCodexDialog()' in viewer
-    assert 'await refreshCodexStatus();' in viewer
-    assert 'threadId: null' in viewer
-    assert 'messages: []' in viewer
-    assert 'body: JSON.stringify({ message, thread_id: state.codex.threadId })' in viewer
-    assert 'renderMarkdown(message.content)' in viewer
-    assert 'payload.codex.login_status !== "pending"' in viewer
-    assert "MAX_CODEX_TRANSCRIPT_MESSAGES = 100" in viewer
-
-    codex_block = viewer[
-        viewer.index('codex: {'):
-        viewer.index('let statusTimer')
-    ]
-    assert "localStorage" not in codex_block
-    assert "sessionStorage" not in codex_block
-    init_block = viewer[
-        viewer.index("async function init()"):
-        viewer.index("async function openCodexDialog()")
-    ]
-    assert "/admin/api/codex" not in init_block
+    assert 'id="codexOpenButton"' not in viewer
+    assert 'id="codexDialog"' not in viewer
+    assert "/admin/api/codex" not in viewer
 
 
 def test_deployment_includes_narrow_restart_helper() -> None:

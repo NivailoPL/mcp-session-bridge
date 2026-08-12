@@ -40,6 +40,31 @@ def test_graph_jobs_has_latest_session_lookup_index(tmp_path) -> None:
     )
 
 
+def test_store_caps_existing_pending_jobs_at_two_attempts(tmp_path) -> None:
+    db_path = tmp_path / "bridge.sqlite3"
+    store = Store(db_path)
+    _session_with_exchange(store, "pending", created_at=1_000)
+    store.set_graph_enabled(True)
+    [job] = store.enqueue_eligible_graph_jobs(now=100_000)
+    with store._connect() as connection:
+        connection.execute(
+            """
+            UPDATE graph_jobs
+            SET status = 'retryable_failed', attempts = 2, max_attempts = 3
+            WHERE job_id = ?
+            """,
+            (job["job_id"],),
+        )
+
+    migrated = Store(db_path)
+    [capped] = migrated.list_graph_jobs()
+
+    assert capped["status"] == "terminal_failed"
+    assert capped["max_attempts"] == 2
+    assert capped["error_code"] == "attempt_limit_reduced"
+    assert migrated.claim_graph_job("worker", now=100_001) is None
+
+
 @pytest.mark.parametrize("error_code", ["invalid_extraction", "lease_exhausted"])
 def test_legacy_terminal_graph_failures_are_recovered_once(tmp_path, error_code) -> None:
     db_path = tmp_path / "bridge.sqlite3"
@@ -88,6 +113,7 @@ def test_eligibility_uses_per_session_inactivity_and_is_idempotent(tmp_path) -> 
     assert [(job["session_id"], job["source_exchange_id"]) for job in first] == [("old", old_exchange)]
     assert second == []
     assert len(store.list_graph_jobs()) == 1
+    assert first[0]["max_attempts"] == 2
 
 
 def test_reset_graph_scan_deletes_production_results_and_queues_every_allowed_session(tmp_path) -> None:
@@ -137,6 +163,7 @@ def test_reset_graph_scan_deletes_production_results_and_queues_every_allowed_se
         ("recent", recent_exchange, "queued"),
     ]
     assert all(job["job_id"] != queued["job_id"] for job in jobs)
+    assert all(job["max_attempts"] == 2 for job in jobs)
     assert store.get_graph_analysis("old") is None
     assert store.get_graph_lab_run(lab_run["lab_run_id"]) == lab_run
     with store._connect() as connection:

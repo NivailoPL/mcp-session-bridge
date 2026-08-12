@@ -16,7 +16,7 @@ GRAPH_MAX_CONCEPTS_MAX = 200
 
 DEFAULT_GRAPH_PROMPT = """Extract durable concepts from this session for a personal knowledge graph.
 
-Prefer specific people, projects, organizations, tools, places, decisions, and recurring topics. Use concise canonical names. Every concept must include literal evidence from the supplied session. Do not infer sensitive facts that are not explicitly present."""
+Prefer specific people, projects, organizations, tools, places, decisions, and recurring topics. Use concise canonical names and summaries. Do not infer sensitive facts that are not explicitly present."""
 
 
 class GraphConfigError(ValueError):

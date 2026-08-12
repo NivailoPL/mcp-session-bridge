@@ -9,7 +9,7 @@ from app.storage import Store
 def test_lab_run_is_append_only_and_does_not_publish_production_analysis(tmp_path) -> None:
     store = Store(tmp_path / "bridge.sqlite3")
     store.create_session("s1", "Lab session", "manual-context")
-    exchange = store.save_exchange("s1", "model", "Panda is the evaluation subject.", "Confirmed.")
+    store.save_exchange("s1", "model", "Panda is the evaluation subject.", "Confirmed.")
     store.set_graph_enabled(True)
 
     class Codex:
@@ -18,7 +18,6 @@ def test_lab_run_is_append_only_and_does_not_publish_production_analysis(tmp_pat
                 "canonical_name": "Panda",
                 "type": "topic",
                 "summary": "Evaluation subject.",
-                "evidence": [{"exchange_id": exchange.exchange_id, "quote": "Panda"}],
             }]}
 
     runtime = GraphRuntime(store, Codex(), worker_id="lab-test")

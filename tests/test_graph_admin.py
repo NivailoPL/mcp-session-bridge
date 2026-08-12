@@ -51,6 +51,35 @@ def test_graph_page_and_assets_require_admin_login(tmp_path, monkeypatch) -> Non
     assert client.get("/admin/assets/graph-viewer.js").status_code == 200
 
 
+def test_graph_viewer_owns_ephemeral_codex_workspace() -> None:
+    viewer = Path("graph-viewer.html").read_text(encoding="utf-8")
+    script = Path("graph-viewer.js").read_text(encoding="utf-8")
+
+    assert 'id="codexOpenButton"' in viewer
+    assert 'aria-controls="codexDialog"' in viewer
+    assert 'id="codexDialog"' in viewer
+    assert 'id="codexLoginStart"' in viewer
+    assert 'id="codexLoginCancel"' in viewer
+    assert 'id="codexLogout"' in viewer
+    assert 'id="codexChatForm"' in viewer
+    assert 'id="codexTranscript"' in viewer
+    assert "function openCodexDialog()" in script
+    assert "refreshCodexStatus()" in script
+    assert "threadId: null" in script
+    assert "messages: []" in script
+    assert "body: JSON.stringify({ message, thread_id: state.codex.threadId })" in script
+    assert "renderCodexMarkdown(message.content)" in script
+    assert 'payload.codex.login_status !== "pending"' in script
+    assert "MAX_CODEX_TRANSCRIPT_MESSAGES = 100" in script
+
+    codex_state = script[
+        script.index("codex: {"):
+        script.index("const dom =")
+    ]
+    assert "localStorage" not in codex_state
+    assert "sessionStorage" not in codex_state
+
+
 def test_graph_config_api_requires_csrf_and_enforces_lock(tmp_path, monkeypatch) -> None:
     main = _load_main(tmp_path, monkeypatch)
     client, csrf = _admin_client(main)
@@ -278,7 +307,7 @@ def test_failed_graph_job_details_reach_processing_and_analysis_ui(tmp_path, mon
     assert analysis["latest_job_id"] == job["job_id"]
     assert analysis["latest_job_status"] == "terminal_failed"
     assert analysis["latest_job_attempts"] == 1
-    assert analysis["latest_job_max_attempts"] == 3
+    assert analysis["latest_job_max_attempts"] == 2
     assert analysis["latest_job_error_code"] == "evidence_quote_not_literal"
     assert analysis["latest_job_error_message"] == "Evidence quote must appear literally in its source exchange."
 

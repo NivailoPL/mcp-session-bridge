@@ -30,6 +30,7 @@ SCHEMA_VERSION = 2
 GRAPH_ENABLED_SETTING = "graph.enabled"
 GRAPH_ACTIVE_PROFILE_SETTING = "graph.active_profile_id"
 GRAPH_FAILURE_RECOVERY_SETTING = "graph.recovered_terminal_failures_v1"
+GRAPH_JOB_MAX_ATTEMPTS = 2
 
 SYSTEM_SESSION_GROUPS = (
     {
@@ -511,7 +512,7 @@ class Store:
                     schema_version TEXT NOT NULL,
                     status TEXT NOT NULL,
                     attempts INTEGER NOT NULL DEFAULT 0,
-                    max_attempts INTEGER NOT NULL DEFAULT 3,
+                    max_attempts INTEGER NOT NULL DEFAULT {GRAPH_JOB_MAX_ATTEMPTS},
                     available_at INTEGER NOT NULL,
                     lease_owner TEXT,
                     lease_expires_at INTEGER,
@@ -632,6 +633,7 @@ class Store:
             self._demote_legacy_system_session_groups(conn)
             self._seed_graph_config(conn)
             self._recover_legacy_graph_failures(conn)
+            self._cap_pending_graph_job_attempts(conn)
             conn.execute(
                 """
                 UPDATE sessions
@@ -708,6 +710,31 @@ class Store:
         conn.execute(
             "INSERT INTO app_settings(key, value, updated_at) VALUES (?, 'true', ?)",
             (GRAPH_FAILURE_RECOVERY_SETTING, now),
+        )
+
+    @staticmethod
+    def _cap_pending_graph_job_attempts(conn: sqlite3.Connection) -> None:
+        now = int(time.time())
+        conn.execute(
+            """
+            UPDATE graph_jobs
+            SET max_attempts = ?
+            WHERE status IN ('queued', 'retryable_failed', 'running')
+              AND max_attempts > ?
+            """,
+            (GRAPH_JOB_MAX_ATTEMPTS, GRAPH_JOB_MAX_ATTEMPTS),
+        )
+        conn.execute(
+            """
+            UPDATE graph_jobs
+            SET status = 'terminal_failed', completed_at = ?, updated_at = ?,
+                lease_owner = NULL, lease_expires_at = NULL,
+                error_code = 'attempt_limit_reduced',
+                error_message = 'Graph job reached the reduced attempt limit.'
+            WHERE status = 'retryable_failed'
+              AND attempts >= max_attempts
+            """,
+            (now, now),
         )
 
     @staticmethod
@@ -1177,14 +1204,15 @@ class Store:
                     """
                     INSERT OR IGNORE INTO graph_jobs (
                         session_id, source_exchange_id, profile_id, schema_version,
-                        status, available_at, created_at, updated_at
-                    ) VALUES (?, ?, ?, ?, 'queued', ?, ?, ?)
+                        status, max_attempts, available_at, created_at, updated_at
+                    ) VALUES (?, ?, ?, ?, 'queued', ?, ?, ?, ?)
                     """,
                     (
                         candidate["session_id"],
                         candidate["source_exchange_id"],
                         profile["profile_id"],
                         profile["schema_version"],
+                        GRAPH_JOB_MAX_ATTEMPTS,
                         current_time,
                         current_time,
                         current_time,
@@ -1281,8 +1309,8 @@ class Store:
                 """
                 INSERT INTO graph_jobs (
                     session_id, source_exchange_id, profile_id, schema_version,
-                    status, available_at, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, 'queued', ?, ?, ?)
+                    status, max_attempts, available_at, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, 'queued', ?, ?, ?, ?)
                 """,
                 (
                     (
@@ -1290,6 +1318,7 @@ class Store:
                         candidate["source_exchange_id"],
                         profile["profile_id"],
                         profile["schema_version"],
+                        GRAPH_JOB_MAX_ATTEMPTS,
                         fresh_jobs_available_at,
                         current_time,
                         current_time,
@@ -1529,18 +1558,20 @@ class Store:
                         concept["summary"],
                     ),
                 )
-                extraction_concept_id = int(concept_cursor.lastrowid)
-                conn.executemany(
-                    """
-                    INSERT INTO graph_extraction_evidence (
-                        extraction_concept_id, exchange_id, quote
-                    ) VALUES (?, ?, ?)
-                    """,
-                    [
-                        (extraction_concept_id, item["exchange_id"], item["quote"])
-                        for item in concept["evidence"]
-                    ],
-                )
+                evidence = concept["evidence"]
+                if evidence:
+                    extraction_concept_id = int(concept_cursor.lastrowid)
+                    conn.executemany(
+                        """
+                        INSERT INTO graph_extraction_evidence (
+                            extraction_concept_id, exchange_id, quote
+                        ) VALUES (?, ?, ?)
+                        """,
+                        [
+                            (extraction_concept_id, item["exchange_id"], item["quote"])
+                            for item in evidence
+                        ],
+                    )
             conn.execute(
                 """
                 INSERT INTO graph_session_current(session_id, extraction_id, updated_at)

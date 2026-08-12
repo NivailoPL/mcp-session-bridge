@@ -39,12 +39,13 @@ def test_runtime_publishes_valid_extraction_atomically(tmp_path) -> None:
             assert f"Exchange {exchange_id}" in message
             assert model == "gpt-5.6-sol"
             assert output_schema["properties"]["concepts"]["maxItems"] == 25
+            assert "evidence" not in output_schema["properties"]["concepts"]["items"]["properties"]
+            assert "Do not include evidence quotes or exchange IDs" in message
             return {
                 "concepts": [{
                     "canonical_name": "SQLite Graph queue",
                     "type": "technology",
                     "summary": "SQLite stores durable Graph jobs.",
-                    "evidence": [{"exchange_id": exchange_id, "quote": "SQLite for the durable Graph queue"}],
                 }]
             }
 
@@ -57,66 +58,26 @@ def test_runtime_publishes_valid_extraction_atomically(tmp_path) -> None:
     assert analysis is not None
     assert analysis["source_exchange_id"] == exchange_id
     assert analysis["concepts"][0]["canonical_name"] == "SQLite Graph queue"
-    assert analysis["concepts"][0]["evidence"][0]["quote"] == "SQLite for the durable Graph queue"
+    assert analysis["concepts"][0]["evidence"] == []
 
 
-def test_invalid_later_result_keeps_last_good_analysis(tmp_path) -> None:
-    store, first_exchange_id = _ready_store(tmp_path)
-
-    class FirstCodex:
-        async def extract_structured(self, message, **kwargs):
-            return {"concepts": [{
-                "canonical_name": "First",
-                "type": "topic",
-                "summary": "First valid result.",
-                "evidence": [{"exchange_id": first_exchange_id, "quote": "SQLite"}],
-            }]}
-
-    asyncio.run(GraphRuntime(store, FirstCodex(), worker_id="one").run_once(now=10_000))
-    first_analysis = store.get_graph_analysis("s1")
-    second = store.save_exchange("s1", "model", "A newer topic appears.", "Acknowledged.")
-    with store._connect() as connection:
-        connection.execute(
-            "UPDATE exchanges SET created_at = 2000, assistant_created_at = 2000 WHERE exchange_id = ?",
-            (second.exchange_id,),
-        )
+def test_semantically_invalid_result_is_not_retried(tmp_path) -> None:
+    store, _ = _ready_store(tmp_path)
 
     class InvalidCodex:
         async def extract_structured(self, message, **kwargs):
             return {"concepts": [{
                 "canonical_name": "Broken",
-                "type": "topic",
-                "summary": "Invalid evidence.",
-                "evidence": [{"exchange_id": second.exchange_id, "quote": "not in source"}],
+                "type": "unsupported",
+                "summary": "Invalid concept type.",
             }]}
 
-    asyncio.run(GraphRuntime(store, InvalidCodex(), worker_id="two").run_once(now=20_000))
-
-    assert store.get_graph_analysis("s1")["extraction_id"] == first_analysis["extraction_id"]
-    job = store.list_graph_jobs()[0]
-    assert job["status"] == "retryable_failed"
-    assert job["error_code"] == "evidence_quote_not_literal"
-
-
-def test_evidence_cannot_cite_transcript_framing_labels(tmp_path) -> None:
-    store, exchange_id = _ready_store(tmp_path)
-
-    class LabelCitingCodex:
-        async def extract_structured(self, message, **kwargs):
-            return {"concepts": [{
-                "canonical_name": "Framing",
-                "type": "other",
-                "summary": "Invalid framing citation.",
-                "evidence": [{"exchange_id": exchange_id, "quote": "USER:"}],
-            }]}
-
-    asyncio.run(GraphRuntime(store, LabelCitingCodex(), worker_id="labels").run_once(now=10_000))
+    asyncio.run(GraphRuntime(store, InvalidCodex(), worker_id="invalid").run_once(now=10_000))
 
     assert store.get_graph_analysis("s1") is None
     job = store.list_graph_jobs()[0]
-    assert job["status"] == "retryable_failed"
-    assert job["error_code"] == "evidence_quote_not_literal"
-    assert job["error_message"] == "Evidence quote must appear literally in its source exchange."
+    assert job["status"] == "terminal_failed"
+    assert job["error_code"] == "concept_type_unsupported"
 
 
 def test_codex_protocol_failure_is_retryable_and_specific(tmp_path) -> None:
@@ -132,6 +93,13 @@ def test_codex_protocol_failure_is_retryable_and_specific(tmp_path) -> None:
     assert job["status"] == "retryable_failed"
     assert job["error_code"] == "codex_protocol_error"
     assert job["error_message"] == "Codex returned invalid structured output."
+
+    asyncio.run(GraphRuntime(store, Codex(), worker_id="protocol").run_once(now=10_061))
+
+    job = store.list_graph_jobs()[0]
+    assert job["status"] == "terminal_failed"
+    assert job["attempts"] == 2
+    assert job["error_code"] == "codex_protocol_error"
 
 
 def test_codex_policy_violation_is_terminal_and_specific(tmp_path) -> None:

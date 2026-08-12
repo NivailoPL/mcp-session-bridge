@@ -10,6 +10,18 @@
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/admin/assets/graph-viewer.css">
   <link rel="stylesheet" href="/admin/assets/graph-data.css">
+  <style>
+    .codex-message blockquote { margin: .45rem 0; padding: .1rem .8rem; border-left: 3px solid var(--accent2); color: var(--muted); }
+    .codex-message ul, .codex-message ol { margin: .4rem 0; padding-left: 1.35rem; }
+    .codex-message code { font-family: "Geist Mono", monospace; }
+    .codex-message a { color: #b8b1ff; }
+    @media (max-width: 800px) {
+      .workspace-bar { grid-template-columns: auto minmax(0, 1fr) auto; }
+      .workspace-nav { justify-self: center; }
+      .workspace-actions { justify-self: end; }
+      .workspace-actions form { display: none; }
+    }
+  </style>
 </head>
 <body>
   <header class="workspace-bar">
@@ -21,7 +33,10 @@
       <a href="/admin/graph" aria-current="page">Graph</a>
       <span aria-disabled="true">Contexts</span>
     </nav>
-    <form method="post" action="/admin/logout"><button class="text-button" type="submit">Log out</button></form>
+    <div class="workspace-actions">
+      <button id="codexOpenButton" type="button" class="secondary" aria-haspopup="dialog" aria-controls="codexDialog">Codex</button>
+      <form method="post" action="/admin/logout"><button class="text-button" type="submit">Log out</button></form>
+    </div>
   </header>
 
   <main class="graph-shell">
@@ -99,7 +114,7 @@
         <div class="section-heading"><div><p class="eyebrow">Production findings</p><h2>Analysis</h2><p>Per-session extraction status and the current validated concepts.</p></div><button id="refreshAnalysis" class="secondary" type="button">Refresh</button></div>
         <div class="analysis-layout">
           <div id="analysisSessions" class="analysis-list"><p>Loading sessions…</p></div>
-          <article id="analysisDetail" class="data-card analysis-detail"><p>Select an analyzed session to inspect its concepts and literal evidence.</p></article>
+          <article id="analysisDetail" class="data-card analysis-detail"><p>Select an analyzed session to inspect its validated concepts.</p></article>
         </div>
       </section>
 
@@ -118,6 +133,30 @@
       </section>
     </section>
   </main>
+  <dialog id="codexDialog" class="codex-dialog" aria-labelledby="codexHeading">
+    <div class="dialog-head">
+      <div><h3 id="codexHeading">Codex</h3><p>Private test conversation through this server's managed Codex App Server.</p></div>
+      <button type="button" class="text-button" id="codexClose">Close</button>
+    </div>
+    <section class="codex-account" aria-live="polite">
+      <p id="codexStatus" class="codex-status">Checking Codex…</p>
+      <button id="codexLoginStart" type="button">Sign in with OpenAI</button>
+      <button id="codexLogout" type="button" class="danger" hidden>Sign out of Codex</button>
+      <div id="codexLoginPanel" class="codex-login" hidden>
+        <span>Open the secure OpenAI page and enter this one-time code:</span>
+        <code id="codexUserCode"></code>
+        <div class="codex-login-actions">
+          <a id="codexVerificationLink" class="button primary" href="#" target="_blank" rel="noopener noreferrer">Open OpenAI</a>
+          <button id="codexLoginCancel" type="button" class="text-button">Cancel</button>
+        </div>
+      </div>
+    </section>
+    <div id="codexTranscript" class="codex-transcript" aria-live="polite"></div>
+    <form id="codexChatForm" class="codex-chat-form">
+      <textarea id="codexChatInput" maxlength="8000" placeholder="Message Codex…" aria-label="Message Codex"></textarea>
+      <button id="codexChatSubmit" type="submit" class="primary">Send</button>
+    </form>
+  </dialog>
   <script src="/admin/assets/graph-viewer.js" defer></script>
 </body>
 </html>

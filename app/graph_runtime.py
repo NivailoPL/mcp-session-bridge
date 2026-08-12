@@ -258,7 +258,7 @@ class GraphRuntime:
     ) -> None:
         await asyncio.to_thread(self.store.start_graph_lab_run, run["lab_run_id"], now=now)
         try:
-            prompt, source_by_exchange = await asyncio.to_thread(self._build_prompt, context)
+            prompt = await asyncio.to_thread(self._build_prompt, context)
             schema = copy.deepcopy(GRAPH_EXTRACTION_OUTPUT_SCHEMA)
             schema["properties"]["concepts"]["maxItems"] = context["profile"]["max_concepts"]
             raw = await self.codex.extract_structured(
@@ -269,7 +269,6 @@ class GraphRuntime:
             )
             validated = validate_extraction_result(
                 raw,
-                source_by_exchange,
                 max_concepts=context["profile"]["max_concepts"],
             )
             await asyncio.to_thread(
@@ -307,7 +306,7 @@ class GraphRuntime:
             context = await asyncio.to_thread(self.store.get_graph_job_context, job["job_id"])
             if context is None:
                 raise RuntimeError("Graph job context is unavailable.")
-            prompt, source_by_exchange = await asyncio.to_thread(
+            prompt = await asyncio.to_thread(
                 self._build_prompt,
                 context,
             )
@@ -321,7 +320,6 @@ class GraphRuntime:
             )
             validated = validate_extraction_result(
                 raw,
-                source_by_exchange,
                 max_concepts=context["profile"]["max_concepts"],
             )
             await asyncio.to_thread(
@@ -415,13 +413,13 @@ class GraphRuntime:
                 now=now,
             )
 
-    def _build_prompt(self, context: dict[str, Any]) -> tuple[str, dict[int, str]]:
+    def _build_prompt(self, context: dict[str, Any]) -> str:
         exchanges = [
             exchange
             for exchange in self.store.list_exchanges(context["session_id"])
             if exchange.exchange_id <= context["source_exchange_id"]
         ]
-        blocks: list[tuple[int, str]] = []
+        blocks: list[str] = []
         total = 0
         for exchange in reversed(exchanges):
             assistant_text = "" if exchange.assistant_masked_at is not None else exchange.assistant_response
@@ -435,7 +433,7 @@ class GraphRuntime:
                     code="source_exchange_too_large",
                     retryable=False,
                 )
-            blocks.append((exchange.exchange_id, block))
+            blocks.append(block)
             total += len(block)
         blocks.reverse()
         if not blocks:
@@ -444,21 +442,12 @@ class GraphRuntime:
                 code="source_transcript_empty",
                 retryable=False,
             )
-        included_ids = {exchange_id for exchange_id, _ in blocks}
-        source_by_exchange = {
-            exchange.exchange_id: (
-                exchange.user_message
-                if exchange.assistant_masked_at is not None
-                else f"{exchange.user_message}\n{exchange.assistant_response}"
-            )
-            for exchange in exchanges
-            if exchange.exchange_id in included_ids
-        }
-        transcript = "\n\n---\n\n".join(block for _, block in blocks)
+        transcript = "\n\n---\n\n".join(blocks)
         prompt = (
             f"{context['profile']['prompt']}\n\n"
-            "Return only the structured result. Evidence quotes must be literal substrings "
-            "of the named exchange.\n\nSESSION TRANSCRIPT\n\n"
+            "Return only the structured result. Do not include evidence quotes or exchange IDs, "
+            "even if an earlier instruction requests them. Source provenance is recorded for the "
+            "whole session.\n\nSESSION TRANSCRIPT\n\n"
             f"{transcript}"
         )
-        return prompt, source_by_exchange
+        return prompt

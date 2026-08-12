@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import importlib
-import re
 import sys
 import threading
 import time
@@ -50,12 +49,11 @@ def _store(tmp_path) -> Store:
     return store
 
 
-def _result(exchange_id: int, name: str = "SQLite Graph queue") -> dict:
+def _result(name: str = "SQLite Graph queue") -> dict:
     return {"concepts": [{
         "canonical_name": name,
         "type": "technology",
         "summary": "SQLite stores durable Graph jobs.",
-        "evidence": [{"exchange_id": exchange_id, "quote": "SQLite"}],
     }]}
 
 
@@ -123,8 +121,7 @@ def test_reset_cancels_active_job_without_stopping_runtime_and_requeues_all(tmp_
             nonlocal calls
             calls += 1
             if calls > 1:
-                exchange_id = int(re.search(r"Exchange (\d+)", message).group(1))
-                return _result(exchange_id, "Fresh scan after reset")
+                return _result("Fresh scan after reset")
             started.set()
             try:
                 await asyncio.Event().wait()
@@ -233,8 +230,7 @@ def test_runtime_never_executes_two_production_jobs_concurrently(tmp_path):
             started.set()
             try:
                 await release.wait()
-                exchange_id = int(re.search(r"Exchange (\d+)", message).group(1))
-                return _result(exchange_id)
+                return _result()
             finally:
                 active -= 1
 
@@ -269,8 +265,7 @@ def test_storage_guard_serializes_two_runtime_instances(tmp_path):
             started.set()
             try:
                 await release.wait()
-                exchange_id = int(re.search(r"Exchange (\d+)", message).group(1))
-                return _result(exchange_id, "Global worker guard")
+                return _result("Global worker guard")
             finally:
                 active -= 1
 
@@ -310,8 +305,7 @@ def test_runtime_renews_lease_while_codex_turn_runs(tmp_path, monkeypatch):
         async def extract_structured(self, message, **kwargs):
             started.set()
             await release.wait()
-            exchange_id = int(re.search(r"Exchange (\d+)", message).group(1))
-            return _result(exchange_id, "Lease heartbeat")
+            return _result("Lease heartbeat")
 
     async def run():
         runtime = GraphRuntime(
@@ -396,7 +390,8 @@ def test_late_worker_cannot_publish_after_lease_reclaimed(tmp_path):
     first = store.claim_graph_job("worker-a", now=100_000, lease_seconds=30)
     second = store.claim_graph_job("worker-b", now=100_031, lease_seconds=30)
     assert first is not None and second is not None
-    result = _result(queued["source_exchange_id"], "Lease fencing")
+    result = _result("Lease fencing")
+    result["concepts"][0]["evidence"] = []
     with pytest.raises(ValueError, match="no longer publishable"):
         store.publish_graph_extraction(
             first["job_id"], result, lease_owner="worker-a", now=100_032
