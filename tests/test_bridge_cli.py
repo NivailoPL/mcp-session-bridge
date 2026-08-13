@@ -26,7 +26,8 @@ def test_status_report_has_stable_machine_readable_contract() -> None:
 
     payload = report.to_dict()
 
-    assert payload["schema_version"] == 1
+    assert payload["format_version"] == 1
+    assert "schema_version" not in payload
     assert payload["overall"] == "attention"
     assert payload["update"]["state"] == "available"
     assert payload["checks"] == [

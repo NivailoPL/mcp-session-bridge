@@ -1629,7 +1629,7 @@ class AdminHandlers:
         if overall not in {"healthy", "attention", "failed", "incomplete", "unknown"}:
             overall = "unknown"
         return {
-            "schema_version": 1,
+            "format_version": 1,
             "overall": overall,
             "version": version,
             "update": update,

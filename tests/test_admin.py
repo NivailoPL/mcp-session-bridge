@@ -2268,8 +2268,12 @@ def test_admin_operational_status_is_authenticated_and_secret_free(tmp_path, mon
 
     assert response.status_code == 200
     assert response.headers["cache-control"] == "no-store"
-    assert response.json()["status"]["update"]["state"] == "available"
-    assert response.json()["status"]["live"]["application"] == "pass"
+    status = response.json()["status"]
+    assert status["format_version"] == 1
+    assert "schema_version" not in status
+    assert status["version"]["database_schema"] == 2
+    assert status["update"]["state"] == "available"
+    assert status["live"]["application"] == "pass"
     assert "test-secret" not in response.text
 
 def test_admin_viewer_rag_settings_and_search_overlay_contract() -> None:

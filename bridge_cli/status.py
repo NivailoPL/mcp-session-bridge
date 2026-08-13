@@ -53,7 +53,7 @@ class StatusReport:
     checks: list[CheckResult]
     installation: dict[str, Any]
     last_operation: dict[str, Any] | None
-    schema_version: int = 1
+    format_version: int = 1
 
     def __post_init__(self) -> None:
         if self.overall not in OVERALL_STATES:
@@ -61,7 +61,7 @@ class StatusReport:
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            "schema_version": self.schema_version,
+            "format_version": self.format_version,
             "overall": self.overall,
             "version": self.version,
             "update": self.update.to_dict(),
