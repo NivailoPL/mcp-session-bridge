@@ -180,6 +180,8 @@ class AdminHandlers:
         media_types = {
             "graph-viewer.css": "text/css",
             "graph-data.css": "text/css",
+            "pearl-gradient-nav.js": "text/javascript",
+            "pearl-gradient-nav.css": "text/css",
             "graph-viewer.js": "text/javascript",
         }
         media_type = media_types.get(asset_name)

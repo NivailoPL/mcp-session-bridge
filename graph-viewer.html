@@ -8,6 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/admin/assets/pearl-gradient-nav.css">
   <link rel="stylesheet" href="/admin/assets/graph-viewer.css">
   <link rel="stylesheet" href="/admin/assets/graph-data.css">
   <style>
@@ -21,6 +22,11 @@
       .workspace-actions { justify-self: end; }
       .workspace-actions form { display: none; }
     }
+    @media (max-width: 500px) {
+      .workspace-bar { grid-template-columns: minmax(0, 1fr) auto; }
+      .brand { display: none; }
+      .workspace-nav { justify-self: center; }
+    }
   </style>
 </head>
 <body>
@@ -28,10 +34,10 @@
     <a class="brand" href="/admin/sessions" aria-label="MCP Session Bridge Sessions">
       <img src="/admin/assets/brand/svg/lockup-horizontal-dark.svg" alt="MCP Session Bridge">
     </a>
-    <nav class="workspace-nav" aria-label="Admin workspaces">
-      <a href="/admin/sessions">Sessions</a>
-      <a href="/admin/graph" aria-current="page">Graph</a>
-      <span aria-disabled="true">Contexts</span>
+    <nav class="workspace-nav sb-nav" role="tablist" aria-label="Admin workspaces">
+      <a class="sb-nav__tab" role="tab" href="/admin/sessions" aria-selected="false" tabindex="-1" data-label="SESSIONS">SESSIONS</a>
+      <a class="sb-nav__tab" role="tab" href="/admin/graph" aria-current="page" aria-selected="true" tabindex="0" data-label="GRAPH">GRAPH</a>
+      <span class="sb-nav__tab" role="tab" aria-disabled="true" aria-selected="false" data-label="CONTEXTS">CONTEXTS</span>
     </nav>
     <div class="workspace-actions">
       <button id="codexOpenButton" type="button" class="secondary" aria-haspopup="dialog" aria-controls="codexDialog">Codex</button>
@@ -157,6 +163,7 @@
       <button id="codexChatSubmit" type="submit" class="primary">Send</button>
     </form>
   </dialog>
+  <script src="/admin/assets/pearl-gradient-nav.js" defer></script>
   <script src="/admin/assets/graph-viewer.js" defer></script>
 </body>
 </html>

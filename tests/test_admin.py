@@ -21,15 +21,26 @@ from tests.pdf_samples import make_pdf
 def test_admin_viewer_uses_brand_lockup_and_tab_assets() -> None:
     viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
     head = viewer[: viewer.index("</head>")]
+    nav_script = Path("pearl-gradient-nav.js").read_text(encoding="utf-8")
     brand = viewer[viewer.index('<section class="brand">') : viewer.index('<div class="settings-row"')]
 
     assert 'rel="icon" type="image/png" sizes="16x16"' in head
     assert 'rel="icon" type="image/png" sizes="32x32"' in head
     assert 'rel="apple-touch-icon" sizes="180x180"' in head
     assert 'rel="manifest" href="/admin/assets/brand/manifest.webmanifest"' in head
+    assert 'href="/admin/assets/pearl-gradient-nav.css"' in head
     assert 'src="/admin/assets/brand/svg/lockup-horizontal-dark.svg"' in brand
+    assert '<script src="/admin/assets/pearl-gradient-nav.js"></script>' in viewer
     assert 'class="brand-lockup"' in brand
     assert 'class="brand-mark"' not in brand
+
+    assert '<nav class="workspace-nav sb-nav" role="tablist"' in viewer
+    assert 'data-label="SESSIONS">SESSIONS</a>' in viewer
+    assert 'data-label="GRAPH">GRAPH</a>' in viewer
+    assert 'data-label="CONTEXTS">CONTEXTS</span>' in viewer
+    assert 'aria-selected="true"' in viewer
+    assert 'aria-selected="false"' in viewer
+    assert "ArrowRight" in nav_script
 
 
 def test_admin_login_uses_dark_branding_and_inline_lockup(tmp_path, monkeypatch) -> None:

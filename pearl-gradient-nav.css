@@ -1,0 +1,152 @@
+/* ------------------------------------------------------------------
+   MCP Session Bridge — primary navigation "Pearl Gradient"
+
+   The active state is carried by the text itself: the base glyphs stay
+   in flow while ::after fades in an identical gradient copy. No layout
+   property changes on hover or selection, so neighboring tabs never move.
+------------------------------------------------------------------- */
+
+.sb-nav {
+  --sb-nav-idle:        #5d5d6e;
+  --sb-nav-hover:       #b9bcd6;
+  --sb-nav-grad-top:    #ffffff;
+  --sb-nav-grad-pearl:  #eef0ff;
+  --sb-nav-grad-mid:    #b7bbf5;
+  --sb-nav-grad-bottom: #7c7ff0;
+  --sb-nav-glow:        rgba(124, 127, 240, .45);
+  --sb-nav-focus:       #818cf8;
+
+  --sb-nav-size:        17px;
+  --sb-nav-weight:      800;
+  --sb-nav-tracking:    .15em;
+  --sb-nav-gap:         44px;
+  --sb-nav-pad:         12px 8px;
+  --sb-nav-ease:        .28s cubic-bezier(.4, 0, .2, 1);
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sb-nav-gap);
+}
+
+/* The old workspace shell supplied the pill. The Pearl nav is intentionally
+   transparent, including when it is used inside the Graph page shell. */
+.workspace-nav.sb-nav {
+  gap: var(--sb-nav-gap);
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.sb-nav__tab,
+.workspace-nav.sb-nav .sb-nav__tab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  appearance: none;
+  box-sizing: border-box;
+  padding: var(--sb-nav-pad);
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--sb-nav-idle);
+  font-family: inherit;
+  font-size: var(--sb-nav-size);
+  font-weight: var(--sb-nav-weight);
+  line-height: 1;
+  letter-spacing: var(--sb-nav-tracking);
+  text-align: center;
+  text-decoration: none;
+  text-transform: uppercase;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color var(--sb-nav-ease);
+}
+
+.sb-nav__tab:hover:not([aria-disabled="true"]),
+.workspace-nav.sb-nav .sb-nav__tab:hover:not([aria-disabled="true"]) {
+  color: var(--sb-nav-hover);
+  background: none;
+}
+
+.sb-nav__tab[aria-disabled="true"],
+.workspace-nav.sb-nav .sb-nav__tab[aria-disabled="true"] {
+  opacity: .38;
+  cursor: not-allowed;
+}
+
+.sb-nav__tab:focus-visible,
+.workspace-nav.sb-nav .sb-nav__tab:focus-visible {
+  outline: 2px solid var(--sb-nav-focus);
+  outline-offset: 2px;
+}
+
+.sb-nav__tab::after,
+.workspace-nav.sb-nav .sb-nav__tab::after {
+  content: attr(data-label);
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  padding: var(--sb-nav-pad);
+  pointer-events: none;
+
+  font: inherit;
+  letter-spacing: var(--sb-nav-tracking);
+  text-transform: uppercase;
+  background: linear-gradient(
+    170deg,
+    var(--sb-nav-grad-top) 0%,
+    var(--sb-nav-grad-pearl) 38%,
+    var(--sb-nav-grad-mid) 70%,
+    var(--sb-nav-grad-bottom) 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 0 14px var(--sb-nav-glow));
+  opacity: 0;
+  transition: opacity .3s cubic-bezier(.4, 0, .2, 1);
+}
+
+.sb-nav__tab[aria-selected="true"]::after,
+.workspace-nav.sb-nav .sb-nav__tab[aria-selected="true"]::after {
+  opacity: 1;
+}
+
+.sb-nav__tab[aria-selected="true"],
+.workspace-nav.sb-nav .sb-nav__tab[aria-selected="true"] {
+  color: transparent;
+  background: none;
+  box-shadow: none;
+}
+
+@media (max-width: 760px) {
+  .sb-nav {
+    --sb-nav-size: 15px;
+    --sb-nav-tracking: .12em;
+    --sb-nav-gap: 18px;
+    --sb-nav-pad: 10px 4px;
+  }
+}
+@media (max-width: 500px) {
+  .sb-nav {
+    --sb-nav-size: 12px;
+    --sb-nav-tracking: .09em;
+    --sb-nav-gap: 6px;
+    --sb-nav-pad: 8px 2px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sb-nav__tab,
+  .workspace-nav.sb-nav .sb-nav__tab,
+  .sb-nav__tab::after,
+  .workspace-nav.sb-nav .sb-nav__tab::after {
+    transition: none;
+  }
+}

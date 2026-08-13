@@ -34,7 +34,7 @@ def test_graph_page_and_assets_require_admin_login(tmp_path, monkeypatch) -> Non
     main = _load_main(tmp_path, monkeypatch)
     anonymous = TestClient(main.app, base_url="http://127.0.0.1:8787")
 
-    for path in ("/admin/graph", "/admin/assets/graph-viewer.css", "/admin/assets/graph-viewer.js"):
+    for path in ("/admin/graph", "/admin/assets/graph-viewer.css", "/admin/assets/graph-data.css", "/admin/assets/graph-viewer.js", "/admin/assets/pearl-gradient-nav.css", "/admin/assets/pearl-gradient-nav.js"):
         response = anonymous.get(path, follow_redirects=False)
         assert response.status_code == 303
         assert response.headers["location"].startswith("/admin/login")
@@ -43,12 +43,22 @@ def test_graph_page_and_assets_require_admin_login(tmp_path, monkeypatch) -> Non
     page = client.get("/admin/graph")
     assert page.status_code == 200
     assert page.headers["cache-control"] == "no-store"
-    assert 'aria-current="page">Graph</a>' in page.text
-    assert "Contexts" in page.text
+    assert 'class="workspace-nav sb-nav" role="tablist"' in page.text
+    assert 'href="/admin/graph" aria-current="page" aria-selected="true"' in page.text
+    assert "CONTEXTS" in page.text
     assert "Map" in page.text
     assert "Config" in page.text
     assert client.get("/admin/assets/graph-viewer.css").status_code == 200
+    css = client.get("/admin/assets/pearl-gradient-nav.css")
+    assert css.status_code == 200
+    assert css.headers["content-type"].startswith("text/css")
+    assert css.text
+    assert ".sb-nav" in css.text
     assert client.get("/admin/assets/graph-viewer.js").status_code == 200
+    nav_script = client.get("/admin/assets/pearl-gradient-nav.js")
+    assert nav_script.status_code == 200
+    assert nav_script.headers["content-type"].startswith("text/javascript")
+    assert "wireWorkspaceNavKeyboard" in nav_script.text
 
 
 def test_graph_viewer_owns_ephemeral_codex_workspace() -> None:
@@ -165,9 +175,10 @@ def test_graph_cannot_enable_without_authenticated_codex(tmp_path, monkeypatch) 
 
 def test_sessions_view_exposes_workspace_navigation_contract() -> None:
     viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
-    assert 'aria-current="page">Sessions</a>' in viewer
-    assert 'href="/admin/graph">Graph</a>' in viewer
-    assert 'aria-disabled="true">Contexts</span>' in viewer
+    assert 'class="workspace-nav sb-nav" role="tablist"' in viewer
+    assert 'href="/admin/sessions" aria-current="page" aria-selected="true"' in viewer
+    assert 'href="/admin/graph" aria-selected="false"' in viewer
+    assert 'aria-disabled="true" aria-selected="false"' in viewer
 
 
 def test_processing_and_analysis_apis_require_auth_and_return_durable_state(tmp_path, monkeypatch) -> None:
