@@ -21,7 +21,8 @@ from app.tool_output import (
 )
 
 UNCATEGORIZED_GROUP_ID = "uncategorized"
-SCHEMA_VERSION = 1
+# Schema versions never decrease; v2 remains current after removing Graph support.
+SCHEMA_VERSION = 2
 
 SYSTEM_SESSION_GROUPS = (
     {

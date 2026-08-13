@@ -84,6 +84,22 @@ def test_managed_store_requires_explicit_migration(tmp_path: Path) -> None:
     assert store.schema_version() == CURRENT_SCHEMA_VERSION
 
 
+def test_managed_store_accepts_existing_schema_two_after_feature_removal(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / "bridge.sqlite3"
+    Store(db_path)
+    with sqlite3.connect(db_path) as connection:
+        connection.executemany(
+            "INSERT OR IGNORE INTO schema_migrations(version, applied_at) VALUES (?, ?)",
+            [(1, 1), (2, 2)],
+        )
+
+    managed = Store(db_path, allow_startup_migrations=False)
+
+    assert managed.schema_version() == 2
+
+
 def test_migration_is_idempotent_and_preserves_data(tmp_path: Path) -> None:
     db_path = tmp_path / "bridge.sqlite3"
     legacy = Store(db_path)
