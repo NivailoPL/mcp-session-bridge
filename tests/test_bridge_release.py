@@ -554,7 +554,7 @@ def test_rollback_receipt_failure_restores_current_runtime_and_metadata(
     assert installation["release_id"] == deployed["release_id"]
 
 
-def test_system_database_migration_runs_as_service_user() -> None:
+def test_system_database_migration_runs_as_service_user_with_safe_import_path() -> None:
     runner = RecordingRunner()
     manager = UpdateManager(Layout.system(), runner)
     release = Path("/opt/mcp-session-bridge/releases/test")
@@ -565,6 +565,7 @@ def test_system_database_migration_runs_as_service_user() -> None:
     assert runner.calls[-1] == (
         "runuser", "--user", "mcp-session-bridge", "--", "env",
         f"PYTHONPATH={release}", str(release / ".venv/bin/python"),
+        "-P",
         "-c",
         (
             "import sys; from pathlib import Path; "
@@ -615,6 +616,7 @@ def test_update_switches_release_and_records_rollback_receipt(tmp_path: Path) ->
     assert layout.current_link.resolve() == layout.release_dir("0.4.1").resolve()
     receipt = json.loads(layout.operation_file.read_text(encoding="utf-8"))
     assert receipt["previous_version"] == "0.4.0"
+    assert receipt["codex_runtime"]["state"] == "disabled"
     assert Path(receipt["database_backup"]).exists()
     updated = json.loads(layout.installation_file.read_text(encoding="utf-8"))
     assert updated["commit"] is None
@@ -622,6 +624,7 @@ def test_update_switches_release_and_records_rollback_receipt(tmp_path: Path) ->
 
     rollback = manager.rollback()
     assert rollback["state"] == "complete"
+    assert rollback["codex_runtime"]["state"] == "disabled"
     assert layout.current_link.resolve() == layout.release_dir("0.4.0").resolve()
     restored = json.loads(layout.installation_file.read_text(encoding="utf-8"))
     assert restored["commit"] == "a" * 40

@@ -44,6 +44,8 @@ class StatusCollector:
         ]
         if self.probe_http:
             checks.append(self._http_check())
+        if (read_json(self.layout.codex_status_file) or {}).get("desired_enabled"):
+            checks.append(self._codex_check())
         if self.deep:
             checks.extend(self._deep_checks())
         update = self._update_status(str(installation.get("version") or BRIDGE_VERSION))
@@ -188,6 +190,28 @@ class StatusCollector:
         if response.status == 200 and payload.get("ok") is True:
             return CheckResult("local_http", "Local health endpoint", "pass", "HTTP 200")
         return CheckResult("local_http", "Local health endpoint", "failed", "Unexpected response.")
+
+    def _codex_check(self) -> CheckResult:
+        from bridge_cli.codex_runtime import CodexRuntimeManager
+
+        runtime = CodexRuntimeManager(self.layout, self.runner, self.layout.current_link).inspect()[
+            "runtime"
+        ]
+        if (
+            runtime["active"]
+            and runtime["socket_ready"]
+            and runtime["installed_version"] == runtime["expected_version"]
+        ):
+            return CheckResult(
+                "codex", "Codex app-server", "pass", f"active; version {runtime['installed_version']}"
+            )
+        return CheckResult(
+            "codex",
+            "Codex app-server",
+            "action_required",
+            runtime.get("last_error") or "Enabled companion is not ready.",
+            "Run mcp-bridge codex-runtime verify, then mcp-bridge codex-runtime repair.",
+        )
 
     def _deep_checks(self) -> list[CheckResult]:
         usage = shutil.disk_usage(self.layout.data_root if self.layout.data_root.exists() else self.layout.root)

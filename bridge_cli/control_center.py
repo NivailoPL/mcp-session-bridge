@@ -43,6 +43,8 @@ class ControlCenter:
                 self._section(choice)
 
     def _main_items(self) -> list[MenuItem]:
+        from bridge_cli.codex_runtime import CodexRuntimeManager
+
         steps = self.wizard._steps()
         descriptions = {
             "server": "Source checkout and host prerequisites",
@@ -60,6 +62,10 @@ class ControlCenter:
         ]
         activation = next(step for step in steps if step.id == "activate")
         verify = next(step for step in steps if step.id == "verify")
+        codex = CodexRuntimeManager(
+            self.wizard.layout, self.wizard.runner, self._codex_source_root()
+        ).inspect()["runtime"]
+        codex_state = "ACTIVE" if codex["active"] else "READY" if codex["installed"] else "NOT INSTALLED"
         return [
             MenuItem(
                 "full_install",
@@ -68,6 +74,12 @@ class ControlCenter:
                 activation.state,
             ),
             *sections,
+            MenuItem(
+                "codex_runtime",
+                "Codex app-server",
+                "Optional isolated runtime for Codex conversations",
+                codex_state,
+            ),
             MenuItem("verify", "Verify installation", "Standard and deep operational checks", verify.state),
             MenuItem("exit", "Exit", "Leave setup without changing anything"),
         ]
@@ -85,6 +97,17 @@ class ControlCenter:
             self._execute(section, choice)
 
     def _section_title(self, section: str) -> str:
+        if section == "codex_runtime":
+            from bridge_cli.codex_runtime import CodexRuntimeManager
+
+            runtime = CodexRuntimeManager(
+                self.wizard.layout, self.wizard.runner, self._codex_source_root()
+            ).inspect()["runtime"]
+            state = "ACTIVE" if runtime["active"] else "READY" if runtime["installed"] else "NOT INSTALLED"
+            return (
+                f"Codex app-server: ({state})\n"
+                f"Pinned {runtime['expected_version']}; socket {runtime['socket']}"
+            )
         step = next(item for item in self.wizard._steps() if item.id == section)
         lines = [f"{step.label}: ({step.state})", step.detail]
         if section == "database":
@@ -139,6 +162,14 @@ class ControlCenter:
                 MenuItem("activate", "Activate Managed Installation", "Final backup, cutover, health-check, rollback"),
                 MenuItem("restart", "Restart Service"),
                 MenuItem("logs", "View Logs", "Use mcp-bridge logs"),
+            ],
+            "codex_runtime": [
+                MenuItem("status", "Show Status", "Inspect installation, unit, and socket state"),
+                MenuItem("enable", "Enable Codex", "Install the locked runtime and start app-server"),
+                MenuItem("repair", "Repair Codex", "Reinstall from the exact runtime lock"),
+                MenuItem("disable", "Disable Codex", "Stop app-server but retain its state"),
+                MenuItem("verify", "Verify Codex", "Check version, service, and Unix socket"),
+                MenuItem("logs", "View Codex Logs", "Show the companion systemd journal"),
             ],
             "verify": [
                 MenuItem("standard", "Standard Verification", "Fast operational report"),
@@ -196,8 +227,57 @@ class ControlCenter:
             result = ServiceManager(self.wizard.layout, self.wizard.runner).logs(100)
             self.wizard.output(str(result["logs"]))
             self.wizard.input("Press Enter to return.")
+        elif section == "codex_runtime":
+            self._codex_runtime_action(action)
         elif section == "verify":
             self._verify_action(action)
+
+    def _codex_runtime_action(self, action: str) -> None:
+        from bridge_cli.codex_runtime import CodexRuntimeManager
+
+        manager = CodexRuntimeManager(
+            self.wizard.layout, self.wizard.runner, self._codex_source_root()
+        )
+        if action in {"enable", "repair", "disable"}:
+            warning = {
+                "enable": "Install the exactly pinned Codex runtime and enable its isolated service?",
+                "repair": "Reinstall the exactly pinned Codex runtime and preserve Bridge if it fails?",
+                "disable": "Stop and disable Codex while retaining its runtime and login state?",
+            }[action]
+            if self.wizard.input(f"{warning} [y/N]: ").strip().lower() not in {"y", "yes"}:
+                self.wizard.output("Codex action cancelled; nothing changed.")
+                return
+            with operation_lock(
+                self.wizard.layout.operation_lock_file,
+                self.wizard.layout.legacy_operation_lock_file,
+            ):
+                result = getattr(manager, action)()
+        elif action == "status":
+            result = manager.inspect()
+        elif action == "verify":
+            result = manager.verify()
+        elif action == "logs":
+            result = manager.logs(100)
+            self.wizard.output(str(result["logs"]))
+            self.wizard.input("Press Enter to return.")
+            return
+        else:
+            return
+        runtime = result["runtime"]
+        self.wizard.output(
+            f"{'PASS' if result['state'] == 'complete' else 'FAILED'} {result['operation']}: "
+            f"{'active' if runtime.get('active') else 'inactive'}, "
+            f"version {runtime.get('installed_version') or 'not installed'}"
+        )
+
+    def _codex_source_root(self) -> Path:
+        current = self.wizard.layout.current_link
+        if current.is_symlink():
+            resolved = current.resolve()
+            if (resolved / "deploy/codex-runtime/package-lock.json").exists():
+                return resolved
+        return self.wizard.source_root
+        self.wizard.input("Press Enter to return.")
 
     def _deploy_checkout(self) -> None:
         from bridge_cli.release import CheckoutDeployer
