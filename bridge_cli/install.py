@@ -298,9 +298,14 @@ class ManagedInstaller:
             }
         )
         atomic_write_json(self.layout.installation_file, installation)
-        owned_paths = {
-            str(path)
-            for path in (
+        atomic_write_json(
+            self.layout.ownership_file,
+            {
+                "format_version": 1,
+                "owner": "mcp-session-bridge",
+                "paths": [
+                    str(path)
+                    for path in (
                         self.layout.service_unit,
                         self.layout.restart_path_unit,
                         self.layout.restart_service_unit,
@@ -322,34 +327,11 @@ class ManagedInstaller:
                         self.layout.setup_file,
                         self.layout.database_status_file,
                         self.layout.ownership_file,
-            )
-        }
-        previous_ownership = read_json(self.layout.ownership_file) or {}
-        codex_owned_paths = {
-            str(path)
-            for path in (
-                self.layout.codex_service_unit,
-                self.layout.codex_runtime_root,
-                self.layout.codex_state_root,
-                self.layout.codex_status_file,
-            )
-        }
-        previous_paths = {
-            str(path)
-            for path in previous_ownership.get("paths", [])
-            if isinstance(path, str)
-        }
-        owned_paths.update(previous_paths & codex_owned_paths)
-        ownership = {
-            "format_version": 1,
-            "owner": "mcp-session-bridge",
-            "paths": sorted(owned_paths),
-        }
-        from bridge_cli.codex_runtime import CODEX_SERVICE_USER
-
-        if previous_ownership.get("codex_service_user") == CODEX_SERVICE_USER:
-            ownership["codex_service_user"] = CODEX_SERVICE_USER
-        atomic_write_json(self.layout.ownership_file, ownership, 0o640)
+                    )
+                ],
+            },
+            0o640,
+        )
         operation = {
             "format_version": 1,
             "operation": "setup",

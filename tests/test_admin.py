@@ -18,76 +18,6 @@ from app.time_format import DISPLAY_TIMEZONE_SETTING_KEY
 from tests.pdf_samples import make_pdf
 
 
-def test_admin_viewer_uses_brand_lockup_and_tab_assets() -> None:
-    viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
-    head = viewer[: viewer.index("</head>")]
-    nav_script = Path("pearl-gradient-nav.js").read_text(encoding="utf-8")
-
-    assert 'rel="icon" type="image/png" sizes="16x16"' in head
-    assert 'rel="icon" type="image/png" sizes="32x32"' in head
-    assert 'rel="apple-touch-icon" sizes="180x180"' in head
-    assert 'rel="manifest" href="/admin/assets/brand/manifest.webmanifest"' in head
-    assert 'href="/admin/assets/pearl-gradient-nav.css"' in head
-    assert '<a class="workspace-brand" href="/admin/sessions" aria-label="MCP Session Bridge Sessions">' in viewer
-    assert 'src="/admin/assets/brand/svg/lockup-horizontal-dark.svg"' in viewer
-    assert viewer.count("lockup-horizontal-dark.svg") == 1
-    assert '<section class="brand">' not in viewer
-    assert '<script src="/admin/assets/pearl-gradient-nav.js"></script>' in viewer
-    assert 'class="brand-lockup"' not in viewer
-
-    assert '<nav class="workspace-nav sb-nav" role="tablist"' in viewer
-    assert 'data-label="SESSIONS">SESSIONS</a>' in viewer
-    assert 'data-label="GRAPH">GRAPH</a>' in viewer
-    assert 'data-label="CONTEXTS">CONTEXTS</span>' in viewer
-    assert 'aria-selected="true"' in viewer
-    assert 'aria-selected="false"' in viewer
-    assert "ArrowRight" in nav_script
-
-
-def test_admin_login_uses_dark_branding_and_inline_lockup(tmp_path, monkeypatch) -> None:
-    main = _load_main(tmp_path, monkeypatch)
-    client = TestClient(main.app, base_url="http://127.0.0.1:8787")
-
-    response = client.get("/admin/login?next=/admin/sessions")
-
-    assert response.status_code == 200
-    assert '<html lang="en">' in response.text
-    assert "color-scheme: dark" in response.text
-    assert 'class="login-shell"' in response.text
-    assert 'class="login-logo"' in response.text
-    assert '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 404 96"' in response.text
-    assert "/admin/assets/brand/svg/lockup-horizontal-dark.svg" not in response.text
-    autofill_style = response.text[response.text.index("input:-webkit-autofill") : response.text.index(".login-submit")]
-    for selector in (
-        "input:-webkit-autofill",
-        "input:-webkit-autofill:hover",
-        "input:-webkit-autofill:focus",
-        "input:-webkit-autofill:active",
-        "input:-moz-autofill",
-        "input:autofill",
-    ):
-        assert selector in autofill_style
-    for declaration in (
-        "background-color: #1d1e27 !important;",
-        "-webkit-box-shadow: 0 0 0 1000px #1d1e27 inset;",
-        "box-shadow: 0 0 0 1000px #1d1e27 inset;",
-        "-webkit-text-fill-color: var(--text);",
-        "outline: 2px solid var(--accent);",
-    ):
-        assert declaration in autofill_style
-    assert 'action="/admin/login"' in response.text
-
-    invalid = client.post(
-        "/admin/login",
-        data={"username": "owner", "password": "wrong", "next": "/admin/sessions"},
-        follow_redirects=False,
-    )
-    assert invalid.status_code == 401
-    assert 'class="login-alert" role="alert"' in invalid.text
-    assert "Invalid username or password." in invalid.text
-
-
-
 def test_admin_viewer_group_ui_contract() -> None:
     viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
 
@@ -103,34 +33,6 @@ def test_admin_viewer_group_ui_contract() -> None:
     assert 'spanCls("group-file-identity")' in viewer
     assert 'setStatus(`Selected ${sessionId}.`, "ok");' not in viewer
     assert 'spanCls("file-meta", "No files")' not in viewer
-
-
-def test_admin_brand_assets_require_login_and_serve_png(tmp_path, monkeypatch) -> None:
-    main = _load_main(tmp_path, monkeypatch)
-    anonymous = TestClient(main.app, base_url="http://127.0.0.1:8787")
-
-    login_required = anonymous.get(
-        "/admin/assets/brand/png/icon-indigo-16.png",
-        follow_redirects=False,
-    )
-    assert login_required.status_code == 303
-    assert login_required.headers["location"].startswith("/admin/login")
-
-    client = TestClient(main.app, base_url="http://127.0.0.1:8787")
-    login = client.post(
-        "/admin/login",
-        data={"username": "owner", "password": "secret-admin-password", "next": "/admin/sessions"},
-        follow_redirects=False,
-    )
-    assert login.status_code == 303
-
-    asset = client.get("/admin/assets/brand/png/icon-indigo-16.png")
-    assert asset.status_code == 200
-    assert asset.headers["content-type"].startswith("image/png")
-    assert len(asset.content) > 0
-    assert client.get("/admin/assets/brand/png/missing.png").status_code == 404
-
-
 
 
 def test_admin_viewer_compacts_unselected_sessions() -> None:
@@ -571,14 +473,6 @@ def test_admin_viewer_exposes_large_tool_result_compatibility_controls() -> None
     assert 'restartBridgeService()' in viewer
     assert "toolOutput.restart_pending || state.toolOutputRestartInFlight" in viewer
     assert "!payload.tool_output.restart_pending && !payload.tool_output.restart_required" in viewer
-
-
-def test_admin_viewer_does_not_expose_codex_workspace() -> None:
-    viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
-
-    assert 'id="codexOpenButton"' not in viewer
-    assert 'id="codexDialog"' not in viewer
-    assert "/admin/api/codex" not in viewer
 
 
 def test_deployment_includes_narrow_restart_helper() -> None:
@@ -1348,131 +1242,6 @@ def _admin_client(main):
         follow_redirects=False,
     )
     return client, client.get("/admin/api/me").json()["csrf_token"]
-
-
-def test_codex_admin_api_auth_csrf_and_chat_contract(tmp_path, monkeypatch) -> None:
-    main = _load_main(tmp_path, monkeypatch)
-
-    class FakeCodex:
-        async def status(self):
-            return {
-                "available": True,
-                "authenticated": True,
-                "version": "0.147.0",
-                "account": {"type": "chatgpt", "email": "owner@example.com", "plan_type": "plus"},
-            }
-
-        async def start_device_login(self):
-            return {
-                "login_id": "login-1",
-                "verification_url": "https://auth.openai.com/device",
-                "user_code": "ABCD-EFGH",
-            }
-
-        async def device_login_status(self):
-            return {**await self.status(), "login_status": "authenticated"}
-
-        async def cancel_device_login(self):
-            return None
-
-        async def logout(self):
-            return None
-
-        async def chat(self, message, *, thread_id=None):
-            assert message == "Hello"
-            assert thread_id is None
-            return {"thread_id": "thread-1", "message": "Hi from Codex"}
-
-    main.admin.codex = FakeCodex()
-    anonymous = TestClient(main.app, base_url="http://127.0.0.1:8787")
-    assert anonymous.get("/admin/api/codex/status").status_code == 401
-    assert anonymous.post("/admin/api/codex/chat", json={"message": "Hello"}).status_code == 401
-
-    client, csrf = _admin_client(main)
-    status = client.get("/admin/api/codex/status")
-    assert status.status_code == 200
-    assert status.headers["cache-control"] == "no-store"
-    assert status.json()["codex"]["version"] == "0.147.0"
-
-    assert client.post("/admin/api/codex/auth/device/start").status_code == 403
-    started = client.post("/admin/api/codex/auth/device/start", headers={"x-csrf-token": csrf})
-    assert started.status_code == 200
-    assert started.json()["login"]["user_code"] == "ABCD-EFGH"
-    assert client.get("/admin/api/codex/auth/device/status").json()["codex"]["login_status"] == "authenticated"
-    assert client.post(
-        "/admin/api/codex/auth/device/cancel", headers={"x-csrf-token": csrf}
-    ).status_code == 200
-    assert client.post(
-        "/admin/api/codex/logout", headers={"x-csrf-token": csrf}
-    ).status_code == 200
-
-    chatted = client.post(
-        "/admin/api/codex/chat",
-        json={"message": "Hello", "thread_id": None},
-        headers={"x-csrf-token": csrf},
-    )
-    assert chatted.status_code == 200
-    assert chatted.json() == {
-        "ok": True,
-        "chat": {"thread_id": "thread-1", "message": "Hi from Codex"},
-    }
-    assert chatted.headers["cache-control"] == "no-store"
-
-    assert client.post(
-        "/admin/api/codex/chat",
-        json={"message": "Hello", "unexpected": True},
-        headers={"x-csrf-token": csrf},
-    ).status_code == 400
-
-
-def test_codex_admin_api_sanitizes_unavailable_and_protocol_errors(tmp_path, monkeypatch) -> None:
-    main = _load_main(tmp_path, monkeypatch)
-    from app.codex_app_server import CodexProtocolError, CodexUnavailableError
-
-    class UnavailableCodex:
-        async def status(self):
-            raise CodexUnavailableError("secret-token /var/lib/private/auth.json")
-
-        async def chat(self, message, *, thread_id=None):
-            raise CodexProtocolError("raw frame bearer-secret")
-
-    main.admin.codex = UnavailableCodex()
-    client, csrf = _admin_client(main)
-
-    status = client.get("/admin/api/codex/status")
-    assert status.status_code == 503
-    assert status.json() == {"ok": False, "error": "Codex App Server is unavailable."}
-    assert "secret" not in status.text
-    assert status.headers["cache-control"] == "no-store"
-
-    chat = client.post(
-        "/admin/api/codex/chat",
-        json={"message": "Hello"},
-        headers={"x-csrf-token": csrf},
-    )
-    assert chat.status_code == 502
-    assert chat.json() == {"ok": False, "error": "Codex App Server request failed."}
-    assert "bearer" not in chat.text
-
-
-def test_codex_expired_conversation_has_stable_error_code(tmp_path, monkeypatch) -> None:
-    main = _load_main(tmp_path, monkeypatch)
-
-    class ExpiredCodex:
-        async def chat(self, message, *, thread_id=None):
-            raise ValueError("Unknown or expired Codex conversation.")
-
-    main.admin.codex = ExpiredCodex()
-    client, csrf = _admin_client(main)
-    response = client.post(
-        "/admin/api/codex/chat",
-        json={"message": "Continue", "thread_id": "old-thread"},
-        headers={"x-csrf-token": csrf},
-    )
-
-    assert response.status_code == 400
-    assert response.json()["code"] == "codex_conversation_expired"
-    assert response.headers["cache-control"] == "no-store"
 
 
 def _encoded_file(content: bytes, *, filename: str = "notes.md", scope_type: str = "session") -> dict:

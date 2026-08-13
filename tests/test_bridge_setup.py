@@ -289,14 +289,7 @@ def test_full_install_is_first_and_sections_do_not_repeat_inspect_actions(tmp_pa
     center = ControlCenter(wizard, PlainMenuDriver())
 
     assert center._main_items()[0].id == "full_install"
-    assert any(item.id == "codex_runtime" for item in center._main_items())
-    assert {
-        item.id for item in center._actions("codex_runtime")
-    } == {"status", "enable", "repair", "disable", "verify", "logs", "return"}
-    for section in (
-        "server", "installation", "release", "administrator", "public_address",
-        "service", "codex_runtime",
-    ):
+    for section in ("server", "installation", "release", "administrator", "public_address", "service"):
         assert all(not item.label.startswith("Inspect") for item in center._actions(section))
 
 

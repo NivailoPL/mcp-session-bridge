@@ -16,8 +16,6 @@ The repository `.gitignore` excludes these by default. `.env.example` is the onl
 
 OpenAI and Cohere API keys saved through the admin UI are encrypted before they are stored in SQLite. Conversation text, uploaded files, BM25 documents, vector chunks, and embeddings are runtime data and are not separately encrypted by the application, so protect the database and every backup with host-level access controls.
 
-Codex ChatGPT credentials follow a different boundary. Codex owns them under `/var/lib/mcp-session-bridge-codex/codex-home` with private permissions. They are never copied into Bridge SQLite, `bridge.env`, releases, Git, normal database exports, or application logs. Do not add this directory to ordinary backups; reauthenticate after disaster recovery.
-
 Before pushing a release, review both the staged file list and ignored runtime files:
 
 ```bash
@@ -66,14 +64,6 @@ Keep localhost values only when you need local development access.
 The admin UI can edit, soft-delete, and restore transcript exchanges. Mutations require login and CSRF protection.
 
 Deleted exchanges remain in SQLite with `deleted_at` and `deleted_reason`, but active transcript reads skip them.
-
-## Codex App Server Isolation
-
-The optional App Server runs as `mcp-session-bridge-codex`, not as root or the Bridge service account. It receives no Bridge environment, database path, provider keys, Caddy listener, or repository workspace. A dedicated socket group permits only local Bridge-to-Codex transport; the browser talks to authenticated, CSRF-protected Bridge endpoints.
-
-The v1 conversation always uses an empty dedicated working directory, an ephemeral thread, read-only sandboxing, approval policy `never`, no MCP servers, no web search, and disabled shell, unified-exec, apps, hooks, multi-agent, and remote-plugin features. The adapter rejects server tool requests and fails the turn if a tool or permission event appears. Future database access must be implemented as narrow audited application tools, not raw SQLite filesystem permission.
-
-The App Server is an experimental versioned protocol. Every Bridge release pins one compatible Codex version and npm SHA-512 integrity. Runtime mismatch is rejected during initialization. Codex failure degrades only the Codex popup; Bridge `/healthz`, sessions, settings, search, and MCP remain independent.
 
 ## Reporting Issues
 

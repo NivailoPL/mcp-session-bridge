@@ -21,17 +21,6 @@ from starlette.requests import Request
 from starlette.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
 from bridge_cli.version import BRIDGE_VERSION
 
-from app.graph_config import GraphConfigError
-from app.graph_runtime import GraphRuntime
-from app.codex_app_server import (
-    MAX_CHAT_MESSAGE_CHARS,
-    CodexAppServerClient,
-    CodexPolicyViolationError,
-    CodexProtocolError,
-    CodexTimeoutError,
-    CodexUnavailableError,
-)
-
 from app.search import (
     COHERE_KEY_SETTING,
     OPENAI_KEY_SETTING,
@@ -98,13 +87,6 @@ AI_RENAME_ENDPOINT = "https://api.openai.com/v1/chat/completions"
 SESSION_TITLE_MAX_CHARS = 72
 ADMIN_FILE_UPLOAD_MAX_BODY_BYTES = ((MAX_ADMIN_PDF_BYTES + 2) // 3 * 4) + 16_384
 ADMIN_FILE_EDIT_MAX_BODY_BYTES = (MAX_SESSION_FILE_BYTES * 6) + 16_384
-CODEX_CHAT_MAX_BODY_BYTES = MAX_CHAT_MESSAGE_CHARS * 4 + 1_024
-CodexAppServerErrorTypes = (
-    CodexUnavailableError,
-    CodexProtocolError,
-    CodexTimeoutError,
-    CodexPolicyViolationError,
-)
 ADMIN_FILE_EXTENSIONS = {
     ".md": "text/markdown",
     ".markdown": "text/markdown",
@@ -115,12 +97,6 @@ ADMIN_FILE_EXTENSIONS = {
     ".csv": "text/csv",
     ".tsv": "text/tab-separated-values",
     ".pdf": "application/pdf",
-}
-BRAND_ASSET_MEDIA_TYPES = {
-    ".json": "application/json",
-    ".png": "image/png",
-    ".svg": "image/svg+xml",
-    ".webmanifest": "application/manifest+json",
 }
 
 
@@ -133,21 +109,14 @@ class AdminHandlers:
         *,
         active_tool_output_mode: str = DEFAULT_TOOL_OUTPUT_MODE,
         restart_requester: Callable[[], Awaitable[None]] | None = None,
-        codex_client: CodexAppServerClient | None = None,
-        graph_runtime: GraphRuntime | None = None,
     ):
         self.settings = settings
         self.store = store
         self.html_path = html_path
-        self.graph_html_path = html_path.parent / "graph-viewer.html"
-        self.graph_asset_dir = html_path.parent
-        self.brand_dir = html_path.parent / "brand"
         self.pdfjs_dir = html_path.parent / "vendor" / "pdfjs"
         self.search = SearchService(store)
         self.active_tool_output_mode = active_tool_output_mode
         self.restart_requester = restart_requester
-        self.codex = codex_client
-        self.graph_runtime = graph_runtime
 
     async def index(self, request: Request) -> Response:
         return RedirectResponse("/admin/sessions", status_code=303)
@@ -161,40 +130,6 @@ class AdminHandlers:
         except OSError:
             return HTMLResponse("Admin viewer is not installed.", status_code=500, headers=self._no_store_headers())
         return HTMLResponse(body, headers=self._admin_headers())
-
-    async def graph_page(self, request: Request) -> Response:
-        _, error = self._require_admin(request)
-        if error:
-            return error
-        try:
-            body = self.graph_html_path.read_text(encoding="utf-8")
-        except OSError:
-            return HTMLResponse("Graph workspace is not installed.", status_code=500, headers=self._no_store_headers())
-        return HTMLResponse(body, headers=self._admin_headers())
-
-    async def graph_asset(self, request: Request) -> Response:
-        _, error = self._require_admin(request)
-        if error:
-            return error
-        asset_name = str(request.path_params.get("asset_name", ""))
-        media_types = {
-            "graph-viewer.css": "text/css",
-            "graph-data.css": "text/css",
-            "pearl-gradient-nav.js": "text/javascript",
-            "pearl-gradient-nav.css": "text/css",
-            "graph-viewer.js": "text/javascript",
-        }
-        media_type = media_types.get(asset_name)
-        if media_type is None:
-            return Response(status_code=404)
-        asset_path = self.graph_asset_dir / asset_name
-        if not asset_path.is_file():
-            return Response(status_code=404)
-        return FileResponse(
-            asset_path,
-            media_type=media_type,
-            headers={**self._no_store_headers(), "X-Content-Type-Options": "nosniff"},
-        )
 
     async def login_get(self, request: Request) -> Response:
         next_path = _safe_next(request.query_params.get("next"))
@@ -282,280 +217,6 @@ class AdminHandlers:
         return JSONResponse(
             {"ok": True, "status": self._operational_status_payload()},
             headers=self._no_store_headers(),
-        )
-
-    async def api_codex_status(self, request: Request) -> Response:
-        _, error = self._require_admin(request)
-        if error:
-            return error
-        if self.codex is None:
-            return self._codex_unavailable()
-        try:
-            status = await self.codex.status()
-        except CodexAppServerErrorTypes as exc:
-            return self._codex_error(exc)
-        return JSONResponse({"ok": True, "codex": status}, headers=self._no_store_headers())
-
-    async def api_codex_device_login_start(self, request: Request) -> Response:
-        _, error = self._require_admin_mutation(request)
-        if error:
-            return error
-        if self.codex is None:
-            return self._codex_unavailable()
-        try:
-            login = await self.codex.start_device_login()
-        except CodexAppServerErrorTypes as exc:
-            return self._codex_error(exc)
-        return JSONResponse({"ok": True, "login": login}, headers=self._no_store_headers())
-
-    async def api_codex_device_login_status(self, request: Request) -> Response:
-        _, error = self._require_admin(request)
-        if error:
-            return error
-        if self.codex is None:
-            return self._codex_unavailable()
-        try:
-            status = await self.codex.device_login_status()
-        except CodexAppServerErrorTypes as exc:
-            return self._codex_error(exc)
-        return JSONResponse({"ok": True, "codex": status}, headers=self._no_store_headers())
-
-    async def api_codex_device_login_cancel(self, request: Request) -> Response:
-        _, error = self._require_admin_mutation(request)
-        if error:
-            return error
-        if self.codex is None:
-            return self._codex_unavailable()
-        try:
-            await self.codex.cancel_device_login()
-        except CodexAppServerErrorTypes as exc:
-            return self._codex_error(exc)
-        return JSONResponse({"ok": True}, headers=self._no_store_headers())
-
-    async def api_codex_logout(self, request: Request) -> Response:
-        _, error = self._require_admin_mutation(request)
-        if error:
-            return error
-        if self.codex is None:
-            return self._codex_unavailable()
-        try:
-            await self.codex.logout()
-        except CodexAppServerErrorTypes as exc:
-            return self._codex_error(exc)
-        return JSONResponse({"ok": True}, headers=self._no_store_headers())
-
-    async def api_codex_chat(self, request: Request) -> Response:
-        _, error = self._require_admin_mutation(request)
-        if error:
-            return error
-        if self.codex is None:
-            return self._codex_unavailable()
-        payload, parse_error = await _bounded_json_body(
-            request,
-            max_bytes=CODEX_CHAT_MAX_BODY_BYTES,
-        )
-        if parse_error:
-            return parse_error
-        if "message" not in payload or not set(payload) <= {"message", "thread_id"}:
-            return self._json_error(
-                "Chat requires message and accepts optional thread_id.",
-                status_code=400,
-            )
-        message = payload.get("message")
-        thread_id = payload.get("thread_id")
-        if not isinstance(message, str):
-            return self._json_error("message must be a string.", status_code=400)
-        if thread_id is not None and not isinstance(thread_id, str):
-            return self._json_error("thread_id must be a string or null.", status_code=400)
-        try:
-            chat = await self.codex.chat(message, thread_id=thread_id)
-        except ValueError as exc:
-            if str(exc) == "Unknown or expired Codex conversation.":
-                return JSONResponse(
-                    {
-                        "ok": False,
-                        "error": str(exc),
-                        "code": "codex_conversation_expired",
-                    },
-                    status_code=400,
-                    headers=self._no_store_headers(),
-                )
-            return self._json_error(str(exc), status_code=400)
-        except CodexAppServerErrorTypes as exc:
-            return self._codex_error(exc)
-        return JSONResponse({"ok": True, "chat": chat}, headers=self._no_store_headers())
-
-    async def api_graph_config(self, request: Request) -> Response:
-        _, error = self._require_admin(request)
-        if error:
-            return error
-        return JSONResponse(
-            {"ok": True, "config": self.store.get_graph_config()},
-            headers=self._no_store_headers(),
-        )
-
-    async def api_graph_jobs(self, request: Request) -> Response:
-        _, error = self._require_admin(request)
-        if error:
-            return error
-        status = request.query_params.get("status")
-        jobs = self.store.list_graph_jobs(status=status or None)
-        return JSONResponse({"ok": True, "jobs": jobs}, headers=self._no_store_headers())
-
-    async def api_graph_rescan(self, request: Request) -> Response:
-        _, error = self._require_admin_mutation(request)
-        if error:
-            return error
-        if self.graph_runtime is None:
-            return self._json_error("Graph runtime is unavailable.", status_code=503)
-        if not await self._graph_provider_is_ready():
-            return self._graph_provider_not_ready()
-        try:
-            result = await self.graph_runtime.reset_all()
-        except ValueError as exc:
-            return self._json_error(str(exc), status_code=409)
-        return JSONResponse(
-            {"ok": True, "reset": result},
-            status_code=202,
-            headers=self._no_store_headers(),
-        )
-
-    async def api_graph_analysis_list(self, request: Request) -> Response:
-        _, error = self._require_admin(request)
-        if error:
-            return error
-        return JSONResponse(
-            {"ok": True, "sessions": self.store.list_graph_analysis_sessions()},
-            headers=self._no_store_headers(),
-        )
-
-    async def api_graph_analysis(self, request: Request) -> Response:
-        _, error = self._require_admin(request)
-        if error:
-            return error
-        session_id = str(request.path_params.get("session_id", ""))
-        analysis = self.store.get_graph_analysis(session_id)
-        if analysis is None:
-            return self._json_error("No production Graph analysis for this session.", status_code=404)
-        return JSONResponse({"ok": True, "analysis": analysis}, headers=self._no_store_headers())
-
-    async def api_graph_lab_runs(self, request: Request) -> Response:
-        _, error = self._require_admin(request)
-        if error:
-            return error
-        return JSONResponse(
-            {"ok": True, "runs": self.store.list_graph_lab_runs()},
-            headers=self._no_store_headers(),
-        )
-
-    async def api_graph_lab_start(self, request: Request) -> Response:
-        session, error = self._require_admin_mutation(request)
-        if error:
-            return error
-        if self.graph_runtime is None:
-            return self._json_error("Graph runtime is unavailable.", status_code=503)
-        payload, parse_error = await _json_body(request)
-        if parse_error:
-            return parse_error
-        session_id = payload.get("session_id")
-        overrides = payload.get("settings", {})
-        if not isinstance(session_id, str) or not session_id.strip():
-            return self._json_error("session_id must be a non-empty string.", status_code=400)
-        if not isinstance(overrides, dict):
-            return self._json_error("settings must be an object.", status_code=400)
-        try:
-            run = await self.graph_runtime.start_lab_run(
-                session_id.strip(), overrides, actor=session["username"]
-            )
-        except (GraphConfigError, ValueError) as exc:
-            return self._json_error(str(exc), status_code=400)
-        return JSONResponse(
-            {"ok": True, "run": run},
-            status_code=202,
-            headers=self._no_store_headers(),
-        )
-
-    async def api_graph_unlock(self, request: Request) -> Response:
-        session, error = self._require_admin_mutation(request)
-        if error:
-            return error
-        self.store.unlock_graph_profile(session["username"])
-        return self._graph_config_response()
-
-    async def api_graph_update_draft(self, request: Request) -> Response:
-        session, error = self._require_admin_mutation(request)
-        if error:
-            return error
-        payload, parse_error = await _json_body(request)
-        if parse_error:
-            return parse_error
-        try:
-            self.store.update_graph_draft(payload, session["username"])
-        except (GraphConfigError, ValueError) as exc:
-            return self._json_error(str(exc), status_code=400)
-        return self._graph_config_response()
-
-    async def api_graph_activate(self, request: Request) -> Response:
-        session, error = self._require_admin_mutation(request)
-        if error:
-            return error
-        try:
-            self.store.activate_graph_draft(session["username"])
-        except ValueError as exc:
-            return self._json_error(str(exc), status_code=400)
-        return self._graph_config_response()
-
-    async def api_graph_discard_draft(self, request: Request) -> Response:
-        _, error = self._require_admin_mutation(request)
-        if error:
-            return error
-        self.store.discard_graph_draft()
-        return self._graph_config_response()
-
-    async def api_graph_state(self, request: Request) -> Response:
-        _, error = self._require_admin_mutation(request)
-        if error:
-            return error
-        payload, parse_error = await _json_body(request)
-        if parse_error:
-            return parse_error
-        enabled = payload.get("enabled")
-        if not isinstance(enabled, bool):
-            return self._json_error("enabled must be a boolean.", status_code=400)
-        if enabled:
-            if not await self._graph_provider_is_ready():
-                return self._graph_provider_not_ready()
-        if self.graph_runtime is not None:
-            await self.graph_runtime.set_enabled(enabled)
-        else:
-            self.store.set_graph_enabled(enabled)
-        return self._graph_config_response()
-
-    def _graph_config_response(self) -> JSONResponse:
-        return JSONResponse(
-            {"ok": True, "config": self.store.get_graph_config()},
-            headers=self._no_store_headers(),
-        )
-
-    async def _graph_provider_is_ready(self) -> bool:
-        if self.codex is None:
-            return False
-        try:
-            status = await self.codex.status()
-        except CodexAppServerErrorTypes:
-            return False
-        return status.get("authenticated") is True
-
-    @classmethod
-    def _graph_provider_not_ready(cls) -> JSONResponse:
-        return JSONResponse(
-            {
-                "ok": False,
-                "error": "Configure and sign in to Codex before enabling Graph.",
-                "code": "graph_provider_not_ready",
-            },
-            status_code=409,
-            headers=cls._no_store_headers(),
         )
 
     async def api_settings(self, request: Request) -> Response:
@@ -1135,37 +796,6 @@ class AdminHandlers:
             },
         )
 
-    async def brand_asset(self, request: Request) -> Response:
-        _, error = self._require_admin(request)
-        if error:
-            return error
-        asset_name = str(request.path_params.get("asset_path", "")).strip("/")
-        relative_path = Path(asset_name)
-        if (
-            not asset_name
-            or relative_path.is_absolute()
-            or any(part in {"", ".", ".."} for part in relative_path.parts)
-        ):
-            return Response(status_code=404)
-        media_type = BRAND_ASSET_MEDIA_TYPES.get(relative_path.suffix.lower())
-        if media_type is None:
-            return Response(status_code=404)
-        try:
-            brand_root = self.brand_dir.resolve()
-            asset_path = (self.brand_dir / relative_path).resolve()
-            if not asset_path.is_relative_to(brand_root) or not asset_path.is_file():
-                return Response(status_code=404)
-        except OSError:
-            return Response(status_code=404)
-        return FileResponse(
-            asset_path,
-            media_type=media_type,
-            headers={
-                "Cache-Control": "private, max-age=31536000, immutable",
-                "X-Content-Type-Options": "nosniff",
-            },
-        )
-
     async def api_upload_file(self, request: Request) -> Response:
         admin_session, error = self._require_admin_mutation(request)
         if error:
@@ -1713,240 +1343,79 @@ class AdminHandlers:
         return Fernet(key)
 
     def _login_form(self, next_path: str, error: str | None = None, status_code: int = 200) -> HTMLResponse:
-        error_html = (
-            '<div class="login-alert" role="alert">'
-            '<span class="alert-dot" aria-hidden="true"></span>'
-            f'<span>{html.escape(error)}</span>'
-            '</div>'
-            if error
-            else ""
-        )
+        error_html = f'<p class="error">{html.escape(error)}</p>' if error else ""
         escaped_next = html.escape(next_path, quote=True)
-        try:
-            brand_svg = (self.brand_dir / "svg" / "lockup-horizontal-dark.svg").read_text(encoding="utf-8")
-        except OSError:
-            brand_svg = '<span class="fallback-wordmark"><span>MCP</span> Session Bridge</span>'
         body = f"""<!doctype html>
-<html lang="en">
+<html lang="pl">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>MCP Session Bridge Admin</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
   <style>
     :root {{
-      color-scheme: dark;
-      --bg-base: #0a0b0f;
-      --panel: #15161d;
-      --text: #ecedf2;
-      --muted: #8e93a6;
-      --faint: #6e7387;
-      --stroke: rgba(255, 255, 255, .1);
-      --stroke-soft: rgba(255, 255, 255, .065);
-      --accent: #6c5cf2;
-      --accent-hover: #7c70f5;
-      --accent-text: #b3a9ff;
-      --accent-soft: rgba(108, 92, 242, .16);
-      --danger: #fb7185;
-      --danger-soft: rgba(251, 113, 133, .12);
+      color-scheme: light;
+      --bg: #f7f7f4;
+      --text: #1f2933;
+      --muted: #68727d;
+      --border: #d8ddd5;
+      --accent: #176b5b;
+      --danger: #a33a32;
     }}
     * {{ box-sizing: border-box; }}
-    html, body {{ min-height: 100%; margin: 0; }}
     body {{
+      margin: 0;
       min-height: 100vh;
       display: grid;
       place-items: center;
-      padding: 1.5rem;
-      overflow-x: hidden;
-      background:
-        radial-gradient(58rem 38rem at 8% -8%, rgba(108, 92, 242, .2), transparent 66%),
-        radial-gradient(42rem 30rem at 105% 108%, rgba(74, 66, 196, .16), transparent 68%),
-        var(--bg-base);
+      background: var(--bg);
       color: var(--text);
-      font-family: Manrope, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-      -webkit-font-smoothing: antialiased;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }}
-    body::before {{
-      content: "";
-      position: fixed;
-      inset: 0;
-      pointer-events: none;
-      opacity: .26;
-      background-image: linear-gradient(rgba(255, 255, 255, .025) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, .025) 1px, transparent 1px);
-      background-size: 48px 48px;
-      mask-image: linear-gradient(to bottom, black, transparent 78%);
+    main {{
+      width: min(92vw, 28rem);
+      padding: 2rem;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: #fff;
+      box-shadow: 0 18px 40px rgb(31 41 51 / 10%);
     }}
-    button, input {{ font: inherit; color: inherit; }}
-    button:focus-visible, input:focus-visible {{ outline: 2px solid var(--accent-hover); outline-offset: 3px; }}
-    .login-shell {{
-      position: relative;
-      z-index: 1;
-      display: grid;
-      grid-template-columns: minmax(0, 1.08fr) minmax(20rem, .92fr);
-      width: min(100%, 68rem);
-      min-height: min(36rem, calc(100vh - 3rem));
-      overflow: hidden;
-      border: 1px solid var(--stroke);
-      border-radius: 22px;
-      background: rgba(21, 22, 29, .86);
-      box-shadow: 0 32px 90px rgba(0, 0, 0, .55), 0 0 0 1px rgba(108, 92, 242, .035);
-      backdrop-filter: blur(20px);
+    h1 {{ margin: 0 0 .35rem; font-size: 1.45rem; }}
+    p {{ margin: 0 0 1.25rem; color: var(--muted); }}
+    label {{ display: block; margin-top: 1rem; font-weight: 650; }}
+    input {{
+      width: 100%;
+      margin-top: .4rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: .7rem .75rem;
+      font: inherit;
     }}
-    .login-visual {{
-      position: relative;
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
-      min-width: 0;
-      padding: clamp(2.2rem, 5vw, 4.5rem);
-      overflow: hidden;
-      border-right: 1px solid var(--stroke-soft);
-      background:
-        radial-gradient(28rem 22rem at 10% 6%, rgba(108, 92, 242, .17), transparent 72%),
-        linear-gradient(145deg, rgba(255, 255, 255, .035), transparent 58%);
+    button {{
+      width: 100%;
+      margin-top: 1.25rem;
+      border: 0;
+      border-radius: 6px;
+      background: var(--accent);
+      color: #fff;
+      padding: .75rem 1rem;
+      font: inherit;
+      font-weight: 700;
+      cursor: pointer;
     }}
-    .login-visual::after {{
-      content: "";
-      position: absolute;
-      right: -9rem;
-      bottom: -12rem;
-      width: 26rem;
-      height: 26rem;
-      border: 1px solid rgba(179, 169, 255, .12);
-      border-radius: 50%;
-      box-shadow: 0 0 0 3.2rem rgba(179, 169, 255, .025), 0 0 0 6.4rem rgba(179, 169, 255, .018);
-      pointer-events: none;
-    }}
-    .login-logo {{ position: relative; z-index: 1; width: min(100%, 27rem); margin-bottom: clamp(4rem, 11vh, 8rem); }}
-    .login-logo svg {{ display: block; width: 100%; height: auto; }}
-    .fallback-wordmark {{ display: block; color: var(--text); font-size: 1.5rem; font-weight: 700; letter-spacing: -.04em; }}
-    .fallback-wordmark span {{ margin-right: .45rem; color: var(--accent-text); font-family: "Geist Mono", ui-monospace, monospace; font-size: .78em; letter-spacing: .12em; }}
-    .eyebrow {{ margin: 0 0 1rem; color: var(--accent-text); font-family: "Geist Mono", ui-monospace, monospace; font-size: .68rem; font-weight: 500; letter-spacing: .18em; text-transform: uppercase; }}
-    h1, h2 {{ letter-spacing: -.055em; }}
-    h1 {{ max-width: 28rem; margin: 0 0 1rem; font-size: clamp(2.35rem, 5vw, 4rem); line-height: .98; }}
-    .visual-copy {{ max-width: 30rem; margin: 0; color: var(--muted); font-size: 1rem; line-height: 1.75; }}
-    .visual-bottom {{ position: relative; z-index: 1; display: flex; align-items: center; gap: .85rem; margin-top: 3rem; color: var(--faint); }}
-    .signal-mark {{ display: grid; place-items: center; width: 2.5rem; height: 2.5rem; flex: 0 0 auto; border: 1px solid rgba(179, 169, 255, .3); border-radius: 10px; background: var(--accent); box-shadow: 0 10px 24px rgba(108, 92, 242, .23); }}
-    .signal-mark::before {{ content: ""; width: 1.05rem; height: 1.05rem; border: 2px solid #ecedf2; border-radius: 50%; box-shadow: 0 0 0 4px rgba(201, 194, 255, .45); }}
-    .mono {{ font-family: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace; }}
-    .visual-meta {{ display: grid; gap: .2rem; }}
-    .visual-meta .mono {{ color: var(--accent-text); font-size: .65rem; letter-spacing: .13em; }}
-    .visual-meta span:last-child {{ font-size: .74rem; }}
-    .login-form-panel {{ display: grid; place-items: center; padding: clamp(2rem, 5vw, 4rem); background: rgba(10, 11, 15, .22); }}
-    .login-form-wrap {{ width: min(100%, 22rem); }}
-    .form-header {{ margin-bottom: 2rem; }}
-    .form-header h2 {{ margin: 0 0 .65rem; font-size: clamp(1.8rem, 3vw, 2.25rem); line-height: 1; }}
-    .form-header p:last-child {{ margin: 0; color: var(--muted); font-size: .9rem; line-height: 1.6; }}
-    .login-alert {{ display: flex; align-items: flex-start; gap: .65rem; margin: 0 0 1.25rem; padding: .8rem .9rem; border: 1px solid rgba(251, 113, 133, .28); border-radius: 10px; background: var(--danger-soft); color: #fecdd3; font-size: .82rem; line-height: 1.45; }}
-    .alert-dot {{ width: .5rem; height: .5rem; flex: 0 0 auto; margin-top: .32rem; border-radius: 50%; background: var(--danger); box-shadow: 0 0 0 4px rgba(251, 113, 133, .12); }}
-    .login-form {{ display: grid; gap: 1rem; }}
-    .field {{ display: grid; gap: .45rem; }}
-    label {{ color: #d6d8e2; font-size: .78rem; font-weight: 600; letter-spacing: .01em; }}
-    input {{ width: 100%; min-height: 3rem; padding: .75rem .85rem; border: 1px solid var(--stroke); border-radius: 10px; background: rgba(0, 0, 0, .28); transition: border-color .16s ease, box-shadow .16s ease, background .16s ease; }}
-    input::placeholder {{ color: var(--faint); }}
-    input:hover {{ border-color: rgba(255, 255, 255, .16); }}
-    input:focus {{ outline: none; border-color: var(--accent); background: rgba(0, 0, 0, .38); box-shadow: 0 0 0 3px var(--accent-soft); }}
-    input:-webkit-autofill,
-    input:-webkit-autofill:hover,
-    input:-webkit-autofill:focus,
-    input:-webkit-autofill:active {{
-      -webkit-text-fill-color: var(--text);
-      caret-color: var(--text);
-      background-color: #1d1e27 !important;
-      -webkit-box-shadow: 0 0 0 1000px #1d1e27 inset;
-      box-shadow: 0 0 0 1000px #1d1e27 inset;
-      border-color: rgba(179, 169, 255, .36);
-      transition: background-color 9999s ease-out 0s;
-    }}
-    input:-moz-autofill {{
-      -webkit-text-fill-color: var(--text);
-      caret-color: var(--text);
-      background-color: #1d1e27 !important;
-      -webkit-box-shadow: 0 0 0 1000px #1d1e27 inset;
-      box-shadow: 0 0 0 1000px #1d1e27 inset;
-      border-color: rgba(179, 169, 255, .36);
-      transition: background-color 9999s ease-out 0s;
-    }}
-    input:autofill {{
-      -webkit-text-fill-color: var(--text);
-      caret-color: var(--text);
-      background-color: #1d1e27 !important;
-      -webkit-box-shadow: 0 0 0 1000px #1d1e27 inset;
-      box-shadow: 0 0 0 1000px #1d1e27 inset;
-      border-color: rgba(179, 169, 255, .36);
-      transition: background-color 9999s ease-out 0s;
-    }}
-    input:-webkit-autofill:focus {{
-      outline: 2px solid var(--accent);
-      outline-offset: 2px;
-    }}
-    input:-moz-autofill:focus {{
-      outline: 2px solid var(--accent);
-      outline-offset: 2px;
-    }}
-    input:autofill:focus {{
-      outline: 2px solid var(--accent);
-      outline-offset: 2px;
-    }}
-    .login-submit {{ display: flex; align-items: center; justify-content: space-between; width: 100%; min-height: 3.1rem; margin-top: .35rem; padding: .75rem .9rem .75rem 1rem; border: 1px solid rgba(179, 169, 255, .24); border-radius: 10px; background: var(--accent); color: #fff; font-size: .86rem; font-weight: 700; cursor: pointer; box-shadow: 0 12px 25px rgba(108, 92, 242, .2); transition: background .16s ease, transform .16s ease, box-shadow .16s ease; }}
-    .login-submit:hover {{ background: var(--accent-hover); box-shadow: 0 15px 30px rgba(108, 92, 242, .3); transform: translateY(-1px); }}
-    .login-submit:active {{ transform: translateY(0); }}
-    .login-submit svg {{ width: 1rem; height: 1rem; }}
-    .login-footer {{ display: flex; align-items: center; gap: .5rem; margin: 1.7rem 0 0; color: var(--faint); font-size: .7rem; line-height: 1.5; }}
-    .status-dot {{ width: .42rem; height: .42rem; flex: 0 0 auto; border-radius: 50%; background: #34d399; box-shadow: 0 0 0 4px rgba(52, 211, 153, .1); }}
-    @media (max-width: 760px) {{
-      body {{ padding: .8rem; }}
-      .login-shell {{ grid-template-columns: 1fr; min-height: auto; border-radius: 17px; }}
-      .login-visual {{ min-height: 23rem; padding: 2.1rem; border-right: 0; border-bottom: 1px solid var(--stroke-soft); }}
-      .login-logo {{ width: min(100%, 23rem); margin-bottom: 4rem; }}
-      h1 {{ font-size: clamp(2.25rem, 12vw, 3.2rem); }}
-      .login-form-panel {{ padding: 2.1rem; }}
-    }}
-    @media (max-width: 390px) {{
-      .login-visual, .login-form-panel {{ padding: 1.5rem; }}
-      .login-visual {{ min-height: 21rem; }}
-    }}
+    .error {{ color: var(--danger); font-weight: 650; }}
   </style>
 </head>
 <body>
-  <main class="login-shell">
-    <section class="login-visual" aria-label="MCP Session Bridge">
-      <div>
-        <div class="login-logo">{brand_svg}</div>
-        <p class="eyebrow">Private workspace</p>
-        <h1>Keep the bridge in view.</h1>
-        <p class="visual-copy">A focused space for conversations, context, and the work around them.</p>
-      </div>
-      <div class="visual-bottom">
-        <span class="signal-mark" aria-hidden="true"></span>
-        <span class="visual-meta"><span class="mono">ADMIN / ACCESS</span><span>Protected session workspace</span></span>
-      </div>
-    </section>
-    <section class="login-form-panel" aria-labelledby="login-title">
-      <div class="login-form-wrap">
-        <div class="form-header">
-          <p class="eyebrow">Secure access</p>
-          <h2 id="login-title">Welcome back</h2>
-          <p>Sign in to continue to your admin workspace.</p>
-        </div>
-        {error_html}
-        <form class="login-form" method="post" action="/admin/login">
-          <input type="hidden" name="next" value="{escaped_next}">
-          <div class="field">
-            <label for="username">Username</label>
-            <input id="username" name="username" autocomplete="username" placeholder="Enter your username" required>
-          </div>
-          <div class="field">
-            <label for="password">Password</label>
-            <input id="password" name="password" type="password" autocomplete="current-password" placeholder="Enter your password" required>
-          </div>
-          <button class="login-submit" type="submit"><span>Log in</span><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3 8h9m-4-4 4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-        </form>
-        <p class="login-footer"><span class="status-dot" aria-hidden="true"></span><span>Your session is private and protected.</span></p>
-      </div>
-    </section>
+  <main>
+    <h1>Admin panel</h1>
+    <p>MCP Session Bridge</p>
+    {error_html}
+    <form method="post" action="/admin/login">
+      <input type="hidden" name="next" value="{escaped_next}">
+      <label>Login <input name="username" autocomplete="username" required></label>
+      <label>Password <input name="password" type="password" autocomplete="current-password" required></label>
+      <button type="submit">Log in</button>
+    </form>
   </main>
 </body>
 </html>"""
@@ -1976,22 +1445,6 @@ class AdminHandlers:
     @staticmethod
     def _json_error(message: str, status_code: int) -> JSONResponse:
         return JSONResponse({"ok": False, "error": message}, status_code=status_code, headers=AdminHandlers._no_store_headers())
-
-    @classmethod
-    def _codex_unavailable(cls) -> JSONResponse:
-        return JSONResponse(
-            {"ok": False, "error": "Codex App Server is unavailable."},
-            status_code=503,
-            headers={**cls._no_store_headers(), "Retry-After": "2"},
-        )
-
-    @classmethod
-    def _codex_error(cls, error: Exception) -> JSONResponse:
-        if isinstance(error, CodexUnavailableError):
-            return cls._codex_unavailable()
-        if isinstance(error, CodexTimeoutError):
-            return cls._json_error("Codex App Server request timed out.", status_code=504)
-        return cls._json_error("Codex App Server request failed.", status_code=502)
 
     @staticmethod
     def _admin_headers() -> dict[str, str]:

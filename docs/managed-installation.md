@@ -16,8 +16,6 @@ Prepare:
 
 The setup does not connect ChatGPT, Claude, Codex, or another harness. Client connection is a separate step after the server is healthy.
 
-Codex App Server is an optional managed companion. Choose **Codex app-server → Enable Codex** in setup after the Bridge is active. Setup installs Node.js/npm from the host distribution when they are missing, then downloads the exact Codex package locked by this Bridge release. It does not install an unbounded `latest` version.
-
 ## Install From Zero
 
 Connect to the server and install the small bootstrap prerequisites:
@@ -96,24 +94,6 @@ Setup installs a bootstrap `/usr/local/bin/mcp-bridge` command immediately. Repe
 Activation creates an unprivileged `mcp-session-bridge` service account, installs locked Python dependencies with `uv`, initializes or migrates SQLite, atomically promotes the staged environment and release, installs the staged systemd units, and configures or adopts Caddy. Setup keeps pending configuration and unit files root-owned; the service account owns only runtime data that the application must change.
 
 Secrets are written only to the private environment file. Re-running setup preserves the existing Bridge secret so OAuth records and encrypted admin settings remain readable.
-
-### Managed Codex companion
-
-The Codex binary is deliberately outside the application release and the repository:
-
-| Path | Purpose |
-| --- | --- |
-| `/opt/mcp-session-bridge/codex-runtime/releases/<codex-version>` | npm-lock-verified Codex runtime |
-| `/opt/mcp-session-bridge/codex-runtime/current` | Active Codex runtime symlink |
-| `/var/lib/mcp-session-bridge-codex/codex-home` | Private Codex-owned authentication state |
-| `/var/lib/mcp-session-bridge-codex/workspace` | Empty, isolated v1 workspace |
-| `/run/mcp-session-bridge-codex/app-server.sock` | Private local transport to the Bridge |
-
-Each Bridge release declares one exact compatible `@openai/codex` version and npm integrity hash. This repository ships only the lock metadata and service integration; setup downloads the Apache-2.0-licensed package from npm. Updates reconcile the companion only when it was enabled, and a Codex reconciliation failure leaves the healthy Bridge running. Deploy, update, and rollback preserve `CODEX_HOME`.
-
-The companion is a separate unprivileged service with no Bridge environment or SQLite access. Its only shared OS permission is a dedicated Unix-socket group. It has no public Caddy route and is not part of the Bridge `/healthz` result.
-
-The first enable adds the Bridge account to that socket-only group and performs one verified Bridge restart so the running process receives its new membership. A failed companion start never makes Codex a dependency of Bridge startup or health.
 
 ## Verify The Result
 
@@ -230,18 +210,6 @@ mcp-bridge rollback
 ```
 
 After an update or rollback, reconnect MCP clients so they refresh their tool schemas.
-
-Codex runtime maintenance remains CLI-only:
-
-```bash
-mcp-bridge codex-runtime status
-mcp-bridge codex-runtime verify
-mcp-bridge codex-runtime repair
-mcp-bridge codex-runtime logs --lines 200
-mcp-bridge codex-runtime disable
-```
-
-`disable` stops the companion but retains its runtime and login state. A normal Bridge uninstall also preserves the private Codex state; only an explicit uninstall with data removal purges it.
 
 ## Compatibility Boundary For Agent Plugins
 

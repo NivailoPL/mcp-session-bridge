@@ -35,21 +35,6 @@ class Layout:
         return self.opt_root / "current"
 
     @property
-    def codex_runtime_root(self) -> Path:
-        return self.opt_root / "codex-runtime"
-
-    @property
-    def codex_runtime_releases(self) -> Path:
-        return self.codex_runtime_root / "releases"
-
-    def codex_runtime_release(self, version: str) -> Path:
-        return self.codex_runtime_releases / version
-
-    @property
-    def codex_runtime_current(self) -> Path:
-        return self.codex_runtime_root / "current"
-
-    @property
     def etc_root(self) -> Path:
         return self._path("etc/mcp-session-bridge")
 
@@ -60,22 +45,6 @@ class Layout:
     @property
     def data_root(self) -> Path:
         return self._path("var/lib/mcp-session-bridge")
-
-    @property
-    def codex_state_root(self) -> Path:
-        return self._path("var/lib/mcp-session-bridge-codex")
-
-    @property
-    def codex_home(self) -> Path:
-        return self.codex_state_root / "codex-home"
-
-    @property
-    def codex_workspace(self) -> Path:
-        return self.codex_state_root / "workspace"
-
-    @property
-    def codex_status_file(self) -> Path:
-        return self.state_root / "codex-runtime.json"
 
     @property
     def db_path(self) -> Path:
@@ -176,18 +145,6 @@ class Layout:
     @property
     def service_unit(self) -> Path:
         return self.systemd_root / "mcp-session-bridge.service"
-
-    @property
-    def codex_service_unit(self) -> Path:
-        return self.systemd_root / "mcp-session-bridge-codex.service"
-
-    @property
-    def codex_runtime_dir(self) -> Path:
-        return self._path("run/mcp-session-bridge-codex")
-
-    @property
-    def codex_socket(self) -> Path:
-        return self.codex_runtime_dir / "app-server.sock"
 
     @property
     def restart_path_unit(self) -> Path:
