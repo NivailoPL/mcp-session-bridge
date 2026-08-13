@@ -175,6 +175,8 @@ def test_graph_cannot_enable_without_authenticated_codex(tmp_path, monkeypatch) 
 
 def test_sessions_view_exposes_workspace_navigation_contract() -> None:
     viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
+    assert '<a class="workspace-brand" href="/admin/sessions" aria-label="MCP Session Bridge Sessions">' in viewer
+    assert '<img src="/admin/assets/brand/svg/lockup-horizontal-dark.svg" alt="MCP Session Bridge">' in viewer
     assert 'class="workspace-nav sb-nav" role="tablist"' in viewer
     assert 'href="/admin/sessions" aria-current="page" aria-selected="true"' in viewer
     assert 'href="/admin/graph" aria-selected="false"' in viewer
