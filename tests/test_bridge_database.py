@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from app.storage import Store
+from app.storage import SCHEMA_VERSION, Store
 from bridge_cli.database import DatabaseManager
 from bridge_cli.layout import Layout
 
@@ -61,7 +61,7 @@ def test_database_inspection_and_verified_backup(tmp_path: Path) -> None:
 
     assert info.healthy is True
     assert info.sessions == 2
-    assert info.schema_version == 1
+    assert info.schema_version == SCHEMA_VERSION
     assert result["state"] == "complete"
     assert result["artifact"]["sha256"]
     assert DatabaseManager(layout, Runner()).inspect(destination).sessions == 2

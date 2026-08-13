@@ -11,6 +11,11 @@ from bridge_cli.operation_lock import operation_lock
 from bridge_cli.runner import Runner
 from bridge_cli.service import ServiceManager
 from bridge_cli.files import read_json
+from bridge_cli.codex_runtime import (
+    CODEX_SERVICE_UNIT,
+    CODEX_SERVICE_USER,
+    CODEX_SOCKET_GROUP,
+)
 
 
 @dataclass(frozen=True)
@@ -81,6 +86,8 @@ class UninstallManager:
                 "mcp-session-bridge-restart.service",
                 "mcp-session-bridge-status.service",
             )
+            codex_owned = str(self.layout.codex_service_unit) in plan.targets
+            codex_state_owned = str(self.layout.codex_state_root) in plan.targets
             if was_active:
                 self.runner.run("systemctl", "stop", "mcp-session-bridge.service")
             try:
@@ -91,6 +98,12 @@ class UninstallManager:
                     self.runner.run("systemctl", "start", "mcp-session-bridge.service", check=False)
                 raise
             self.runner.run("systemctl", "disable", "--now", *units, check=False)
+            if codex_owned:
+                self.runner.run(
+                    "systemctl", "disable", "--now", CODEX_SERVICE_UNIT,
+                    check=False,
+                )
+            ownership = read_json(self.layout.ownership_file) or {}
             removed: list[str] = []
             for raw in plan.targets:
                 path = Path(raw)
@@ -103,6 +116,17 @@ class UninstallManager:
                 elif path.is_dir():
                     shutil.rmtree(path)
                 removed.append(str(path))
+            if (
+                codex_state_owned
+                and plan.remove_data
+                and ownership.get("codex_service_user") == CODEX_SERVICE_USER
+            ):
+                self.runner.run("userdel", CODEX_SERVICE_USER, check=False)
+                self.runner.run(
+                    "gpasswd", "-d", "mcp-session-bridge", CODEX_SOCKET_GROUP, check=False
+                )
+                if ownership.get("codex_socket_group_created") is True:
+                    self.runner.run("groupdel", CODEX_SOCKET_GROUP, check=False)
             self.runner.run("systemctl", "daemon-reload", check=False)
             if self.layout.caddyfile.exists():
                 validation = self.runner.run("caddy", "validate", "--config", str(self.layout.caddyfile), check=False)
@@ -128,6 +152,9 @@ class UninstallManager:
             self.layout.command_path,
             self.layout.opt_root,
             self.layout.env_file,
+            self.layout.codex_service_unit,
+            self.layout.codex_runtime_root,
+            self.layout.codex_status_file,
         )
         if not remove_data:
             return targets
@@ -145,7 +172,14 @@ class UninstallManager:
             self.layout.setup_file,
             self.layout.database_status_file,
             self.layout.ownership_file,
+            self.layout.codex_state_root,
         )
 
     def _managed_roots(self) -> tuple[Path, ...]:
-        return (self.layout.opt_root, self.layout.etc_root, self.layout.data_root, self.layout.backup_root)
+        return (
+            self.layout.opt_root,
+            self.layout.etc_root,
+            self.layout.data_root,
+            self.layout.backup_root,
+            self.layout.codex_state_root,
+        )

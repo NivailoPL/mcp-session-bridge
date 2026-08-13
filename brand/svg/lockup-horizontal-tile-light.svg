@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 96" width="400" height="96" role="img" aria-label="Lockup poziomy z kaflem, jasny">
+  <title>Lockup poziomy z kaflem, jasny</title>
+  <defs>
+    
+  </defs>
+  <rect x="0" y="8" width="80" height="80" rx="21" fill="#6C5CF2"></rect>
+  <g transform="translate(8.32 33.11) scale(0.6336) translate(-10 -16)">
+    <g fill="#ECEDF2">
+      <rect x="16.9" y="44" width="6.2" height="8" rx="3.1"></rect>
+      <rect x="24.9" y="40.93" width="6.2" height="11.07" rx="3.1"></rect>
+      <rect x="40.9" y="31.54" width="6.2" height="20.46" rx="3.1"></rect>
+      <rect x="48.9" y="40.93" width="6.2" height="11.07" rx="3.1"></rect>
+      <rect x="56.9" y="44" width="6.2" height="8" rx="3.1"></rect>
+      <rect x="64.9" y="40.93" width="6.2" height="11.07" rx="3.1"></rect>
+      <rect x="72.9" y="31.54" width="6.2" height="20.46" rx="3.1"></rect>
+      <rect x="88.9" y="40.93" width="6.2" height="11.07" rx="3.1"></rect>
+      <rect x="96.9" y="44" width="6.2" height="8" rx="3.1"></rect>
+    </g>
+    <g fill="#C9C2FF">
+      <rect x="32.4" y="22" width="7.2" height="35" rx="3.6"></rect>
+      <rect x="80.4" y="22" width="7.2" height="35" rx="3.6"></rect>
+    </g>
+  </g>
+  <text x="100" y="55" font-family="IBM Plex Mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="19" font-weight="500" letter-spacing="2" fill="#6C5CF2">MCP</text>
+  <text x="162" y="56" font-family="Instrument Sans, system-ui, -apple-system, Segoe UI, Helvetica Neue, sans-serif" font-size="33" font-weight="600" letter-spacing="-0.7" fill="#12131A">Session Bridge</text>
+</svg>

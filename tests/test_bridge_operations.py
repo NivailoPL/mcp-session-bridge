@@ -210,6 +210,24 @@ def test_status_collector_reports_deployed_checkout_revision(tmp_path: Path) -> 
     assert report.installation["source_root"] == "/srv/bridge"
 
 
+def test_status_keeps_bridge_checks_independent_when_codex_needs_attention(
+    tmp_path: Path,
+) -> None:
+    layout = Layout.for_root(tmp_path)
+    layout.codex_status_file.parent.mkdir(parents=True)
+    layout.codex_status_file.write_text(
+        '{"desired_enabled":true,"version":"0.147.0"}', encoding="utf-8"
+    )
+    layout.codex_service_unit.parent.mkdir(parents=True)
+    layout.codex_service_unit.write_text("unit", encoding="utf-8")
+
+    report = StatusCollector(layout, RecordingRunner(), probe_http=False).collect()
+
+    codex = next(check for check in report.checks if check.id == "codex")
+    assert codex.state == "action_required"
+    assert next(check for check in report.checks if check.id == "service").state == "pass"
+
+
 def test_repeated_setup_preserves_bridge_secret(tmp_path: Path) -> None:
     source = tmp_path / "source"
     source.mkdir()

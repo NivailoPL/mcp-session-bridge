@@ -53,6 +53,32 @@ The authenticated admin page exposes the same summary under **Settings → Statu
 
 Managed data lives under `/var/lib/mcp-session-bridge`; dated setup and update backups live under `/var/backups/mcp-session-bridge`. Do not edit a version directory under `/opt/mcp-session-bridge/releases` in place.
 
+## Codex App Server
+
+The optional Codex companion has an independent lifecycle:
+
+```bash
+mcp-bridge codex-runtime status
+mcp-bridge codex-runtime verify
+mcp-bridge codex-runtime logs --lines 200
+mcp-bridge codex-runtime repair
+mcp-bridge codex-runtime disable
+```
+
+Enable it from `mcp-bridge setup` under **Codex app-server**, or non-interactively with `mcp-bridge codex-runtime enable`. Enabling downloads only the version and integrity-pinned npm artifact declared by the active Bridge release.
+
+The Codex button in the Admin Viewer lazily checks the companion. Sign-in uses OpenAI device authorization and is separate from the Bridge owner login. The test conversation is ephemeral: messages and the Codex thread ID stay in page memory and disappear on refresh. Codex unavailability does not change `/healthz` and must not interrupt normal sessions, search, settings, or MCP traffic.
+
+Stop the companion and confirm failure isolation:
+
+```bash
+systemctl stop mcp-session-bridge-codex.service
+curl http://127.0.0.1:8787/healthz
+mcp-bridge codex-runtime status
+```
+
+Restart it with `mcp-bridge codex-runtime repair`. Do not copy, inspect, or include `/var/lib/mcp-session-bridge-codex/codex-home` in normal Bridge backups.
+
 
 
 ## Health Check
@@ -154,6 +180,8 @@ Back up at least:
 - the production `.env`
 
 Do not publish these backups.
+
+Codex authentication is intentionally excluded. Prefer signing in again after disaster recovery instead of copying its token store.
 
 ## Rebuild The Virtual Environment
 

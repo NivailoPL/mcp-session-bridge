@@ -8,6 +8,7 @@ import secrets
 import time
 from contextlib import asynccontextmanager, suppress
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 from mcp.server.auth.middleware.auth_context import get_access_token
@@ -19,6 +20,8 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
 from app.admin import AdminHandlers
+from app.codex_app_server import CodexAppServerClient
+from app.graph_runtime import GraphRuntime
 from app.oauth import OAuthHandlers
 from app.pdf_files import (
     MAX_MCP_PDF_BYTES,
@@ -68,6 +71,8 @@ store = Store(
 logger = logging.getLogger(__name__)
 MCP_REQUEST_MAX_BODY_BYTES = ((MAX_MCP_PDF_BYTES + 2) // 3 * 4) + 262_144
 BRIDGE_RESTART_HELPER_UNIT = "mcp-session-bridge-restart.service"
+CODEX_SOCKET_PATH = Path("/run/mcp-session-bridge-codex/app-server.sock")
+CODEX_WORKSPACE_PATH = Path("/var/lib/mcp-session-bridge-codex/workspace")
 RESTART_REQUEST_TIMEOUT_SECONDS = 5.0
 RESTART_CLEANUP_TIMEOUT_SECONDS = 1.0
 ACTIVE_TOOL_OUTPUT_MODE = configured_tool_output_mode(store)
@@ -102,17 +107,34 @@ async def _search_index_monitor() -> None:
             logger.exception("Automatic search index refresh check failed")
 
 
+async def _graph_pipeline_monitor() -> None:
+    while True:
+        try:
+            await graph_runtime.run_once()
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception("Automatic Graph pipeline check failed")
+        await asyncio.sleep(30)
+
+
 @asynccontextmanager
-async def app_lifespan(_: FastMCP[Any]):
-    monitor = asyncio.create_task(_search_index_monitor())
-    try:
-        # Reaching this point is the final startup step before the app is ready to serve.
-        await asyncio.to_thread(store.clear_tool_output_restart_pending)
-        yield {}
-    finally:
-        monitor.cancel()
-        with suppress(asyncio.CancelledError):
-            await monitor
+async def app_lifespan(_: Any):
+    async with mcp.session_manager.run():
+        monitor = asyncio.create_task(_search_index_monitor())
+        graph_monitor = asyncio.create_task(_graph_pipeline_monitor())
+        try:
+            # Reaching this point is the final startup step before the app is ready to serve.
+            await asyncio.to_thread(store.clear_tool_output_restart_pending)
+            yield {}
+        finally:
+            monitor.cancel()
+            graph_monitor.cancel()
+            with suppress(asyncio.CancelledError):
+                await monitor
+            with suppress(asyncio.CancelledError):
+                await graph_monitor
+            await codex.close()
 
 
 mcp = FastMCP(
@@ -127,7 +149,6 @@ mcp = FastMCP(
     streamable_http_path=settings.resource_path,
     json_response=True,
     stateless_http=True,
-    lifespan=app_lifespan,
     transport_security=TransportSecuritySettings(
         enable_dns_rebinding_protection=True,
         allowed_hosts=settings.transport_allowed_hosts,
@@ -136,6 +157,11 @@ mcp = FastMCP(
 )
 
 oauth = OAuthHandlers(settings, store)
+codex = CodexAppServerClient(
+    socket_path=CODEX_SOCKET_PATH,
+    workspace_dir=CODEX_WORKSPACE_PATH,
+)
+graph_runtime = GraphRuntime(store, codex)
 
 
 async def _request_service_restart() -> None:
@@ -186,6 +212,8 @@ admin = AdminHandlers(
     ROOT / "admin-viewer.html",
     active_tool_output_mode=ACTIVE_TOOL_OUTPUT_MODE,
     restart_requester=_request_service_restart,
+    codex_client=codex,
+    graph_runtime=graph_runtime,
 )
 
 
@@ -239,6 +267,11 @@ async def admin_sessions_page(request: Request) -> Response:
     return await admin.sessions_page(request)
 
 
+@mcp.custom_route("/admin/graph", methods=["GET"])
+async def admin_graph_page(request: Request) -> Response:
+    return await admin.graph_page(request)
+
+
 @mcp.custom_route("/admin/login", methods=["GET"])
 async def admin_login_get(request: Request) -> Response:
     return await admin.login_get(request)
@@ -286,6 +319,96 @@ async def admin_api_settings(request: Request) -> Response:
 @mcp.custom_route("/admin/api/status", methods=["GET"])
 async def admin_api_operational_status(request: Request) -> Response:
     return await admin.api_operational_status(request)
+
+
+@mcp.custom_route("/admin/api/codex/status", methods=["GET"])
+async def admin_api_codex_status(request: Request) -> Response:
+    return await admin.api_codex_status(request)
+
+
+@mcp.custom_route("/admin/api/graph/config", methods=["GET"])
+async def admin_api_graph_config(request: Request) -> Response:
+    return await admin.api_graph_config(request)
+
+
+@mcp.custom_route("/admin/api/graph/jobs", methods=["GET"])
+async def admin_api_graph_jobs(request: Request) -> Response:
+    return await admin.api_graph_jobs(request)
+
+
+@mcp.custom_route("/admin/api/graph/rescan", methods=["POST"])
+async def admin_api_graph_rescan(request: Request) -> Response:
+    return await admin.api_graph_rescan(request)
+
+
+@mcp.custom_route("/admin/api/graph/analysis", methods=["GET"])
+async def admin_api_graph_analysis_list(request: Request) -> Response:
+    return await admin.api_graph_analysis_list(request)
+
+
+@mcp.custom_route("/admin/api/graph/analysis/{session_id}", methods=["GET"])
+async def admin_api_graph_analysis(request: Request) -> Response:
+    return await admin.api_graph_analysis(request)
+
+
+@mcp.custom_route("/admin/api/graph/lab", methods=["GET"])
+async def admin_api_graph_lab_runs(request: Request) -> Response:
+    return await admin.api_graph_lab_runs(request)
+
+
+@mcp.custom_route("/admin/api/graph/lab", methods=["POST"])
+async def admin_api_graph_lab_start(request: Request) -> Response:
+    return await admin.api_graph_lab_start(request)
+
+
+@mcp.custom_route("/admin/api/graph/config/unlock", methods=["POST"])
+async def admin_api_graph_unlock(request: Request) -> Response:
+    return await admin.api_graph_unlock(request)
+
+
+@mcp.custom_route("/admin/api/graph/config/draft", methods=["PUT"])
+async def admin_api_graph_update_draft(request: Request) -> Response:
+    return await admin.api_graph_update_draft(request)
+
+
+@mcp.custom_route("/admin/api/graph/config/activate", methods=["POST"])
+async def admin_api_graph_activate(request: Request) -> Response:
+    return await admin.api_graph_activate(request)
+
+
+@mcp.custom_route("/admin/api/graph/config/draft", methods=["DELETE"])
+async def admin_api_graph_discard_draft(request: Request) -> Response:
+    return await admin.api_graph_discard_draft(request)
+
+
+@mcp.custom_route("/admin/api/graph/state", methods=["PUT"])
+async def admin_api_graph_state(request: Request) -> Response:
+    return await admin.api_graph_state(request)
+
+
+@mcp.custom_route("/admin/api/codex/auth/device/start", methods=["POST"])
+async def admin_api_codex_device_login_start(request: Request) -> Response:
+    return await admin.api_codex_device_login_start(request)
+
+
+@mcp.custom_route("/admin/api/codex/auth/device/status", methods=["GET"])
+async def admin_api_codex_device_login_status(request: Request) -> Response:
+    return await admin.api_codex_device_login_status(request)
+
+
+@mcp.custom_route("/admin/api/codex/auth/device/cancel", methods=["POST"])
+async def admin_api_codex_device_login_cancel(request: Request) -> Response:
+    return await admin.api_codex_device_login_cancel(request)
+
+
+@mcp.custom_route("/admin/api/codex/logout", methods=["POST"])
+async def admin_api_codex_logout(request: Request) -> Response:
+    return await admin.api_codex_logout(request)
+
+
+@mcp.custom_route("/admin/api/codex/chat", methods=["POST"])
+async def admin_api_codex_chat(request: Request) -> Response:
+    return await admin.api_codex_chat(request)
 
 
 @mcp.custom_route("/admin/api/settings/general", methods=["PUT"])
@@ -392,6 +515,16 @@ async def admin_api_file_raw(request: Request) -> Response:
 @mcp.custom_route("/admin/assets/pdfjs/{asset_name}", methods=["GET"])
 async def admin_pdfjs_asset(request: Request) -> Response:
     return await admin.pdfjs_asset(request)
+
+
+@mcp.custom_route("/admin/assets/brand/{asset_path:path}", methods=["GET"])
+async def admin_brand_asset(request: Request) -> Response:
+    return await admin.brand_asset(request)
+
+
+@mcp.custom_route("/admin/assets/{asset_name}", methods=["GET"])
+async def admin_graph_asset(request: Request) -> Response:
+    return await admin.graph_asset(request)
 
 
 @mcp.custom_route("/admin/api/sessions/{session_id}/files", methods=["POST"])
@@ -1037,8 +1170,10 @@ def _group_payload(group: Any) -> dict[str, Any] | None:
     }
 
 
+mcp_http_app = mcp.streamable_http_app()
+mcp_http_app.router.lifespan_context = app_lifespan
 app = RequestBodyLimitMiddleware(
-    mcp.streamable_http_app(),
+    mcp_http_app,
     path=settings.resource_path,
     max_bytes=MCP_REQUEST_MAX_BODY_BYTES,
 )
