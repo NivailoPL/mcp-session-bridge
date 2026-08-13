@@ -166,42 +166,21 @@
       z-index: 1;
       display: grid;
       grid-template-columns: minmax(19rem, 23rem) minmax(0, 1fr);
-      min-height: calc(100vh - 3.65rem);
+      min-height: calc(100vh - var(--workspace-bar-height));
     }
-
-    .workspace-bar {
-      position: sticky; top: 0; z-index: 30;
-      height: 3.65rem; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center;
-      padding: 0 1.2rem; border-bottom: 1px solid var(--stroke-soft);
-      background: rgba(11, 13, 18, .88); backdrop-filter: blur(18px);
-    }
-    .workspace-nav { flex: 0 0 auto; }
-    .workspace-brand {
-      display: inline-flex; align-items: center; justify-self: start;
-      width: 210px;
-    }
-    .workspace-brand img { display: block; width: 100%; height: auto; }
 
     /* ---------- sidebar (solid, no glass) ---------- */
     .sidebar {
       position: sticky;
-      top: 3.65rem;
+      top: var(--workspace-bar-height);
       align-self: start;
-      height: calc(100vh - 3.65rem);
+      height: calc(100vh - var(--workspace-bar-height));
       display: flex;
       flex-direction: column;
       border-right: 1px solid var(--stroke-soft);
       background: rgba(255, 255, 255, .02);
       min-width: 0;
     }
-
-    .brand {
-      display: flex;
-      align-items: center;
-      padding: 1.15rem 1.2rem;
-      border-bottom: 1px solid var(--stroke-soft);
-    }
-    .brand-lockup { display: block; width: min(100%, 264px); height: auto; }
 
     .settings-row {
       display: flex;
@@ -1136,15 +1115,7 @@
       .turn + .turn { border-left: 0; border-top: 1px solid var(--stroke-soft); }
       .chat.bubbles .message { max-width: 92%; }
     }
-    @media (max-width: 800px) {
-      .workspace-bar { grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); }
-      .workspace-brand { width: 150px; }
-      .workspace-nav { justify-self: center; }
-    }
     @media (max-width: 520px) {
-      .workspace-bar { grid-template-columns: minmax(0, 1fr); padding: 0 .7rem; }
-      .workspace-brand { display: none; }
-      .workspace-nav { justify-self: center; }
       .exchange-head { flex-direction: column; }
       .head-right { width: 100%; justify-content: space-between; }
       .context-visibility-controls { flex-wrap: wrap; }
@@ -1187,10 +1158,6 @@
   </header>
   <main class="shell">
     <aside class="sidebar">
-      <section class="brand">
-        <img class="brand-lockup" src="/admin/assets/brand/svg/lockup-horizontal-dark.svg" alt="MCP Session Bridge">
-      </section>
-
       <div class="settings-row" aria-label="Admin menu">
         <button id="searchOpenButton" type="button" class="ghost search-launcher" aria-haspopup="dialog" aria-controls="searchDialog">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>

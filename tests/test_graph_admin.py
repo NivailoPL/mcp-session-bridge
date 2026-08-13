@@ -43,6 +43,8 @@ def test_graph_page_and_assets_require_admin_login(tmp_path, monkeypatch) -> Non
     page = client.get("/admin/graph")
     assert page.status_code == 200
     assert page.headers["cache-control"] == "no-store"
+    assert '<a class="workspace-brand" href="/admin/sessions" aria-label="MCP Session Bridge Sessions">' in page.text
+    assert '<a class="brand" href="/admin/sessions"' not in page.text
     assert 'class="workspace-nav sb-nav" role="tablist"' in page.text
     assert 'href="/admin/graph" aria-current="page" aria-selected="true"' in page.text
     assert "CONTEXTS" in page.text
@@ -177,10 +179,45 @@ def test_sessions_view_exposes_workspace_navigation_contract() -> None:
     viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
     assert '<a class="workspace-brand" href="/admin/sessions" aria-label="MCP Session Bridge Sessions">' in viewer
     assert '<img src="/admin/assets/brand/svg/lockup-horizontal-dark.svg" alt="MCP Session Bridge">' in viewer
+    assert viewer.count("lockup-horizontal-dark.svg") == 1
+    assert '<section class="brand">' not in viewer
+    assert 'class="brand-lockup"' not in viewer
     assert 'class="workspace-nav sb-nav" role="tablist"' in viewer
     assert 'href="/admin/sessions" aria-current="page" aria-selected="true"' in viewer
     assert 'href="/admin/graph" aria-selected="false"' in viewer
     assert 'aria-disabled="true" aria-selected="false"' in viewer
+
+
+def test_sessions_and_graph_share_workspace_header_contract() -> None:
+    sessions = Path("admin-viewer.html").read_text(encoding="utf-8")
+    graph = Path("graph-viewer.html").read_text(encoding="utf-8")
+    graph_css = Path("graph-viewer.css").read_text(encoding="utf-8")
+    shared_css = Path("pearl-gradient-nav.css").read_text(encoding="utf-8")
+
+    for page in (sessions, graph):
+        head = page[: page.index("</head>")]
+        header = page[page.index('<header class="workspace-bar">') : page.index("</header>")]
+        assert head.count('href="/admin/assets/pearl-gradient-nav.css"') == 1
+        assert '<a class="workspace-brand"' in header
+        assert '<nav class="workspace-nav sb-nav" role="tablist"' in header
+        assert 'data-label="SESSIONS">SESSIONS</a>' in header
+        assert 'data-label="GRAPH">GRAPH</a>' in header
+
+    workspace_rule = shared_css[shared_css.index(".workspace-bar {") : shared_css.index(".workspace-brand {")]
+    assert "--workspace-bar-height: 4.15rem;" in shared_css
+    assert "height: var(--workspace-bar-height);" in workspace_rule
+    assert 'grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr)' in shared_css
+    assert 'padding: 0 1.4rem' in shared_css
+    assert "min-height: calc(100vh - var(--workspace-bar-height));" in sessions
+    assert "top: var(--workspace-bar-height);" in sessions
+    assert "height: calc(100vh - var(--workspace-bar-height));" in sessions
+    assert "min-height:calc(100vh - var(--workspace-bar-height))" in graph_css
+    assert "top:var(--workspace-bar-height)" in graph_css
+    assert "height:calc(100vh - var(--workspace-bar-height))" in graph_css
+    assert "@media (max-width: 800px)" in shared_css
+    assert ".workspace-actions form { display: none; }" in shared_css
+    assert "@media (max-width: 520px)" in shared_css
+    assert ".workspace-brand { display: none; }" in shared_css
 
 
 def test_processing_and_analysis_apis_require_auth_and_return_durable_state(tmp_path, monkeypatch) -> None:

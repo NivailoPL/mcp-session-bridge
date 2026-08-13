@@ -1848,6 +1848,48 @@ class AdminHandlers:
     input::placeholder {{ color: var(--faint); }}
     input:hover {{ border-color: rgba(255, 255, 255, .16); }}
     input:focus {{ outline: none; border-color: var(--accent); background: rgba(0, 0, 0, .38); box-shadow: 0 0 0 3px var(--accent-soft); }}
+    input:-webkit-autofill,
+    input:-webkit-autofill:hover,
+    input:-webkit-autofill:focus,
+    input:-webkit-autofill:active {{
+      -webkit-text-fill-color: var(--text);
+      caret-color: var(--text);
+      background-color: #1d1e27 !important;
+      -webkit-box-shadow: 0 0 0 1000px #1d1e27 inset;
+      box-shadow: 0 0 0 1000px #1d1e27 inset;
+      border-color: rgba(179, 169, 255, .36);
+      transition: background-color 9999s ease-out 0s;
+    }}
+    input:-moz-autofill {{
+      -webkit-text-fill-color: var(--text);
+      caret-color: var(--text);
+      background-color: #1d1e27 !important;
+      -webkit-box-shadow: 0 0 0 1000px #1d1e27 inset;
+      box-shadow: 0 0 0 1000px #1d1e27 inset;
+      border-color: rgba(179, 169, 255, .36);
+      transition: background-color 9999s ease-out 0s;
+    }}
+    input:autofill {{
+      -webkit-text-fill-color: var(--text);
+      caret-color: var(--text);
+      background-color: #1d1e27 !important;
+      -webkit-box-shadow: 0 0 0 1000px #1d1e27 inset;
+      box-shadow: 0 0 0 1000px #1d1e27 inset;
+      border-color: rgba(179, 169, 255, .36);
+      transition: background-color 9999s ease-out 0s;
+    }}
+    input:-webkit-autofill:focus {{
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }}
+    input:-moz-autofill:focus {{
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }}
+    input:autofill:focus {{
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }}
     .login-submit {{ display: flex; align-items: center; justify-content: space-between; width: 100%; min-height: 3.1rem; margin-top: .35rem; padding: .75rem .9rem .75rem 1rem; border: 1px solid rgba(179, 169, 255, .24); border-radius: 10px; background: var(--accent); color: #fff; font-size: .86rem; font-weight: 700; cursor: pointer; box-shadow: 0 12px 25px rgba(108, 92, 242, .2); transition: background .16s ease, transform .16s ease, box-shadow .16s ease; }}
     .login-submit:hover {{ background: var(--accent-hover); box-shadow: 0 15px 30px rgba(108, 92, 242, .3); transform: translateY(-1px); }}
     .login-submit:active {{ transform: translateY(0); }}

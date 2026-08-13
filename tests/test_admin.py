@@ -22,17 +22,18 @@ def test_admin_viewer_uses_brand_lockup_and_tab_assets() -> None:
     viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
     head = viewer[: viewer.index("</head>")]
     nav_script = Path("pearl-gradient-nav.js").read_text(encoding="utf-8")
-    brand = viewer[viewer.index('<section class="brand">') : viewer.index('<div class="settings-row"')]
 
     assert 'rel="icon" type="image/png" sizes="16x16"' in head
     assert 'rel="icon" type="image/png" sizes="32x32"' in head
     assert 'rel="apple-touch-icon" sizes="180x180"' in head
     assert 'rel="manifest" href="/admin/assets/brand/manifest.webmanifest"' in head
     assert 'href="/admin/assets/pearl-gradient-nav.css"' in head
-    assert 'src="/admin/assets/brand/svg/lockup-horizontal-dark.svg"' in brand
+    assert '<a class="workspace-brand" href="/admin/sessions" aria-label="MCP Session Bridge Sessions">' in viewer
+    assert 'src="/admin/assets/brand/svg/lockup-horizontal-dark.svg"' in viewer
+    assert viewer.count("lockup-horizontal-dark.svg") == 1
+    assert '<section class="brand">' not in viewer
     assert '<script src="/admin/assets/pearl-gradient-nav.js"></script>' in viewer
-    assert 'class="brand-lockup"' in brand
-    assert 'class="brand-mark"' not in brand
+    assert 'class="brand-lockup"' not in viewer
 
     assert '<nav class="workspace-nav sb-nav" role="tablist"' in viewer
     assert 'data-label="SESSIONS">SESSIONS</a>' in viewer
@@ -56,6 +57,24 @@ def test_admin_login_uses_dark_branding_and_inline_lockup(tmp_path, monkeypatch)
     assert 'class="login-logo"' in response.text
     assert '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 404 96"' in response.text
     assert "/admin/assets/brand/svg/lockup-horizontal-dark.svg" not in response.text
+    autofill_style = response.text[response.text.index("input:-webkit-autofill") : response.text.index(".login-submit")]
+    for selector in (
+        "input:-webkit-autofill",
+        "input:-webkit-autofill:hover",
+        "input:-webkit-autofill:focus",
+        "input:-webkit-autofill:active",
+        "input:-moz-autofill",
+        "input:autofill",
+    ):
+        assert selector in autofill_style
+    for declaration in (
+        "background-color: #1d1e27 !important;",
+        "-webkit-box-shadow: 0 0 0 1000px #1d1e27 inset;",
+        "box-shadow: 0 0 0 1000px #1d1e27 inset;",
+        "-webkit-text-fill-color: var(--text);",
+        "outline: 2px solid var(--accent);",
+    ):
+        assert declaration in autofill_style
     assert 'action="/admin/login"' in response.text
 
     invalid = client.post(

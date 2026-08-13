@@ -8,30 +8,19 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/admin/assets/pearl-gradient-nav.css">
   <link rel="stylesheet" href="/admin/assets/graph-viewer.css">
   <link rel="stylesheet" href="/admin/assets/graph-data.css">
+  <link rel="stylesheet" href="/admin/assets/pearl-gradient-nav.css">
   <style>
     .codex-message blockquote { margin: .45rem 0; padding: .1rem .8rem; border-left: 3px solid var(--accent2); color: var(--muted); }
     .codex-message ul, .codex-message ol { margin: .4rem 0; padding-left: 1.35rem; }
     .codex-message code { font-family: "Geist Mono", monospace; }
     .codex-message a { color: #b8b1ff; }
-    @media (max-width: 800px) {
-      .workspace-bar { grid-template-columns: auto minmax(0, 1fr) auto; }
-      .workspace-nav { justify-self: center; }
-      .workspace-actions { justify-self: end; }
-      .workspace-actions form { display: none; }
-    }
-    @media (max-width: 500px) {
-      .workspace-bar { grid-template-columns: minmax(0, 1fr) auto; }
-      .brand { display: none; }
-      .workspace-nav { justify-self: center; }
-    }
   </style>
 </head>
 <body>
   <header class="workspace-bar">
-    <a class="brand" href="/admin/sessions" aria-label="MCP Session Bridge Sessions">
+    <a class="workspace-brand" href="/admin/sessions" aria-label="MCP Session Bridge Sessions">
       <img src="/admin/assets/brand/svg/lockup-horizontal-dark.svg" alt="MCP Session Bridge">
     </a>
     <nav class="workspace-nav sb-nav" role="tablist" aria-label="Admin workspaces">
