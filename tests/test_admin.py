@@ -143,10 +143,10 @@ def test_admin_viewer_compacts_unselected_sessions() -> None:
     assert 'item.classList.toggle("is-compact", !isSelected);' in render_sessions
     assert 'const isSelected = session.session_id === state.selectedSessionId;' in render_sessions
     assert 'if (isSelected && state.manualRenameSessionId === session.session_id) {' in render_sessions
-    assert 'content.append(sessionCompactTitle(session, group));' in render_sessions
+    assert 'content.append(sessionCompactTitle(session, group, dateBucket));' in render_sessions
     assert 'item.setAttribute("aria-label"' in render_sessions
     assert 'function sessionGroupChip(group, fallbackId)' in viewer
-    assert 'function sessionCompactTitle(session, group)' in viewer
+    assert 'function sessionCompactTitle(session, group, dateBucket = null)' in viewer
     assert ".session-button.is-compact" in viewer
     assert 'content.classList.add("sensitive-compact-content");' in render_sessions
 
@@ -155,18 +155,16 @@ def test_admin_viewer_compact_sensitive_overlay_fits_card_contract() -> None:
     viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
 
     compact_overlay = viewer[
-        viewer.index(".session-button.is-compact .session-card-sensitive-overlay"):
+        viewer.index(".session-card-sensitive-overlay {"):
         viewer.index("#threadSensitiveOverlay")
     ]
-    assert "padding: .25rem;" in compact_overlay
-    assert "grid-template-columns: auto minmax(0, 1fr);" in compact_overlay
-    assert "grid-template-rows: auto auto;" in compact_overlay
-    assert "grid-row: 1 / span 2;" in compact_overlay
-    assert "width: min(100%, 18rem);" in compact_overlay
-    assert ".session-button.is-compact .session-card-sensitive-overlay .sensitive-overlay-card svg" in compact_overlay
+    assert "padding: .25rem .55rem;" in compact_overlay
+    assert "background: rgba(8, 11, 16, .86);" in compact_overlay
     assert "inset: 0 0 0 var(--session-compact-icon-offset);" in compact_overlay
     assert "width: auto;" in compact_overlay
-    assert "--session-compact-icon-offset: calc(1rem + 1rem + .5rem);" in viewer
+    assert "display: flex;" in compact_overlay
+    assert ".session-card-sensitive-overlay .sensitive-overlay-card svg" in compact_overlay
+    assert "--session-compact-icon-offset: calc(.85rem + 1.1rem + .6rem);" in viewer
     assert ".session-button.is-compact .session-card-content.sensitive-compact-content .session-title {" in viewer
 
 
@@ -225,6 +223,38 @@ process.stdout.write(JSON.stringify({
         "tag": "h3",
         "className": "session-date-heading",
         "text": "Today",
+    }
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="Node.js is required for the browser renderer smoke test")
+def test_admin_viewer_session_list_stamps_use_display_timezone() -> None:
+    viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
+    helpers = viewer[
+        viewer.index("function sessionCompactTitle"):
+        viewer.index("function sessionGroupChip")
+    ]
+    harness = r"""
+const state = { displayTimezone: "Europe/Warsaw" };
+process.stdout.write(JSON.stringify({
+  today: sessionListStamp("2026-08-13T07:12:00Z", "today"),
+  older: sessionListStamp("2026-08-11T15:08:00Z", "more-than-2-days"),
+  meta: sessionListMetaTimestamp("2026-08-13T15:21:00Z")
+}));
+"""
+    node = shutil.which("node")
+    assert node is not None
+    completed = subprocess.run(
+        [node, "-e", helpers + harness],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    rendered = json.loads(completed.stdout)
+
+    assert rendered == {
+        "today": "09:12",
+        "older": "11.08",
+        "meta": "Thursday 17:21",
     }
 
 
@@ -392,7 +422,9 @@ process.stdout.write(JSON.stringify({ initial, switched, initialHeadings, switch
     initial_selected, initial_other, initial_two_days, initial_old = rendered["initial"]
     assert initial_selected["active"] is True
     assert initial_selected["compact"] is False
-    assert initial_selected["compactIcon"] is False
+    assert initial_selected["compactIcon"] is True
+    assert initial_selected["compactIconFirst"] is True
+    assert initial_selected["compactIconHidden"] is True
     assert initial_selected["ariaLabel"] == ""
     assert "selected-id" in initial_selected["text"]
     assert "actions" in initial_selected["text"]
@@ -405,15 +437,15 @@ process.stdout.write(JSON.stringify({ initial, switched, initialHeadings, switch
     assert initial_other["compactIconFirst"] is True
     assert initial_other["compactIconHidden"] is True
     assert initial_other["ariaLabel"] == "Other session — Brainstorming"
-    assert initial_other["text"] == "Other session"
+    assert initial_other["text"].startswith("Other session")
     assert "Brainstorming" not in initial_other["text"]
     assert "other-id" not in initial_other["text"]
     assert "actions" not in initial_other["text"]
     assert initial_other["role"] == "button"
     assert initial_other["tabIndex"] == 0
     assert initial_other["hasKeydown"] is True
-    assert initial_two_days["text"] == "Two-day session"
-    assert initial_old["text"] == "Old session"
+    assert initial_two_days["text"].startswith("Two-day session")
+    assert initial_old["text"].startswith("Old session")
 
     switched_selected, switched_other, switched_two_days, switched_old = rendered["switched"]
     assert switched_selected["active"] is False
@@ -426,13 +458,15 @@ process.stdout.write(JSON.stringify({ initial, switched, initialHeadings, switch
     assert "Brainstorming" not in switched_selected["text"]
     assert switched_other["active"] is True
     assert switched_other["compact"] is False
-    assert switched_other["compactIcon"] is False
+    assert switched_other["compactIcon"] is True
+    assert switched_other["compactIconFirst"] is True
+    assert switched_other["compactIconHidden"] is True
     assert switched_other["ariaLabel"] == ""
     assert "other-id" in switched_other["text"]
     assert "Brainstorming" in switched_other["text"]
     assert "actions" in switched_other["text"]
-    assert switched_two_days["text"] == "Two-day session"
-    assert switched_old["text"] == "Old session"
+    assert switched_two_days["text"].startswith("Two-day session")
+    assert switched_old["text"].startswith("Old session")
 
 
 def test_admin_viewer_sensitive_group_privacy_contract() -> None:
