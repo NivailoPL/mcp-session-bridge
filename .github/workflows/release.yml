@@ -45,16 +45,15 @@ jobs:
           import json
           import sys
           from pathlib import Path
+          from bridge_cli.release import build_release_manifest
+
           version, artifact, digest = sys.argv[1:]
-          Path("release-manifest.json").write_text(json.dumps({
-              "format_version": 1,
-              "version": version,
-              "artifact": artifact,
-              "sha256": digest,
-              "database_schema": 1,
-              "python": "3.12",
-              "channel": "stable",
-          }, indent=2) + "\n")
+          manifest = build_release_manifest(
+              version=version, artifact=artifact, digest=digest
+          )
+          Path("release-manifest.json").write_text(
+              json.dumps(manifest, indent=2) + "\n"
+          )
           PY
       - name: Attest release bundle
         uses: actions/attest-build-provenance@v2
