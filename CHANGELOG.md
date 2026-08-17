@@ -6,6 +6,70 @@ This project follows a lightweight changelog format inspired by Keep a Changelog
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-08-17
+
+### Highlights
+
+- The Sessions dashboard is easier to scan with compact rows, date separators, timestamps, and clearer selected-session context.
+- Admin surfaces now share a complete project identity, icon set, and responsive Pearl Gradient navigation.
+- Managed updates are safer: restart flows wait for Bridge health, and migrations run with code from the prepared release.
+- Runtime status and release metadata now report database compatibility from the same schema source of truth.
+
+### Quality of Life
+
+- Redesigned the Sessions list around compact conversation rows, chronological date buckets, and selected-session metadata.
+- Added a reusable brand asset pack plus consistent headers and navigation across desktop, tablet, and mobile layouts.
+
+### Reliability and Operations
+
+- Managed setup now waits for Bridge health after restarting the service.
+- Prepared-release migrations now execute with the code and environment from the release being activated.
+- Status output now distinguishes its response format version from the SQLite database schema version.
+- Release manifests now derive their database schema from the runtime constant and verify the complete manifest shape in regression tests.
+
+### Included commits
+
+- [`d3ac68b`](https://github.com/NivailoPL/mcp-session-bridge/commit/d3ac68b9987d3fba9694c84351dcb62502d0262e) feat(codex): add isolated app-server adapter and admin API
+- [`0d3c9a1`](https://github.com/NivailoPL/mcp-session-bridge/commit/0d3c9a1e0a1ab4e1681a9c96eea94692f852c0d3) feat(admin): add ephemeral Codex chat popup
+- [`4712d86`](https://github.com/NivailoPL/mcp-session-bridge/commit/4712d86d96b814283a042d8bee5d32cb1561cbb3) feat(setup): manage pinned Codex sidecar lifecycle
+- [`7ef34f5`](https://github.com/NivailoPL/mcp-session-bridge/commit/7ef34f5611de787ec6b5e78db836ae16bac69393) fix(review): harden Codex runtime lifecycle
+- [`12d53bd`](https://github.com/NivailoPL/mcp-session-bridge/commit/12d53bd41ca0bebb5bfa8b99cd61697ffb5796bc) fix(codex): disable unsupported websocket compression
+- [`9afbd95`](https://github.com/NivailoPL/mcp-session-bridge/commit/9afbd951936b7544d9da26df86f5fa8ac753cbfe) fix(setup): wait for Bridge health after restart
+- [`9ed8d12`](https://github.com/NivailoPL/mcp-session-bridge/commit/9ed8d12e4f9aab9635d178d468121133325bf91b) fix(codex): allow Bridge socket-group traversal
+- [`3d40e3b`](https://github.com/NivailoPL/mcp-session-bridge/commit/3d40e3bb68327f1497fd662b373f8089574235d3) fix(codex): restore shared socket directory mode
+- [`a1393f3`](https://github.com/NivailoPL/mcp-session-bridge/commit/a1393f31f408be2124dff3a33d6c211965f944ab) fix(codex): stop sidecar cleanly
+- [`f35714d`](https://github.com/NivailoPL/mcp-session-bridge/commit/f35714d081f14fbd0c791d6120a7347be64f4fe7) feat(admin): add project branding and icons
+- [`b38bcc1`](https://github.com/NivailoPL/mcp-session-bridge/commit/b38bcc128f0d977600f0440c08116f68276901b1) feat(graph): add configurable extraction workspace
+- [`2149d8d`](https://github.com/NivailoPL/mcp-session-bridge/commit/2149d8d254af6db892ce3c5719fa3fdf26adb954) fix(deploy): migrate with prepared release code
+- [`55592d9`](https://github.com/NivailoPL/mcp-session-bridge/commit/55592d980facb52921caf5142446500828e8dbf4) fix(graph): make worker lifecycle process-safe
+- [`1463a03`](https://github.com/NivailoPL/mcp-session-bridge/commit/1463a03441242ffa13629c5c66062496a6c93234) fix(graph): make extraction failures recoverable
+- [`0195bc7`](https://github.com/NivailoPL/mcp-session-bridge/commit/0195bc7a20fa3584739a9ca26a7b0b7d6fc3b3bc) feat(graph): add destructive full rescan
+- [`b28251c`](https://github.com/NivailoPL/mcp-session-bridge/commit/b28251c76b099cb391a5caef736a246045d25d5f) feat(graph): consolidate extraction workflow and Codex workspace
+- [`73bc124`](https://github.com/NivailoPL/mcp-session-bridge/commit/73bc124fcaf3fc879174389c362d05544929282b) feat(admin): add Pearl Gradient workspace navigation
+- [`6f950c8`](https://github.com/NivailoPL/mcp-session-bridge/commit/6f950c8b26275791a714754038f54ba07c7bce2f) feat(admin): add brand lockup to Sessions header
+- [`c25d3cc`](https://github.com/NivailoPL/mcp-session-bridge/commit/c25d3cc2a2e57a0d7a3d6197a55ce46d35fc0620) Admin UI: visual polish for sessions and graph nav
+- [`6ac0a30`](https://github.com/NivailoPL/mcp-session-bridge/commit/6ac0a30faeb427fa0dd324b62998ec87b9ed7747) Merge pull request #1 from NivailoPL/codex/admin-visual-polish
+- [`73d014a`](https://github.com/NivailoPL/mcp-session-bridge/commit/73d014a9c082d2a8f0ebf9296e1471ce9775acbe) chore: remove graph, Codex, and branding
+- [`c5a758d`](https://github.com/NivailoPL/mcp-session-bridge/commit/c5a758d471c9112009ed8080fd74f1140fee0eef) fix(storage): preserve schema v2 after graph removal
+- [`7332cad`](https://github.com/NivailoPL/mcp-session-bridge/commit/7332cad556543901eef42aacfe8f620ca7e1347b) restore(admin): recover Graph workspace and branding
+- [`c1d0fc4`](https://github.com/NivailoPL/mcp-session-bridge/commit/c1d0fc461388952544ba5d721bc9dbbedfab089c) fix(status): distinguish format version from database schema
+- [`ed3de92`](https://github.com/NivailoPL/mcp-session-bridge/commit/ed3de92777f4f6cca29bd163bb1c8792443ee08f) feat(admin): redesign session list
+- [`5751a5b`](https://github.com/NivailoPL/mcp-session-bridge/commit/5751a5b6027a69cfc612c1cb9ded252758761258) Merge pull request #2 from NivailoPL/codex/session-list-redesign
+- [`54cbecb`](https://github.com/NivailoPL/mcp-session-bridge/commit/54cbecb33f1e2c9b64d5c0807dae657cf30b811c) fix(release): keep manifest schema in sync
+- [`610d3ae`](https://github.com/NivailoPL/mcp-session-bridge/commit/610d3ae9ab045807c1173cf76a2dbe7038e2c1a9) feat(admin): gate experimental graph workspace
+- [`57f7880`](https://github.com/NivailoPL/mcp-session-bridge/commit/57f78809cd97003e91f06e66556c53b9e39802de) Merge pull request #3 from NivailoPL/codex/disable-graph-release
+
+[Compare changes: v0.4.1...v0.5.0](https://github.com/NivailoPL/mcp-session-bridge/compare/v0.4.1...v0.5.0)
+
+## [0.4.0] - 2026-08-09
+
+### Highlights
+
+- Managed installations gained a resumable setup dashboard plus status, diagnostics, update, rollback, and recovery operations.
+- Owners can tune large MCP tool-result compatibility and restart Bridge safely from the authenticated admin settings.
+- Session reads are now unlisted by default, and file access is explicitly scoped to a supplied session.
+- Stable updates verify release digests, preflight migrations, back up SQLite, health-check activation, and roll back failures.
+
 ### New Features
 
 - Added an advanced Settings control for large MCP tool results. Optimized mode is the default and returns transcript chunks, output probes, and downloaded file contents once; Maximum compatibility restores the SDK's duplicated text and structured representations.
