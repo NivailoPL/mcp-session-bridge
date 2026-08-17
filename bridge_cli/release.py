@@ -16,6 +16,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, BinaryIO, Callable
 
+from app.storage import SCHEMA_VERSION
 from bridge_cli.files import atomic_write_json, read_json
 from bridge_cli.layout import Layout
 from bridge_cli.operation_lock import operation_lock as shared_operation_lock
@@ -118,6 +119,18 @@ def _parse_version(value: str) -> str:
 
 def _version_tuple(value: str) -> tuple[int, int, int]:
     return tuple(int(part) for part in _parse_version(value).split("."))  # type: ignore[return-value]
+
+
+def build_release_manifest(*, version: str, artifact: str, digest: str) -> dict[str, Any]:
+    return {
+        "format_version": 1,
+        "version": version,
+        "artifact": artifact,
+        "sha256": digest,
+        "database_schema": SCHEMA_VERSION,
+        "python": "3.12",
+        "channel": "stable",
+    }
 
 
 def safe_extract(archive: Path, destination: Path) -> None:

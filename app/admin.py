@@ -122,6 +122,8 @@ BRAND_ASSET_MEDIA_TYPES = {
     ".svg": "image/svg+xml",
     ".webmanifest": "application/manifest+json",
 }
+GRAPH_NAV_LINK = '<a class="sb-nav__tab" role="tab" href="/admin/graph" aria-selected="false" tabindex="-1" data-label="GRAPH">GRAPH</a>'
+GRAPH_NAV_WIP = '<span class="sb-nav__tab" role="tab" aria-disabled="true" aria-selected="false" data-label="GRAPH">GRAPH <small>WIP</small></span>'
 
 
 class AdminHandlers:
@@ -140,6 +142,7 @@ class AdminHandlers:
         self.store = store
         self.html_path = html_path
         self.graph_html_path = html_path.parent / "graph-viewer.html"
+        self.graph_wip_html_path = html_path.parent / "graph-wip.html"
         self.graph_asset_dir = html_path.parent
         self.brand_dir = html_path.parent / "brand"
         self.pdfjs_dir = html_path.parent / "vendor" / "pdfjs"
@@ -160,17 +163,27 @@ class AdminHandlers:
             body = self.html_path.read_text(encoding="utf-8")
         except OSError:
             return HTMLResponse("Admin viewer is not installed.", status_code=500, headers=self._no_store_headers())
-        return HTMLResponse(body, headers=self._admin_headers())
+        return HTMLResponse(self._render_workspace_navigation(body), headers=self._admin_headers())
 
     async def graph_page(self, request: Request) -> Response:
         _, error = self._require_admin(request)
         if error:
             return error
+        page_path = (
+            self.graph_html_path
+            if self.settings.graph_experimental
+            else self.graph_wip_html_path
+        )
         try:
-            body = self.graph_html_path.read_text(encoding="utf-8")
+            body = page_path.read_text(encoding="utf-8")
         except OSError:
             return HTMLResponse("Graph workspace is not installed.", status_code=500, headers=self._no_store_headers())
         return HTMLResponse(body, headers=self._admin_headers())
+
+    def _render_workspace_navigation(self, body: str) -> str:
+        if self.settings.graph_experimental:
+            return body
+        return body.replace(GRAPH_NAV_LINK, GRAPH_NAV_WIP)
 
     async def graph_asset(self, request: Request) -> Response:
         _, error = self._require_admin(request)
@@ -288,6 +301,8 @@ class AdminHandlers:
         _, error = self._require_admin(request)
         if error:
             return error
+        if unavailable := self._graph_feature_unavailable():
+            return unavailable
         if self.codex is None:
             return self._codex_unavailable()
         try:
@@ -300,6 +315,8 @@ class AdminHandlers:
         _, error = self._require_admin_mutation(request)
         if error:
             return error
+        if unavailable := self._graph_feature_unavailable():
+            return unavailable
         if self.codex is None:
             return self._codex_unavailable()
         try:
@@ -312,6 +329,8 @@ class AdminHandlers:
         _, error = self._require_admin(request)
         if error:
             return error
+        if unavailable := self._graph_feature_unavailable():
+            return unavailable
         if self.codex is None:
             return self._codex_unavailable()
         try:
@@ -324,6 +343,8 @@ class AdminHandlers:
         _, error = self._require_admin_mutation(request)
         if error:
             return error
+        if unavailable := self._graph_feature_unavailable():
+            return unavailable
         if self.codex is None:
             return self._codex_unavailable()
         try:
@@ -336,6 +357,8 @@ class AdminHandlers:
         _, error = self._require_admin_mutation(request)
         if error:
             return error
+        if unavailable := self._graph_feature_unavailable():
+            return unavailable
         if self.codex is None:
             return self._codex_unavailable()
         try:
@@ -348,6 +371,8 @@ class AdminHandlers:
         _, error = self._require_admin_mutation(request)
         if error:
             return error
+        if unavailable := self._graph_feature_unavailable():
+            return unavailable
         if self.codex is None:
             return self._codex_unavailable()
         payload, parse_error = await _bounded_json_body(
@@ -389,6 +414,8 @@ class AdminHandlers:
         _, error = self._require_admin(request)
         if error:
             return error
+        if unavailable := self._graph_feature_unavailable():
+            return unavailable
         return JSONResponse(
             {"ok": True, "config": self.store.get_graph_config()},
             headers=self._no_store_headers(),
@@ -398,6 +425,8 @@ class AdminHandlers:
         _, error = self._require_admin(request)
         if error:
             return error
+        if unavailable := self._graph_feature_unavailable():
+            return unavailable
         status = request.query_params.get("status")
         jobs = self.store.list_graph_jobs(status=status or None)
         return JSONResponse({"ok": True, "jobs": jobs}, headers=self._no_store_headers())
@@ -406,6 +435,8 @@ class AdminHandlers:
         _, error = self._require_admin_mutation(request)
         if error:
             return error
+        if unavailable := self._graph_feature_unavailable():
+            return unavailable
         if self.graph_runtime is None:
             return self._json_error("Graph runtime is unavailable.", status_code=503)
         if not await self._graph_provider_is_ready():
@@ -424,6 +455,8 @@ class AdminHandlers:
         _, error = self._require_admin(request)
         if error:
             return error
+        if unavailable := self._graph_feature_unavailable():
+            return unavailable
         return JSONResponse(
             {"ok": True, "sessions": self.store.list_graph_analysis_sessions()},
             headers=self._no_store_headers(),
@@ -433,6 +466,8 @@ class AdminHandlers:
         _, error = self._require_admin(request)
         if error:
             return error
+        if unavailable := self._graph_feature_unavailable():
+            return unavailable
         session_id = str(request.path_params.get("session_id", ""))
         analysis = self.store.get_graph_analysis(session_id)
         if analysis is None:
@@ -443,6 +478,8 @@ class AdminHandlers:
         _, error = self._require_admin(request)
         if error:
             return error
+        if unavailable := self._graph_feature_unavailable():
+            return unavailable
         return JSONResponse(
             {"ok": True, "runs": self.store.list_graph_lab_runs()},
             headers=self._no_store_headers(),
@@ -452,6 +489,8 @@ class AdminHandlers:
         session, error = self._require_admin_mutation(request)
         if error:
             return error
+        if unavailable := self._graph_feature_unavailable():
+            return unavailable
         if self.graph_runtime is None:
             return self._json_error("Graph runtime is unavailable.", status_code=503)
         payload, parse_error = await _json_body(request)
@@ -479,6 +518,8 @@ class AdminHandlers:
         session, error = self._require_admin_mutation(request)
         if error:
             return error
+        if unavailable := self._graph_feature_unavailable():
+            return unavailable
         self.store.unlock_graph_profile(session["username"])
         return self._graph_config_response()
 
@@ -486,6 +527,8 @@ class AdminHandlers:
         session, error = self._require_admin_mutation(request)
         if error:
             return error
+        if unavailable := self._graph_feature_unavailable():
+            return unavailable
         payload, parse_error = await _json_body(request)
         if parse_error:
             return parse_error
@@ -499,6 +542,8 @@ class AdminHandlers:
         session, error = self._require_admin_mutation(request)
         if error:
             return error
+        if unavailable := self._graph_feature_unavailable():
+            return unavailable
         try:
             self.store.activate_graph_draft(session["username"])
         except ValueError as exc:
@@ -509,6 +554,8 @@ class AdminHandlers:
         _, error = self._require_admin_mutation(request)
         if error:
             return error
+        if unavailable := self._graph_feature_unavailable():
+            return unavailable
         self.store.discard_graph_draft()
         return self._graph_config_response()
 
@@ -516,6 +563,8 @@ class AdminHandlers:
         _, error = self._require_admin_mutation(request)
         if error:
             return error
+        if unavailable := self._graph_feature_unavailable():
+            return unavailable
         payload, parse_error = await _json_body(request)
         if parse_error:
             return parse_error
@@ -534,6 +583,19 @@ class AdminHandlers:
     def _graph_config_response(self) -> JSONResponse:
         return JSONResponse(
             {"ok": True, "config": self.store.get_graph_config()},
+            headers=self._no_store_headers(),
+        )
+
+    def _graph_feature_unavailable(self) -> JSONResponse | None:
+        if self.settings.graph_experimental:
+            return None
+        return JSONResponse(
+            {
+                "ok": False,
+                "error": "Graph is not supported in this release.",
+                "code": "graph_feature_unavailable",
+            },
+            status_code=409,
             headers=self._no_store_headers(),
         )
 

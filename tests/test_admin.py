@@ -1949,6 +1949,7 @@ def _load_main(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("BRIDGE_OWNER_USERNAME", "owner")
     monkeypatch.setenv("BRIDGE_OWNER_PASSWORD_HASH", password_hash("secret-admin-password"))
     monkeypatch.setenv("BRIDGE_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("BRIDGE_GRAPH_EXPERIMENTAL", "true")
 
     sys.modules.pop("app.main", None)
     return importlib.import_module("app.main")

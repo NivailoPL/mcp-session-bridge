@@ -10,7 +10,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from app.storage import Store
+from app.storage import SCHEMA_VERSION, Store
 import bridge_cli.release as release_module
 
 from bridge_cli.files import atomic_write_json
@@ -20,9 +20,28 @@ from bridge_cli.release import (
     ReleaseClient,
     ReleaseInfo,
     UpdateManager,
+    build_release_manifest,
     is_newer,
     safe_extract,
 )
+
+
+def test_release_manifest_uses_current_database_schema() -> None:
+    manifest = build_release_manifest(
+        version="0.4.1",
+        artifact="mcp-session-bridge-0.4.1.tar.gz",
+        digest="a" * 64,
+    )
+
+    assert manifest == {
+        "format_version": 1,
+        "version": "0.4.1",
+        "artifact": "mcp-session-bridge-0.4.1.tar.gz",
+        "sha256": "a" * 64,
+        "database_schema": SCHEMA_VERSION,
+        "python": "3.12",
+        "channel": "stable",
+    }
 
 
 class Response(io.BytesIO):

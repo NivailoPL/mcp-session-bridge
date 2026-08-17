@@ -122,18 +122,24 @@ async def _graph_pipeline_monitor() -> None:
 async def app_lifespan(_: Any):
     async with mcp.session_manager.run():
         monitor = asyncio.create_task(_search_index_monitor())
-        graph_monitor = asyncio.create_task(_graph_pipeline_monitor())
+        graph_monitor = (
+            asyncio.create_task(_graph_pipeline_monitor())
+            if settings.graph_experimental
+            else None
+        )
         try:
             # Reaching this point is the final startup step before the app is ready to serve.
             await asyncio.to_thread(store.clear_tool_output_restart_pending)
             yield {}
         finally:
             monitor.cancel()
-            graph_monitor.cancel()
+            if graph_monitor is not None:
+                graph_monitor.cancel()
             with suppress(asyncio.CancelledError):
                 await monitor
-            with suppress(asyncio.CancelledError):
-                await graph_monitor
+            if graph_monitor is not None:
+                with suppress(asyncio.CancelledError):
+                    await graph_monitor
             await codex.close()
 
 
