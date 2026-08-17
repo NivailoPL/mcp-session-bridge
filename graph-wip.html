@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MCP Session Bridge · Graph WIP</title>
+  <link rel="icon" type="image/png" sizes="16x16" href="/admin/assets/brand/png/icon-indigo-16.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/admin/assets/brand/png/icon-indigo-32.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/admin/assets/brand/png/apple-touch-icon.png">
+  <link rel="manifest" href="/admin/assets/brand/manifest.webmanifest">
+  <link rel="stylesheet" href="/admin/assets/pearl-gradient-nav.css">
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #090b10;
+      --panel: rgba(24, 27, 38, .82);
+      --stroke: rgba(255, 255, 255, .09);
+      --text: #f5f5fb;
+      --muted: #a8a9ba;
+      --accent: #8b8ff5;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        radial-gradient(circle at 50% 0%, rgba(124, 127, 240, .15), transparent 36rem),
+        var(--bg);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    .wip-shell {
+      min-height: calc(100vh - var(--workspace-bar-height));
+      display: grid;
+      place-items: center;
+      padding: 2rem;
+    }
+    .wip-card {
+      width: min(660px, 100%);
+      padding: clamp(2rem, 5vw, 3.5rem);
+      border: 1px solid var(--stroke);
+      border-radius: 24px;
+      background: linear-gradient(145deg, rgba(34, 37, 51, .9), var(--panel));
+      box-shadow: 0 28px 80px rgba(0, 0, 0, .42);
+      text-align: center;
+    }
+    .wip-badge {
+      display: inline-flex;
+      padding: .42rem .68rem;
+      border: 1px solid rgba(139, 143, 245, .45);
+      border-radius: 999px;
+      background: rgba(139, 143, 245, .1);
+      color: #c8caff;
+      font-size: .72rem;
+      font-weight: 800;
+      letter-spacing: .14em;
+    }
+    h1 {
+      margin: 1.25rem 0 .9rem;
+      font-size: clamp(2rem, 6vw, 3.2rem);
+      line-height: 1.05;
+      letter-spacing: -.04em;
+    }
+    p {
+      margin: 0 auto;
+      max-width: 54ch;
+      color: var(--muted);
+      font-size: 1.05rem;
+      line-height: 1.7;
+    }
+    .wip-note {
+      margin-top: 1.25rem;
+      padding: 1rem 1.1rem;
+      border: 1px solid rgba(255, 255, 255, .07);
+      border-radius: 14px;
+      background: rgba(6, 8, 13, .42);
+      color: #d5d6e2;
+      font-size: .92rem;
+    }
+    .back-link {
+      display: inline-flex;
+      margin-top: 1.7rem;
+      padding: .75rem 1.05rem;
+      border: 1px solid rgba(139, 143, 245, .45);
+      border-radius: 10px;
+      color: #e7e8ff;
+      font-weight: 700;
+      text-decoration: none;
+    }
+    .back-link:hover { background: rgba(139, 143, 245, .12); }
+    @media (max-width: 520px) {
+      .wip-shell { padding: 1rem; }
+      .wip-card { padding: 2rem 1.25rem; border-radius: 18px; }
+    }
+  </style>
+</head>
+<body>
+  <header class="workspace-bar">
+    <a class="workspace-brand" href="/admin/sessions" aria-label="MCP Session Bridge Sessions">
+      <img src="/admin/assets/brand/svg/lockup-horizontal-dark.svg" alt="MCP Session Bridge">
+    </a>
+    <nav class="workspace-nav sb-nav" role="tablist" aria-label="Admin workspaces">
+      <a class="sb-nav__tab" role="tab" href="/admin/sessions" aria-selected="false" tabindex="0" data-label="SESSIONS">SESSIONS</a>
+      <span class="sb-nav__tab" role="tab" aria-disabled="true" aria-selected="false" data-label="GRAPH">GRAPH <small>WIP</small></span>
+      <span class="sb-nav__tab" role="tab" aria-disabled="true" aria-selected="false" data-label="CONTEXTS">CONTEXTS</span>
+    </nav>
+  </header>
+
+  <main class="wip-shell">
+    <section class="wip-card" aria-labelledby="wipTitle">
+      <span class="wip-badge">WORK IN PROGRESS</span>
+      <h1 id="wipTitle">Graph is a work in progress</h1>
+      <p>This workspace is included for future development, but it is not supported in this release and its results are not guaranteed.</p>
+      <p class="wip-note">Graph processing and Codex experiments cannot be started while this release gate is closed.</p>
+      <a class="back-link" href="/admin/sessions">Back to Sessions</a>
+    </section>
+  </main>
+</body>
+</html>

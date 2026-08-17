@@ -137,6 +137,16 @@
   cursor: not-allowed;
 }
 
+.sb-nav__tab small,
+.workspace-nav.sb-nav .sb-nav__tab small {
+  margin-left: .45rem;
+  padding: .22rem .35rem;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-size: .52em;
+  letter-spacing: .08em;
+}
+
 .sb-nav__tab:focus-visible,
 .workspace-nav.sb-nav .sb-nav__tab:focus-visible {
   outline: 2px solid var(--sb-nav-focus);

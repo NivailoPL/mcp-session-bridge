@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import importlib
 import sys
 from pathlib import Path
@@ -9,12 +10,16 @@ from starlette.testclient import TestClient
 from app.security import password_hash
 
 
-def _load_main(tmp_path: Path, monkeypatch):
+def _load_main(tmp_path: Path, monkeypatch, *, graph_experimental: bool | None = True):
     monkeypatch.setenv("BRIDGE_PUBLIC_BASE_URL", "https://example.test")
     monkeypatch.setenv("BRIDGE_DB_PATH", str(tmp_path / "bridge.sqlite3"))
     monkeypatch.setenv("BRIDGE_OWNER_USERNAME", "owner")
     monkeypatch.setenv("BRIDGE_OWNER_PASSWORD_HASH", password_hash("secret-admin-password"))
     monkeypatch.setenv("BRIDGE_SECRET_KEY", "test-secret")
+    if graph_experimental is None:
+        monkeypatch.delenv("BRIDGE_GRAPH_EXPERIMENTAL", raising=False)
+    else:
+        monkeypatch.setenv("BRIDGE_GRAPH_EXPERIMENTAL", str(graph_experimental).lower())
     sys.modules.pop("app.main", None)
     return importlib.import_module("app.main")
 
@@ -50,6 +55,10 @@ def test_graph_page_and_assets_require_admin_login(tmp_path, monkeypatch) -> Non
     assert "CONTEXTS" in page.text
     assert "Map" in page.text
     assert "Config" in page.text
+    sessions = client.get("/admin/sessions")
+    assert sessions.status_code == 200
+    assert 'href="/admin/graph"' in sessions.text
+    assert "GRAPH <small>WIP</small>" not in sessions.text
     assert client.get("/admin/assets/graph-viewer.css").status_code == 200
     css = client.get("/admin/assets/pearl-gradient-nav.css")
     assert css.status_code == 200
@@ -61,6 +70,90 @@ def test_graph_page_and_assets_require_admin_login(tmp_path, monkeypatch) -> Non
     assert nav_script.status_code == 200
     assert nav_script.headers["content-type"].startswith("text/javascript")
     assert "wireWorkspaceNavKeyboard" in nav_script.text
+
+
+def test_graph_release_gate_defaults_closed_and_serves_wip_page(tmp_path, monkeypatch) -> None:
+    main = _load_main(tmp_path, monkeypatch, graph_experimental=None)
+    client, _ = _admin_client(main)
+
+    assert main.settings.graph_experimental is False
+    sessions = client.get("/admin/sessions")
+    assert sessions.status_code == 200
+    assert 'href="/admin/graph"' not in sessions.text
+    assert 'aria-disabled="true" aria-selected="false" data-label="GRAPH">GRAPH <small>WIP</small></span>' in sessions.text
+
+    page = client.get("/admin/graph")
+    assert page.status_code == 200
+    assert page.headers["cache-control"] == "no-store"
+    assert "Graph is a work in progress" in page.text
+    assert "not supported in this release" in page.text
+    assert "/admin/assets/graph-viewer.js" not in page.text
+    assert 'id="codexOpenButton"' not in page.text
+    assert 'href="/admin/sessions"' in page.text
+
+
+def test_graph_release_gate_blocks_workspace_mutations_and_subscription_actions(tmp_path, monkeypatch) -> None:
+    main = _load_main(tmp_path, monkeypatch, graph_experimental=False)
+    anonymous = TestClient(main.app, base_url="http://127.0.0.1:8787")
+
+    for path in ("/admin/api/graph/config", "/admin/api/codex/status"):
+        assert anonymous.get(path).status_code == 401
+
+    client, csrf = _admin_client(main)
+    for path in ("/admin/api/graph/rescan", "/admin/api/codex/auth/device/start"):
+        assert client.post(path).status_code == 403
+
+    headers = {"x-csrf-token": csrf}
+
+    requests = (
+        ("GET", "/admin/api/graph/config", None),
+        ("GET", "/admin/api/graph/jobs", None),
+        ("GET", "/admin/api/graph/analysis", None),
+        ("GET", "/admin/api/graph/analysis/unknown", None),
+        ("GET", "/admin/api/graph/lab", None),
+        ("POST", "/admin/api/graph/rescan", None),
+        ("POST", "/admin/api/graph/lab", {"session_id": "session", "settings": {}}),
+        ("POST", "/admin/api/graph/config/unlock", None),
+        ("PUT", "/admin/api/graph/config/draft", {}),
+        ("POST", "/admin/api/graph/config/activate", None),
+        ("DELETE", "/admin/api/graph/config/draft", None),
+        ("PUT", "/admin/api/graph/state", {"enabled": True}),
+        ("GET", "/admin/api/codex/status", None),
+        ("POST", "/admin/api/codex/auth/device/start", None),
+        ("GET", "/admin/api/codex/auth/device/status", None),
+        ("POST", "/admin/api/codex/auth/device/cancel", None),
+        ("POST", "/admin/api/codex/logout", None),
+        ("POST", "/admin/api/codex/chat", {"message": "test"}),
+    )
+
+    for method, path, payload in requests:
+        response = client.request(method, path, json=payload, headers=headers)
+        assert response.status_code == 409, path
+        assert response.json()["code"] == "graph_feature_unavailable", path
+
+    assert main.store.get_graph_config()["enabled"] is False
+
+
+def test_graph_release_gate_prevents_background_processing(tmp_path, monkeypatch) -> None:
+    main = _load_main(tmp_path, monkeypatch, graph_experimental=False)
+    calls = 0
+
+    async def count_run_once():
+        nonlocal calls
+        calls += 1
+
+    async def close_codex():
+        return None
+
+    monkeypatch.setattr(main.graph_runtime, "run_once", count_run_once)
+    monkeypatch.setattr(main.codex, "close", close_codex)
+
+    async def enter_lifespan() -> None:
+        async with main.app_lifespan(None):
+            await asyncio.sleep(0.01)
+
+    asyncio.run(enter_lifespan())
+    assert calls == 0
 
 
 def test_graph_viewer_owns_ephemeral_codex_workspace() -> None:
