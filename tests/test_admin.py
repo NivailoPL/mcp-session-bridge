@@ -630,7 +630,7 @@ def test_admin_viewer_session_move_requires_explicit_confirmation() -> None:
     assert 'id="sessionMoveGroupList"' in viewer
     assert 'id="sessionMoveConfirmation"' in viewer
     assert 'id="sessionMoveConfirm"' in viewer
-    assert 'button("Move", (event) =>' in viewer
+    assert 'iconAction("move", "Move to another group", (event) =>' in viewer
     assert 'openSessionMoveDialog(session.session_id);' in viewer
     assert 'openSessionMoveDialog(state.selectedSession.session_id, groupId);' in viewer
     assert (
