@@ -346,7 +346,6 @@
       background: transparent;
       box-shadow: inset 2px 0 0 transparent;
       cursor: pointer;
-      --session-compact-icon-offset: 44px;
     }
     .session-button:hover { background: rgba(255, 255, 255, .035); }
     .session-button.is-active {
@@ -445,73 +444,53 @@
     /* ---------- main ---------- */
     .main { position: relative; display: flex; flex-direction: column; min-width: 0; }
 
-    .sensitive-blurred {
-      filter: blur(12px);
-      user-select: none;
-      pointer-events: none;
+    /* a covered row keeps its geometry: the title is redacted, nothing else moves */
+    .session-title-redacted {
+      width: var(--redacted-width, 62%);
+      height: 9px;
+      border-radius: 3px;
+      background: rgba(255, 255, 255, .09);
     }
-    .session-button.is-compact .session-card-content.sensitive-compact-content .session-title {
-      filter: blur(12px);
-      user-select: none;
-      pointer-events: none;
-    }
-    .sensitive-overlay {
+    .session-button.is-guarded:hover .session-title-redacted { background: rgba(255, 255, 255, .15); }
+    .session-stamp-group { display: flex; align-items: center; gap: 8px; }
+    .session-guard-glyph { display: inline-flex; color: #d9b96a; }
+    .session-guard-glyph svg { width: 14px; height: 14px; }
+
+    /* the transcript sits behind a flat curtain; the header above it stays live */
+    .thread-sensitive-content { position: relative; display: flex; flex: 1; flex-direction: column; min-width: 0; }
+    .sensitive-curtain {
       position: absolute; inset: 0; z-index: 12;
-      display: grid; place-items: center;
-      width: 100%; min-height: 100%; padding: 1rem;
+      display: grid; place-items: start center;
+      width: 100%; padding: 2rem;
       border: 0; border-radius: 0;
-      background: rgba(11, 13, 18, .52);
-      -webkit-backdrop-filter: blur(7px) saturate(75%);
-      backdrop-filter: blur(7px) saturate(75%);
+      background: rgba(9, 11, 16, .975);
       color: var(--text); text-align: center;
     }
-    .sensitive-overlay[hidden] { display: none; }
-    .sensitive-overlay-card {
-      display: grid; justify-items: center; gap: .45rem;
-      max-width: 18rem; padding: 1.1rem 1.35rem;
-      border: 1px solid rgba(251, 191, 36, .25); border-radius: var(--r-card);
-      background: rgba(11, 13, 18, .88); box-shadow: var(--shadow-pop);
+    .sensitive-curtain[hidden] { display: none; }
+    .sensitive-curtain-card {
+      position: sticky; top: 28vh;
+      display: grid; justify-items: center; gap: 10px; max-width: 26rem;
     }
-    .sensitive-overlay-card svg { width: 1.8rem; height: 1.8rem; color: var(--warn); }
-    .sensitive-overlay-title { font-size: var(--t-name); font-weight: 800; }
-    .sensitive-overlay-hint { color: var(--muted); font-size: var(--t-meta); }
-    .session-card-sensitive-overlay {
-      inset: 0 0 0 var(--session-compact-icon-offset);
-      width: auto;
-      min-height: 0;
-      padding: .25rem .55rem;
-      border-radius: 0;
-      background: rgba(8, 11, 16, .86);
-      text-align: left;
+    .sensitive-curtain-head { display: flex; align-items: center; gap: 8px; }
+    .sensitive-overlay-icon { display: inline-flex; color: #d9b96a; }
+    .sensitive-overlay-icon svg { width: 16px; height: 16px; }
+    .sensitive-curtain-title { font-size: var(--t-body); font-weight: 700; }
+    .sensitive-curtain-hint { color: var(--muted); font-size: var(--t-meta); line-height: 1.5; }
+    .sensitive-curtain-action {
+      display: inline-flex; align-items: center; gap: 8px;
+      min-height: var(--h-ctrl); margin-top: 4px; padding: 0 14px;
+      border-radius: var(--r-ctrl); background: var(--accent);
+      color: #fff; font-size: var(--t-ctrl); font-weight: 600;
     }
-    .session-card-sensitive-overlay .sensitive-overlay-card {
-      display: flex;
-      align-items: center;
-      justify-content: flex-start;
-      gap: .45rem;
-      width: 100%;
-      max-width: none;
-      min-height: 0;
-      padding: .25rem 0;
-      border: 0;
-      border-radius: 0;
-      background: transparent;
-      box-shadow: none;
+    .sensitive-curtain:hover .sensitive-curtain-action { background: var(--accent-2); }
+    .sensitive-curtain-action svg { width: 14px; height: 14px; }
+    .topbar-title h2.is-redacted { position: relative; color: transparent; user-select: none; }
+    .topbar-title h2.is-redacted::after {
+      content: "";
+      position: absolute; left: 0; top: 50%; transform: translateY(-50%);
+      width: min(18rem, 100%); height: 14px;
+      border-radius: 4px; background: rgba(255, 255, 255, .09);
     }
-    .session-card-sensitive-overlay .sensitive-overlay-card svg { width: 1rem; height: 1rem; }
-    .session-card-sensitive-overlay .sensitive-overlay-title {
-      color: #d9b96a;
-      font-size: var(--t-ctrl);
-      font-weight: 650;
-    }
-    .session-card-sensitive-overlay .sensitive-overlay-hint {
-      color: #7f8796;
-      font-family: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
-      font-size: var(--t-label);
-    }
-    #threadSensitiveOverlay { place-items: start center; }
-    #threadSensitiveOverlay .sensitive-overlay-card { position: sticky; top: 32vh; margin-top: 32vh; }
-    .thread-sensitive-content { display: flex; flex: 1; flex-direction: column; min-width: 0; }
 
     /* the ONE glass surface in the app */
     .topbar {
@@ -533,12 +512,35 @@
       font-size: var(--t-display); font-weight: 700; letter-spacing: -.015em; line-height: 1.15;
       overflow-wrap: anywhere;
     }
-    .session-id-line { display: flex; align-items: center; gap: .5rem; min-width: 0; }
-    .session-id {
-      min-width: 0; color: var(--faint-ink); font-family: "Geist Mono", ui-monospace, monospace;
-      font-size: var(--t-meta); overflow-wrap: anywhere;
+    .session-id-line { display: flex; align-items: center; min-width: 0; }
+    .session-id-unit {
+      display: inline-flex; align-items: stretch; justify-content: flex-start;
+      max-width: 100%; min-height: var(--h-compact); padding: 0;
+      border: 1px solid var(--stroke); border-radius: var(--r-ctrl);
+      background: rgba(0, 0, 0, .28); color: var(--text-2);
+      font-weight: 400; overflow: hidden;
+      transition: border-color .16s ease, background .16s ease, color .16s ease;
     }
-    .session-id-copy { min-height: var(--h-compact); padding: 0 8px; font-size: var(--t-label); flex: 0 0 auto; }
+    .session-id-unit:hover {
+      border-color: var(--stroke-strong); background: rgba(0, 0, 0, .4); color: var(--text);
+    }
+    .session-id-glyph { display: grid; place-items: center; padding-left: 10px; color: var(--faint-ink); }
+    .session-id-glyph svg { width: 13px; height: 13px; }
+    .session-id {
+      display: inline-flex; align-items: center; min-width: 0; padding: 0 10px;
+      font-family: "Geist Mono", ui-monospace, monospace; font-size: var(--t-meta);
+      letter-spacing: .01em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .session-id-copy {
+      display: inline-flex; align-items: center; gap: 6px; flex: 0 0 auto;
+      padding: 0 10px; border-left: 1px solid var(--stroke);
+      background: var(--glass-2); font-size: var(--t-meta); font-weight: 700;
+    }
+    .session-id-copy svg { width: 13px; height: 13px; }
+    .session-id-unit.is-copied { border-color: rgba(52, 211, 153, .42); }
+    .session-id-unit.is-copied .session-id-copy {
+      border-left-color: rgba(52, 211, 153, .42); background: rgba(52, 211, 153, .14); color: var(--ok);
+    }
     .meta { display: flex; flex-wrap: wrap; align-items: center; gap: .45rem; color: var(--muted); font-size: var(--t-ctrl); font-variant-numeric: tabular-nums; }
     .meta .sep { width: 3px; height: 3px; border-radius: 50%; background: var(--faint-ink); }
     .meta .mono { font-size: var(--t-meta); color: var(--faint-ink); }
@@ -699,24 +701,27 @@
     .exchange.is-editing { border-color: rgba(122, 125, 240, .45); box-shadow: var(--shadow-pop); }
 
     .exchange-head {
-      display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem;
+      display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 1rem;
       padding: .9rem 1.05rem;
       border-bottom: 1px solid var(--stroke-soft);
       border-radius: calc(var(--r-card) - 1px) calc(var(--r-card) - 1px) 0 0;
       background: rgba(255, 255, 255, .02);
     }
-    .head-id { display: flex; align-items: center; gap: .7rem; min-width: 0; }
+    .head-id { display: flex; align-items: center; gap: .7rem; min-width: 0; flex: 1 1 12rem; }
     .ex-num {
       font-family: "Geist Mono", monospace; font-size: var(--t-meta); color: var(--faint-ink);
       padding: .2rem .45rem; border: 1px solid var(--stroke-soft); border-radius: var(--r-xs); background: rgba(0, 0, 0, .25);
       flex: 0 0 auto;
     }
     .head-model { min-width: 0; display: grid; gap: .1rem; }
-    .head-model .name { font-weight: 700; font-size: var(--t-name); overflow-wrap: anywhere; }
+    .head-model .name {
+      min-width: 0; font-weight: 700; font-size: var(--t-name);
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
     .head-model .stamps { font-size: var(--t-meta); color: var(--faint-ink); display: flex; flex-wrap: wrap; gap: .35rem; align-items: center; font-variant-numeric: tabular-nums; }
     .head-model .stamps .sep { width: 3px; height: 3px; border-radius: 50%; background: var(--faint-ink); }
 
-    .head-right { display: flex; align-items: center; gap: .55rem; flex: 0 0 auto; }
+    .head-right { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: .55rem; flex: 0 1 auto; }
 
     .pill {
       display: inline-flex; align-items: center; gap: .35rem;
@@ -1260,19 +1265,11 @@
         <div class="list-head"><span>Sessions</span></div>
         <div class="session-list-region">
           <nav id="sessionList" class="session-list" aria-label="Sessions"></nav>
-          <button id="sessionListSensitiveOverlay" type="button" class="sensitive-overlay" hidden>
-            <span class="sensitive-overlay-card">
-              <span class="sensitive-overlay-icon" aria-hidden="true"></span>
-              <span class="sensitive-overlay-title">Sensitive content</span>
-              <span class="sensitive-overlay-hint">Click to reveal</span>
-            </span>
-          </button>
         </div>
       </section>
     </aside>
 
     <section class="main" aria-label="Session corrections">
-      <div id="threadSensitiveContent" class="thread-sensitive-content">
       <header class="topbar">
         <div class="topbar-title">
           <div class="session-title-line">
@@ -1280,8 +1277,14 @@
             <h2 id="sessionTitle">Select a session</h2>
           </div>
           <div id="sessionIdLine" class="session-id-line" hidden>
-            <span id="sessionId" class="session-id"></span>
-            <button id="copySessionIdButton" type="button" class="ghost session-id-copy">Copy ID</button>
+            <button id="copySessionIdButton" type="button" class="session-id-unit" title="Copy session ID">
+              <span class="session-id-glyph" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 6.5a4.6 4.6 0 1 1 6.5 6.5l-2.2 2.2"></path><path d="M9.5 17.5a4.6 4.6 0 1 1-6.5-6.5l2.2-2.2"></path><path d="M8.8 15.2l6.4-6.4"></path></svg></span>
+              <span id="sessionId" class="session-id"></span>
+              <span class="session-id-copy">
+                <span class="session-id-copy-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"></rect><path d="M15 5H6a2 2 0 0 0-2 2v9"></path></svg></span>
+                <span id="copySessionIdLabel" class="session-id-copy-label">Copy</span>
+              </span>
+            </button>
           </div>
           <div id="sessionMeta" class="meta">Conversation history correction panel.</div>
         </div>
@@ -1311,6 +1314,7 @@
         </div>
       </header>
 
+      <div id="threadSensitiveContent" class="thread-sensitive-content">
       <div class="content-wrap">
         <nav id="turnNav" class="turn-nav" aria-label="Transcript navigation">
           <button id="scrollTopButton" type="button" class="ghost" title="Scroll to top"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"></path><path d="M6 5h12"></path></svg></button>
@@ -1329,14 +1333,20 @@
           <div id="exchangeList" aria-live="polite"></div>
         </section>
       </div>
-      </div>
-      <button id="threadSensitiveOverlay" type="button" class="sensitive-overlay" hidden>
-        <span class="sensitive-overlay-card">
-          <span class="sensitive-overlay-icon" aria-hidden="true"></span>
-          <span class="sensitive-overlay-title">Sensitive content</span>
-          <span class="sensitive-overlay-hint">Click to reveal</span>
+      <button id="threadSensitiveOverlay" type="button" class="sensitive-curtain" hidden>
+        <span class="sensitive-curtain-card">
+          <span class="sensitive-curtain-head">
+            <span class="sensitive-overlay-icon" aria-hidden="true"></span>
+            <span id="threadSensitiveTitle" class="sensitive-curtain-title">Sensitive group</span>
+          </span>
+          <span class="sensitive-curtain-hint">The conversation stays covered until you reveal it. Revealing applies to the whole group and lasts until you reload the page.</span>
+          <span class="sensitive-curtain-action">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.6 12C3.6 9.4 7 5.4 12 5.4s8.4 4 9.4 6.6c-1 2.6-4.4 6.6-9.4 6.6S3.6 14.6 2.6 12z"></path><circle cx="12" cy="12" r="2.6"></circle></svg>
+            Reveal conversation
+          </span>
         </span>
       </button>
+      </div>
     </section>
   </main>
 
@@ -1813,6 +1823,7 @@
         aiSettingsStatus: document.getElementById("aiSettingsStatus"),
         copyButton: document.getElementById("copyButton"),
         copySessionIdButton: document.getElementById("copySessionIdButton"),
+        copySessionIdLabel: document.getElementById("copySessionIdLabel"),
         demoBanner: document.getElementById("demoBanner"),
         exchangeList: document.getElementById("exchangeList"),
         editGroupButton: document.getElementById("editGroupButton"),
@@ -1877,7 +1888,6 @@
         sessionFileInput: document.getElementById("sessionFileInput"),
         sessionFileStatus: document.getElementById("sessionFileStatus"),
         sessionList: document.getElementById("sessionList"),
-        sessionListSensitiveOverlay: document.getElementById("sessionListSensitiveOverlay"),
         sessionMoveBack: document.getElementById("sessionMoveBack"),
         sessionMoveCancel: document.getElementById("sessionMoveCancel"),
         sessionMoveClose: document.getElementById("sessionMoveClose"),
@@ -1896,6 +1906,7 @@
         timezoneSelect: document.getElementById("timezoneSelect"),
         threadSensitiveContent: document.getElementById("threadSensitiveContent"),
         threadSensitiveOverlay: document.getElementById("threadSensitiveOverlay"),
+        threadSensitiveTitle: document.getElementById("threadSensitiveTitle"),
         turnNav: document.getElementById("turnNav"),
       };
       const settingsDom = Object.fromEntries([
@@ -1926,12 +1937,6 @@
       dom.groupSensitiveButton.addEventListener("click", () => {
         const next = dom.groupSensitiveButton.getAttribute("aria-pressed") !== "true";
         dom.groupSensitiveButton.setAttribute("aria-pressed", String(next));
-      });
-      dom.sessionListSensitiveOverlay.addEventListener("click", () => {
-        const groupId = state.activeGroupId;
-        if (groupId === "all") return;
-        state.revealedSensitiveSessionLists.add(groupId);
-        renderSessions();
       });
       dom.threadSensitiveOverlay.addEventListener("click", () => {
         const groupId = state.selectedSession?.group_id;
@@ -2057,7 +2062,7 @@
         if (!sessionId) return;
         try {
           await navigator.clipboard.writeText(sessionId);
-          setStatus("Session ID copied to clipboard.", "ok");
+          markSessionIdCopied();
         } catch (error) {
           setStatus(`Could not copy session ID: ${error.message}`, "error");
         }
@@ -3054,7 +3059,6 @@
 
         if (!visible.length) {
           dom.sessionList.append(emptyRow("No matching sessions."));
-          renderSessionListSensitiveGuard();
           return;
         }
 
@@ -3070,10 +3074,8 @@
           item.className = "session-button";
           const isSelected = session.session_id === state.selectedSessionId;
           item.classList.toggle("is-active", isSelected);
-          item.classList.toggle("is-compact", !isSelected);
           const group = sessionGroup(session);
-          const cardIsGuarded = state.activeGroupId === "all"
-            && Boolean(group?.is_sensitive)
+          const cardIsGuarded = Boolean(group?.is_sensitive)
             && !state.revealedSensitiveSessionLists.has(session.group_id);
           const selectSession = () => {
             if (state.fileOperationPending) {
@@ -3086,64 +3088,44 @@
             };
             runFileContinuation("session", continueSelection, item);
           };
-          if (!cardIsGuarded) {
-            item.tabIndex = 0;
-            item.role = "button";
-            if (!isSelected) {
-              item.setAttribute("aria-label", `${session.title || "Untitled"} — ${group?.name || session.group_id || "Uncategorized"}`);
-            }
-            item.addEventListener("click", selectSession);
-            item.addEventListener("keydown", (event) => {
-              if (event.key === "Enter" || event.key === " ") {
-                event.preventDefault();
-                selectSession();
-              }
-            });
+          const revealGroup = () => {
+            state.revealedSensitiveSessionLists.add(session.group_id);
+            renderSessions();
+          };
+          const activate = cardIsGuarded ? revealGroup : selectSession;
+          item.classList.toggle("is-guarded", cardIsGuarded);
+          item.tabIndex = 0;
+          item.role = "button";
+          if (cardIsGuarded) {
+            item.setAttribute("aria-label", `Covered session in ${group.name}. Activate to reveal the group.`);
+          } else if (!isSelected) {
+            item.setAttribute("aria-label", `${session.title || "Untitled"} — ${group?.name || session.group_id || "Uncategorized"}`);
           }
+          item.addEventListener("click", activate);
+          item.addEventListener("keydown", (event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              activate();
+            }
+          });
 
           const content = div("session-card-content");
-          if (isSelected && state.manualRenameSessionId === session.session_id) {
+          if (cardIsGuarded) {
+            content.append(
+              sessionCompactTitle(session, group, dateBucket, true),
+              sessionMetaLine(session, group),
+            );
+          } else if (state.manualRenameSessionId === session.session_id) {
             content.append(renderSessionRenameForm(session));
           } else {
-            content.append(sessionCompactTitle(session, group, dateBucket), sessionMetaLine(session, group));
-            if (isSelected) content.append(renderSessionActions(session));
+            content.append(
+              sessionCompactTitle(session, group, dateBucket),
+              sessionMetaLine(session, group),
+              renderSessionActions(session),
+            );
           }
           item.append(content);
-          if (cardIsGuarded) {
-            content.inert = true;
-            if (isSelected) {
-              content.classList.add("sensitive-blurred");
-            } else {
-              content.classList.add("sensitive-compact-content");
-            }
-            const overlay = sensitiveOverlayButton("session-card-sensitive-overlay");
-            overlay.setAttribute("aria-label", `Sensitive content in ${group.name}. Click to reveal.`);
-            overlay.addEventListener("click", (event) => {
-              event.stopPropagation();
-              const groupId = session.group_id;
-              state.revealedSensitiveSessionLists.add(groupId);
-              renderSessions();
-            });
-            item.append(overlay);
-          }
           dom.sessionList.append(item);
-        }
-        renderSessionListSensitiveGuard();
-      }
-
-      function renderSessionListSensitiveGuard() {
-        const group = currentGroup();
-        const listIsGuarded = state.activeGroupId !== "all"
-          && Boolean(group?.is_sensitive)
-          && !state.revealedSensitiveSessionLists.has(group.group_id);
-        dom.sessionList.inert = listIsGuarded;
-        dom.sessionList.classList.toggle("sensitive-blurred", listIsGuarded);
-        dom.sessionListSensitiveOverlay.hidden = !listIsGuarded;
-        if (listIsGuarded) {
-          dom.sessionListSensitiveOverlay.setAttribute(
-            "aria-label",
-            `Sensitive content in ${group.name}. Click to reveal.`,
-          );
         }
       }
 
@@ -4170,18 +4152,36 @@
         return heading;
       }
 
-      function sessionCompactTitle(session, group, dateBucket = null) {
+      function sessionCompactTitle(session, group, dateBucket = null, guarded = false) {
         const titleLine = div("session-compact-title");
         const icon = spanCls("session-compact-icon");
         icon.setAttribute("aria-hidden", "true");
         icon.style.setProperty("--g", group?.color || "#8b93a7");
         icon.append(svgNode(group?.icon_key || "folder"));
+        const stampGroup = div("session-stamp-group");
+        if (guarded) {
+          const glyph = spanCls("session-guard-glyph");
+          glyph.setAttribute("aria-hidden", "true");
+          glyph.innerHTML = sensitiveIconSvg();
+          stampGroup.append(glyph);
+        }
+        stampGroup.append(sessionListStampNode(session.last_turn_at_iso || session.updated_at_iso, dateBucket));
         titleLine.append(
           icon,
-          div("session-title", session.title || "Untitled"),
-          sessionListStampNode(session.last_turn_at_iso || session.updated_at_iso, dateBucket),
+          guarded ? redactedSessionTitle(session) : div("session-title", session.title || "Untitled"),
+          stampGroup,
         );
         return titleLine;
+      }
+
+      function redactedSessionTitle(session) {
+        const node = div("session-title-redacted");
+        const id = String(session.session_id || "");
+        let hash = 0;
+        for (let index = 0; index < id.length; index += 1) hash = (hash * 31 + id.charCodeAt(index)) % 997;
+        node.style.setProperty("--redacted-width", `${48 + (hash % 42)}%`);
+        node.setAttribute("aria-hidden", "true");
+        return node;
       }
 
       function sessionListFormatter(timezone, kind) {
@@ -4645,15 +4645,27 @@
         const groupId = state.selectedSession?.group_id;
         const group = state.groups.find((item) => item.group_id === groupId);
         const threadIsGuarded = selectedThreadIsGuarded();
+        // the transcript is covered; the title bar keeps its session key and its actions
         dom.threadSensitiveContent.inert = threadIsGuarded;
-        dom.threadSensitiveContent.classList.toggle("sensitive-blurred", threadIsGuarded);
+        dom.sessionTitle.classList.toggle("is-redacted", threadIsGuarded);
         dom.threadSensitiveOverlay.hidden = !threadIsGuarded;
         if (threadIsGuarded) {
+          dom.threadSensitiveTitle.textContent = `${group.name} — sensitive group`;
           dom.threadSensitiveOverlay.setAttribute(
             "aria-label",
-            `Sensitive content in ${group.name}. Click to reveal.`,
+            `Conversation covered because ${group.name} is a sensitive group. Activate to reveal it.`,
           );
         }
+      }
+
+      function markSessionIdCopied() {
+        window.clearTimeout(markSessionIdCopied.timer);
+        dom.copySessionIdButton.classList.add("is-copied");
+        dom.copySessionIdLabel.textContent = "Copied";
+        markSessionIdCopied.timer = window.setTimeout(() => {
+          dom.copySessionIdButton.classList.remove("is-copied");
+          dom.copySessionIdLabel.textContent = "Copy";
+        }, 1200);
       }
 
       function selectedThreadIsGuarded() {
@@ -6023,14 +6035,6 @@
 
       for (const icon of document.querySelectorAll(".sensitive-overlay-icon, .sensitive-toggle-icon")) {
         icon.innerHTML = sensitiveIconSvg();
-      }
-
-      function sensitiveOverlayButton(className = "") {
-        const overlay = document.createElement("button");
-        overlay.type = "button";
-        overlay.className = `sensitive-overlay${className ? ` ${className}` : ""}`;
-        overlay.innerHTML = `<span class="sensitive-overlay-card"><span class="sensitive-overlay-icon" aria-hidden="true">${sensitiveIconSvg()}</span><span class="sensitive-overlay-title">Sensitive content</span><span class="sensitive-overlay-hint">Click to reveal</span></span>`;
-        return overlay;
       }
 
       // ---------- tiny DOM helpers ----------

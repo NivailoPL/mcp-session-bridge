@@ -138,35 +138,38 @@ def test_admin_viewer_compacts_unselected_sessions() -> None:
 
     render_sessions = viewer[
         viewer.index("function renderSessions"):
-        viewer.index("function renderSessionListSensitiveGuard")
+        viewer.index("function chip(text, warn)")
     ]
-    assert 'item.classList.toggle("is-compact", !isSelected);' in render_sessions
     assert 'const isSelected = session.session_id === state.selectedSessionId;' in render_sessions
-    assert 'if (isSelected && state.manualRenameSessionId === session.session_id) {' in render_sessions
-    assert 'content.append(sessionCompactTitle(session, group, dateBucket), sessionMetaLine(session, group));' in render_sessions
+    assert 'if (state.manualRenameSessionId === session.session_id) {' in render_sessions
+    assert 'sessionCompactTitle(session, group, dateBucket),' in render_sessions
+    assert 'sessionMetaLine(session, group),' in render_sessions
+    assert 'renderSessionActions(session),' in render_sessions
     assert 'item.setAttribute("aria-label"' in render_sessions
     assert 'function sessionGroupChip(group, fallbackId)' in viewer
-    assert 'function sessionCompactTitle(session, group, dateBucket = null)' in viewer
+    assert 'function sessionCompactTitle(session, group, dateBucket = null, guarded = false)' in viewer
     assert 'function sessionMetaLine(session, group)' in viewer
-    assert ".session-button.is-compact" in viewer
-    assert 'content.classList.add("sensitive-compact-content");' in render_sessions
+    assert 'item.classList.toggle("is-guarded", cardIsGuarded);' in render_sessions
 
 
-def test_admin_viewer_compact_sensitive_overlay_fits_card_contract() -> None:
+def test_admin_viewer_covered_row_keeps_the_row_contract() -> None:
     viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
 
-    compact_overlay = viewer[
-        viewer.index(".session-card-sensitive-overlay {"):
-        viewer.index("#threadSensitiveOverlay")
+    # a covered row is redacted in place: same grid, same height, nothing laid over it
+    assert "sensitive-compact-content" not in viewer
+    assert "session-card-sensitive-overlay" not in viewer
+    assert "sensitive-blurred" not in viewer
+
+    redacted = viewer[
+        viewer.index(".session-title-redacted {"):
+        viewer.index(".session-stamp-group")
     ]
-    assert "padding: .25rem .55rem;" in compact_overlay
-    assert "background: rgba(8, 11, 16, .86);" in compact_overlay
-    assert "inset: 0 0 0 var(--session-compact-icon-offset);" in compact_overlay
-    assert "width: auto;" in compact_overlay
-    assert "display: flex;" in compact_overlay
-    assert ".session-card-sensitive-overlay .sensitive-overlay-card svg" in compact_overlay
-    assert "--session-compact-icon-offset: 44px;" in viewer
-    assert ".session-button.is-compact .session-card-content.sensitive-compact-content .session-title {" in viewer
+    assert "width: var(--redacted-width, 62%);" in redacted
+    assert "height: 9px;" in redacted
+
+    assert "function redactedSessionTitle(session)" in viewer
+    assert 'node.style.setProperty("--redacted-width"' in viewer
+    assert ".session-guard-glyph svg { width: 14px; height: 14px; }" in viewer
 
 
 @pytest.mark.skipif(shutil.which("node") is None, reason="Node.js is required for the browser renderer smoke test")
@@ -270,7 +273,7 @@ def test_admin_viewer_session_list_rendering() -> None:
     ]
     render_sessions = session_list_helpers + viewer[
         viewer.index("function renderSessions"):
-        viewer.index("function renderSessionListSensitiveGuard")
+        viewer.index("function chip(text, warn)")
     ]
     harness = r"""
 class Element {
@@ -366,7 +369,6 @@ const dom = {
 function cardSnapshot(node) {
   return {
     active: node.classList.contains("is-active"),
-    compact: node.classList.contains("is-compact"),
     role: node.role,
     tabIndex: node.tabIndex,
     hasKeydown: Boolean(node.listeners.keydown),
@@ -420,7 +422,6 @@ process.stdout.write(JSON.stringify({ initial, switched, initialHeadings, switch
     assert rendered["switchedStructure"] == expected_structure
     initial_selected, initial_other, initial_two_days, initial_old = rendered["initial"]
     assert initial_selected["active"] is True
-    assert initial_selected["compact"] is False
     assert initial_selected["compactIcon"] is True
     assert initial_selected["compactIconFirst"] is True
     assert initial_selected["compactIconHidden"] is True
@@ -432,7 +433,6 @@ process.stdout.write(JSON.stringify({ initial, switched, initialHeadings, switch
     assert initial_selected["tabIndex"] == 0
     assert initial_selected["hasKeydown"] is True
     assert initial_other["active"] is False
-    assert initial_other["compact"] is True
     assert initial_other["compactIcon"] is True
     assert initial_other["compactIconFirst"] is True
     assert initial_other["compactIconHidden"] is True
@@ -440,7 +440,7 @@ process.stdout.write(JSON.stringify({ initial, switched, initialHeadings, switch
     assert initial_other["text"].startswith("Other session")
     assert "Brainstorming · 2 turns" in initial_other["text"]
     assert "other-id" not in initial_other["text"]
-    assert "actions" not in initial_other["text"]
+    assert "actions" in initial_other["text"]
     assert initial_other["role"] == "button"
     assert initial_other["tabIndex"] == 0
     assert initial_other["hasKeydown"] is True
@@ -448,16 +448,12 @@ process.stdout.write(JSON.stringify({ initial, switched, initialHeadings, switch
     assert initial_old["text"].startswith("Old session")
 
     switched_selected, switched_other, switched_two_days, switched_old = rendered["switched"]
+    # renaming no longer requires opening the session first
     assert switched_selected["active"] is False
-    assert switched_selected["compact"] is True
-    assert switched_selected["compactIcon"] is True
-    assert switched_selected["compactIconFirst"] is True
-    assert switched_selected["compactIconHidden"] is True
     assert switched_selected["ariaLabel"] == "Selected session — Brainstorming"
-    assert "rename form" not in switched_selected["text"]
-    assert "Brainstorming · 4 turns" in switched_selected["text"]
+    assert "rename form" in switched_selected["text"]
+    assert switched_selected["compactIcon"] is False
     assert switched_other["active"] is True
-    assert switched_other["compact"] is False
     assert switched_other["compactIcon"] is True
     assert switched_other["compactIconFirst"] is True
     assert switched_other["compactIconHidden"] is True
@@ -478,13 +474,14 @@ def test_admin_viewer_sensitive_group_privacy_contract() -> None:
     assert viewer.count("sensitiveIconSvg()") >= 4
     assert 'revealedSensitiveSessionLists: new Set()' in viewer
     assert 'revealedSensitiveThreads: new Set()' in viewer
-    assert 'id="sessionListSensitiveOverlay"' in viewer
     assert 'id="threadSensitiveOverlay"' in viewer
-    assert viewer.count("Sensitive content") >= 2
-    assert viewer.count("Click to reveal") >= 2
-    assert "dom.sessionList.inert = listIsGuarded;" in viewer
+    assert "The conversation stays covered until you reveal it." in viewer
+    assert "Reveal conversation" in viewer
     assert "dom.threadSensitiveContent.inert = threadIsGuarded;" in viewer
-    assert "state.revealedSensitiveSessionLists.add(groupId);" in viewer
+    # a covered thread keeps its header usable, but not its title
+    assert 'dom.sessionTitle.classList.toggle("is-redacted", threadIsGuarded);' in viewer
+    assert ".topbar-title h2.is-redacted" in viewer
+    assert "state.revealedSensitiveSessionLists.add(session.group_id);" in viewer
     assert "state.revealedSensitiveThreads.add(groupId);" in viewer
     assert 'input.disabled = Boolean(group.is_sensitive);' in viewer
     assert "This group stays in local BM25 search." in viewer
@@ -510,17 +507,23 @@ def test_admin_viewer_sensitive_group_privacy_contract() -> None:
     assert "group.is_sensitive ? sensitiveIconSvg()" not in group_button
 
 
-    all_sessions_guard = viewer[
-        viewer.index("const cardIsGuarded = state.activeGroupId === \"all\""):
+    guard = viewer[
+        viewer.index("const cardIsGuarded = Boolean(group?.is_sensitive)"):
         viewer.index("dom.sessionList.append(item);", viewer.index("const cardIsGuarded"))
     ]
-    assert 'if (!cardIsGuarded) {' in all_sessions_guard
-    assert 'item.addEventListener("keydown"' in all_sessions_guard
-    assert "content.inert = true;" in all_sessions_guard
-    reveal_handler = all_sessions_guard[all_sessions_guard.index('overlay.addEventListener("click"'):]
-    assert "state.revealedSensitiveSessionLists.add(groupId);" in reveal_handler
+    # covering follows the group, under every filter the list can be in
+    assert "!state.revealedSensitiveSessionLists.has(session.group_id)" in guard
+    assert "state.activeGroupId" not in guard
+    assert "const activate = cardIsGuarded ? revealGroup : selectSession;" in guard
+    assert 'item.addEventListener("keydown"' in guard
+    # a covered row renders redacted and offers neither rename nor move
+    assert "sessionCompactTitle(session, group, dateBucket, true)" in guard
+    covered_branch = guard[guard.index("if (cardIsGuarded) {", guard.index("const content =")):guard.index("} else if")]
+    assert "renderSessionActions" not in covered_branch
+    reveal_handler = guard[guard.index("const revealGroup"):guard.index("const activate")]
+    assert "state.revealedSensitiveSessionLists.add(session.group_id);" in reveal_handler
     assert "renderSessions();" in reveal_handler
-    assert "selectSession();" not in reveal_handler
+    assert "loadSession" not in reveal_handler
 
 
 def test_admin_viewer_initializes_sensitive_icons_after_svg_constants() -> None:
