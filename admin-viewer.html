@@ -208,7 +208,7 @@
       display: flex;
       gap: .45rem;
       align-items: center;
-      padding: .8rem 1.2rem .9rem;
+      padding: 16px;
       border-bottom: 1px solid var(--stroke-soft);
     }
     .settings-row button { min-height: var(--h-ctrl); padding: 0 10px; font-size: var(--t-ctrl); border-radius: var(--r-ctrl); }
@@ -238,7 +238,7 @@
 
     .list-head {
       display: flex; align-items: center; justify-content: space-between;
-      padding: .9rem 1.2rem .4rem;
+      padding: 16px 16px 8px;
       color: var(--faint-ink);
       font-family: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
       font-size: var(--t-label); font-weight: 500; text-transform: uppercase; letter-spacing: .16em;
@@ -246,8 +246,8 @@
 
     .group-panel {
       display: grid;
-      gap: .55rem;
-      padding: .75rem 1.2rem .85rem;
+      gap: 12px;
+      padding: 16px;
       border-bottom: 1px solid var(--stroke-soft);
     }
     .group-head { display: flex; align-items: center; gap: .6rem; }
@@ -315,113 +315,93 @@
 
     .session-list {
       display: grid; align-content: start; gap: 0;
-      padding: .35rem 0 .8rem;
+      padding: 0 0 12px;
       overflow: auto; min-height: 0; flex: 1;
     }
     .session-list-region { position: relative; display: flex; min-height: 0; flex: 1; }
 
     .session-date-heading {
-      display: flex;
-      align-items: center;
-      gap: .7rem;
       grid-column: 1 / -1;
-      margin: .75rem .95rem .35rem;
+      margin: 20px 16px 6px;
       color: var(--faint-ink);
       font-family: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
       font-size: var(--t-label);
       font-weight: 500;
-      letter-spacing: .13em;
+      letter-spacing: .09em;
       line-height: 1.2;
       text-transform: uppercase;
       white-space: nowrap;
     }
-    .session-date-heading::after {
-      content: "";
-      height: 1px;
-      flex: 1;
-      background: var(--stroke-soft);
-    }
-    .session-date-heading:first-child { margin-top: .4rem; }
+    .session-date-heading:first-child { margin-top: 12px; }
 
     .session-button {
       position: relative;
       display: block;
       width: 100%;
       min-height: auto;
-      padding: .72rem .85rem;
+      padding: 10px 16px;
       text-align: left;
       border: 0;
-      border-left: 3px solid transparent;
       border-radius: 0;
       background: transparent;
-      --session-compact-icon-offset: calc(.85rem + 1.1rem + .6rem);
+      box-shadow: inset 2px 0 0 transparent;
+      cursor: pointer;
+      --session-compact-icon-offset: 44px;
     }
     .session-button:hover { background: rgba(255, 255, 255, .035); }
     .session-button.is-active {
-      padding-left: calc(.85rem - 3px);
-      border-left-color: #8f9df0;
-      background: rgba(143, 157, 240, .13);
+      background: rgba(84, 87, 229, .14);
+      box-shadow: inset 2px 0 0 #8f9df0;
     }
-    .session-button.is-compact {
-      padding-top: .62rem;
-      padding-bottom: .62rem;
-    }
-    .session-button.is-compact .session-card-content { gap: .25rem; }
-    .session-button { cursor: pointer; }
-    .session-card-content { display: grid; gap: .35rem; min-width: 0; }
+    .session-card-content { display: grid; gap: 2px; min-width: 0; }
     .session-compact-title {
       display: grid;
-      grid-template-columns: 1.1rem minmax(0, 1fr) auto;
+      grid-template-columns: 16px minmax(0, 1fr) auto;
       align-items: center;
-      gap: .6rem;
+      gap: 12px;
       min-width: 0;
     }
     .session-title {
       min-width: 0;
       overflow: hidden;
-      color: var(--text);
+      color: var(--text-2);
       font-size: var(--t-body);
       font-weight: 600;
-      line-height: 1.3;
+      line-height: 18px;
       text-overflow: ellipsis;
       white-space: nowrap;
     }
-    .session-button.is-active .session-title { color: #f0f1f6; font-weight: 750; }
-    .session-compact-icon { display: inline-flex; width: 1.1rem; height: 1.1rem; color: var(--g, var(--muted)); flex: 0 0 auto; }
+    .session-button.is-active .session-title { color: #f0f1f6; font-weight: 700; }
+    .session-compact-icon { display: inline-flex; width: 16px; height: 16px; color: var(--g, var(--muted)); flex: 0 0 auto; }
     .session-compact-icon svg { width: 100%; height: 100%; }
     .session-list-stamp {
-      color: var(--muted);
+      color: var(--faint-ink);
       font-family: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
       font-size: var(--t-meta);
       font-variant-numeric: tabular-nums;
-      line-height: 1;
+      line-height: 18px;
       white-space: nowrap;
     }
-    .session-list-stamp.is-date { color: #6fb3a8; }
-    .session-selected-details {
-      display: grid;
-      gap: .25rem;
+    .session-button.is-active .session-list-stamp { color: var(--muted); }
+    .session-meta-line {
       min-width: 0;
-      margin-left: calc(1.1rem + .6rem);
-    }
-    .session-facts,
-    .session-selected-time,
-    .session-selected-id {
-      min-width: 0;
+      margin-left: 28px;
       overflow: hidden;
+      color: var(--muted);
+      font-size: var(--t-meta);
+      line-height: 16px;
       text-overflow: ellipsis;
       white-space: nowrap;
     }
-    .session-facts { color: var(--muted); font-size: var(--t-meta); }
-    .session-selected-time { color: #6fb3a8; font-size: var(--t-meta); }
-    .session-selected-id { color: var(--faint-ink); font-size: var(--t-label); }
     .session-actions {
-      position: absolute; inset: .55rem .55rem auto auto; display: flex; gap: .35rem;
-      opacity: 0; transform: translateY(-3px); pointer-events: none; transition: opacity .16s ease, transform .16s ease;
-      padding: .25rem; border-radius: var(--r-ctrl); background: #12141a; border: 1px solid var(--stroke-soft);
+      position: absolute; inset: 0 12px 0 auto; display: flex; align-items: center; gap: 4px;
+      opacity: 0; pointer-events: none; transition: opacity .16s ease;
+      padding: 0 0 0 20px;
+      background: linear-gradient(90deg, transparent, rgba(11, 13, 18, .94) 18%);
     }
-    .session-button:hover .session-actions, .session-button:focus-within .session-actions { opacity: 1; transform: translateY(0); pointer-events: auto; }
-    .session-actions button { min-height: var(--h-compact); padding: 0 8px; border-radius: var(--r-ctrl); font-size: var(--t-label); }
+    .session-button:hover .session-actions, .session-button:focus-within .session-actions { opacity: 1; pointer-events: auto; }
+    .session-button:hover .session-list-stamp, .session-button:focus-within .session-list-stamp { opacity: 0; }
+    .session-actions button { min-height: var(--h-micro); padding: 0 8px; border-radius: var(--r-ctrl); font-size: var(--t-label); }
     .session-actions button:disabled { opacity: .38; cursor: not-allowed; }
     .session-rename { display: grid; gap: .45rem; position: relative; z-index: 2; }
     .session-rename input { width: 100%; min-height: var(--h-ctrl); border-radius: var(--r-ctrl); font-size: var(--t-ctrl); }
@@ -3110,10 +3090,8 @@
           if (isSelected && state.manualRenameSessionId === session.session_id) {
             content.append(renderSessionRenameForm(session));
           } else {
-            content.append(sessionCompactTitle(session, group, dateBucket));
-            if (isSelected) {
-              content.append(sessionSelectedDetails(session, group), renderSessionActions(session));
-            }
+            content.append(sessionCompactTitle(session, group, dateBucket), sessionMetaLine(session, group));
+            if (isSelected) content.append(renderSessionActions(session));
           }
           item.append(content);
           if (cardIsGuarded) {
@@ -4104,8 +4082,8 @@
       const SESSION_DATE_GROUPS = [
         { key: "today", label: "Today" },
         { key: "yesterday", label: "Yesterday" },
-        { key: "more-than-2-days", label: "More than 2 days ago" },
-        { key: "more-than-7-days", label: "More than 7 days ago" },
+        { key: "more-than-2-days", label: "Earlier this week" },
+        { key: "more-than-7-days", label: "Older" },
       ];
 
       const SESSION_DATE_FORMATTERS = new Map();
@@ -4198,7 +4176,6 @@
         const options = {
           time: { hour: "2-digit", minute: "2-digit", hourCycle: "h23" },
           date: { day: "2-digit", month: "2-digit" },
-          meta: { weekday: "long", hour: "2-digit", minute: "2-digit", hourCycle: "h23" },
         }[kind] || { hour: "2-digit", minute: "2-digit", hourCycle: "h23" };
         let formatter;
         try {
@@ -4225,19 +4202,10 @@
       }
 
       function sessionListStampNode(value, dateBucket) {
-        const stamp = spanCls("session-list-stamp mono", sessionListStamp(value, dateBucket));
-        if (dateBucket && dateBucket !== "today") stamp.classList.add("is-date");
-        return stamp;
+        return spanCls("session-list-stamp mono", sessionListStamp(value, dateBucket));
       }
 
-      function sessionListMetaTimestamp(value) {
-        const parts = sessionListDateParts(value, "meta");
-        if (!parts) return "No timestamp";
-        return `${parts.weekday} ${parts.hour}:${parts.minute}`;
-      }
-
-      function sessionSelectedDetails(session, group) {
-        const details = div("session-selected-details");
+      function sessionMetaLine(session, group) {
         const facts = [
           group?.name || session.group_id || "Uncategorized",
           `${(Number(session.exchange_count) || 0) * 2} turns`,
@@ -4245,12 +4213,7 @@
         if (Number(session.deleted_exchange_count || 0) > 0) {
           facts.push(`${session.deleted_exchange_count} excluded`);
         }
-        details.append(
-          spanCls("session-facts mono", facts.join(" · ")),
-          spanCls("session-selected-time mono", sessionListMetaTimestamp(session.last_turn_at_iso || session.updated_at_iso)),
-          spanCls("session-selected-id mono", session.session_id || "—"),
-        );
-        return details;
+        return div("session-meta-line", facts.join(" · "));
       }
 
       function sessionGroupChip(group, fallbackId) {

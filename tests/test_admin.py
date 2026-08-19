@@ -143,10 +143,11 @@ def test_admin_viewer_compacts_unselected_sessions() -> None:
     assert 'item.classList.toggle("is-compact", !isSelected);' in render_sessions
     assert 'const isSelected = session.session_id === state.selectedSessionId;' in render_sessions
     assert 'if (isSelected && state.manualRenameSessionId === session.session_id) {' in render_sessions
-    assert 'content.append(sessionCompactTitle(session, group, dateBucket));' in render_sessions
+    assert 'content.append(sessionCompactTitle(session, group, dateBucket), sessionMetaLine(session, group));' in render_sessions
     assert 'item.setAttribute("aria-label"' in render_sessions
     assert 'function sessionGroupChip(group, fallbackId)' in viewer
     assert 'function sessionCompactTitle(session, group, dateBucket = null)' in viewer
+    assert 'function sessionMetaLine(session, group)' in viewer
     assert ".session-button.is-compact" in viewer
     assert 'content.classList.add("sensitive-compact-content");' in render_sessions
 
@@ -164,7 +165,7 @@ def test_admin_viewer_compact_sensitive_overlay_fits_card_contract() -> None:
     assert "width: auto;" in compact_overlay
     assert "display: flex;" in compact_overlay
     assert ".session-card-sensitive-overlay .sensitive-overlay-card svg" in compact_overlay
-    assert "--session-compact-icon-offset: calc(.85rem + 1.1rem + .6rem);" in viewer
+    assert "--session-compact-icon-offset: 44px;" in viewer
     assert ".session-button.is-compact .session-card-content.sensitive-compact-content .session-title {" in viewer
 
 
@@ -209,8 +210,8 @@ process.stdout.write(JSON.stringify({
     assert rendered["labels"] == [
         "Today",
         "Yesterday",
-        "More than 2 days ago",
-        "More than 7 days ago",
+        "Earlier this week",
+        "Older",
     ]
     assert rendered["buckets"] == [
         "today",
@@ -237,8 +238,7 @@ def test_admin_viewer_session_list_stamps_use_display_timezone() -> None:
 const state = { displayTimezone: "Europe/Warsaw" };
 process.stdout.write(JSON.stringify({
   today: sessionListStamp("2026-08-13T07:12:00Z", "today"),
-  older: sessionListStamp("2026-08-11T15:08:00Z", "more-than-2-days"),
-  meta: sessionListMetaTimestamp("2026-08-13T15:21:00Z")
+  older: sessionListStamp("2026-08-11T15:08:00Z", "more-than-2-days")
 }));
 """
     node = shutil.which("node")
@@ -254,7 +254,6 @@ process.stdout.write(JSON.stringify({
     assert rendered == {
         "today": "09:12",
         "older": "11.08",
-        "meta": "Thursday 17:21",
     }
 
 
@@ -404,15 +403,15 @@ process.stdout.write(JSON.stringify({ initial, switched, initialHeadings, switch
     )
     rendered = json.loads(completed.stdout)
 
-    expected_headings = ["Today", "Yesterday", "More than 2 days ago", "More than 7 days ago"]
+    expected_headings = ["Today", "Yesterday", "Earlier this week", "Older"]
     expected_structure = [
         "heading:Today",
         "card",
         "heading:Yesterday",
         "card",
-        "heading:More than 2 days ago",
+        "heading:Earlier this week",
         "card",
-        "heading:More than 7 days ago",
+        "heading:Older",
         "card",
     ]
     assert rendered["initialHeadings"] == expected_headings
@@ -426,7 +425,8 @@ process.stdout.write(JSON.stringify({ initial, switched, initialHeadings, switch
     assert initial_selected["compactIconFirst"] is True
     assert initial_selected["compactIconHidden"] is True
     assert initial_selected["ariaLabel"] == ""
-    assert "selected-id" in initial_selected["text"]
+    assert "selected-id" not in initial_selected["text"]
+    assert "Brainstorming · 4 turns" in initial_selected["text"]
     assert "actions" in initial_selected["text"]
     assert initial_selected["role"] == "button"
     assert initial_selected["tabIndex"] == 0
@@ -438,7 +438,7 @@ process.stdout.write(JSON.stringify({ initial, switched, initialHeadings, switch
     assert initial_other["compactIconHidden"] is True
     assert initial_other["ariaLabel"] == "Other session — Brainstorming"
     assert initial_other["text"].startswith("Other session")
-    assert "Brainstorming" not in initial_other["text"]
+    assert "Brainstorming · 2 turns" in initial_other["text"]
     assert "other-id" not in initial_other["text"]
     assert "actions" not in initial_other["text"]
     assert initial_other["role"] == "button"
@@ -455,15 +455,15 @@ process.stdout.write(JSON.stringify({ initial, switched, initialHeadings, switch
     assert switched_selected["compactIconHidden"] is True
     assert switched_selected["ariaLabel"] == "Selected session — Brainstorming"
     assert "rename form" not in switched_selected["text"]
-    assert "Brainstorming" not in switched_selected["text"]
+    assert "Brainstorming · 4 turns" in switched_selected["text"]
     assert switched_other["active"] is True
     assert switched_other["compact"] is False
     assert switched_other["compactIcon"] is True
     assert switched_other["compactIconFirst"] is True
     assert switched_other["compactIconHidden"] is True
     assert switched_other["ariaLabel"] == ""
-    assert "other-id" in switched_other["text"]
-    assert "Brainstorming" in switched_other["text"]
+    assert "other-id" not in switched_other["text"]
+    assert "Brainstorming · 2 turns" in switched_other["text"]
     assert "actions" in switched_other["text"]
     assert switched_two_days["text"].startswith("Two-day session")
     assert switched_old["text"].startswith("Old session")
