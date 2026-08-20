@@ -1371,6 +1371,11 @@ def test_display_timezone_setting_controls_mcp_timestamps(tmp_path, monkeypatch)
 def test_project_prompt_documents_manual_context_and_chunk_protocol() -> None:
     prompt = Path("docs/project-prompt-template.md").read_text(encoding="utf-8")
 
+    assert (
+        '"Response from model <who you are>\n'
+        'HH:MM (weekday, Month D, YYYY)\n'
+        'Session: <session_id>"'
+    ) in prompt
     assert "`get_session_overview`" in prompt
     assert "`get_last_speaker`" in prompt
     assert "`get_session_transcript_chunk`" in prompt
