@@ -537,12 +537,15 @@ def test_admin_viewer_sensitive_group_privacy_contract() -> None:
     assert "renderSessions();" in reveal_handler
     assert "loadSession" not in reveal_handler
 
-    # the rename form would put the covered title in an input, so it reveals first
+    # every row action reveals a covered group first, so none of them can work around the cover
     actions = viewer[
         viewer.index("function renderSessionActions(session)"):
         viewer.index("function renderSessionRenameForm(session)")
     ]
-    assert "if (sessionRowIsCovered(session)) state.revealedSensitiveSessionLists.add(session.group_id);" in actions
+    assert "const revealIfCovered = () => {" in actions
+    assert "if (!sessionRowIsCovered(session)) return false;" in actions
+    assert "state.revealedSensitiveSessionLists.add(session.group_id);" in actions
+    assert actions.count("revealIfCovered()") == 3
 
 
 def test_admin_viewer_initializes_sensitive_icons_after_svg_constants() -> None:

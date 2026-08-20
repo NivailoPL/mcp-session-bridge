@@ -4272,10 +4272,19 @@
       function renderSessionActions(session) {
         const actions = div("session-actions");
         const renaming = state.renamingSessionId === session.session_id;
+        // acting on a covered row reveals its group first: every action ends up
+        // showing a title somewhere, so the cover cannot be worked around by them
+        const revealIfCovered = () => {
+          if (!sessionRowIsCovered(session)) return false;
+          state.revealedSensitiveSessionLists.add(session.group_id);
+          return true;
+        };
+
         const aiButton = iconAction("ai_rename", state.aiSettings.configured
           ? "Rename from the first user message"
           : "Configure an AI API key first", (event) => {
           event.stopPropagation();
+          if (revealIfCovered()) renderSessions();
           aiRenameSession(session.session_id);
         });
         if (renaming) aiButton.replaceChildren(spanCls("action-spinner"));
@@ -4283,8 +4292,7 @@
 
         const manualButton = iconAction("rename", "Set title manually", (event) => {
           event.stopPropagation();
-          // the form shows the current title, so renaming a covered row reveals its group
-          if (sessionRowIsCovered(session)) state.revealedSensitiveSessionLists.add(session.group_id);
+          revealIfCovered();
           state.manualRenameSessionId = session.session_id;
           renderSessions();
         });
@@ -4292,6 +4300,7 @@
 
         const moveButton = iconAction("move", "Move to another group", (event) => {
           event.stopPropagation();
+          if (revealIfCovered()) renderSessions();
           openSessionMoveDialog(session.session_id);
         });
         moveButton.disabled = state.busy || !state.groups.some((group) => group.group_id !== session.group_id);
