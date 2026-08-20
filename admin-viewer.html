@@ -453,7 +453,9 @@
     }
     .session-button.is-guarded:hover .session-title-redacted { background: rgba(255, 255, 255, .15); }
     .session-stamp-group { display: flex; align-items: center; gap: 8px; }
-    .session-guard-glyph { display: inline-flex; color: #d9b96a; }
+    .session-guard-glyph { display: inline-flex; color: #d9b96a; transition: opacity .16s ease; }
+    .session-button.is-guarded:hover .session-guard-glyph,
+    .session-button.is-guarded:focus-within .session-guard-glyph { opacity: 0; }
     .session-guard-glyph svg { width: 14px; height: 14px; }
 
     /* the transcript sits behind a flat curtain; the header above it stays live */
@@ -463,7 +465,7 @@
       display: grid; place-items: start center;
       width: 100%; padding: 2rem;
       border: 0; border-radius: 0;
-      background: rgba(9, 11, 16, .975);
+      background: var(--bg-base);
       color: var(--text); text-align: center;
     }
     .sensitive-curtain[hidden] { display: none; }
@@ -484,11 +486,14 @@
     }
     .sensitive-curtain:hover .sensitive-curtain-action { background: var(--accent-2); }
     .sensitive-curtain-action svg { width: 14px; height: 14px; }
-    .topbar-title h2.is-redacted { position: relative; color: transparent; user-select: none; }
+    .topbar-title h2.is-redacted {
+      position: relative;
+      width: min(18rem, 52vw); min-height: 28px; flex: 0 0 auto;
+    }
     .topbar-title h2.is-redacted::after {
       content: "";
       position: absolute; left: 0; top: 50%; transform: translateY(-50%);
-      width: min(18rem, 100%); height: 14px;
+      width: 100%; height: 14px;
       border-radius: 4px; background: rgba(255, 255, 255, .09);
     }
 
@@ -502,8 +507,8 @@
       -webkit-backdrop-filter: blur(16px) saturate(120%);
       backdrop-filter: blur(16px) saturate(120%);
     }
-    .topbar-title { min-width: 0; display: grid; gap: .3rem; }
-    .session-title-line { display: flex; align-items: center; gap: .55rem; min-width: 0; }
+    .topbar-title { min-width: 0; display: grid; gap: 10px; }
+    .session-title-line { display: flex; align-items: center; gap: .55rem; min-width: 0; margin-bottom: 2px; }
     .session-title-icon { display: none; width: 1.35rem; height: 1.35rem; color: var(--g, var(--accent-ink)); flex: 0 0 auto; }
     .session-title-icon.show { display: inline-flex; }
     .session-title-icon svg, .session-compact-icon svg { width: 100%; height: 100%; }
@@ -516,13 +521,13 @@
     .session-id-unit {
       display: inline-flex; align-items: stretch; justify-content: flex-start;
       max-width: 100%; min-height: var(--h-compact); padding: 0;
-      border: 1px solid var(--stroke); border-radius: var(--r-ctrl);
-      background: rgba(0, 0, 0, .28); color: var(--text-2);
+      border: 1px solid var(--stroke-soft); border-radius: var(--r-ctrl);
+      background: rgba(0, 0, 0, .16); color: var(--text-2);
       font-weight: 400; overflow: hidden;
       transition: border-color .16s ease, background .16s ease, color .16s ease;
     }
     .session-id-unit:hover {
-      border-color: var(--stroke-strong); background: rgba(0, 0, 0, .4); color: var(--text);
+      border-color: var(--stroke); background: rgba(0, 0, 0, .34); color: var(--text);
     }
     .session-id-glyph { display: grid; place-items: center; padding-left: 10px; color: var(--faint-ink); }
     .session-id-glyph svg { width: 13px; height: 13px; }
@@ -533,8 +538,8 @@
     }
     .session-id-copy {
       display: inline-flex; align-items: center; gap: 6px; flex: 0 0 auto;
-      padding: 0 10px; border-left: 1px solid var(--stroke);
-      background: var(--glass-2); font-size: var(--t-meta); font-weight: 700;
+      padding: 0 10px; border-left: 1px solid var(--stroke-soft);
+      background: var(--glass); font-size: var(--t-meta); font-weight: 700;
     }
     .session-id-copy svg { width: 13px; height: 13px; }
     .session-id-unit.is-copied { border-color: rgba(52, 211, 153, .42); }
@@ -1942,7 +1947,7 @@
         const groupId = state.selectedSession?.group_id;
         if (!groupId) return;
         state.revealedSensitiveThreads.add(groupId);
-        renderThreadSensitiveGuard();
+        renderExchanges();
       });
       dom.aiSettingsClose.addEventListener("click", () => dom.aiSettingsDialog.close());
       bindSettingsEvents();
@@ -3075,8 +3080,7 @@
           const isSelected = session.session_id === state.selectedSessionId;
           item.classList.toggle("is-active", isSelected);
           const group = sessionGroup(session);
-          const cardIsGuarded = Boolean(group?.is_sensitive)
-            && !state.revealedSensitiveSessionLists.has(session.group_id);
+          const cardIsGuarded = sessionRowIsCovered(session, group);
           const selectSession = () => {
             if (state.fileOperationPending) {
               setStatus("Wait for the file operation to finish.", "warn");
@@ -3114,6 +3118,7 @@
             content.append(
               sessionCompactTitle(session, group, dateBucket, true),
               sessionMetaLine(session, group),
+              renderSessionActions(session),
             );
           } else if (state.manualRenameSessionId === session.session_id) {
             content.append(renderSessionRenameForm(session));
@@ -4174,6 +4179,11 @@
         return titleLine;
       }
 
+      function sessionRowIsCovered(session, group = sessionGroup(session)) {
+        return Boolean(group?.is_sensitive)
+          && !state.revealedSensitiveSessionLists.has(session.group_id);
+      }
+
       function redactedSessionTitle(session) {
         const node = div("session-title-redacted");
         const id = String(session.session_id || "");
@@ -4273,6 +4283,8 @@
 
         const manualButton = iconAction("rename", "Set title manually", (event) => {
           event.stopPropagation();
+          // the form shows the current title, so renaming a covered row reveals its group
+          if (sessionRowIsCovered(session)) state.revealedSensitiveSessionLists.add(session.group_id);
           state.manualRenameSessionId = session.session_id;
           renderSessions();
         });
@@ -4624,6 +4636,13 @@
           { text: `timezone ${state.displayTimezone}` },
           { text: `updated ${formatDate(state.selectedSession.updated_at_iso)}` },
         ]);
+
+        // covered means not rendered: nothing to read off the screen, a screenshot,
+        // the accessibility tree or the DOM until the group is revealed
+        if (selectedThreadIsGuarded()) {
+          dom.sessionTitle.textContent = "";
+          return;
+        }
 
         const visible = state.exchanges;
         if (!visible.length) {

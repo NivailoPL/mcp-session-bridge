@@ -481,6 +481,15 @@ def test_admin_viewer_sensitive_group_privacy_contract() -> None:
     # a covered thread keeps its header usable, but not its title
     assert 'dom.sessionTitle.classList.toggle("is-redacted", threadIsGuarded);' in viewer
     assert ".topbar-title h2.is-redacted" in viewer
+    # a covered transcript is never built, so nothing survives in a screenshot or the DOM
+    render_exchanges = viewer[
+        viewer.index("function renderExchanges()"):
+        viewer.index("function renderThreadSensitiveGuard()")
+    ]
+    assert "if (selectedThreadIsGuarded()) {" in render_exchanges
+    assert 'dom.sessionTitle.textContent = "";' in render_exchanges
+    guarded_return = render_exchanges.index("if (selectedThreadIsGuarded()) {")
+    assert render_exchanges.index("const visible = state.exchanges;") > guarded_return
     assert "state.revealedSensitiveSessionLists.add(session.group_id);" in viewer
     assert "state.revealedSensitiveThreads.add(groupId);" in viewer
     assert 'input.disabled = Boolean(group.is_sensitive);' in viewer
@@ -507,23 +516,33 @@ def test_admin_viewer_sensitive_group_privacy_contract() -> None:
     assert "group.is_sensitive ? sensitiveIconSvg()" not in group_button
 
 
+    # covering follows the group, under every filter the list can be in
+    covered = viewer[
+        viewer.index("function sessionRowIsCovered(session"):
+        viewer.index("function redactedSessionTitle(session)")
+    ]
+    assert "Boolean(group?.is_sensitive)" in covered
+    assert "!state.revealedSensitiveSessionLists.has(session.group_id)" in covered
+    assert "state.activeGroupId" not in covered
+
     guard = viewer[
-        viewer.index("const cardIsGuarded = Boolean(group?.is_sensitive)"):
+        viewer.index("const cardIsGuarded = sessionRowIsCovered(session, group);"):
         viewer.index("dom.sessionList.append(item);", viewer.index("const cardIsGuarded"))
     ]
-    # covering follows the group, under every filter the list can be in
-    assert "!state.revealedSensitiveSessionLists.has(session.group_id)" in guard
-    assert "state.activeGroupId" not in guard
     assert "const activate = cardIsGuarded ? revealGroup : selectSession;" in guard
     assert 'item.addEventListener("keydown"' in guard
-    # a covered row renders redacted and offers neither rename nor move
     assert "sessionCompactTitle(session, group, dateBucket, true)" in guard
-    covered_branch = guard[guard.index("if (cardIsGuarded) {", guard.index("const content =")):guard.index("} else if")]
-    assert "renderSessionActions" not in covered_branch
     reveal_handler = guard[guard.index("const revealGroup"):guard.index("const activate")]
     assert "state.revealedSensitiveSessionLists.add(session.group_id);" in reveal_handler
     assert "renderSessions();" in reveal_handler
     assert "loadSession" not in reveal_handler
+
+    # the rename form would put the covered title in an input, so it reveals first
+    actions = viewer[
+        viewer.index("function renderSessionActions(session)"):
+        viewer.index("function renderSessionRenameForm(session)")
+    ]
+    assert "if (sessionRowIsCovered(session)) state.revealedSensitiveSessionLists.add(session.group_id);" in actions
 
 
 def test_admin_viewer_initializes_sensitive_icons_after_svg_constants() -> None:
