@@ -477,7 +477,9 @@ def test_admin_viewer_sensitive_group_privacy_contract() -> None:
     assert 'id="threadSensitiveOverlay"' in viewer
     assert "The conversation stays covered until you reveal it." in viewer
     assert "Reveal conversation" in viewer
-    assert "dom.threadSensitiveContent.inert = threadIsGuarded;" in viewer
+    assert 'id="threadSensitiveBody"' in viewer
+    assert "dom.threadSensitiveBody.inert = threadIsGuarded;" in viewer
+    assert "dom.threadSensitiveContent.inert" not in viewer
     # a covered thread keeps its header usable, but not its title
     assert 'dom.sessionTitle.classList.toggle("is-redacted", threadIsGuarded);' in viewer
     assert ".topbar-title h2.is-redacted" in viewer

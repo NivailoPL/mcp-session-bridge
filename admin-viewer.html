@@ -1374,7 +1374,7 @@
       </header>
 
       <div id="threadSensitiveContent" class="thread-sensitive-content">
-      <div class="content-wrap">
+      <div id="threadSensitiveBody" class="content-wrap">
         <nav id="turnNav" class="turn-nav" aria-label="Transcript navigation">
           <button id="scrollTopButton" type="button" class="ghost" title="Scroll to top"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"></path><path d="M6 5h12"></path></svg></button>
           <button id="scrollPrevButton" type="button" class="ghost" title="Previous turn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"></path></svg></button>
@@ -1962,6 +1962,7 @@
         sessionTitleIcon: document.getElementById("sessionTitleIcon"),
         status: document.getElementById("status"),
         timezoneSelect: document.getElementById("timezoneSelect"),
+        threadSensitiveBody: document.getElementById("threadSensitiveBody"),
         threadSensitiveContent: document.getElementById("threadSensitiveContent"),
         threadSensitiveOverlay: document.getElementById("threadSensitiveOverlay"),
         threadSensitiveTitle: document.getElementById("threadSensitiveTitle"),
@@ -4752,7 +4753,7 @@
         const group = state.groups.find((item) => item.group_id === groupId);
         const threadIsGuarded = selectedThreadIsGuarded();
         // the transcript is covered; the title bar keeps its session key and its actions
-        dom.threadSensitiveContent.inert = threadIsGuarded;
+        dom.threadSensitiveBody.inert = threadIsGuarded;
         dom.sessionTitle.classList.toggle("is-redacted", threadIsGuarded);
         dom.threadSensitiveOverlay.hidden = !threadIsGuarded;
         if (threadIsGuarded) {
