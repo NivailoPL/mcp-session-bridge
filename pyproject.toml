@@ -26,3 +26,7 @@ dev = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+
+[tool.mcp-session-bridge.development]
+target-version = "0.5.1"
+label = "0.5.1-beta"
