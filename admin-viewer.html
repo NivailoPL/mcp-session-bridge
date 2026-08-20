@@ -1056,16 +1056,45 @@
     .admin-session-copy strong { overflow-wrap: anywhere; font-size: var(--t-body); }
     .admin-session-card form { flex: 0 0 auto; margin: 0; }
     .settings-dialog { width: min(58rem, calc(100vw - 2rem)); max-width: none; max-height: min(48rem, calc(100vh - 2rem)); }
-    .settings-shell { display: grid; grid-template-columns: 10rem minmax(0, 1fr); min-height: 31rem; }
+    .settings-dialog[open] { display: grid; grid-template-rows: auto minmax(0, 1fr); overflow: hidden; }
+    .settings-shell {
+      display: grid;
+      grid-template-columns: 10rem minmax(0, 1fr);
+      grid-template-rows: minmax(0, 1fr);
+      min-height: 31rem;
+    }
+    .settings-body { display: grid; grid-template-rows: minmax(0, 1fr) auto; min-width: 0; min-height: 0; }
+    .settings-actionbar {
+      display: flex; align-items: center; justify-content: flex-end; gap: .55rem;
+      padding: .75rem 1.2rem;
+      border-top: 1px solid var(--stroke-soft);
+      background: rgba(255, 255, 255, .02);
+    }
+    .settings-actionbar[hidden] { display: none; }
     .settings-tabs { display: grid; align-content: start; gap: .35rem; padding: 1rem; border-right: 1px solid var(--stroke-soft); }
     .settings-tabs button { justify-content: flex-start; border-color: transparent; background: transparent; }
     .settings-tabs button.is-active { color: var(--accent-ink); border-color: rgba(122,125,240,.32); background: var(--accent-soft); }
-    .settings-content { min-width: 0; overflow: auto; padding: 1.2rem; }
+    .settings-content { min-width: 0; min-height: 0; overflow: auto; padding: 1.2rem; }
     .settings-panel, .settings-stack { display: grid; gap: 1rem; }
     .settings-section-head h4, .settings-section-head p { margin: 0; }
-    .settings-section-head h4 { font-size: var(--t-title); }
-    .settings-panel > .settings-section-head h4,
-    .mcp-settings-section > .settings-section-head h4 { color: var(--accent-ink); font-weight: 800; letter-spacing: -.01em; }
+    /* card */
+    .settings-section-head h4 { font-size: var(--t-name); font-weight: 700; color: var(--text); }
+    /* panel */
+    .settings-panel > .settings-section-head h4 {
+      font-size: var(--t-display); font-weight: 800; letter-spacing: -.015em; color: var(--accent-ink);
+    }
+    /* group inside a card */
+    .mcp-settings-section section > .settings-section-head h4 {
+      font-family: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: var(--t-label); font-weight: 500; letter-spacing: .09em; text-transform: uppercase;
+      color: var(--faint-ink);
+    }
+    /* the dialog names itself once, quietly */
+    .settings-dialog .dialog-head h3 {
+      font-family: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: var(--t-label); font-weight: 500; letter-spacing: .09em; text-transform: uppercase;
+      color: var(--faint-ink);
+    }
     .settings-section-head p { margin-top: .3rem; color: var(--muted); font-size: var(--t-ctrl); line-height: 1.5; }
     .operational-summary, .operational-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .7rem; }
     .operational-card {
@@ -1499,7 +1528,7 @@
 
   <dialog id="aiSettingsDialog" class="settings-dialog" aria-labelledby="settingsHeading">
     <div class="dialog-head">
-      <div><h3 id="settingsHeading">Settings</h3><p class="meta">Admin configuration for models, MCP delivery, and context search.</p></div>
+      <h3 id="settingsHeading">Settings</h3>
       <button type="button" class="ghost" id="aiSettingsClose">Close</button>
     </div>
     <div class="settings-shell">
@@ -1510,6 +1539,7 @@
         <button type="button" data-settings-tab="api">API</button>
         <button type="button" data-settings-tab="status">Status <span id="statusUpdateDot" class="update-dot" hidden aria-hidden="true"></span></button>
       </nav>
+      <div class="settings-body">
       <div class="settings-content">
         <p id="aiSettingsStatus" class="settings-status" aria-live="polite"></p>
         <section data-settings-panel="general" class="settings-panel">
@@ -1525,9 +1555,9 @@
           </div>
           <label class="field">Display timezone<select id="timezoneSelect" aria-label="Display timezone"></select></label>
           <label class="field">AI rename model<input id="aiModelInput" type="text" maxlength="96" autocomplete="off"></label>
-          <div class="edit-actions"><button type="button" class="primary" id="generalSettingsSave">Save General</button></div>
         </section>
         <section data-settings-panel="transcript" class="settings-panel" hidden>
+          <div class="settings-section-head"><div><h4>MCP</h4><p>How transcripts and tool results reach the harnesses.</p></div></div>
           <section class="mcp-settings-section tool-output-card">
             <div class="settings-section-head"><div><h4>Large tool result format</h4><p>Controls transcript chunks, output probes, and downloaded file contents. Small metadata tools remain structured in both modes.</p></div></div>
             <div class="tool-output-options" role="radiogroup" aria-label="Large tool result format">
@@ -1537,7 +1567,6 @@
             <p id="toolOutputActiveSummary" class="tool-output-summary"></p>
             <p class="tool-output-summary">After changing modes and restarting, refresh the tool list or reconnect the connector in every harness. Probe results are compared only within the active mode.</p>
             <div class="tool-output-actions">
-              <button type="button" class="primary" id="toolOutputSave">Save result format</button>
               <div id="toolOutputRestartRequired" class="tool-output-restart" hidden>
                 <span id="toolOutputRestartMessage">Restart required to activate this mode.</span>
                 <button type="button" class="ghost" id="toolOutputRestart">Restart Bridge</button>
@@ -1552,7 +1581,6 @@
                 <label class="field">Maximum characters<input id="transcriptChunkMaxChars" type="number" min="1000" max="250000" step="1000"></label>
                 <label class="field">Maximum lines<input id="transcriptChunkMaxLines" type="number" min="1" max="10000"></label>
               </div>
-              <div class="edit-actions"><button type="button" class="primary" id="transcriptSettingsSave">Save global chunk size</button></div>
             </section>
             <section class="probe-config">
               <div class="settings-section-head"><div><h4>Run a harness test</h4><p>Copy this instruction into the harness being measured. Running the payload in this browser would bypass the harness and produce a false result.</p></div></div>
@@ -1617,13 +1645,11 @@
               <button id="indexDelete" type="button" class="danger">Delete index</button>
             </div></div>
           </div>
-          <div class="edit-actions"><button type="button" class="primary" id="searchSettingsSave">Save Search</button></div>
         </section>
         <section data-settings-panel="api" class="settings-panel" hidden>
           <div class="settings-section-head"><div><h4>Provider API keys</h4><p>Keys are encrypted at rest and never returned to this browser.</p></div></div>
           <div class="provider-card"><label class="field">OpenAI API key<input id="aiKeyInput" type="password" autocomplete="off" placeholder="Leave blank to keep current key"></label><p id="openaiKeyStatus" class="meta"></p><button type="button" class="danger" id="aiKeyRemoveButton">Remove OpenAI key</button></div>
           <div class="provider-card"><label class="field">Cohere API key<input id="cohereKeyInput" type="password" autocomplete="off" placeholder="Leave blank to keep current key"></label><p id="cohereKeyStatus" class="meta"></p><button type="button" class="danger" id="cohereKeyRemoveButton">Remove Cohere key</button></div>
-          <div class="edit-actions"><button type="button" class="primary" id="apiSettingsSave">Save API keys</button></div>
         </section>
         <section data-settings-panel="status" class="settings-panel" hidden>
           <div class="settings-section-head"><div><h4>Bridge status</h4><p>Read-only operational summary. Changes and updates stay in the server CLI.</p></div></div>
@@ -1649,6 +1675,10 @@
             </div>
           </div>
         </section>
+      </div>
+      <div id="settingsActionbar" class="settings-actionbar">
+        <button type="button" class="primary" id="settingsSaveButton">Save changes</button>
+      </div>
       </div>
     </div>
   </dialog>
@@ -1915,7 +1945,7 @@
         turnNav: document.getElementById("turnNav"),
       };
       const settingsDom = Object.fromEntries([
-        "generalSettingsSave", "apiSettingsSave", "searchSettingsSave", "transcriptSettingsSave", "toolOutputSave", "toolOutputRestart", "toolOutputRestartRequired", "toolOutputRestartMessage", "toolOutputActiveSummary", "toolOutputOptimized", "toolOutputMaximumCompatibility", "cohereKeyInput",
+        "settingsSaveButton", "settingsActionbar", "toolOutputRestart", "toolOutputRestartRequired", "toolOutputRestartMessage", "toolOutputActiveSummary", "toolOutputOptimized", "toolOutputMaximumCompatibility", "cohereKeyInput",
         "cohereKeyRemoveButton", "openaiKeyStatus", "cohereKeyStatus", "ragEnabled",
         "ragOptions", "cohereEnabled", "sourceConversations", "sourceSessionFiles",
         "sourceGroupFiles", "ragGroupList", "chunkSize", "chunkOverlap", "embeddingModel",
@@ -2213,12 +2243,9 @@
           const button = event.target.closest("[data-settings-tab]");
           if (button) selectSettingsTab(button.dataset.settingsTab);
         });
-        settingsDom.generalSettingsSave.addEventListener("click", () => saveGeneralSettings());
-        settingsDom.transcriptSettingsSave.addEventListener("click", () => saveTranscriptSettings());
-        settingsDom.toolOutputSave.addEventListener("click", () => saveToolOutputSettings());
+        settingsDom.settingsSaveButton.addEventListener("click", () => saveActiveSettingsPanel());
         settingsDom.toolOutputRestart.addEventListener("click", () => restartBridgeService());
-        settingsDom.searchSettingsSave.addEventListener("click", () => saveSearchSettings());
-        settingsDom.apiSettingsSave.addEventListener("click", () => saveApiSettings());
+
         dom.aiKeyRemoveButton.addEventListener("click", () => removeProviderKey("openai"));
         settingsDom.cohereKeyRemoveButton.addEventListener("click", () => removeProviderKey("cohere"));
         settingsDom.ragEnabled.addEventListener("change", renderRagVisibility);
@@ -2242,6 +2269,29 @@
         for (const panel of document.querySelectorAll("[data-settings-panel]")) {
           panel.hidden = panel.dataset.settingsPanel !== name;
         }
+        // Status is read-only, so it gets no save bar
+        settingsDom.settingsActionbar.hidden = name === "status";
+      }
+
+      function activeSettingsTab() {
+        return document.querySelector("[data-settings-tab].is-active")?.dataset.settingsTab || "general";
+      }
+
+      async function saveActiveSettingsPanel() {
+        switch (activeSettingsTab()) {
+          case "general": return saveGeneralSettings();
+          case "transcript": return saveDeliverySettings();
+          case "search": return saveSearchSettings();
+          case "api": return saveApiSettings();
+          default: return undefined;
+        }
+      }
+
+      // one panel, one save: chunk limits first so the result format - which can
+      // ask for a restart - is the outcome left on screen
+      async function saveDeliverySettings() {
+        await saveTranscriptSettings();
+        if (!settingsDom.toolOutputOptimized.disabled) await saveToolOutputSettings();
       }
 
       async function openAiSettingsDialog() {
@@ -2485,7 +2535,6 @@
           : "Restart required to activate this mode.";
         settingsDom.toolOutputOptimized.disabled = restartLocked;
         settingsDom.toolOutputMaximumCompatibility.disabled = restartLocked;
-        settingsDom.toolOutputSave.disabled = restartLocked;
         settingsDom.toolOutputRestart.disabled = restartLocked || !toolOutput.restart_required;
       }
 
