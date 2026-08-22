@@ -1,17 +1,14 @@
 import asyncio
 import base64
-import importlib
 import json
 import re
 import shutil
 import subprocess
-import sys
 from pathlib import Path
 
 import pytest
 from starlette.testclient import TestClient
 
-from app.security import password_hash
 from app.search import SearchConfig
 from app.storage import SESSION_GROUP_ICON_KEYS
 from app.time_format import DISPLAY_TIMEZONE_SETTING_KEY
@@ -44,8 +41,8 @@ def test_admin_viewer_uses_brand_lockup_and_tab_assets() -> None:
     assert "ArrowRight" in nav_script
 
 
-def test_admin_login_uses_dark_branding_and_inline_lockup(tmp_path, monkeypatch) -> None:
-    main = _load_main(tmp_path, monkeypatch)
+def test_admin_login_uses_dark_branding_and_inline_lockup(load_main) -> None:
+    main = load_main(graph_experimental=True)
     client = TestClient(main.app, base_url="http://127.0.0.1:8787")
 
     response = client.get("/admin/login?next=/admin/sessions")
@@ -105,8 +102,8 @@ def test_admin_viewer_group_ui_contract() -> None:
     assert 'spanCls("file-meta", "No files")' not in viewer
 
 
-def test_admin_brand_assets_require_login_and_serve_png(tmp_path, monkeypatch) -> None:
-    main = _load_main(tmp_path, monkeypatch)
+def test_admin_brand_assets_require_login_and_serve_png(load_main) -> None:
+    main = load_main(graph_experimental=True)
     anonymous = TestClient(main.app, base_url="http://127.0.0.1:8787")
 
     login_required = anonymous.get(
@@ -1046,8 +1043,8 @@ def test_admin_viewer_demo_group_delete_reassigns_group_files() -> None:
     assert "file.group_id = destinationGroupId;" in delete_branch
 
 
-def test_admin_api_requires_login_and_csrf_for_mutations(tmp_path, monkeypatch) -> None:
-    main = _load_main(tmp_path, monkeypatch)
+def test_admin_api_requires_login_and_csrf_for_mutations(load_main) -> None:
+    main = load_main(graph_experimental=True)
     session = main.store.create_session("s1", "Admin test", "manual-context")
     exchange = main.store.save_exchange("s1", "Claude", "Message.", "Answer to correct.")
 
@@ -1122,8 +1119,8 @@ def test_admin_api_requires_login_and_csrf_for_mutations(tmp_path, monkeypatch) 
     assert unmasked.json()["exchange"]["is_masked"] is False
 
 
-def test_admin_can_configure_ai_rename_and_update_session_title(tmp_path, monkeypatch) -> None:
-    main = _load_main(tmp_path, monkeypatch)
+def test_admin_can_configure_ai_rename_and_update_session_title(load_main, monkeypatch) -> None:
+    main = load_main(graph_experimental=True)
     main.store.create_session("s1", "Chaotic long title", "manual-context")
     main.store.save_exchange("s1", "Claude", "Pierwsza wiadomość użytkownika o ewaluacji LLM.", "OK")
     client = TestClient(main.app, base_url="http://127.0.0.1:8787")
@@ -1205,8 +1202,8 @@ def test_admin_can_configure_ai_rename_and_update_session_title(tmp_path, monkey
     assert removed.json()["settings"]["configured"] is False
 
 
-def test_admin_can_update_display_timezone(tmp_path, monkeypatch) -> None:
-    main = _load_main(tmp_path, monkeypatch)
+def test_admin_can_update_display_timezone(load_main) -> None:
+    main = load_main(graph_experimental=True)
     client = TestClient(main.app, base_url="http://127.0.0.1:8787")
 
     login = client.post(
@@ -1244,8 +1241,8 @@ def test_admin_can_update_display_timezone(tmp_path, monkeypatch) -> None:
     assert legacy_updated.json()["display_timezone"] == "UTC"
 
 
-def test_admin_can_manage_session_groups_and_move_sessions(tmp_path, monkeypatch) -> None:
-    main = _load_main(tmp_path, monkeypatch)
+def test_admin_can_manage_session_groups_and_move_sessions(load_main) -> None:
+    main = load_main(graph_experimental=True)
     main.store.create_session("s1", "Admin group test", "manual-context")
     client = TestClient(main.app, base_url="http://127.0.0.1:8787")
 
@@ -1320,8 +1317,8 @@ def test_admin_can_manage_session_groups_and_move_sessions(tmp_path, monkeypatch
     assert bad_move.status_code == 404
 
 
-def test_admin_sensitive_group_prunes_and_blocks_external_rag_scope(tmp_path, monkeypatch) -> None:
-    main = _load_main(tmp_path, monkeypatch)
+def test_admin_sensitive_group_prunes_and_blocks_external_rag_scope(load_main, monkeypatch) -> None:
+    main = load_main(graph_experimental=True)
     main.store.create_session_group("Private", "#ef4444", "lock", group_id="private")
     client = TestClient(main.app, base_url="http://127.0.0.1:8787")
     client.post(
@@ -1370,8 +1367,8 @@ def test_admin_sensitive_group_prunes_and_blocks_external_rag_scope(tmp_path, mo
     assert main.admin.search.get_config().included_group_ids == ("private",)
 
 
-def test_admin_can_view_session_and_group_files(tmp_path, monkeypatch) -> None:
-    main = _load_main(tmp_path, monkeypatch)
+def test_admin_can_view_session_and_group_files(load_main) -> None:
+    main = load_main(graph_experimental=True)
     main.store.create_session_group("Tests", "#22c55e", "science")
     main.store.create_session("s1", "File admin test", "manual-context", group_id="tests")
     session_file = main.store.save_session_file("s1", "plan.md", "# Plan")
@@ -1402,18 +1399,10 @@ def test_admin_can_view_session_and_group_files(tmp_path, monkeypatch) -> None:
     assert session_file.file_id != group_file.file_id
 
 
-def _admin_client(main):
-    client = TestClient(main.app, base_url="http://127.0.0.1:8787")
-    client.post(
-        "/admin/login",
-        data={"username": "owner", "password": "secret-admin-password", "next": "/admin/sessions"},
-        follow_redirects=False,
-    )
-    return client, client.get("/admin/api/me").json()["csrf_token"]
 
 
-def test_codex_admin_api_auth_csrf_and_chat_contract(tmp_path, monkeypatch) -> None:
-    main = _load_main(tmp_path, monkeypatch)
+def test_codex_admin_api_auth_csrf_and_chat_contract(admin_client, load_main) -> None:
+    main = load_main(graph_experimental=True)
 
     class FakeCodex:
         async def status(self):
@@ -1450,7 +1439,7 @@ def test_codex_admin_api_auth_csrf_and_chat_contract(tmp_path, monkeypatch) -> N
     assert anonymous.get("/admin/api/codex/status").status_code == 401
     assert anonymous.post("/admin/api/codex/chat", json={"message": "Hello"}).status_code == 401
 
-    client, csrf = _admin_client(main)
+    client, csrf = admin_client(main)
     status = client.get("/admin/api/codex/status")
     assert status.status_code == 200
     assert status.headers["cache-control"] == "no-store"
@@ -1487,8 +1476,8 @@ def test_codex_admin_api_auth_csrf_and_chat_contract(tmp_path, monkeypatch) -> N
     ).status_code == 400
 
 
-def test_codex_admin_api_sanitizes_unavailable_and_protocol_errors(tmp_path, monkeypatch) -> None:
-    main = _load_main(tmp_path, monkeypatch)
+def test_codex_admin_api_sanitizes_unavailable_and_protocol_errors(admin_client, load_main) -> None:
+    main = load_main(graph_experimental=True)
     from app.codex_app_server import CodexProtocolError, CodexUnavailableError
 
     class UnavailableCodex:
@@ -1499,7 +1488,7 @@ def test_codex_admin_api_sanitizes_unavailable_and_protocol_errors(tmp_path, mon
             raise CodexProtocolError("raw frame bearer-secret")
 
     main.admin.codex = UnavailableCodex()
-    client, csrf = _admin_client(main)
+    client, csrf = admin_client(main)
 
     status = client.get("/admin/api/codex/status")
     assert status.status_code == 503
@@ -1517,15 +1506,15 @@ def test_codex_admin_api_sanitizes_unavailable_and_protocol_errors(tmp_path, mon
     assert "bearer" not in chat.text
 
 
-def test_codex_expired_conversation_has_stable_error_code(tmp_path, monkeypatch) -> None:
-    main = _load_main(tmp_path, monkeypatch)
+def test_codex_expired_conversation_has_stable_error_code(admin_client, load_main) -> None:
+    main = load_main(graph_experimental=True)
 
     class ExpiredCodex:
         async def chat(self, message, *, thread_id=None):
             raise ValueError("Unknown or expired Codex conversation.")
 
     main.admin.codex = ExpiredCodex()
-    client, csrf = _admin_client(main)
+    client, csrf = admin_client(main)
     response = client.post(
         "/admin/api/codex/chat",
         json={"message": "Continue", "thread_id": "old-thread"},
@@ -1545,8 +1534,8 @@ def _encoded_file(content: bytes, *, filename: str = "notes.md", scope_type: str
     }
 
 
-def test_admin_file_mutations_require_login_and_csrf(tmp_path, monkeypatch) -> None:
-    main = _load_main(tmp_path, monkeypatch)
+def test_admin_file_mutations_require_login_and_csrf(admin_client, load_main) -> None:
+    main = load_main(graph_experimental=True)
     main.store.create_session("s1", "File mutations", "manual-context")
     saved = main.store.save_session_file("s1", "existing.md", "old")
     anonymous = TestClient(main.app, base_url="http://127.0.0.1:8787")
@@ -1558,17 +1547,17 @@ def test_admin_file_mutations_require_login_and_csrf(tmp_path, monkeypatch) -> N
     for method, path, payload in calls:
         assert anonymous.request(method, path, json=payload).status_code == 401
 
-    client, csrf = _admin_client(main)
+    client, csrf = admin_client(main)
     for method, path, payload in calls:
         assert client.request(method, path, json=payload).status_code == 403
     assert csrf
 
 
-def test_admin_uploads_bounded_utf8_files_to_selected_session_or_group(tmp_path, monkeypatch) -> None:
-    main = _load_main(tmp_path, monkeypatch)
+def test_admin_uploads_bounded_utf8_files_to_selected_session_or_group(admin_client, load_main) -> None:
+    main = load_main(graph_experimental=True)
     main.store.create_session_group("Tests", "#22c55e", "science")
     main.store.create_session("s1", "File mutations", "manual-context", group_id="tests")
-    client, csrf = _admin_client(main)
+    client, csrf = admin_client(main)
     headers = {"x-csrf-token": csrf}
 
     uploaded = client.post(
@@ -1628,10 +1617,10 @@ def test_admin_uploads_bounded_utf8_files_to_selected_session_or_group(tmp_path,
     assert len(main.store.list_session_files(session_id="s1")) == 1
 
 
-def test_admin_uploads_previews_and_downloads_original_pdf(tmp_path, monkeypatch) -> None:
-    main = _load_main(tmp_path, monkeypatch)
+def test_admin_uploads_previews_and_downloads_original_pdf(admin_client, load_main) -> None:
+    main = load_main(graph_experimental=True)
     main.store.create_session("s1", "PDF admin", "manual-context")
-    client, csrf = _admin_client(main)
+    client, csrf = admin_client(main)
     raw = make_pdf("Admin PDF text")
 
     uploaded = client.post(
@@ -1670,10 +1659,10 @@ def test_admin_uploads_previews_and_downloads_original_pdf(tmp_path, monkeypatch
     assert group_upload.json()["file"]["group_id"] == "uncategorized"
 
 
-def test_admin_pdf_raw_requires_login_and_pdf_cannot_be_edited(tmp_path, monkeypatch) -> None:
-    main = _load_main(tmp_path, monkeypatch)
+def test_admin_pdf_raw_requires_login_and_pdf_cannot_be_edited(admin_client, load_main) -> None:
+    main = load_main(graph_experimental=True)
     main.store.create_session("s1", "PDF admin", "manual-context")
-    client, csrf = _admin_client(main)
+    client, csrf = admin_client(main)
     uploaded = client.post(
         "/admin/api/sessions/s1/files",
         json=_encoded_file(make_pdf(), filename="brief.pdf"),
@@ -1711,12 +1700,12 @@ def test_admin_pdf_raw_requires_login_and_pdf_cannot_be_edited(tmp_path, monkeyp
     assert client.get("/admin/assets/pdfjs/not-allowed.mjs").status_code == 404
 
 
-def test_admin_group_upload_uses_session_current_group_atomically(tmp_path, monkeypatch) -> None:
-    main = _load_main(tmp_path, monkeypatch)
+def test_admin_group_upload_uses_session_current_group_atomically(admin_client, load_main, monkeypatch) -> None:
+    main = load_main(graph_experimental=True)
     main.store.create_session_group("First", "#22c55e", "science")
     main.store.create_session_group("Second", "#3b82f6", "ideas")
     main.store.create_session("s1", "File mutations", "manual-context", group_id="first")
-    client, csrf = _admin_client(main)
+    client, csrf = admin_client(main)
     original_selected_session = main.admin._selected_session
 
     def select_then_move(request):
@@ -1737,15 +1726,15 @@ def test_admin_group_upload_uses_session_current_group_atomically(tmp_path, monk
     assert main.store.list_session_files(group_id="first") == []
 
 
-def test_admin_edits_moves_and_deletes_only_visible_files(tmp_path, monkeypatch) -> None:
-    main = _load_main(tmp_path, monkeypatch)
+def test_admin_edits_moves_and_deletes_only_visible_files(admin_client, load_main) -> None:
+    main = load_main(graph_experimental=True)
     main.store.create_session_group("Tests", "#22c55e", "science")
     main.store.create_session_group("Other", "#ef4444", "camera")
     main.store.create_session("s1", "File mutations", "manual-context", group_id="tests")
     main.store.create_session("s2", "Other session", "manual-context", group_id="other")
     saved = main.store.save_session_file("s1", "notes.md", "old")
     unrelated = main.store.save_session_file("s2", "private.md", "untouched")
-    client, csrf = _admin_client(main)
+    client, csrf = admin_client(main)
     headers = {"x-csrf-token": csrf}
     path = f"/admin/api/sessions/s1/files/{saved.file_id}"
 
@@ -1801,8 +1790,8 @@ def test_admin_edits_moves_and_deletes_only_visible_files(tmp_path, monkeypatch)
     assert main.store.get_session_file(unrelated.file_id).content == "untouched"
 
 
-def test_admin_file_mutations_conflict_if_file_moves_after_visibility_check(tmp_path, monkeypatch) -> None:
-    main = _load_main(tmp_path, monkeypatch)
+def test_admin_file_mutations_conflict_if_file_moves_after_visibility_check(admin_client, load_main, monkeypatch) -> None:
+    main = load_main(graph_experimental=True)
     main.store.create_session_group("First", "#22c55e", "science")
     main.store.create_session_group("Second", "#ef4444", "camera")
     main.store.create_session("s1", "First", "manual-context", group_id="first")
@@ -1821,7 +1810,7 @@ def test_admin_file_mutations_conflict_if_file_moves_after_visibility_check(tmp_
         return saved
 
     monkeypatch.setattr(main.store, "get_session_file", move_after_visibility_check)
-    client, csrf = _admin_client(main)
+    client, csrf = admin_client(main)
     headers = {"x-csrf-token": csrf}
 
     assert client.patch(
@@ -1847,11 +1836,11 @@ def test_admin_file_mutations_conflict_if_file_moves_after_visibility_check(tmp_
         assert current.content == "Original"
 
 
-def test_admin_rejects_oversized_or_malformed_patch_lengths_without_mutation(tmp_path, monkeypatch) -> None:
-    main = _load_main(tmp_path, monkeypatch)
+def test_admin_rejects_oversized_or_malformed_patch_lengths_without_mutation(admin_client, load_main) -> None:
+    main = load_main(graph_experimental=True)
     main.store.create_session("s1", "File mutations", "manual-context")
     saved = main.store.save_session_file("s1", "notes.md", "Original")
-    client, csrf = _admin_client(main)
+    client, csrf = admin_client(main)
     headers = {"x-csrf-token": csrf, "content-type": "application/json"}
     path = f"/admin/api/sessions/s1/files/{saved.file_id}"
     oversized = (
@@ -1882,12 +1871,12 @@ def test_admin_rejects_oversized_or_malformed_patch_lengths_without_mutation(tmp
     assert main.store.get_session_file(saved.file_id) == saved
 
 
-def test_admin_file_workspace_stays_consistent_with_mcp_reads(tmp_path, monkeypatch) -> None:
-    main = _load_main(tmp_path, monkeypatch)
+def test_admin_file_workspace_stays_consistent_with_mcp_reads(admin_client, load_main) -> None:
+    main = load_main(graph_experimental=True)
     main.store.create_session_group("Ideas", "#22c55e", "science")
     main.store.create_session("s1", "Owner session", "manual-context", group_id="ideas")
     main.store.create_session("s2", "Peer session", "manual-context", group_id="ideas")
-    client, csrf = _admin_client(main)
+    client, csrf = admin_client(main)
     headers = {"x-csrf-token": csrf}
 
     uploaded = client.post(
@@ -1971,20 +1960,10 @@ def test_admin_file_workspace_stays_consistent_with_mcp_reads(tmp_path, monkeypa
     }
 
 
-def _load_main(tmp_path: Path, monkeypatch):
-    monkeypatch.setenv("BRIDGE_PUBLIC_BASE_URL", "https://example.test")
-    monkeypatch.setenv("BRIDGE_DB_PATH", str(tmp_path / "bridge.sqlite3"))
-    monkeypatch.setenv("BRIDGE_OWNER_USERNAME", "owner")
-    monkeypatch.setenv("BRIDGE_OWNER_PASSWORD_HASH", password_hash("secret-admin-password"))
-    monkeypatch.setenv("BRIDGE_SECRET_KEY", "test-secret")
-    monkeypatch.setenv("BRIDGE_GRAPH_EXPERIMENTAL", "true")
-
-    sys.modules.pop("app.main", None)
-    return importlib.import_module("app.main")
 
 
-def test_restart_helper_uses_fixed_systemctl_command(tmp_path, monkeypatch) -> None:
-    main = _load_main(tmp_path, monkeypatch)
+def test_restart_helper_uses_fixed_systemctl_command(load_main, monkeypatch) -> None:
+    main = load_main(graph_experimental=True)
     invocation = {}
 
     class Process:
@@ -2015,11 +1994,13 @@ def test_restart_helper_uses_fixed_systemctl_command(tmp_path, monkeypatch) -> N
     }
 
 
-def test_managed_restart_writes_runtime_request_file(tmp_path, monkeypatch) -> None:
+def test_managed_restart_writes_runtime_request_file(load_main, tmp_path, monkeypatch) -> None:
     request_file = tmp_path / "run" / "restart-request"
     request_file.parent.mkdir()
-    monkeypatch.setenv("BRIDGE_RESTART_REQUEST_FILE", str(request_file))
-    main = _load_main(tmp_path, monkeypatch)
+    main = load_main(
+        graph_experimental=True,
+        env={"BRIDGE_RESTART_REQUEST_FILE": str(request_file)},
+    )
 
     asyncio.run(main._request_service_restart())
 
@@ -2027,8 +2008,8 @@ def test_managed_restart_writes_runtime_request_file(tmp_path, monkeypatch) -> N
     assert request_file.stat().st_mode & 0o777 == 0o600
 
 
-def test_restart_helper_surfaces_nonzero_systemctl_result(tmp_path, monkeypatch) -> None:
-    main = _load_main(tmp_path, monkeypatch)
+def test_restart_helper_surfaces_nonzero_systemctl_result(load_main, monkeypatch) -> None:
+    main = load_main(graph_experimental=True)
 
     class Process:
         returncode = 1
@@ -2045,8 +2026,8 @@ def test_restart_helper_surfaces_nonzero_systemctl_result(tmp_path, monkeypatch)
         asyncio.run(main._request_service_restart())
 
 
-def test_restart_helper_terminates_and_reaps_timed_out_systemctl(tmp_path, monkeypatch) -> None:
-    main = _load_main(tmp_path, monkeypatch)
+def test_restart_helper_terminates_and_reaps_timed_out_systemctl(load_main, monkeypatch) -> None:
+    main = load_main(graph_experimental=True)
 
     class Process:
         returncode = None
@@ -2086,8 +2067,8 @@ def test_restart_helper_terminates_and_reaps_timed_out_systemctl(tmp_path, monke
     assert process.killed is True
     assert process.wait_calls == 2
 
-def test_admin_search_settings_keys_and_basic_search_api(tmp_path, monkeypatch) -> None:
-    main = _load_main(tmp_path, monkeypatch)
+def test_admin_search_settings_keys_and_basic_search_api(load_main) -> None:
+    main = load_main(graph_experimental=True)
     main.store.create_session("search-session", "Searchable session", "manual-context")
     main.store.save_exchange(
         "search-session", "Codex", "The admin search contains a kumquat marker.", "Confirmed."
@@ -2289,7 +2270,7 @@ def test_admin_search_settings_keys_and_basic_search_api(tmp_path, monkeypatch) 
     assert removed.json()["settings"]["api"]["cohere"]["configured"] is False
 
 
-def test_admin_operational_status_is_authenticated_and_secret_free(tmp_path, monkeypatch) -> None:
+def test_admin_operational_status_is_authenticated_and_secret_free(load_main, tmp_path, monkeypatch) -> None:
     import app.admin as admin_module
 
     status_path = tmp_path / "status.json"
@@ -2318,9 +2299,11 @@ def test_admin_operational_status_is_authenticated_and_secret_free(tmp_path, mon
         ),
         encoding="utf-8",
     )
-    monkeypatch.setenv("BRIDGE_OPERATIONAL_STATUS_FILE", str(status_path))
     monkeypatch.setattr(admin_module, "BRIDGE_VERSION_LABEL", "0.5.1-beta")
-    main = _load_main(tmp_path, monkeypatch)
+    main = load_main(
+        graph_experimental=True,
+        env={"BRIDGE_OPERATIONAL_STATUS_FILE": str(status_path)},
+    )
     anonymous = TestClient(main.app, base_url="http://127.0.0.1:8787")
     assert anonymous.get("/admin/api/status").status_code == 401
 

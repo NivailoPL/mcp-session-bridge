@@ -1,42 +1,18 @@
 from __future__ import annotations
 
 import asyncio
-import importlib
-import sys
 from pathlib import Path
 
 from starlette.testclient import TestClient
 
-from app.security import password_hash
 
 
-def _load_main(tmp_path: Path, monkeypatch, *, graph_experimental: bool | None = True):
-    monkeypatch.setenv("BRIDGE_PUBLIC_BASE_URL", "https://example.test")
-    monkeypatch.setenv("BRIDGE_DB_PATH", str(tmp_path / "bridge.sqlite3"))
-    monkeypatch.setenv("BRIDGE_OWNER_USERNAME", "owner")
-    monkeypatch.setenv("BRIDGE_OWNER_PASSWORD_HASH", password_hash("secret-admin-password"))
-    monkeypatch.setenv("BRIDGE_SECRET_KEY", "test-secret")
-    if graph_experimental is None:
-        monkeypatch.delenv("BRIDGE_GRAPH_EXPERIMENTAL", raising=False)
-    else:
-        monkeypatch.setenv("BRIDGE_GRAPH_EXPERIMENTAL", str(graph_experimental).lower())
-    sys.modules.pop("app.main", None)
-    return importlib.import_module("app.main")
 
 
-def _admin_client(main):
-    client = TestClient(main.app, base_url="http://127.0.0.1:8787")
-    response = client.post(
-        "/admin/login",
-        data={"username": "owner", "password": "secret-admin-password", "next": "/admin/graph"},
-        follow_redirects=False,
-    )
-    assert response.status_code == 303
-    return client, client.get("/admin/api/me").json()["csrf_token"]
 
 
-def test_graph_page_and_assets_require_admin_login(tmp_path, monkeypatch) -> None:
-    main = _load_main(tmp_path, monkeypatch)
+def test_graph_page_and_assets_require_admin_login(admin_client, load_main) -> None:
+    main = load_main(graph_experimental=True)
     anonymous = TestClient(main.app, base_url="http://127.0.0.1:8787")
 
     for path in ("/admin/graph", "/admin/assets/graph-viewer.css", "/admin/assets/graph-data.css", "/admin/assets/graph-viewer.js", "/admin/assets/pearl-gradient-nav.css", "/admin/assets/pearl-gradient-nav.js"):
@@ -44,7 +20,7 @@ def test_graph_page_and_assets_require_admin_login(tmp_path, monkeypatch) -> Non
         assert response.status_code == 303
         assert response.headers["location"].startswith("/admin/login")
 
-    client, _ = _admin_client(main)
+    client, _ = admin_client(main)
     page = client.get("/admin/graph")
     assert page.status_code == 200
     assert page.headers["cache-control"] == "no-store"
@@ -72,9 +48,9 @@ def test_graph_page_and_assets_require_admin_login(tmp_path, monkeypatch) -> Non
     assert "wireWorkspaceNavKeyboard" in nav_script.text
 
 
-def test_graph_release_gate_defaults_closed_and_serves_wip_page(tmp_path, monkeypatch) -> None:
-    main = _load_main(tmp_path, monkeypatch, graph_experimental=None)
-    client, _ = _admin_client(main)
+def test_graph_release_gate_defaults_closed_and_serves_wip_page(admin_client, load_main) -> None:
+    main = load_main(graph_experimental=None)
+    client, _ = admin_client(main)
 
     assert main.settings.graph_experimental is False
     sessions = client.get("/admin/sessions")
@@ -92,14 +68,14 @@ def test_graph_release_gate_defaults_closed_and_serves_wip_page(tmp_path, monkey
     assert 'href="/admin/sessions"' in page.text
 
 
-def test_graph_release_gate_blocks_workspace_mutations_and_subscription_actions(tmp_path, monkeypatch) -> None:
-    main = _load_main(tmp_path, monkeypatch, graph_experimental=False)
+def test_graph_release_gate_blocks_workspace_mutations_and_subscription_actions(admin_client, load_main) -> None:
+    main = load_main(graph_experimental=False)
     anonymous = TestClient(main.app, base_url="http://127.0.0.1:8787")
 
     for path in ("/admin/api/graph/config", "/admin/api/codex/status"):
         assert anonymous.get(path).status_code == 401
 
-    client, csrf = _admin_client(main)
+    client, csrf = admin_client(main)
     for path in ("/admin/api/graph/rescan", "/admin/api/codex/auth/device/start"):
         assert client.post(path).status_code == 403
 
@@ -134,8 +110,8 @@ def test_graph_release_gate_blocks_workspace_mutations_and_subscription_actions(
     assert main.store.get_graph_config()["enabled"] is False
 
 
-def test_graph_release_gate_prevents_background_processing(tmp_path, monkeypatch) -> None:
-    main = _load_main(tmp_path, monkeypatch, graph_experimental=False)
+def test_graph_release_gate_prevents_background_processing(load_main, monkeypatch) -> None:
+    main = load_main(graph_experimental=False)
     calls = 0
 
     async def count_run_once():
@@ -185,9 +161,9 @@ def test_graph_viewer_owns_ephemeral_codex_workspace() -> None:
     assert "sessionStorage" not in codex_state
 
 
-def test_graph_config_api_requires_csrf_and_enforces_lock(tmp_path, monkeypatch) -> None:
-    main = _load_main(tmp_path, monkeypatch)
-    client, csrf = _admin_client(main)
+def test_graph_config_api_requires_csrf_and_enforces_lock(admin_client, load_main) -> None:
+    main = load_main(graph_experimental=True)
+    client, csrf = admin_client(main)
 
     assert client.get("/admin/api/graph/config").status_code == 200
     assert client.post("/admin/api/graph/config/unlock").status_code == 403
@@ -223,9 +199,9 @@ def test_graph_config_api_requires_csrf_and_enforces_lock(tmp_path, monkeypatch)
     assert activated.json()["config"]["locked"] is True
 
 
-def test_graph_cannot_enable_without_authenticated_codex(tmp_path, monkeypatch) -> None:
-    main = _load_main(tmp_path, monkeypatch)
-    client, csrf = _admin_client(main)
+def test_graph_cannot_enable_without_authenticated_codex(admin_client, load_main) -> None:
+    main = load_main(graph_experimental=True)
+    client, csrf = admin_client(main)
 
     class LoggedOutCodex:
         async def status(self):
@@ -313,14 +289,14 @@ def test_sessions_and_graph_share_workspace_header_contract() -> None:
     assert ".workspace-brand { display: none; }" in shared_css
 
 
-def test_processing_and_analysis_apis_require_auth_and_return_durable_state(tmp_path, monkeypatch) -> None:
-    main = _load_main(tmp_path, monkeypatch)
+def test_processing_and_analysis_apis_require_auth_and_return_durable_state(admin_client, load_main) -> None:
+    main = load_main(graph_experimental=True)
     anonymous = TestClient(main.app, base_url="http://127.0.0.1:8787")
     assert anonymous.get("/admin/api/graph/jobs").status_code == 401
     assert anonymous.get("/admin/api/graph/analysis").status_code == 401
     assert anonymous.get("/admin/api/graph/lab").status_code == 401
 
-    client, _ = _admin_client(main)
+    client, _ = admin_client(main)
     assert client.get("/admin/api/graph/jobs").json() == {"ok": True, "jobs": []}
     assert client.get("/admin/api/graph/analysis").json() == {"ok": True, "sessions": []}
     assert client.get("/admin/api/graph/lab").json() == {"ok": True, "runs": []}
@@ -328,8 +304,8 @@ def test_processing_and_analysis_apis_require_auth_and_return_durable_state(tmp_
     assert missing.status_code == 404
 
 
-def test_rescan_all_api_requires_csrf_and_returns_reset_counts(tmp_path, monkeypatch) -> None:
-    main = _load_main(tmp_path, monkeypatch)
+def test_rescan_all_api_requires_csrf_and_returns_reset_counts(admin_client, load_main) -> None:
+    main = load_main(graph_experimental=True)
     main.store.create_session("fresh-session", "Fresh session", "manual-context")
     exchange = main.store.save_exchange(
         "fresh-session", "model", "Recent user text", "Recent model text"
@@ -354,7 +330,7 @@ def test_rescan_all_api_requires_csrf_and_returns_reset_counts(tmp_path, monkeyp
         },
         lease_owner="test-worker",
     )
-    client, csrf = _admin_client(main)
+    client, csrf = admin_client(main)
 
     assert client.post("/admin/api/graph/rescan").status_code == 403
 
@@ -414,9 +390,9 @@ def test_rescan_all_api_requires_csrf_and_returns_reset_counts(tmp_path, monkeyp
     assert "!state.config || !config.enabled || !state.codexReady || state.rescanBusy" in script
 
 
-def test_failed_graph_job_details_reach_processing_and_analysis_ui(tmp_path, monkeypatch) -> None:
-    main = _load_main(tmp_path, monkeypatch)
-    client, _ = _admin_client(main)
+def test_failed_graph_job_details_reach_processing_and_analysis_ui(admin_client, load_main) -> None:
+    main = load_main(graph_experimental=True)
+    client, _ = admin_client(main)
     draft = main.store.unlock_graph_profile("owner")
     main.store.update_graph_draft({**draft, "inactivity_hours": 1}, "owner")
     main.store.activate_graph_draft("owner")
