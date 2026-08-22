@@ -19,7 +19,7 @@ from typing import Any
 from cryptography.fernet import Fernet, InvalidToken
 from starlette.requests import Request
 from starlette.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
-from bridge_cli.version import BRIDGE_VERSION
+from bridge_cli.version import BRIDGE_VERSION, BRIDGE_VERSION_LABEL
 
 from app.graph_config import GraphConfigError
 from app.graph_runtime import GraphRuntime
@@ -1672,6 +1672,8 @@ class AdminHandlers:
 
         version = _public_keys(cached.get("version"), {"current", "database_schema"})
         version.setdefault("current", BRIDGE_VERSION)
+        if BRIDGE_VERSION_LABEL is not None:
+            version["label"] = BRIDGE_VERSION_LABEL
         version["database_schema"] = self.store.schema_version()
         installation = _public_keys(
             cached.get("installation"),

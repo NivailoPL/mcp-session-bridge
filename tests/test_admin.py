@@ -2290,6 +2290,8 @@ def test_admin_search_settings_keys_and_basic_search_api(tmp_path, monkeypatch) 
 
 
 def test_admin_operational_status_is_authenticated_and_secret_free(tmp_path, monkeypatch) -> None:
+    import app.admin as admin_module
+
     status_path = tmp_path / "status.json"
     status_path.write_text(
         json.dumps(
@@ -2317,6 +2319,7 @@ def test_admin_operational_status_is_authenticated_and_secret_free(tmp_path, mon
         encoding="utf-8",
     )
     monkeypatch.setenv("BRIDGE_OPERATIONAL_STATUS_FILE", str(status_path))
+    monkeypatch.setattr(admin_module, "BRIDGE_VERSION_LABEL", "0.5.1-beta")
     main = _load_main(tmp_path, monkeypatch)
     anonymous = TestClient(main.app, base_url="http://127.0.0.1:8787")
     assert anonymous.get("/admin/api/status").status_code == 401
@@ -2335,6 +2338,8 @@ def test_admin_operational_status_is_authenticated_and_secret_free(tmp_path, mon
     assert status["format_version"] == 1
     assert "schema_version" not in status
     assert status["version"]["database_schema"] == 2
+    assert status["version"]["current"] == "0.4.0"
+    assert status["version"]["label"] == "0.5.1-beta"
     assert status["update"]["state"] == "available"
     assert status["live"]["application"] == "pass"
     assert "test-secret" not in response.text
@@ -2349,6 +2354,8 @@ def test_admin_viewer_rag_settings_and_search_overlay_contract() -> None:
     for tab in ("general", "search", "api", "transcript", "status"):
         assert f'data-settings-tab="{tab}"' in viewer
         assert f'data-settings-panel="{tab}"' in viewer
+
+    assert 'bridgeStatusVersion.textContent = version.label || version.current || "—";' in viewer
 
     assert 'id="settingsUpdateDot"' in viewer
     assert 'id="statusUpdateDot"' in viewer
