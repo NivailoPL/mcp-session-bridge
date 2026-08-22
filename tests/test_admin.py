@@ -480,6 +480,7 @@ def test_admin_viewer_sensitive_group_privacy_contract() -> None:
     assert 'id="threadSensitiveBody"' in viewer
     assert "dom.threadSensitiveBody.inert = threadIsGuarded;" in viewer
     assert "dom.threadSensitiveContent.inert" not in viewer
+    assert ".sensitive-curtain:hover { background: var(--bg-base); }" in viewer
     # a covered thread keeps its header usable, but not its title
     assert 'dom.sessionTitle.classList.toggle("is-redacted", threadIsGuarded);' in viewer
     assert ".topbar-title h2.is-redacted" in viewer
