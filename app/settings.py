@@ -34,6 +34,7 @@ class Settings:
     graph_experimental: bool = False
     restart_request_file: Path | None = None
     operational_status_file: Path | None = None
+    export_root: Path | None = None
 
     @property
     def issuer_url(self) -> str:
@@ -55,6 +56,10 @@ class Settings:
     def registration_endpoint(self) -> str:
         return f"{self.public_base_url}/oauth/register"
 
+    @property
+    def markdown_export_root(self) -> Path:
+        return self.export_root or self.db_path.parent / "exports"
+
 
 def load_settings() -> Settings:
     load_dotenv(ROOT / ".env")
@@ -63,10 +68,11 @@ def load_settings() -> Settings:
     if not resource_path.startswith("/"):
         resource_path = f"/{resource_path}"
 
+    db_path = Path(os.getenv("BRIDGE_DB_PATH", str(ROOT / "data" / "bridge.sqlite3")))
     return Settings(
         public_base_url=public_base_url,
         resource_path=resource_path,
-        db_path=Path(os.getenv("BRIDGE_DB_PATH", str(ROOT / "data" / "bridge.sqlite3"))),
+        db_path=db_path,
         context_packs_dir=Path(os.getenv("BRIDGE_CONTEXT_PACKS_DIR", str(ROOT / "data" / "context-packs"))),
         default_context_pack_id=os.getenv("BRIDGE_DEFAULT_CONTEXT_PACK_ID", "manual-context"),
         transcript_chunk_max_lines=int(os.getenv("BRIDGE_TRANSCRIPT_CHUNK_MAX_LINES", "180")),
@@ -101,6 +107,11 @@ def load_settings() -> Settings:
             Path(value)
             if (value := os.getenv("BRIDGE_OPERATIONAL_STATUS_FILE"))
             else None
+        ),
+        export_root=(
+            Path(value)
+            if (value := os.getenv("BRIDGE_EXPORT_ROOT"))
+            else db_path.parent / "exports"
         ),
     )
 

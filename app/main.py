@@ -322,6 +322,11 @@ async def admin_api_settings(request: Request) -> Response:
     return await admin.api_settings(request)
 
 
+@mcp.custom_route("/admin/api/database/export", methods=["POST"])
+async def admin_api_export_database(request: Request) -> Response:
+    return await admin.api_export_database(request)
+
+
 @mcp.custom_route("/admin/api/status", methods=["GET"])
 async def admin_api_operational_status(request: Request) -> Response:
     return await admin.api_operational_status(request)

@@ -763,6 +763,93 @@ def test_admin_api_requires_login_and_csrf_for_mutations(load_main) -> None:
     assert unmasked.json()["exchange"]["is_masked"] is False
 
 
+def test_admin_database_export_requires_csrf_and_keeps_files_on_server(
+    load_main, tmp_path: Path
+) -> None:
+    main = load_main(graph_experimental=True)
+    main.store.create_session("export-me", "Export me", "manual-context")
+    client = TestClient(main.app, base_url="http://127.0.0.1:8787")
+
+    assert client.post("/admin/api/database/export").status_code == 401
+    login = client.post(
+        "/admin/login",
+        data={
+            "username": "owner",
+            "password": "secret-admin-password",
+            "next": "/admin/sessions",
+        },
+        follow_redirects=False,
+    )
+    assert login.status_code == 303
+    assert client.post("/admin/api/database/export").status_code == 403
+    csrf = client.get("/admin/api/me").json()["csrf_token"]
+
+    requested_path = tmp_path / "browser-selected-path"
+    response = client.post(
+        "/admin/api/database/export",
+        headers={"x-csrf-token": csrf},
+        json={"output": str(requested_path)},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    destination = Path(payload["export"]["artifact"]["path"])
+    assert destination.parent == tmp_path / "exports"
+    assert destination.is_dir()
+    assert list(destination.glob("*/*.md"))
+    assert "download" not in json.dumps(payload).lower()
+    assert not requested_path.exists()
+    assert response.headers["cache-control"] == "no-store"
+
+
+@requires_node
+def test_admin_database_export_button_sends_only_a_trigger_and_renders_vps_path() -> None:
+    source = slice_source(
+        "async function exportDatabaseMarkdown()", "// one panel, one save"
+    )
+    rendered = run_js(
+        r"""
+        const settingsDom = {
+          databaseExportButton: document.createElement("button"),
+          databaseExportResult: document.createElement("p"),
+        };
+        const calls = [];
+        const statuses = [];
+        const window = { confirm: () => true };
+        async function api(path, options) {
+          calls.push({ path, options });
+          return { export: { artifact: {
+            path: "/var/lib/mcp-session-bridge/exports/mcp-bridge-export-test",
+            session_count: 3,
+            attachment_count: 2,
+          } } };
+        }
+        function renderSettingsStatus(message, kind) { statuses.push({ message, kind }); }
+        """
+        + source
+        + r"""
+        (async () => {
+          await exportDatabaseMarkdown();
+          emit({
+            calls,
+            result: settingsDom.databaseExportResult.textContent,
+            disabled: settingsDom.databaseExportButton.disabled,
+            busy: settingsDom.databaseExportButton.getAttribute("aria-busy"),
+            statuses,
+          });
+        })();
+        """,
+    )
+
+    assert rendered["calls"] == [
+        {"path": "/admin/api/database/export", "options": {"method": "POST"}}
+    ]
+    assert "/var/lib/mcp-session-bridge/exports/" in rendered["result"]
+    assert rendered["disabled"] is False
+    assert rendered["busy"] == "false"
+    assert rendered["statuses"][-1]["kind"] == "ok"
+
+
 def test_admin_can_configure_ai_rename_and_update_session_title(load_main, monkeypatch) -> None:
     main = load_main(graph_experimental=True)
     main.store.create_session("s1", "Chaotic long title", "manual-context")
@@ -2097,6 +2184,7 @@ FEATURE_CONTROLS = {
     "rag settings": ["ragEnabled", "cohereEnabled", "ragGroupList"],
     "search index": ["indexRebuild", "indexReadyCheck", "indexBuiltAt", "indexCancel", "indexDelete", "indexEstimate", "indexEstimateDocuments", "indexEstimateTokens", "indexEstimateCost"],
     "bridge status": ["settingsUpdateDot", "statusUpdateDot", "bridgeStatusChecks"],
+    "database export": ["databaseExportButton", "databaseExportResult"],
 }
 
 
@@ -2131,7 +2219,7 @@ def test_admin_page_does_not_ship_retired_controls(admin_client) -> None:
     for dialog in ("searchDialog", "aiSettingsDialog", "fileWorkspaceDialog"):
         assert page.count(f'<dialog id="{dialog}"') == 1
 
-    for tab in ("general", "search", "api", "transcript", "status"):
+    for tab in ("general", "search", "api", "transcript", "database", "status"):
         assert f'data-settings-tab="{tab}"' in page
         assert f'data-settings-panel="{tab}"' in page
 

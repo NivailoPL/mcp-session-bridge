@@ -1563,6 +1563,7 @@
         <button type="button" data-settings-tab="transcript">MCP</button>
         <button type="button" data-settings-tab="search">Search</button>
         <button type="button" data-settings-tab="api">API</button>
+        <button type="button" data-settings-tab="database">Database</button>
         <button type="button" data-settings-tab="status">Status <span id="statusUpdateDot" class="update-dot" hidden aria-hidden="true"></span></button>
       </nav>
       <div class="settings-body">
@@ -1676,6 +1677,14 @@
           <div class="settings-section-head"><div><h4>Provider API keys</h4><p>Keys are encrypted at rest and never returned to this browser.</p></div></div>
           <div class="provider-card"><label class="field">OpenAI API key<input id="aiKeyInput" type="password" autocomplete="off" placeholder="Leave blank to keep current key"></label><p id="openaiKeyStatus" class="meta"></p><button type="button" class="danger" id="aiKeyRemoveButton">Remove OpenAI key</button></div>
           <div class="provider-card"><label class="field">Cohere API key<input id="cohereKeyInput" type="password" autocomplete="off" placeholder="Leave blank to keep current key"></label><p id="cohereKeyStatus" class="meta"></p><button type="button" class="danger" id="cohereKeyRemoveButton">Remove Cohere key</button></div>
+        </section>
+        <section data-settings-panel="database" class="settings-panel" hidden>
+          <div class="settings-section-head"><div><h4>Database</h4><p>Create a Markdown archive on this VPS. The browser never receives or downloads the exported files.</p></div></div>
+          <section class="mcp-settings-section">
+            <div class="settings-section-head"><div><h4>Conversation archive</h4><p>The export includes sensitive sessions, excluded and masked content, exchange audit history, and all stored attachments. It is written to the same managed server location used by <code>mcp-bridge export</code>.</p></div></div>
+            <div class="edit-actions"><button type="button" class="primary" id="databaseExportButton">Export Database (.md)</button></div>
+            <p id="databaseExportResult" class="meta" aria-live="polite">No export created in this browser session.</p>
+          </section>
         </section>
         <section data-settings-panel="status" class="settings-panel" hidden>
           <div class="settings-section-head"><div><h4>Bridge status</h4><p>Read-only operational summary. Changes and updates stay in the server CLI.</p></div></div>
@@ -1983,6 +1992,7 @@
         "contextSearchStatus", "searchResults", "localSearchResults", "searchDetail",
         "transcriptChunkMaxChars", "transcriptChunkMaxLines", "probeHarnessLabel", "probeTargetChars",
         "probeContentProfile", "probePromptPreview", "probePromptCopy", "probeRecommendations", "probeResults",
+        "databaseExportButton", "databaseExportResult",
         "statusUpdateDot", "bridgeStatusOverall", "bridgeStatusVersion", "bridgeStatusUpdate",
         "bridgeStatusChecked", "bridgeStatusChecks", "bridgeStatusUrl", "bridgeStatusSchema",
         "bridgeStatusOperation", "bridgeStatusError"
@@ -2275,6 +2285,7 @@
           if (button) selectSettingsTab(button.dataset.settingsTab);
         });
         settingsDom.settingsSaveButton.addEventListener("click", () => saveActiveSettingsPanel());
+        settingsDom.databaseExportButton.addEventListener("click", () => exportDatabaseMarkdown());
         settingsDom.toolOutputRestart.addEventListener("click", () => restartBridgeService());
 
         dom.aiKeyRemoveButton.addEventListener("click", () => removeProviderKey("openai"));
@@ -2300,8 +2311,8 @@
         for (const panel of document.querySelectorAll("[data-settings-panel]")) {
           panel.hidden = panel.dataset.settingsPanel !== name;
         }
-        // Status is read-only, so it gets no save bar
-        settingsDom.settingsActionbar.hidden = name === "status";
+        // Database and Status have dedicated/read-only actions, so neither gets the shared save bar
+        settingsDom.settingsActionbar.hidden = ["database", "status"].includes(name);
       }
 
       function activeSettingsTab() {
@@ -2315,6 +2326,26 @@
           case "search": return saveSearchSettings();
           case "api": return saveApiSettings();
           default: return undefined;
+        }
+      }
+
+      async function exportDatabaseMarkdown() {
+        const warning = "Create a server-side archive containing sensitive sessions, excluded and masked content, audit history, and every stored attachment? The files will remain on this VPS.";
+        if (!window.confirm(warning)) return;
+        settingsDom.databaseExportButton.disabled = true;
+        settingsDom.databaseExportButton.setAttribute("aria-busy", "true");
+        settingsDom.databaseExportResult.textContent = "Exporting on the VPS…";
+        try {
+          const payload = await api("/admin/api/database/export", { method: "POST" });
+          const artifact = payload.export.artifact;
+          settingsDom.databaseExportResult.textContent = `Saved ${artifact.session_count} sessions and ${artifact.attachment_count} attachments to ${artifact.path}`;
+          renderSettingsStatus("Database export completed on the VPS.", "ok");
+        } catch (error) {
+          settingsDom.databaseExportResult.textContent = `Export failed: ${error.message}`;
+          renderSettingsStatus(error.message, "error");
+        } finally {
+          settingsDom.databaseExportButton.disabled = false;
+          settingsDom.databaseExportButton.setAttribute("aria-busy", "false");
         }
       }
 
