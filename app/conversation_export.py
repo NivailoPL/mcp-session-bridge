@@ -516,13 +516,8 @@ def _component_join(*parts: Any, suffix: str = "") -> str:
 
 
 def _attachment_name(prefix: str, original_name: str) -> str:
-    safe_original = _safe_filename(original_name, 110)
+    safe_original = _safe_component(original_name, max_bytes=110)
     return _truncate_utf8(f"{prefix}--{safe_original}", 180)
-
-
-def _safe_filename(value: str, max_bytes: int) -> str:
-    normalized = _safe_component(value, max_bytes=max_bytes)
-    return normalized
 
 
 def _safe_component(value: str, *, max_bytes: int = 96) -> str:
