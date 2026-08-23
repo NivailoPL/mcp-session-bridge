@@ -2202,7 +2202,7 @@
         const overall = String(status.overall || "unknown").toLowerCase();
         settingsDom.bridgeStatusOverall.textContent = OVERALL_STATUS_LABELS[overall] || "Unknown";
         settingsDom.bridgeStatusOverall.className = `verdict is-${overall}`;
-        settingsDom.bridgeStatusVersion.textContent = version.current || "—";
+        settingsDom.bridgeStatusVersion.textContent = version.label || version.current || "—";
         settingsDom.bridgeStatusUpdate.textContent = update.state === "available"
           ? `${update.latest || "New version"} available`
           : update.state === "current" ? "Up to date" : "Unknown";

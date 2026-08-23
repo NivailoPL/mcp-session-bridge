@@ -225,7 +225,9 @@ def test_state_preparation_rejects_symlink_without_touching_target(tmp_path: Pat
     assert layout.codex_home.is_symlink()
 
 
-def test_runtime_wrapper_sets_socket_group_mode(tmp_path: Path) -> None:
+def test_runtime_wrapper_sets_socket_group_mode(short_tmp_path: Path) -> None:
+    # short_tmp_path, not tmp_path: the socket has to fit in sun_path (104 bytes).
+    tmp_path = short_tmp_path
     wrapper = Path(__file__).parents[1] / "deploy/codex-runtime/run-app-server.sh"
     fake = tmp_path / "fake-codex"
     fake.write_text(
