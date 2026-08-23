@@ -2062,7 +2062,7 @@ def test_admin_operational_status_is_authenticated_and_secret_free(load_main, tm
         ),
         encoding="utf-8",
     )
-    monkeypatch.setattr(admin_module, "BRIDGE_VERSION_LABEL", "0.5.1-beta")
+    monkeypatch.setattr(admin_module, "BRIDGE_VERSION_LABEL", "2026.8.2-beta")
     main = load_main(
         graph_experimental=True,
         env={"BRIDGE_OPERATIONAL_STATUS_FILE": str(status_path)},
@@ -2085,7 +2085,7 @@ def test_admin_operational_status_is_authenticated_and_secret_free(load_main, tm
     assert "schema_version" not in status
     assert status["version"]["database_schema"] == 2
     assert status["version"]["current"] == "0.4.0"
-    assert status["version"]["label"] == "0.5.1-beta"
+    assert status["version"]["label"] == "2026.8.2-beta"
     assert status["update"]["state"] == "available"
     assert status["live"]["application"] == "pass"
     assert "test-secret" not in response.text

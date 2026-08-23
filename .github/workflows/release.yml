@@ -19,6 +19,7 @@ jobs:
       - name: Install Python and locked dependencies
         run: |
           uv python install 3.12
+          uv lock --check
           uv sync --frozen
       - name: Verify tag and project version
         run: |
@@ -26,8 +27,10 @@ jobs:
           import os
           import tomllib
           from pathlib import Path
+          from bridge_cli.release import parse_calver_version
           version = tomllib.loads(Path("pyproject.toml").read_text())["project"]["version"]
           tag = os.environ["GITHUB_REF_NAME"]
+          parse_calver_version(version)
           if tag != f"v{version}":
               raise SystemExit(f"Tag {tag} does not match project version {version}")
           PY

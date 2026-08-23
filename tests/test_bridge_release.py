@@ -22,21 +22,22 @@ from bridge_cli.release import (
     UpdateManager,
     build_release_manifest,
     is_newer,
+    parse_calver_version,
     safe_extract,
 )
 
 
 def test_release_manifest_uses_current_database_schema() -> None:
     manifest = build_release_manifest(
-        version="0.4.1",
-        artifact="mcp-session-bridge-0.4.1.tar.gz",
+        version="2026.8.2",
+        artifact="mcp-session-bridge-2026.8.2.tar.gz",
         digest="a" * 64,
     )
 
     assert manifest == {
         "format_version": 1,
-        "version": "0.4.1",
-        "artifact": "mcp-session-bridge-0.4.1.tar.gz",
+        "version": "2026.8.2",
+        "artifact": "mcp-session-bridge-2026.8.2.tar.gz",
         "sha256": "a" * 64,
         "database_schema": SCHEMA_VERSION,
         "python": "3.12",
@@ -87,24 +88,53 @@ class CheckoutRunner(RecordingRunner):
         return super().run(*args, check=check)
 
 
-def test_semver_comparison_ignores_v_prefix_and_rejects_prereleases() -> None:
+def test_version_comparison_supports_calver_transition_and_rejects_prereleases() -> None:
     assert is_newer("0.4.1", "0.4.0") is True
     assert is_newer("v1.0.0", "0.9.9") is True
+    assert is_newer("v2026.8.2", "0.5.0") is True
+    assert is_newer("2026.8.2", "2026.8.1") is True
     assert is_newer("0.4.0", "0.4.0") is False
     with pytest.raises(ValueError):
-        is_newer("0.5.0-rc.1", "0.4.0")
+        is_newer("2026.8.2-beta", "0.5.0")
+    with pytest.raises(ValueError):
+        is_newer("2026.13.1", "0.5.0")
+
+
+@pytest.mark.parametrize("version", ["2026.1.1", "2026.12.999"])
+def test_calver_validator_accepts_month_and_sequence_boundaries(version: str) -> None:
+    assert parse_calver_version(version) == version
+
+
+@pytest.mark.parametrize(
+    "version",
+    [
+        "026.8.2",
+        "2026.01.1",
+        "2026.00.1",
+        "2026.13.1",
+        "2026.1.0",
+        "2026.1.01",
+        "v2026.8.2",
+        "2026.8.2-beta",
+    ],
+)
+def test_calver_validator_rejects_noncanonical_or_out_of_range_values(
+    version: str,
+) -> None:
+    with pytest.raises(ValueError, match="CalVer YYYY.M.N"):
+        parse_calver_version(version)
 
 
 def test_release_client_requires_stable_asset_with_github_digest() -> None:
     payload = {
-        "tag_name": "v0.4.1",
+        "tag_name": "v2026.8.2",
         "draft": False,
         "prerelease": False,
-        "html_url": "https://github.test/releases/v0.4.1",
+        "html_url": "https://github.test/releases/v2026.8.2",
         "body": "Changes",
         "assets": [
             {
-                "name": "mcp-session-bridge-0.4.1.tar.gz",
+                "name": "mcp-session-bridge-2026.8.2.tar.gz",
                 "browser_download_url": "https://github.test/bridge.tar.gz",
                 "digest": "sha256:" + "a" * 64,
             }
@@ -114,7 +144,7 @@ def test_release_client_requires_stable_asset_with_github_digest() -> None:
     client = ReleaseClient(opener=lambda *args, **kwargs: Response(json.dumps(payload).encode()))
     release = client.latest()
 
-    assert release.version == "0.4.1"
+    assert release.version == "2026.8.2"
     assert release.digest == "a" * 64
     assert release.asset_url.endswith("bridge.tar.gz")
 
@@ -257,12 +287,12 @@ def test_update_declined_by_user_does_not_install(
     assert result == 0
 
 
-def _managed_layout(tmp_path: Path) -> Layout:
+def _managed_layout(tmp_path: Path, version: str = "0.4.0") -> Layout:
     layout = Layout.for_root(tmp_path / "root")
-    current = layout.release_dir("0.4.0")
+    current = layout.release_dir(version)
     current.mkdir(parents=True)
     (current / "pyproject.toml").write_text(
-        "[project]\nname='mcp-session-bridge'\nversion='0.4.0'\n", encoding="utf-8"
+        f"[project]\nname='mcp-session-bridge'\nversion='{version}'\n", encoding="utf-8"
     )
     layout.current_link.parent.mkdir(parents=True, exist_ok=True)
     layout.current_link.symlink_to(current)
@@ -272,7 +302,7 @@ def _managed_layout(tmp_path: Path) -> Layout:
     migrate_database(layout.db_path)
     atomic_write_json(
         layout.installation_file,
-        {"format_version": 1, "mode": "managed", "version": "0.4.0"},
+        {"format_version": 1, "mode": "managed", "version": version},
     )
     return layout
 
@@ -609,11 +639,11 @@ def test_system_database_owner_is_restored_after_backup_copy() -> None:
 
 
 def test_update_switches_release_and_records_rollback_receipt(tmp_path: Path) -> None:
-    layout = _managed_layout(tmp_path)
-    archive, digest = _release_archive(tmp_path, "0.4.1")
+    layout = _managed_layout(tmp_path, version="0.5.0")
+    archive, digest = _release_archive(tmp_path, "2026.8.2")
     info = ReleaseInfo(
-        version="0.4.1",
-        release_url="https://github.test/v0.4.1",
+        version="2026.8.2",
+        release_url="https://github.test/v2026.8.2",
         asset_url="https://github.test/asset",
         digest=digest,
         notes="Changes",
@@ -624,7 +654,7 @@ def test_update_switches_release_and_records_rollback_receipt(tmp_path: Path) ->
     installation.update(
         {
             "commit": "a" * 40,
-            "release_id": "0.4.0-git-aaaaaaaaaaaa",
+            "release_id": "0.5.0-git-aaaaaaaaaaaa",
         }
     )
     atomic_write_json(layout.installation_file, installation)
@@ -632,22 +662,23 @@ def test_update_switches_release_and_records_rollback_receipt(tmp_path: Path) ->
     result = manager.update(info)
 
     assert result["state"] == "complete"
-    assert layout.current_link.resolve() == layout.release_dir("0.4.1").resolve()
+    assert layout.current_link.resolve() == layout.release_dir("2026.8.2").resolve()
     receipt = json.loads(layout.operation_file.read_text(encoding="utf-8"))
-    assert receipt["previous_version"] == "0.4.0"
+    assert receipt["previous_version"] == "0.5.0"
     assert receipt["codex_runtime"]["state"] == "disabled"
     assert Path(receipt["database_backup"]).exists()
     updated = json.loads(layout.installation_file.read_text(encoding="utf-8"))
     assert updated["commit"] is None
-    assert updated["release_id"] == "0.4.1"
+    assert updated["version"] == "2026.8.2"
+    assert updated["release_id"] == "2026.8.2"
 
     rollback = manager.rollback()
     assert rollback["state"] == "complete"
     assert rollback["codex_runtime"]["state"] == "disabled"
-    assert layout.current_link.resolve() == layout.release_dir("0.4.0").resolve()
+    assert layout.current_link.resolve() == layout.release_dir("0.5.0").resolve()
     restored = json.loads(layout.installation_file.read_text(encoding="utf-8"))
     assert restored["commit"] == "a" * 40
-    assert restored["release_id"] == "0.4.0-git-aaaaaaaaaaaa"
+    assert restored["release_id"] == "0.5.0-git-aaaaaaaaaaaa"
 
 
 def test_failed_update_restores_previous_release_and_database(tmp_path: Path) -> None:

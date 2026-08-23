@@ -49,7 +49,7 @@ After committing changes in the server checkout, deploy that exact Git revision 
 
 Deploy creates an immutable release named with the commit hash, excludes untracked files, makes a final database backup, switches the managed service, verifies health, and automatically restores the previous release and database on failure. After the first checkout deployment, the global `mcp-bridge deploy` command finds the configured source checkout automatically.
 
-Deploy refuses an older semantic version, an older commit at the same version, or a divergent non-fast-forward checkout. An expert can override this only explicitly with `mcp-bridge deploy --allow-downgrade`; the normal workflow never needs that flag.
+Deploy refuses an older release version, an older commit at the same version, or a divergent non-fast-forward checkout. An expert can override this only explicitly with `mcp-bridge deploy --allow-downgrade`; the normal workflow never needs that flag.
 
 Portable database and lifecycle commands are also available without the menu:
 
@@ -157,6 +157,7 @@ Settings are split into General, MCP, Search, API, Database, and Status tabs. Da
 - [Client setup](docs/client-setup.md)
 - [Model instructions](docs/model-instructions.md)
 - [Deployment](docs/deployment.md)
+- [Versioning](docs/versioning.md)
 - [Security](docs/security.md)
 - [Limitations](docs/limitations.md)
 - [Operations](docs/operations.md)
