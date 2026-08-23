@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import os
 import sqlite3
 from pathlib import Path
 
 import pytest
 
+from app import conversation_export
 from app.conversation_export import export_database_to_markdown
 from app.storage import Store
 
@@ -151,3 +153,55 @@ def test_export_disambiguates_transcript_and_attachment_name_collision(
     assert len(matching) == 2
     assert "session-001--file-1--unsafe_.md" in matching
     assert any(name != "session-001--file-1--unsafe_.md" for name in matching)
+
+
+def test_export_preserves_existing_shared_export_root_permissions(tmp_path: Path) -> None:
+    db_path = tmp_path / "bridge.sqlite3"
+    Store(db_path)
+    export_root = tmp_path / "exports"
+    export_root.mkdir(mode=0o770)
+    export_root.chmod(0o770)
+
+    export_database_to_markdown(db_path, export_root=export_root)
+
+    assert export_root.stat().st_mode & 0o777 == 0o770
+
+
+def test_export_reads_one_snapshot_even_if_live_database_changes(
+    tmp_path: Path, monkeypatch
+) -> None:
+    db_path = tmp_path / "bridge.sqlite3"
+    store = Store(db_path)
+    store.create_session("before-snapshot", "Before", "manual-context")
+    original_snapshot = conversation_export._snapshot_database
+
+    def snapshot_then_write(source: Path, destination: Path) -> None:
+        original_snapshot(source, destination)
+        store.create_session("after-snapshot", "After", "manual-context")
+
+    monkeypatch.setattr(conversation_export, "_snapshot_database", snapshot_then_write)
+
+    result = export_database_to_markdown(db_path, export_root=tmp_path / "exports")
+    markdown_files = list(Path(result["artifact"]["path"]).glob("*/*.md"))
+
+    assert result["artifact"]["session_count"] == 1
+    assert any(path.name.startswith("before-snapshot--") for path in markdown_files)
+    assert not any(path.name.startswith("after-snapshot--") for path in markdown_files)
+
+
+def test_export_artifact_permissions_are_private(tmp_path: Path) -> None:
+    if os.name == "nt":
+        pytest.skip("POSIX permission bits are not available on Windows")
+    db_path = tmp_path / "bridge.sqlite3"
+    store = Store(db_path)
+    store.create_session("session-001", "Session", "manual-context")
+    store.save_session_file("session-001", "notes.md", "private")
+
+    result = export_database_to_markdown(db_path, export_root=tmp_path / "exports")
+    export_path = Path(result["artifact"]["path"])
+
+    assert export_path.stat().st_mode & 0o777 == 0o700
+    for directory in [path for path in export_path.rglob("*") if path.is_dir()]:
+        assert directory.stat().st_mode & 0o777 == 0o700
+    for file_path in [path for path in export_path.rglob("*") if path.is_file()]:
+        assert file_path.stat().st_mode & 0o777 == 0o600

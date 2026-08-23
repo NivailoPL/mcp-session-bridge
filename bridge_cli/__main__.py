@@ -203,6 +203,8 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _export_markdown(args: argparse.Namespace, layout: Layout) -> int:
+    if args.output is None:
+        _prepare_managed_export_root(layout)
     result = export_database_to_markdown(
         layout.db_path,
         export_root=layout.export_root,
@@ -222,6 +224,31 @@ def _export_markdown(args: argparse.Namespace, layout: Layout) -> int:
     for warning in result["warnings"]:
         print(f"WARNING {warning}")
     return 0
+
+
+def _prepare_managed_export_root(layout: Layout) -> None:
+    export_root = layout.export_root
+    if export_root.is_symlink():
+        raise RuntimeError(f"Managed export root must not be a symlink: {export_root}")
+    export_root.mkdir(mode=0o700, parents=True, exist_ok=True)
+    if layout.root != Path("/"):
+        return
+    import grp
+
+    try:
+        service_group = grp.getgrnam("mcp-session-bridge")
+    except KeyError:
+        export_root.chmod(0o700)
+        return
+    flags = os.O_RDONLY | os.O_DIRECTORY
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    descriptor = os.open(export_root, flags)
+    try:
+        os.fchown(descriptor, 0, service_group.gr_gid)
+        os.fchmod(descriptor, 0o3770)
+    finally:
+        os.close(descriptor)
 
 
 def _deploy(args: argparse.Namespace, layout: Layout, runner: SubprocessRunner) -> int:

@@ -83,7 +83,7 @@ def _export_database_to_markdown(
         if export_root is None:
             raise ValueError("export_root is required when output is not provided")
         parent = export_root.expanduser().resolve()
-        _mkdir_private(parent, parents=True)
+        _ensure_export_root(parent)
         final = _unique_default_destination(parent, timestamp)
 
     if final.exists() or final.is_symlink():
@@ -597,6 +597,16 @@ def _iso(value: int | None) -> str | None:
 def _mkdir_private(path: Path, *, parents: bool = False) -> None:
     path.mkdir(mode=0o700, parents=parents, exist_ok=True)
     _chmod(path, 0o700)
+
+
+def _ensure_export_root(path: Path) -> None:
+    if path.is_symlink():
+        raise ValueError(f"Export root must not be a symlink: {path}")
+    if path.exists():
+        if not path.is_dir():
+            raise ValueError(f"Export root is not a directory: {path}")
+        return
+    _mkdir_private(path, parents=True)
 
 
 def _write_private_file(path: Path, data: bytes) -> None:
