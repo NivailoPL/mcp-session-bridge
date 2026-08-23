@@ -86,6 +86,10 @@ class Layout:
         return self.data_root / "context-packs"
 
     @property
+    def export_root(self) -> Path:
+        return self.data_root / "exports"
+
+    @property
     def state_root(self) -> Path:
         return self.data_root / "state"
 
