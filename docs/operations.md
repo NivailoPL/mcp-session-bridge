@@ -53,6 +53,25 @@ The authenticated admin page exposes the same summary under **Settings → Statu
 
 Managed data lives under `/var/lib/mcp-session-bridge`; dated setup and update backups live under `/var/backups/mcp-session-bridge`. Do not edit a version directory under `/opt/mcp-session-bridge/releases` in place.
 
+## Markdown Conversation Export
+
+Create a timestamped conversation archive on the VPS:
+
+```bash
+mcp-bridge export
+```
+
+The command prints the absolute destination under `/var/lib/mcp-session-bridge/exports`. For automation or a different new destination:
+
+```bash
+mcp-bridge export --json
+mcp-bridge export --output /safe/new/archive-directory
+```
+
+The export contains one Markdown file per session, grouped by the current session group, plus stored text files and original PDFs. It also includes sensitive sessions, raw excluded or masked exchanges, and the exchange edit/delete/restore/mask history retained by SQLite. It does not include OAuth records, provider keys, application settings, search indexes, or Graph data.
+
+The authenticated **Settings → Database** button runs this same server-side operation. It reports the path but provides no browser download, file listing, path selector, or archive-reading endpoint. Export directories are not automatically rotated; inspect free space and delete obsolete archives over SSH.
+
 ## Codex App Server
 
 The optional Codex companion has an independent lifecycle:

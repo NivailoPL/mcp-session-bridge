@@ -86,6 +86,7 @@ The managed installation uses versioned releases and stable host paths:
 | `/etc/mcp-session-bridge/bridge.env` | Active private runtime configuration |
 | `/var/lib/mcp-session-bridge/state/pending/bridge.env` | Root-owned configuration staged by setup |
 | `/var/lib/mcp-session-bridge` | SQLite database, context packs, and status state |
+| `/var/lib/mcp-session-bridge/exports` | Private server-side Markdown conversation archives |
 | `/var/backups/mcp-session-bridge` | Setup and update backups |
 | `/usr/local/bin/mcp-bridge` | Daily CLI command |
 | `/etc/systemd/system/mcp-session-bridge*.service` | Service, restart helper, and status refresh |
@@ -96,6 +97,8 @@ Setup installs a bootstrap `/usr/local/bin/mcp-bridge` command immediately. Repe
 Activation creates an unprivileged `mcp-session-bridge` service account, installs locked Python dependencies with `uv`, initializes or migrates SQLite, atomically promotes the staged environment and release, installs the staged systemd units, and configures or adopts Caddy. Setup keeps pending configuration and unit files root-owned; the service account owns only runtime data that the application must change.
 
 Secrets are written only to the private environment file. Re-running setup preserves the existing Bridge secret so OAuth records and encrypted admin settings remain readable.
+
+Markdown exports created by the CLI or **Settings → Database** remain under the private managed data root. They are not served by Caddy or the Admin API. Copy or inspect them over SSH and remove archives that are no longer needed.
 
 ### Managed Codex companion
 

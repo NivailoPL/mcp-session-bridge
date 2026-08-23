@@ -7,6 +7,7 @@ import hashlib
 import hmac
 import html
 import json
+import logging
 import re
 import time
 import urllib.error
@@ -63,6 +64,7 @@ from app.output_probe import (
 )
 from app.security import token_urlsafe, verify_password
 from app.settings import Settings
+from app.conversation_export import ExportInProgressError, export_database_to_markdown
 from app.storage import (
     MAX_SESSION_FILE_BYTES,
     ExchangeRecord,
@@ -124,6 +126,7 @@ BRAND_ASSET_MEDIA_TYPES = {
 }
 GRAPH_NAV_LINK = '<a class="sb-nav__tab" role="tab" href="/admin/graph" aria-selected="false" tabindex="-1" data-label="GRAPH">GRAPH</a>'
 GRAPH_NAV_WIP = '<span class="sb-nav__tab" role="tab" aria-disabled="true" aria-selected="false" data-label="GRAPH">GRAPH <small>WIP</small></span>'
+logger = logging.getLogger(__name__)
 
 
 class AdminHandlers:
@@ -626,6 +629,31 @@ class AdminHandlers:
             return error
         return JSONResponse(
             {"ok": True, "settings": await asyncio.to_thread(self._settings_payload)},
+            headers=self._no_store_headers(),
+        )
+
+    async def api_export_database(self, request: Request) -> Response:
+        _, error = self._require_admin_mutation(request)
+        if error:
+            return error
+        try:
+            result = await asyncio.to_thread(
+                export_database_to_markdown,
+                self.settings.db_path,
+                export_root=self.settings.markdown_export_root,
+            )
+        except ExportInProgressError:
+            return self._json_error(
+                "A database export is already in progress.", status_code=409
+            )
+        except (OSError, RuntimeError, ValueError):
+            logger.exception("Admin Markdown database export failed")
+            return self._json_error(
+                "Database export failed. Check the Bridge service logs.",
+                status_code=500,
+            )
+        return JSONResponse(
+            {"ok": True, "export": result},
             headers=self._no_store_headers(),
         )
 

@@ -6,6 +6,15 @@ This project follows a lightweight changelog format inspired by Keep a Changelog
 
 ## [Unreleased]
 
+### New Features
+
+- Added `mcp-bridge export` for complete, group-organized Markdown conversation archives with original stored attachments and machine-readable output.
+- Added **Settings → Database → Export Database (.md)** as a server-side trigger for the same managed export.
+
+### Security
+
+- Markdown archives remain in the private VPS data directory; the Admin API cannot select, list, read, or download export files.
+
 ## [0.5.0] - 2026-08-17
 
 ### Highlights

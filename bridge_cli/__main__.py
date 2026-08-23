@@ -9,6 +9,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+from app.conversation_export import export_database_to_markdown
 from bridge_cli.caddy import replace_site_address
 from bridge_cli.config import read_env_file, update_env_file
 from bridge_cli.files import atomic_write_json, atomic_write_text, read_json
@@ -51,6 +52,11 @@ def build_parser() -> argparse.ArgumentParser:
     commands.add_parser("version", help="Show Bridge and schema versions.")
     migrate = commands.add_parser("migrate", help="Apply explicit database migrations.")
     migrate.add_argument("--db", type=Path)
+    export = commands.add_parser(
+        "export", help="Export all conversations and files to Markdown on this server."
+    )
+    export.add_argument("--output", type=Path)
+    export.add_argument("--json", action="store_true", dest="as_json")
     database = commands.add_parser("database", help="Inspect and manage the Bridge database.")
     database_actions = database.add_subparsers(dest="database_action", required=True)
     for name in ("inspect", "verify", "migrate"):
@@ -167,6 +173,9 @@ def main(argv: list[str] | None = None) -> int:
             )
             print(json.dumps(result, indent=2))
             return 0
+        if args.command == "export":
+            _require_root("export")
+            return _export_markdown(args, layout)
         if args.command == "database":
             _require_root("database")
             return _database(args, layout, runner)
@@ -191,6 +200,64 @@ def main(argv: list[str] | None = None) -> int:
         print(f"FAILED: {exc}", file=sys.stderr)
         return 1
     return 2
+
+
+def _export_markdown(args: argparse.Namespace, layout: Layout) -> int:
+    if args.output is None:
+        _prepare_managed_export_root(layout)
+    result = export_database_to_markdown(
+        layout.db_path,
+        export_root=layout.export_root,
+        output=args.output,
+    )
+    if args.as_json:
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return 0
+
+    artifact = result["artifact"]
+    print(f"PASS {result['operation']}: {result['state']}")
+    print(f"Export: {artifact['path']}")
+    print(f"Groups: {artifact['group_count']}")
+    print(f"Sessions: {artifact['session_count']}")
+    print(f"Exchanges: {artifact['exchange_count']}")
+    print(f"Attachments: {artifact['attachment_count']}")
+    for warning in result["warnings"]:
+        print(f"WARNING {warning}")
+    return 0
+
+
+def _prepare_managed_export_root(layout: Layout) -> None:
+    export_root = layout.export_root
+    if export_root.is_symlink():
+        raise RuntimeError(f"Managed export root must not be a symlink: {export_root}")
+    export_root.mkdir(mode=0o700, parents=True, exist_ok=True)
+    if layout.root != Path("/"):
+        return
+    import grp
+
+    try:
+        service_group = grp.getgrnam("mcp-session-bridge")
+    except KeyError:
+        export_root.chmod(0o700)
+        return
+    flags = os.O_RDONLY | os.O_DIRECTORY
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    descriptor = os.open(export_root, flags)
+    try:
+        os.fchown(descriptor, 0, service_group.gr_gid)
+        os.fchmod(descriptor, 0o3770)
+    finally:
+        os.close(descriptor)
+    lock_flags = os.O_RDONLY | os.O_CREAT
+    if hasattr(os, "O_NOFOLLOW"):
+        lock_flags |= os.O_NOFOLLOW
+    lock_descriptor = os.open(layout.export_lock_file, lock_flags, 0o640)
+    try:
+        os.fchown(lock_descriptor, 0, service_group.gr_gid)
+        os.fchmod(lock_descriptor, 0o640)
+    finally:
+        os.close(lock_descriptor)
 
 
 def _deploy(args: argparse.Namespace, layout: Layout, runner: SubprocessRunner) -> int:

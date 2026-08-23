@@ -12,6 +12,7 @@ It is intentionally narrow. Files enter the bridge only through an explicit uplo
 - Returns long transcripts in chunks so clients do not need one oversized tool result.
 - Saves explicitly uploaded session and group text files or PDFs for reusable context.
 - Includes an offline transcript viewer and an authenticated admin UI for transcript correction, file management, and full-database search.
+- Exports the complete conversation archive to grouped Markdown files and original attachments that remain on the VPS.
 - Provides local BM25 search plus optional OpenAI embeddings and Cohere reranking for admin-only Hybrid search.
 - Ships a local demo script for understanding the core workflow without setting up a remote MCP client.
 
@@ -56,12 +57,16 @@ Portable database and lifecycle commands are also available without the menu:
 mcp-bridge database inspect --json
 mcp-bridge database verify
 mcp-bridge database backup --output /safe/path/bridge.sqlite3
+mcp-bridge export
+mcp-bridge export --output /safe/new/archive-directory --json
 mcp-bridge database import /safe/path/bridge.sqlite3 --replace
 mcp-bridge service inspect
 mcp-bridge installation uninstall --dry-run --remove-data --output /safe/path/bridge.sqlite3
 ```
 
 Database import replaces the complete current database; it does not merge records. Bridge creates and verifies a final safety backup after stopping the service, swaps the prepared SQLite file atomically, checks WAL write access as the service user, and restores the previous database on failure. The portable database is sensitive: it contains conversations, uploaded files, OAuth/application rows, and settings. When restoring it into an installation with a new `BRIDGE_SECRET_KEY`, reconnect harnesses and re-enter encrypted provider keys.
+
+`mcp-bridge export` is a conversation archive, not a portable SQLite backup. It creates one Markdown file per session under a folder for the session's current group, includes raw excluded and masked exchanges plus the exchange audit history that SQLite retains, and writes every stored text file and original PDF beside the related session files. The default destination is a new timestamped directory under `/var/lib/mcp-session-bridge/exports`. The command never overwrites an existing destination and always prints the absolute output path. The same operation is available under **Settings → Database → Export Database (.md)**; the browser starts the export and displays its VPS path but cannot list or download the generated files.
 
 Read the complete [managed server installation guide](docs/managed-installation.md), including adoption, updates, rollback, and the future Agent Plugins boundary. Client/harness connection is intentionally a separate step.
 
@@ -141,7 +146,7 @@ The Search button in the admin panel opens an overlay over the complete bridge d
 - Each group must be explicitly selected before its content can be embedded or reranked. Unselected groups remain available only in the separate local BM25 lane.
 - Sensitive groups always remain in the local BM25 lane and cannot be selected for OpenAI embeddings or Cohere reranking.
 
-Settings are split into General, MCP, Search, API, and Status tabs. Status mirrors the CLI's cached operational report and marks available releases, while all host changes and updates remain terminal-only. The MCP tab creates harness-test instructions, records verified probe results, recommends a safe character limit with a 25% margin, and controls the global transcript chunk character/line limits without a restart. Provider keys are encrypted with the bridge secret, are returned only as masked previews, and are shared with the existing AI rename feature where applicable. Vector indexing is disabled by default; the owner can build, stop, rebuild, or delete the index and configure search chunking plus refresh thresholds. Admin search remains admin-only.
+Settings are split into General, MCP, Search, API, Database, and Status tabs. Database can create the same server-side Markdown archive as `mcp-bridge export` without serving its contents to the browser. Status mirrors the CLI's cached operational report and marks available releases, while all host changes and updates remain terminal-only. The MCP tab creates harness-test instructions, records verified probe results, recommends a safe character limit with a 25% margin, and controls the global transcript chunk character/line limits without a restart. Provider keys are encrypted with the bridge secret, are returned only as masked previews, and are shared with the existing AI rename feature where applicable. Vector indexing is disabled by default; the owner can build, stop, rebuild, or delete the index and configure search chunking plus refresh thresholds. Admin search remains admin-only.
 
 `get_session_overview` returns `response_display_timezone` for the configured bridge display timezone. `save_exchange` returns `assistant_created_at_display` and `assistant_created_at_timezone`; use that returned display timestamp as the user-visible response timestamp. The bridge renders response display timestamps in the configured bridge display timezone, UTC by default, so clients should not convert that value into their own local timezone.
 
