@@ -9,16 +9,18 @@ import sqlite3
 import tempfile
 import time
 import unicodedata
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 from threading import Lock
-from typing import Any
+from typing import Any, Iterator
 from urllib.parse import quote
 
 from app.storage import SCHEMA_VERSION
 
 
 EXPORT_FORMAT_VERSION = 1
+EXPORT_LOCK_FILENAME = ".markdown-export.lock"
 _EXPORT_LOCK = Lock()
 _UNSAFE_COMPONENT = re.compile(r'[\\/:*?"<>|\x00-\x1f\x7f]')
 _WINDOWS_RESERVED = {
@@ -53,12 +55,16 @@ def export_database_to_markdown(
     if not _EXPORT_LOCK.acquire(blocking=False):
         raise ExportInProgressError("A Markdown database export is already in progress.")
     try:
-        return _export_database_to_markdown(
-            Path(db_path),
-            export_root=Path(export_root) if export_root is not None else None,
-            output=Path(output) if output is not None else None,
-            timestamp=int(timestamp if timestamp is not None else time.time()),
-        )
+        resolved_export_root = Path(export_root) if export_root is not None else None
+        resolved_output = Path(output) if output is not None else None
+        lock_parent = _export_parent(resolved_export_root, resolved_output)
+        with _process_export_lock(lock_parent):
+            return _export_database_to_markdown(
+                Path(db_path),
+                export_root=resolved_export_root,
+                output=resolved_output,
+                timestamp=int(timestamp if timestamp is not None else time.time()),
+            )
     finally:
         _EXPORT_LOCK.release()
 
@@ -105,7 +111,9 @@ def _export_database_to_markdown(
             Path(f"{snapshot}{suffix}").unlink(missing_ok=True)
         size_bytes = sum(path.stat().st_size for path in staging.rglob("*") if path.is_file())
         staging.rename(final)
-        _chmod(final, 0o700)
+    except sqlite3.Error as exc:
+        shutil.rmtree(staging, ignore_errors=True)
+        raise RuntimeError("SQLite database export failed.") from exc
     except Exception:
         shutil.rmtree(staging, ignore_errors=True)
         raise
@@ -163,16 +171,10 @@ def _write_archive(
     sessions = connection.execute(
         "SELECT * FROM sessions ORDER BY created_at, session_id"
     ).fetchall()
-    exchanges = connection.execute(
-        "SELECT * FROM exchanges ORDER BY session_id, created_at, exchange_id"
-    ).fetchall()
-    events = connection.execute(
-        "SELECT * FROM exchange_admin_events ORDER BY session_id, created_at, event_id"
-    ).fetchall()
+    exchange_count = connection.execute("SELECT COUNT(*) FROM exchanges").fetchone()[0]
     files = connection.execute(
         """
         SELECT file_id, scope_type, session_id, group_id, filename, mime_type,
-               CASE WHEN content_kind = 'text' THEN content ELSE NULL END AS text_content,
                sha256, size_bytes, created_by, created_at, content_kind,
                page_count, extraction_status, extracted_text_bytes
         FROM session_files
@@ -271,13 +273,6 @@ def _write_archive(
         _write_attachment(connection, file_row, destination)
         exported_files[file_row["file_id"]] = (directory, exported_name)
 
-    exchanges_by_session: dict[str, list[sqlite3.Row]] = {}
-    for exchange in exchanges:
-        exchanges_by_session.setdefault(exchange["session_id"], []).append(exchange)
-    events_by_session: dict[str, list[sqlite3.Row]] = {}
-    for event in events:
-        events_by_session.setdefault(event["session_id"], []).append(event)
-
     used_names_by_directory: dict[Path, set[str]] = {}
     for directory, exported_name in exported_files.values():
         used_names_by_directory.setdefault(directory, set()).add(exported_name.casefold())
@@ -291,8 +286,18 @@ def _write_archive(
             used_names_by_directory.setdefault(directory, set()),
             suffix=".md",
         )
-        session_exchanges = exchanges_by_session.get(session["session_id"], [])
-        session_events = events_by_session.get(session["session_id"], [])
+        session_exchanges = connection.execute(
+            "SELECT * FROM exchanges WHERE session_id = ? ORDER BY created_at, exchange_id",
+            (session["session_id"],),
+        ).fetchall()
+        session_events = connection.execute(
+            """
+            SELECT * FROM exchange_admin_events
+            WHERE session_id = ?
+            ORDER BY created_at, event_id
+            """,
+            (session["session_id"],),
+        ).fetchall()
         session_files = files_by_session.get(session["session_id"], [])
         group_files = files_by_group.get(group_id, [])
         markdown = _render_session_markdown(
@@ -310,7 +315,7 @@ def _write_archive(
     counts = {
         "group_count": len(group_directories),
         "session_count": len(sessions),
-        "exchange_count": len(exchanges),
+        "exchange_count": exchange_count,
         "attachment_count": len(files),
     }
     return counts, warnings
@@ -340,7 +345,13 @@ def _write_attachment(
                         digest.update(block)
                         size += len(block)
             elif file_row["content_kind"] == "text":
-                data = (file_row["text_content"] or "").encode("utf-8")
+                content_row = connection.execute(
+                    "SELECT content FROM session_files WHERE file_id = ?",
+                    (file_row["file_id"],),
+                ).fetchone()
+                if content_row is None:
+                    raise RuntimeError(f"Text file {file_row['file_id']} no longer exists.")
+                data = (content_row["content"] or "").encode("utf-8")
                 target.write(data)
                 digest.update(data)
                 size = len(data)
@@ -602,6 +613,43 @@ def _ensure_export_root(path: Path) -> None:
             raise ValueError(f"Export root is not a directory: {path}")
         return
     _mkdir_private(path, parents=True)
+
+
+def _export_parent(export_root: Path | None, output: Path | None) -> Path:
+    if output is not None:
+        parent = output.expanduser().resolve().parent
+        if not parent.is_dir():
+            raise ValueError(f"Export parent directory does not exist: {parent}")
+        return parent
+    if export_root is None:
+        raise ValueError("export_root is required when output is not provided")
+    expanded = export_root.expanduser()
+    _ensure_export_root(expanded)
+    return expanded.resolve()
+
+
+@contextmanager
+def _process_export_lock(parent: Path) -> Iterator[None]:
+    try:
+        import fcntl
+    except ImportError:  # pragma: no cover - Windows keeps the in-process lock.
+        yield
+        return
+
+    flags = os.O_RDONLY | os.O_CREAT
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    descriptor = os.open(parent / EXPORT_LOCK_FILENAME, flags, 0o640)
+    try:
+        try:
+            fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as exc:
+            raise ExportInProgressError(
+                "A Markdown database export is already in progress."
+            ) from exc
+        yield
+    finally:
+        os.close(descriptor)
 
 
 def _write_private_file(path: Path, data: bytes) -> None:

@@ -90,6 +90,10 @@ class Layout:
         return self.data_root / "exports"
 
     @property
+    def export_lock_file(self) -> Path:
+        return self.export_root / ".markdown-export.lock"
+
+    @property
     def state_root(self) -> Path:
         return self.data_root / "state"
 

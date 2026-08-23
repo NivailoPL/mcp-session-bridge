@@ -419,6 +419,12 @@ def test_activation_adopts_existing_caddy_site_and_restarts_service(tmp_path: Pa
     assert layout.data_root.stat().st_mode & 0o7777 == 0o1770
     assert layout.export_root.stat().st_mode & 0o7777 == 0o3770
     assert ("chown", "root:mcp-session-bridge", str(layout.export_root)) in runner.calls
+    assert layout.export_lock_file.stat().st_mode & 0o777 == 0o640
+    assert (
+        "chown",
+        "root:mcp-session-bridge",
+        str(layout.export_lock_file),
+    ) in runner.calls
     assert layout.state_root.stat().st_mode & 0o7777 == 0o2750
     assert ("chown", "root:mcp-session-bridge", str(layout.state_root)) in runner.calls
     assert layout.pending_root.stat().st_mode & 0o777 == 0o700

@@ -7,7 +7,11 @@ from pathlib import Path
 import pytest
 
 from app import conversation_export
-from app.conversation_export import export_database_to_markdown
+from app.conversation_export import (
+    EXPORT_LOCK_FILENAME,
+    ExportInProgressError,
+    export_database_to_markdown,
+)
 from app.storage import Store
 
 
@@ -133,7 +137,84 @@ def test_export_checksum_failure_leaves_no_final_or_staging_artifact(
     with pytest.raises(RuntimeError, match="checksum"):
         export_database_to_markdown(db_path, export_root=export_root)
 
-    assert list(export_root.iterdir()) == []
+    assert [
+        path for path in export_root.iterdir() if path.name != EXPORT_LOCK_FILENAME
+    ] == []
+
+
+def test_export_rejects_lock_held_by_another_process_boundary(tmp_path: Path) -> None:
+    try:
+        import fcntl
+    except ImportError:
+        pytest.skip("POSIX file locking is not available")
+    db_path = tmp_path / "bridge.sqlite3"
+    Store(db_path)
+    export_root = tmp_path / "exports"
+    export_root.mkdir()
+    descriptor = os.open(
+        export_root / EXPORT_LOCK_FILENAME, os.O_RDONLY | os.O_CREAT, 0o640
+    )
+    try:
+        fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+
+        with pytest.raises(ExportInProgressError, match="already in progress"):
+            export_database_to_markdown(db_path, export_root=export_root)
+    finally:
+        os.close(descriptor)
+
+
+def test_export_normalizes_sqlite_failures_and_cleans_staging(
+    tmp_path: Path, monkeypatch
+) -> None:
+    db_path = tmp_path / "bridge.sqlite3"
+    Store(db_path)
+    export_root = tmp_path / "exports"
+
+    def fail_snapshot(_source: Path, _destination: Path) -> None:
+        raise sqlite3.OperationalError("database unavailable")
+
+    monkeypatch.setattr(conversation_export, "_snapshot_database", fail_snapshot)
+
+    with pytest.raises(RuntimeError, match="SQLite database export failed"):
+        export_database_to_markdown(db_path, export_root=export_root)
+
+    assert [
+        path for path in export_root.iterdir() if path.name != EXPORT_LOCK_FILENAME
+    ] == []
+
+
+def test_export_loads_text_attachment_content_only_when_writing_each_file(
+    tmp_path: Path, monkeypatch
+) -> None:
+    db_path = tmp_path / "bridge.sqlite3"
+    store = Store(db_path)
+    store.create_session("session-001", "Session", "manual-context")
+    store.save_session_file("session-001", "notes.md", "content")
+    observed_keys: list[set[str]] = []
+    original_write_attachment = conversation_export._write_attachment
+
+    def record_metadata(connection, file_row, destination) -> None:
+        observed_keys.append(set(file_row.keys()))
+        original_write_attachment(connection, file_row, destination)
+
+    monkeypatch.setattr(conversation_export, "_write_attachment", record_metadata)
+
+    export_database_to_markdown(db_path, export_root=tmp_path / "exports")
+
+    assert observed_keys
+    assert all("text_content" not in keys and "content" not in keys for keys in observed_keys)
+
+
+def test_export_rejects_symlink_export_root(tmp_path: Path) -> None:
+    db_path = tmp_path / "bridge.sqlite3"
+    Store(db_path)
+    real_root = tmp_path / "real-exports"
+    real_root.mkdir()
+    symlink_root = tmp_path / "exports"
+    symlink_root.symlink_to(real_root, target_is_directory=True)
+
+    with pytest.raises(ValueError, match="must not be a symlink"):
+        export_database_to_markdown(db_path, export_root=symlink_root)
 
 
 def test_export_disambiguates_transcript_and_attachment_name_collision(

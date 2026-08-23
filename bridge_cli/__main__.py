@@ -249,6 +249,15 @@ def _prepare_managed_export_root(layout: Layout) -> None:
         os.fchmod(descriptor, 0o3770)
     finally:
         os.close(descriptor)
+    lock_flags = os.O_RDONLY | os.O_CREAT
+    if hasattr(os, "O_NOFOLLOW"):
+        lock_flags |= os.O_NOFOLLOW
+    lock_descriptor = os.open(layout.export_lock_file, lock_flags, 0o640)
+    try:
+        os.fchown(lock_descriptor, 0, service_group.gr_gid)
+        os.fchmod(lock_descriptor, 0o640)
+    finally:
+        os.close(lock_descriptor)
 
 
 def _deploy(args: argparse.Namespace, layout: Layout, runner: SubprocessRunner) -> int:
