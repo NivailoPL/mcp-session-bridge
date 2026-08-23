@@ -279,11 +279,18 @@ function sessionGroupChip(group, fallbackId) {
 }
 function svgNode() { return spanCls("group-icon"); }
 function renderSessionActions() { return spanCls("session-actions", "actions"); }
-function renderSessionRenameForm() { return spanCls("session-rename", "rename form"); }
+function renderSessionRenameForm() {
+  const form = new Element("form");
+  form.className = "session-rename";
+  form.textContent = "rename form";
+  form.append(new Element("input"));
+  return form;
+}
 function formatLastTurnDate() { return "date"; }
 function setStatus() {}
-function runFileContinuation() {}
-function loadSession() {}
+function runFileContinuation(_kind, continuation) { continuation(); }
+let loadSessionCalls = 0;
+function loadSession() { loadSessionCalls += 1; }
 function renderSessionListSensitiveGuard() {}
 function filteredSessions() {
   return state.sessions.filter((session) => (
@@ -344,10 +351,37 @@ const initialStructure = listStructure();
 state.selectedSessionId = "other-id";
 state.manualRenameSessionId = "selected-id";
 renderSessions();
-const switched = dom.sessionList.children.filter((node) => hasClass(node, "session-button")).map(cardSnapshot);
+const switchedCards = dom.sessionList.children.filter((node) => hasClass(node, "session-button"));
+const switched = switchedCards.map(cardSnapshot);
 const switchedHeadings = listHeadings();
 const switchedStructure = listStructure();
-process.stdout.write(JSON.stringify({ initial, switched, initialHeadings, switchedHeadings, initialStructure, switchedStructure }));
+const renameInput = switchedCards[0].children[0].children[0].children[0];
+const renameSpace = {
+  key: " ",
+  target: renameInput,
+  prevented: false,
+  preventDefault() { this.prevented = true; },
+};
+switchedCards[0].listeners.keydown(renameSpace);
+const afterRenameInputSpace = { loadSessionCalls, prevented: renameSpace.prevented };
+const rowSpace = {
+  key: " ",
+  target: switchedCards[1],
+  prevented: false,
+  preventDefault() { this.prevented = true; },
+};
+switchedCards[1].listeners.keydown(rowSpace);
+const afterRowSpace = { loadSessionCalls, prevented: rowSpace.prevented };
+process.stdout.write(JSON.stringify({
+  initial,
+  switched,
+  initialHeadings,
+  switchedHeadings,
+  initialStructure,
+  switchedStructure,
+  afterRenameInputSpace,
+  afterRowSpace,
+}));
 """
     node = shutil.which("node")
     assert node is not None
@@ -417,6 +451,8 @@ process.stdout.write(JSON.stringify({ initial, switched, initialHeadings, switch
     assert "actions" in switched_other["text"]
     assert switched_two_days["text"].startswith("Two-day session")
     assert switched_old["text"].startswith("Old session")
+    assert rendered["afterRenameInputSpace"] == {"loadSessionCalls": 0, "prevented": False}
+    assert rendered["afterRowSpace"] == {"loadSessionCalls": 1, "prevented": True}
 
 
 def test_admin_viewer_sensitive_group_privacy_contract() -> None:

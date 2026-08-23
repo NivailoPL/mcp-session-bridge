@@ -3218,6 +3218,7 @@
           }
           item.addEventListener("click", activate);
           item.addEventListener("keydown", (event) => {
+            if (event.target !== item) return;
             if (event.key === "Enter" || event.key === " ") {
               event.preventDefault();
               activate();
