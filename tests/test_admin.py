@@ -10,6 +10,7 @@ import pytest
 from starlette.testclient import TestClient
 
 from app.search import SearchConfig
+from app.session_package import MASKED_MODEL_RESPONSE
 from app.storage import SESSION_GROUP_ICON_KEYS
 from app.time_format import DISPLAY_TIMEZONE_SETTING_KEY
 from tests.pdf_samples import make_pdf
@@ -576,6 +577,14 @@ def test_admin_viewer_context_visibility_controls_contract() -> None:
     assert "Mask hides only the model response and leaves an explicit placeholder for all models." in viewer
     assert "Exclude removes the complete user and model exchange from all MCP transcript chunks." in viewer
     assert "Both actions are reversible." in viewer
+    assert f'const MASKED_MODEL_RESPONSE = "{MASKED_MODEL_RESPONSE}";' in viewer
+    assert 'function maskedResponseNotice()' in viewer
+    assert 'spanCls("masked-response-copy", MASKED_MODEL_RESPONSE)' in viewer
+    assert viewer.count("if (isMasked) node.append(maskedResponseNotice());") == 1
+    assert viewer.count("if (isMasked) body.append(maskedResponseNotice());") == 1
+    assert viewer.count("if (isMasked) article.append(maskedResponseNotice());") == 1
+    assert 'const response = ex.is_masked ? MASKED_MODEL_RESPONSE' in viewer
+    assert ".masked-response-notice" in viewer
     assert 'function renderExcludedTurnBar(exchange)' in viewer
     assert '"Excluded turn"' in viewer
     assert 'spanCls("excluded-turn-note", `Note: ${exchange.deleted_reason}`)' in viewer

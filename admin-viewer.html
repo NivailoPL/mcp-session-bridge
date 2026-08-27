@@ -705,6 +705,13 @@
     .exchange.is-deleted { border-color: rgba(251, 191, 36, .32); background: rgba(251, 191, 36, .035); }
     .exchange:has(.context-help:hover), .exchange:has(.context-help:focus-within) { z-index: 6; }
     .turn.is-masked .turn-content, .message.is-masked .bubble { filter: blur(5px); user-select: none; opacity: .68; }
+    .masked-response-notice {
+      display: grid; gap: .25rem; padding: .65rem .75rem;
+      border: 1px solid rgba(251, 191, 36, .3); border-radius: var(--r-ctrl);
+      background: var(--warn-soft); color: var(--warn);
+    }
+    .masked-response-label { font-size: var(--t-label); font-weight: 750; letter-spacing: .08em; text-transform: uppercase; }
+    .masked-response-copy { color: #f7d982; font: var(--t-meta)/1.5 "Geist Mono", ui-monospace, monospace; overflow-wrap: anywhere; }
     .exchange.is-editing { border-color: rgba(122, 125, 240, .45); box-shadow: var(--shadow-pop); }
 
     .exchange-head {
@@ -1743,6 +1750,8 @@
   <script src="/admin/assets/admin-confirmation.js"></script>
   <script>
     (() => {
+      const MASKED_MODEL_RESPONSE = "[MODEL RESPONSE MASKED - CONTENT HIDDEN FROM ALL MODELS]";
+
       // ---------- model identity (original color + monogram, no brand logos) ----------
       function modelIdentity(name) {
         const raw = (name == null ? "" : String(name)).trim();
@@ -4963,6 +4972,15 @@
         return spanCls("pill", "In context");
       }
 
+      function maskedResponseNotice() {
+        const notice = div("masked-response-notice");
+        notice.append(
+          spanCls("masked-response-label", "Models receive"),
+          spanCls("masked-response-copy", MASKED_MODEL_RESPONSE)
+        );
+        return notice;
+      }
+
       // bubbles / thread: each exchange becomes a USER + MODEL message pair plus an action row
       function renderExGroup(exchange) {
         const group = div("ex-group" + (exchange.is_deleted ? " is-deleted" : ""));
@@ -4996,6 +5014,7 @@
           const bubble = div("bubble");
           bubble.append(markdownContent("msg-content", content || "—"));
           body.append(meta, bubble);
+          if (isMasked) body.append(maskedResponseNotice());
           article.append(avatar(isModel ? speakerName : "USER"), body);
           return article;
         }
@@ -5010,6 +5029,7 @@
         bubble.append(markdownContent("msg-content", content || "—"));
         row.append(bubble);
         article.append(meta, row);
+        if (isMasked) article.append(maskedResponseNotice());
         return article;
       }
 
@@ -5106,7 +5126,7 @@
           lines.push(`### USER (${ex.user_message_token_count || 0} tokens)`, "", ex.user_message || "", "");
           const model = ex.model_name || "Model";
           const t = ex.assistant_created_at_display ? ` — ${ex.assistant_created_at_display}` : "";
-          const response = ex.is_masked ? "[MODEL RESPONSE MASKED - CONTENT HIDDEN FROM ALL MODELS]" : (ex.assistant_response || "");
+          const response = ex.is_masked ? MASKED_MODEL_RESPONSE : (ex.assistant_response || "");
           lines.push(`### ${model}${t} (${ex.assistant_response_token_count || 0} tokens)`, "", response, "");
         }
         return lines.join("\n");
@@ -5352,6 +5372,7 @@
         const headRow = div("turn-head");
         headRow.append(avatar(identityName, true), spanCls("turn-label", label), spanCls("token-count", tokenLabel(tokenCount)));
         node.append(headRow, markdownContent("turn-content", content || "—"));
+        if (isMasked) node.append(maskedResponseNotice());
         return node;
       }
 
