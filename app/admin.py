@@ -196,6 +196,8 @@ class AdminHandlers:
         media_types = {
             "graph-viewer.css": "text/css",
             "graph-data.css": "text/css",
+            "admin-confirmation.css": "text/css",
+            "admin-confirmation.js": "text/javascript",
             "pearl-gradient-nav.js": "text/javascript",
             "pearl-gradient-nav.css": "text/css",
             "graph-viewer.js": "text/javascript",

@@ -851,7 +851,7 @@ def test_admin_database_export_button_sends_only_a_trigger_and_renders_vps_path(
         };
         const calls = [];
         const statuses = [];
-        const window = { confirm: () => true };
+        const window = { adminConfirmation: { confirm: async () => true } };
         async function api(path, options) {
           calls.push({ path, options });
           return { export: { artifact: {
@@ -2204,6 +2204,135 @@ def test_admin_page_serves_every_asset_it_references(admin_client) -> None:
     lockup = "/admin/assets/brand/svg/lockup-horizontal-dark.svg"
     assert lockup in referenced
     assert page.text.count(lockup) == 1, "the brand lockup should appear once"
+
+
+def test_admin_workspaces_share_styled_confirmation_contract() -> None:
+    sessions = Path("admin-viewer.html").read_text(encoding="utf-8")
+    graph = Path("graph-viewer.html").read_text(encoding="utf-8")
+    graph_script = Path("graph-viewer.js").read_text(encoding="utf-8")
+    confirmation_script = Path("admin-confirmation.js").read_text(encoding="utf-8")
+    confirmation_css = Path("admin-confirmation.css").read_text(encoding="utf-8")
+
+    for page in (sessions, graph):
+        assert page.count('href="/admin/assets/admin-confirmation.css"') == 1
+        assert page.count('src="/admin/assets/admin-confirmation.js"') == 1
+
+    for source in (sessions, graph_script):
+        assert "window.confirm" not in source
+        assert "window.prompt" not in source
+        assert "window.alert" not in source
+
+    assert "window.adminConfirmation" in confirmation_script
+    assert "confirm(options" in confirmation_script
+    assert "prompt(options" in confirmation_script
+    assert 'id="adminConfirmationDialog"' not in sessions
+    assert ".admin-confirmation" in confirmation_css
+    assert 'defaultValue: "temporarily excluded from model context"' in sessions
+
+
+@requires_node
+def test_styled_confirmation_dialog_resolves_actions_and_restores_focus() -> None:
+    source = Path("admin-confirmation.js").read_text(encoding="utf-8")
+    harness = r"""
+const elementsById = {};
+class Element {
+  constructor(tag) {
+    this.tag = tag;
+    this.children = [];
+    this.listeners = {};
+    this.dataset = {};
+    this.hidden = false;
+    this.open = false;
+    this.textContent = "";
+    this.value = "";
+    this.required = false;
+    this.className = "";
+    this.attributes = {};
+  }
+  set id(value) { this._id = value; elementsById[value] = this; }
+  get id() { return this._id || ""; }
+  append(...nodes) { this.children.push(...nodes); }
+  setAttribute(name, value) { this.attributes[name] = String(value); }
+  addEventListener(name, handler) { (this.listeners[name] ||= []).push(handler); }
+  emit(name, extra = {}) {
+    const event = {
+      target: this,
+      clientX: 50,
+      clientY: 50,
+      preventDefault() { this.defaultPrevented = true; },
+      ...extra,
+    };
+    for (const handler of this.listeners[name] || []) handler(event);
+    return event;
+  }
+  focus() { document.activeElement = this; }
+  showModal() { this.open = true; }
+  close() { if (!this.open) return; this.open = false; this.emit("close"); }
+  reportValidity() { return !this.required || Boolean(this.value); }
+  getBoundingClientRect() { return { left: 0, right: 100, top: 0, bottom: 100 }; }
+}
+global.HTMLElement = Element;
+global.document = {
+  body: new Element("body"),
+  activeElement: null,
+  createElement: (tag) => new Element(tag),
+  getElementById: (id) => elementsById[id] || null,
+};
+global.window = { requestAnimationFrame: (callback) => callback() };
+"""
+    scenario = r"""
+(async () => {
+  const trigger = new Element("button");
+  document.activeElement = trigger;
+  const cancelledPromise = window.adminConfirmation.confirm({
+    title: "Delete index?", message: "Delete it?", tone: "danger"
+  });
+  const initialFocus = document.activeElement.id;
+  elementsById.adminConfirmationCancel.emit("click");
+  const cancelled = await cancelledPromise;
+
+  document.activeElement = trigger;
+  const notePromise = window.adminConfirmation.prompt({
+    title: "Exclude?", message: "Add a note", defaultValue: "initial", initialFocus: "input"
+  });
+  const promptFocus = document.activeElement.id;
+  elementsById.adminConfirmationInput.value = "edited note";
+  elementsById.adminConfirmationDialog.children[0].emit("submit");
+  const note = await notePromise;
+
+  document.activeElement = trigger;
+  const escapedPromise = window.adminConfirmation.confirm({ title: "Restart?" });
+  const escapeEvent = elementsById.adminConfirmationDialog.emit("cancel");
+  const escaped = await escapedPromise;
+
+  process.stdout.write(JSON.stringify({
+    cancelled,
+    initialFocus,
+    focusRestored: document.activeElement === trigger,
+    note,
+    promptFocus,
+    escaped,
+    escapePrevented: Boolean(escapeEvent.defaultPrevented),
+  }));
+})().catch((error) => { console.error(error); process.exit(1); });
+"""
+    completed = subprocess.run(
+        [shutil.which("node"), "-e", harness + source + scenario],
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+
+    assert json.loads(completed.stdout) == {
+        "cancelled": False,
+        "initialFocus": "adminConfirmationCancel",
+        "focusRestored": True,
+        "note": "edited note",
+        "promptFocus": "adminConfirmationInput",
+        "escaped": False,
+        "escapePrevented": True,
+    }
 
 
 FEATURE_CONTROLS = {
