@@ -15,7 +15,16 @@ def test_graph_page_and_assets_require_admin_login(admin_client, load_main) -> N
     main = load_main(graph_experimental=True)
     anonymous = TestClient(main.app, base_url="http://127.0.0.1:8787")
 
-    for path in ("/admin/graph", "/admin/assets/graph-viewer.css", "/admin/assets/graph-data.css", "/admin/assets/graph-viewer.js", "/admin/assets/pearl-gradient-nav.css", "/admin/assets/pearl-gradient-nav.js"):
+    for path in (
+        "/admin/graph",
+        "/admin/assets/graph-viewer.css",
+        "/admin/assets/graph-data.css",
+        "/admin/assets/graph-viewer.js",
+        "/admin/assets/pearl-gradient-nav.css",
+        "/admin/assets/pearl-gradient-nav.js",
+        "/admin/assets/admin-confirmation.css",
+        "/admin/assets/admin-confirmation.js",
+    ):
         response = anonymous.get(path, follow_redirects=False)
         assert response.status_code == 303
         assert response.headers["location"].startswith("/admin/login")
@@ -42,6 +51,10 @@ def test_graph_page_and_assets_require_admin_login(admin_client, load_main) -> N
     assert css.text
     assert ".sb-nav" in css.text
     assert client.get("/admin/assets/graph-viewer.js").status_code == 200
+    confirmation_script = client.get("/admin/assets/admin-confirmation.js")
+    assert confirmation_script.status_code == 200
+    assert confirmation_script.headers["content-type"].startswith("text/javascript")
+    assert "window.adminConfirmation" in confirmation_script.text
     nav_script = client.get("/admin/assets/pearl-gradient-nav.js")
     assert nav_script.status_code == 200
     assert nav_script.headers["content-type"].startswith("text/javascript")
@@ -377,7 +390,8 @@ def test_rescan_all_api_requires_csrf_and_returns_reset_counts(admin_client, loa
     script = client.get("/admin/assets/graph-viewer.js").text
     page = client.get("/admin/graph").text
     assert "/admin/api/graph/rescan" in script
-    assert "window.confirm" in script
+    assert "window.confirm" not in script
+    assert "adminConfirmation.confirm" in script
     assert 'id="rescanAll" class="danger" type="button" disabled' in page
     assert "dataGeneration" in script
     assert "async function loadProcessing(generation = state.dataGeneration)" in script

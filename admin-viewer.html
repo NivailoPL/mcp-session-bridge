@@ -14,6 +14,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/admin/assets/pearl-gradient-nav.css">
+  <link rel="stylesheet" href="/admin/assets/admin-confirmation.css">
   <style>
     /* ============================================================
        MCP Bridge Admin - v2 "toned tech"
@@ -704,6 +705,13 @@
     .exchange.is-deleted { border-color: rgba(251, 191, 36, .32); background: rgba(251, 191, 36, .035); }
     .exchange:has(.context-help:hover), .exchange:has(.context-help:focus-within) { z-index: 6; }
     .turn.is-masked .turn-content, .message.is-masked .bubble { filter: blur(5px); user-select: none; opacity: .68; }
+    .masked-response-notice {
+      display: grid; gap: .25rem; padding: .65rem .75rem;
+      border: 1px solid rgba(251, 191, 36, .3); border-radius: var(--r-ctrl);
+      background: var(--warn-soft); color: var(--warn);
+    }
+    .masked-response-label { font-size: var(--t-label); font-weight: 750; letter-spacing: .08em; text-transform: uppercase; }
+    .masked-response-copy { color: #f7d982; font: var(--t-meta)/1.5 "Geist Mono", ui-monospace, monospace; overflow-wrap: anywhere; }
     .exchange.is-editing { border-color: rgba(122, 125, 240, .45); box-shadow: var(--shadow-pop); }
 
     .exchange-head {
@@ -1739,8 +1747,11 @@
 
   <script type="application/json" id="demo-data">{"ok":true,"schema":"mcp-session-bridge.viewer.v1","generated_at":1780321400,"generated_at_iso":"2026-06-01T13:43:20.000Z","session_count":4,"turn_count":22,"sessions":[{"session_id":"demo-2026-06-01-empty-followup","title":"Short follow-up session","title_is_auto":false,"context_pack_id":"manual-context","created_at":1780316600,"updated_at":1780317350,"exchange_count":1,"deleted_exchange_count":0},{"session_id":"demo-2026-06-01-incident-debugging","title":"Debugging a virtual environment issue","title_is_auto":false,"context_pack_id":"local-development","created_at":1780311200,"updated_at":1780313270,"exchange_count":3,"deleted_exchange_count":0},{"session_id":"demo-2026-06-01-ui-review","title":"Admin viewer UI review","title_is_auto":false,"context_pack_id":"viewer-design-refresh","created_at":1780305600,"updated_at":1780308330,"exchange_count":4,"deleted_exchange_count":1},{"session_id":"demo-2026-06-01-product-planning","title":"Product planning with Claude and GPT","title_is_auto":false,"context_pack_id":"public-release-notes","created_at":1780301400,"updated_at":1780303470,"exchange_count":3,"deleted_exchange_count":0}],"transcripts":{"demo-2026-06-01-product-planning":{"session_id":"demo-2026-06-01-product-planning","title":"Product planning with Claude and GPT","exchange_count":3,"turn_count":6,"char_count":2104,"sha256":"synthetic-preview-only","context_pack_id":"public-release-notes","turn_sequence":["USER","Claude","USER","GPT-5","USER","Claude"],"turns":[{"turn":1,"speaker":"USER","exchange_id":100,"created_at":"2026-06-01T08:10:00.000Z","created_at_display":null,"chars":103,"content":"We are preparing MCP Session Bridge for a public v0.1 release. What should the README make clear first?"},{"turn":2,"speaker":"Claude","exchange_id":100,"created_at":"2026-06-01T08:11:30.000Z","created_at_display":"Monday June 1, 2026 at 08:11","chars":226,"content":"Lead with the core promise: this is a small remote MCP server for shared, multi-model conversation memory. The README should show the quickest useful path, then explain tools, security assumptions, and the current limitations."},{"turn":3,"speaker":"USER","exchange_id":101,"created_at":"2026-06-01T08:21:00.000Z","created_at_display":null,"chars":50,"content":"Can you turn that into a concise launch checklist?"},{"turn":4,"speaker":"GPT-5","exchange_id":101,"created_at":"2026-06-01T08:22:30.000Z","created_at_display":"Monday June 1, 2026 at 08:22","chars":191,"content":"Yes. Suggested checklist: README quickstart, .env.example, MIT license, security policy, contributing notes, changelog, demo script, examples, and a CI workflow that runs tests plus the demo."},{"turn":5,"speaker":"USER","exchange_id":102,"created_at":"2026-06-01T08:32:00.000Z","created_at_display":null,"chars":80,"content":"The docs feel a little dense. What would make them easier for a new contributor?"},{"turn":6,"speaker":"Claude","exchange_id":102,"created_at":"2026-06-01T08:33:30.000Z","created_at_display":"Monday June 1, 2026 at 08:33","chars":199,"content":"Split the mental model from the operational steps. A first-time reader should find installation, client setup, model instructions, deployment, security, limitations, and operations as separate paths."}]},"demo-2026-06-01-ui-review":{"session_id":"demo-2026-06-01-ui-review","title":"Admin viewer UI review","exchange_count":4,"turn_count":8,"char_count":2480,"sha256":"synthetic-preview-only","context_pack_id":"viewer-design-refresh","turn_sequence":["USER","USER","USER","Claude","USER","GPT-5","USER","Claude"],"turns":[{"turn":1,"speaker":"USER","exchange_id":103,"created_at":"2026-06-01T09:20:00.000Z","created_at_display":null,"chars":113,"content":"The current admin panel works, but it feels a bit plain. I want it to stay practical while looking more polished."},{"turn":2,"speaker":"USER","exchange_id":103,"created_at":"2026-06-01T09:21:30.000Z","created_at_display":"Monday June 1, 2026 at 09:21","chars":196,"content":"The best direction is a calmer operational dashboard: stronger spacing rhythm, clearer active selection, better exchange cards, and more deliberate typography. Keep it dense enough for repeat use."},{"turn":3,"speaker":"USER","exchange_id":104,"created_at":"2026-06-01T09:31:00.000Z","created_at_display":null,"chars":66,"content":"Should the redesign use a big hero or decorative visual treatment?"},{"turn":4,"speaker":"Claude","exchange_id":104,"created_at":"2026-06-01T09:32:30.000Z","created_at_display":"Monday June 1, 2026 at 09:32","chars":150,"content":"No. This is an admin tool, so the first screen should be the working surface itself: session list, summary, transcript corrections, and clear actions."},{"turn":5,"speaker":"USER","exchange_id":105,"created_at":"2026-06-01T09:42:00.000Z","created_at_display":null,"chars":44,"content":"What UI states should the redesign preserve?"},{"turn":6,"speaker":"GPT-5","exchange_id":105,"created_at":"2026-06-01T09:43:30.000Z","created_at_display":"Monday June 1, 2026 at 09:43","chars":157,"content":"Keep loading, empty, selected, editing, deleted, error, and success states. Also preserve responsive behavior for narrow screens and long transcript content."},{"turn":7,"speaker":"USER","exchange_id":106,"created_at":"2026-06-01T09:53:00.000Z","created_at_display":null,"chars":74,"content":"The delete and restore actions need better affordance. Any recommendation?"},{"turn":8,"speaker":"Claude","exchange_id":106,"created_at":"2026-06-01T09:54:30.000Z","created_at_display":"Monday June 1, 2026 at 09:54","chars":166,"content":"Use restrained destructive styling for delete, a clear restored/saved status message, and make deleted exchanges visually distinct without making the text unreadable."}]},"demo-2026-06-01-incident-debugging":{"session_id":"demo-2026-06-01-incident-debugging","title":"Debugging a virtual environment issue","exchange_count":3,"turn_count":6,"char_count":1920,"sha256":"synthetic-preview-only","context_pack_id":"local-development","turn_sequence":["USER","USER","USER","GPT-5","USER","Claude"],"turns":[{"turn":1,"speaker":"USER","exchange_id":107,"created_at":"2026-06-01T10:53:20.000Z","created_at_display":null,"chars":70,"content":"uv run sometimes hangs on my mounted workspace. Is the project broken?"},{"turn":2,"speaker":"USER","exchange_id":107,"created_at":"2026-06-01T10:54:50.000Z","created_at_display":"Monday June 1, 2026 at 10:54","chars":192,"content":"The project is likely fine. The symptom points to the mounted filesystem and virtual environment metadata rather than app logic. Rebuilding .venv on the host where tests run is the safer path."},{"turn":3,"speaker":"USER","exchange_id":108,"created_at":"2026-06-01T11:04:20.000Z","created_at_display":null,"chars":41,"content":"What should we document for contributors?"},{"turn":4,"speaker":"GPT-5","exchange_id":108,"created_at":"2026-06-01T11:05:50.000Z","created_at_display":"Monday June 1, 2026 at 11:05","chars":171,"content":"Tell contributors to run uv sync locally on their own machine, avoid committing .venv, and rebuild the environment if packages look inconsistent after moving the checkout."},{"turn":5,"speaker":"USER","exchange_id":109,"created_at":"2026-06-01T11:15:20.000Z","created_at_display":null,"chars":33,"content":"Could this affect GitHub Actions?"},{"turn":6,"speaker":"Claude","exchange_id":109,"created_at":"2026-06-01T11:16:50.000Z","created_at_display":"Monday June 1, 2026 at 11:16","chars":160,"content":"No, GitHub Actions creates a fresh checkout and a fresh Python environment. That makes CI a useful independent signal for whether the project itself is healthy."}]},"demo-2026-06-01-empty-followup":{"session_id":"demo-2026-06-01-empty-followup","title":"Short follow-up session","exchange_count":1,"turn_count":2,"char_count":937,"sha256":"synthetic-preview-only","context_pack_id":"manual-context","turn_sequence":["USER","USER"],"turns":[{"turn":1,"speaker":"USER","exchange_id":110,"created_at":"2026-06-01T12:23:20.000Z","created_at_display":null,"chars":59,"content":"Give me a tiny explanation of what MCP Session Bridge does."},{"turn":2,"speaker":"USER","exchange_id":110,"created_at":"2026-06-01T12:24:50.000Z","created_at_display":"Monday June 1, 2026 at 12:24","chars":209,"content":"It gives multiple model clients one shared transcript store, so Claude, ChatGPT, Codex, or another MCP client can pick up the same conversation history through tools instead of relying on a single chat window."}]}}}</script>
   <script src="/admin/assets/pearl-gradient-nav.js"></script>
+  <script src="/admin/assets/admin-confirmation.js"></script>
   <script>
     (() => {
+      const MASKED_MODEL_RESPONSE = "[MODEL RESPONSE MASKED - CONTENT HIDDEN FROM ALL MODELS]";
+
       // ---------- model identity (original color + monogram, no brand logos) ----------
       function modelIdentity(name) {
         const raw = (name == null ? "" : String(name)).trim();
@@ -2330,8 +2341,14 @@
       }
 
       async function exportDatabaseMarkdown() {
-        const warning = "Create a server-side archive containing sensitive sessions, excluded and masked content, audit history, and every stored attachment? The files will remain on this VPS.";
-        if (!window.confirm(warning)) return;
+        const confirmed = await window.adminConfirmation.confirm({
+          title: "Create database export?",
+          message: "The archive will contain sensitive sessions, excluded and masked content, audit history, and every stored attachment.",
+          detail: "The exported files will remain on this VPS.",
+          confirmLabel: "Create export",
+          tone: "warning",
+        });
+        if (!confirmed) return;
         settingsDom.databaseExportButton.disabled = true;
         settingsDom.databaseExportButton.setAttribute("aria-busy", "true");
         settingsDom.databaseExportResult.textContent = "Exporting on the VPS…";
@@ -2627,7 +2644,14 @@
         const toolOutput = state.settings?.tool_output || {};
         if (!toolOutput.restart_required) return;
         const configured = toolOutputModeLabel(toolOutput.configured_mode);
-        if (!window.confirm(`Restart MCP Session Bridge and activate ${configured}? Active tool calls may be interrupted.`)) return;
+        const confirmed = await window.adminConfirmation.confirm({
+          title: "Restart MCP Session Bridge?",
+          message: `Restart Bridge and activate ${configured}?`,
+          detail: "Active tool calls may be interrupted.",
+          confirmLabel: "Restart Bridge",
+          tone: "warning",
+        });
+        if (!confirmed) return;
         state.toolOutputRestartInFlight = true;
         renderToolOutputState();
         renderSettingsStatus("Requesting Bridge restart…", "ok");
@@ -2824,7 +2848,14 @@
       }
 
       async function removeProviderKey(provider) {
-        if (!window.confirm(`Remove the saved ${provider} API key?`)) return;
+        const confirmed = await window.adminConfirmation.confirm({
+          title: "Remove saved API key?",
+          message: `Remove the saved ${provider} API key?`,
+          detail: "Features that use this provider will stop working until a new key is saved.",
+          confirmLabel: "Remove key",
+          tone: "danger",
+        });
+        if (!confirmed) return;
         try {
           const result = await api(`/admin/api/settings/api/${provider}/key`, { method: "DELETE" });
           state.settings = result.settings;
@@ -2837,7 +2868,16 @@
       }
 
       async function runIndexAction(action) {
-        if (action === "delete" && !window.confirm("Delete the complete vector index? BM25 will keep working.")) return;
+        if (action === "delete") {
+          const confirmed = await window.adminConfirmation.confirm({
+            title: "Delete vector index?",
+            message: "Delete the complete vector index?",
+            detail: "BM25 search will keep working. Vector search will remain unavailable until the index is rebuilt.",
+            confirmLabel: "Delete index",
+            tone: "danger",
+          });
+          if (!confirmed) return;
+        }
         const options = action === "delete" ? { method: "DELETE" } : { method: "POST" };
         const path = action === "rebuild" ? "/admin/api/search/index/rebuild"
           : action === "cancel" ? "/admin/api/search/index/cancel" : "/admin/api/search/index";
@@ -4700,7 +4740,14 @@
 
       async function deleteGroup(group) {
         if (!group || group.is_system) return;
-        if (!window.confirm(`Delete group "${group.name}" and move its sessions to Uncategorized?`)) return;
+        const confirmed = await window.adminConfirmation.confirm({
+          title: "Delete group?",
+          message: `Delete group "${group.name}"?`,
+          detail: "Its sessions will be moved to Uncategorized.",
+          confirmLabel: "Delete group",
+          tone: "danger",
+        });
+        if (!confirmed) return;
         setBusy(true);
         try {
           await api(`/admin/api/session-groups/${encodeURIComponent(group.group_id)}`, {
@@ -4925,6 +4972,15 @@
         return spanCls("pill", "In context");
       }
 
+      function maskedResponseNotice() {
+        const notice = div("masked-response-notice");
+        notice.append(
+          spanCls("masked-response-label", "Models receive"),
+          spanCls("masked-response-copy", MASKED_MODEL_RESPONSE)
+        );
+        return notice;
+      }
+
       // bubbles / thread: each exchange becomes a USER + MODEL message pair plus an action row
       function renderExGroup(exchange) {
         const group = div("ex-group" + (exchange.is_deleted ? " is-deleted" : ""));
@@ -4958,6 +5014,7 @@
           const bubble = div("bubble");
           bubble.append(markdownContent("msg-content", content || "—"));
           body.append(meta, bubble);
+          if (isMasked) body.append(maskedResponseNotice());
           article.append(avatar(isModel ? speakerName : "USER"), body);
           return article;
         }
@@ -4972,6 +5029,7 @@
         bubble.append(markdownContent("msg-content", content || "—"));
         row.append(bubble);
         article.append(meta, row);
+        if (isMasked) article.append(maskedResponseNotice());
         return article;
       }
 
@@ -5068,7 +5126,7 @@
           lines.push(`### USER (${ex.user_message_token_count || 0} tokens)`, "", ex.user_message || "", "");
           const model = ex.model_name || "Model";
           const t = ex.assistant_created_at_display ? ` — ${ex.assistant_created_at_display}` : "";
-          const response = ex.is_masked ? "[MODEL RESPONSE MASKED - CONTENT HIDDEN FROM ALL MODELS]" : (ex.assistant_response || "");
+          const response = ex.is_masked ? MASKED_MODEL_RESPONSE : (ex.assistant_response || "");
           lines.push(`### ${model}${t} (${ex.assistant_response_token_count || 0} tokens)`, "", response, "");
         }
         return lines.join("\n");
@@ -5314,6 +5372,7 @@
         const headRow = div("turn-head");
         headRow.append(avatar(identityName, true), spanCls("turn-label", label), spanCls("token-count", tokenLabel(tokenCount)));
         node.append(headRow, markdownContent("turn-content", content || "—"));
+        if (isMasked) node.append(maskedResponseNotice());
         return node;
       }
 
@@ -5372,24 +5431,53 @@
       }
 
       async function deleteExchange(exchangeId) {
-        const reason = window.prompt("Exclusion note", "temporarily excluded from model context");
+        const reason = await window.adminConfirmation.prompt({
+          title: `Exclude exchange #${exchangeId}?`,
+          message: "This complete exchange will be excluded from all MCP transcript chunks.",
+          detail: "You can include it again later.",
+          inputLabel: "Exclusion note",
+          defaultValue: "temporarily excluded from model context",
+          confirmLabel: "Exclude exchange",
+          tone: "warning",
+          initialFocus: "input",
+        });
         if (reason === null) return;
-        if (!window.confirm(`Exclude exchange #${exchangeId} from all MCP transcript chunks?`)) return;
         await mutate(`/admin/api/exchanges/${exchangeId}`, { method: "DELETE", body: JSON.stringify({ reason }) }, "Exchange excluded from model context.");
       }
 
       async function restoreExchange(exchangeId) {
-        if (!window.confirm(`Include exchange #${exchangeId} in MCP transcript chunks again?`)) return;
+        const confirmed = await window.adminConfirmation.confirm({
+          title: `Include exchange #${exchangeId}?`,
+          message: "Include this complete exchange in MCP transcript chunks again?",
+          detail: "Its user message and model response will become available to models.",
+          confirmLabel: "Include exchange",
+          tone: "warning",
+        });
+        if (!confirmed) return;
         await mutate(`/admin/api/exchanges/${exchangeId}/restore`, { method: "POST" }, "Exchange included in model context.");
       }
 
       async function maskExchange(exchangeId) {
-        if (!window.confirm(`Mask the model response in exchange #${exchangeId} for all models?`)) return;
+        const confirmed = await window.adminConfirmation.confirm({
+          title: `Mask response in exchange #${exchangeId}?`,
+          message: "Hide this model response from all models retrieving transcript chunks?",
+          detail: "The user message will remain in context. You can restore the response later.",
+          confirmLabel: "Mask response",
+          tone: "warning",
+        });
+        if (!confirmed) return;
         await mutate(`/admin/api/exchanges/${exchangeId}/mask`, { method: "POST" }, "Model response masked.");
       }
 
       async function unmaskExchange(exchangeId) {
-        if (!window.confirm(`Restore the model response in exchange #${exchangeId} to MCP transcript chunks?`)) return;
+        const confirmed = await window.adminConfirmation.confirm({
+          title: `Restore response in exchange #${exchangeId}?`,
+          message: "Restore this model response to MCP transcript chunks?",
+          detail: "The response will become available to all models retrieving this conversation.",
+          confirmLabel: "Restore response",
+          tone: "warning",
+        });
+        if (!confirmed) return;
         await mutate(`/admin/api/exchanges/${exchangeId}/unmask`, { method: "POST" }, "Model response unmasked.");
       }
 
