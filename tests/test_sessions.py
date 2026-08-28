@@ -556,8 +556,8 @@ def test_output_probe_mode_migration_marks_historical_runs_as_maximum_compatibil
     assert run["tool_output_mode"] == "maximum_compatibility"
 
 
-def test_public_tools_hide_context_pack_tools(tmp_path, monkeypatch) -> None:
-    main = _load_main(tmp_path, monkeypatch)
+def test_public_tools_hide_context_pack_tools(load_main) -> None:
+    main = load_main()
 
     tool_names = _tool_names(main)
 
@@ -587,8 +587,8 @@ def test_public_tools_hide_context_pack_tools(tmp_path, monkeypatch) -> None:
     assert "delete_session_file" not in tool_names
 
 
-def test_large_tool_results_default_to_optimized_unstructured_output(tmp_path, monkeypatch) -> None:
-    main = _load_main(tmp_path, monkeypatch)
+def test_large_tool_results_default_to_optimized_unstructured_output(load_main) -> None:
+    main = load_main()
     main.store.create_session("shape", "Result shape", "manual-context")
     main.store.save_exchange("shape", "Codex", "hello", "world")
 
@@ -616,8 +616,8 @@ def test_large_tool_results_default_to_optimized_unstructured_output(tmp_path, m
     assert result[0].type == "text"
 
 
-def test_invalid_persisted_tool_output_mode_falls_back_to_optimized(tmp_path, monkeypatch) -> None:
-    main = _load_main(tmp_path, monkeypatch)
+def test_invalid_persisted_tool_output_mode_falls_back_to_optimized(load_main) -> None:
+    main = load_main()
     main.store.set_app_setting("mcp.tool_output_mode", "invalid-mode")
     sys.modules.pop("app.main", None)
     main = importlib.import_module("app.main")
@@ -625,8 +625,8 @@ def test_invalid_persisted_tool_output_mode_falls_back_to_optimized(tmp_path, mo
     assert main.ACTIVE_TOOL_OUTPUT_MODE == "optimized"
 
 
-def test_large_tool_results_can_restore_maximum_compatibility(tmp_path, monkeypatch) -> None:
-    main = _load_main(tmp_path, monkeypatch)
+def test_large_tool_results_can_restore_maximum_compatibility(load_main) -> None:
+    main = load_main()
     main.store.create_session("shape", "Result shape", "manual-context")
     main.store.save_exchange("shape", "Codex", "hello", "world")
     main.store.set_app_setting("mcp.tool_output_mode", "maximum_compatibility")
@@ -656,8 +656,8 @@ def test_large_tool_results_can_restore_maximum_compatibility(tmp_path, monkeypa
     assert result[1]["transcript_markdown"]
 
 
-def test_public_file_tools_require_session_scoping(tmp_path, monkeypatch) -> None:
-    main = _load_main(tmp_path, monkeypatch)
+def test_public_file_tools_require_session_scoping(load_main) -> None:
+    main = load_main()
 
     async def tools_by_name():
         return {tool.name: tool for tool in await main.mcp.list_tools()}
@@ -672,8 +672,8 @@ def test_public_file_tools_require_session_scoping(tmp_path, monkeypatch) -> Non
     assert set(download_schema["properties"]) == {"session_id", "file_id"}
 
 
-def test_output_probe_round_trip_records_verified_result(tmp_path, monkeypatch) -> None:
-    main = _load_main(tmp_path, monkeypatch)
+def test_output_probe_round_trip_records_verified_result(load_main) -> None:
+    main = load_main()
 
     started = main.run_output_probe(
         harness_label="chatgpt-web",
@@ -715,8 +715,8 @@ def test_output_probe_round_trip_records_verified_result(tmp_path, monkeypatch) 
     assert completed["result_class"] == "complete"
 
 
-def test_output_probe_rejects_invalid_requests_and_unseen_canaries(tmp_path, monkeypatch) -> None:
-    main = _load_main(tmp_path, monkeypatch)
+def test_output_probe_rejects_invalid_requests_and_unseen_canaries(load_main) -> None:
+    main = load_main()
 
     assert main.run_output_probe("", 12_000)["ok"] is False
     assert main.run_output_probe("chatgpt-web", 4_095)["ok"] is False
@@ -738,8 +738,8 @@ def test_output_probe_rejects_invalid_requests_and_unseen_canaries(tmp_path, mon
     assert stored["noticed_truncation"] is True
 
 
-def test_output_probe_report_is_immutable_and_retry_is_idempotent(tmp_path, monkeypatch) -> None:
-    main = _load_main(tmp_path, monkeypatch)
+def test_output_probe_report_is_immutable_and_retry_is_idempotent(load_main) -> None:
+    main = load_main()
     started = main.run_output_probe("chatgpt-web", 12_000)
     stored = main.store.get_output_probe_run(started["run_id"])
     assert stored is not None
@@ -764,8 +764,8 @@ def test_output_probe_report_is_immutable_and_retry_is_idempotent(tmp_path, monk
     assert persisted["observed_canaries"] == checkpoints
 
 
-def test_runtime_transcript_chunk_setting_overrides_environment(tmp_path, monkeypatch) -> None:
-    main = _load_main(tmp_path, monkeypatch, max_lines=180, max_chars=12_000)
+def test_runtime_transcript_chunk_setting_overrides_environment(load_main) -> None:
+    main = load_main(transcript_max_lines=180, transcript_max_chars=12_000)
     session = main.store.create_session("runtime-chunks", "Runtime chunks", "manual-context")
     main.store.save_exchange(
         session.session_id,
@@ -787,8 +787,8 @@ def test_runtime_transcript_chunk_setting_overrides_environment(tmp_path, monkey
     assert all(chunk["chunk_char_count"] <= 1000 for chunk in chunks)
 
 
-def test_transcript_chunks_mask_model_response_for_every_consumer(tmp_path, monkeypatch) -> None:
-    main = _load_main(tmp_path, monkeypatch)
+def test_transcript_chunks_mask_model_response_for_every_consumer(load_main) -> None:
+    main = load_main()
     session = main.store.create_session("masked-chunk", "Masked chunk", "manual-context")
     exchange = main.store.save_exchange(
         session.session_id,
@@ -810,8 +810,8 @@ def test_transcript_chunks_mask_model_response_for_every_consumer(tmp_path, monk
     assert "This answer must not anchor another model." not in transcript
 
 
-def test_get_last_speaker_reports_continuity_decision(tmp_path, monkeypatch) -> None:
-    main = _load_main(tmp_path, monkeypatch)
+def test_get_last_speaker_reports_continuity_decision(load_main) -> None:
+    main = load_main()
     main.store.create_session("s1", "Continuity", "manual-context")
 
     unknown = main.get_last_speaker("missing", "Claude")
@@ -845,8 +845,8 @@ def test_get_last_speaker_reports_continuity_decision(tmp_path, monkeypatch) -> 
     assert after_delete["should_fetch_transcript"] is False
 
 
-def test_create_session_works_without_context_pack_manifest(tmp_path, monkeypatch) -> None:
-    main = _load_main(tmp_path, monkeypatch)
+def test_create_session_works_without_context_pack_manifest(load_main) -> None:
+    main = load_main()
 
     main.store.create_session_group("Ideas", "#22c55e", "ideas")
     main.store.update_session_group("ideas", is_sensitive=True)
@@ -873,8 +873,8 @@ def test_create_session_works_without_context_pack_manifest(tmp_path, monkeypatc
     assert session.group_id == "ideas"
 
 
-def test_session_overview_and_transcript_chunks_round_trip(tmp_path, monkeypatch) -> None:
-    main = _load_main(tmp_path, monkeypatch, max_lines=8, max_chars=220)
+def test_session_overview_and_transcript_chunks_round_trip(load_main) -> None:
+    main = load_main(transcript_max_lines=8, transcript_max_chars=220)
     session = main.store.create_session("s1", "Chunk test", "manual-context")
     for index in range(1, 8):
         main.store.save_exchange(
@@ -905,8 +905,8 @@ def test_session_overview_and_transcript_chunks_round_trip(tmp_path, monkeypatch
     assert chunks[-1]["next_chunk_index"] is None
 
 
-def test_mcp_session_files_are_visible_only_through_their_session(tmp_path, monkeypatch) -> None:
-    main = _load_main(tmp_path, monkeypatch)
+def test_mcp_session_files_are_visible_only_through_their_session(load_main) -> None:
+    main = load_main()
     main.store.create_session_group("Ideas", "#22c55e", "ideas")
     main.store.create_session_group("Health", "#ef4444", "medical_plus", group_id="health")
     main.store.create_session("s1", "File test", "manual-context", group_id="ideas")
@@ -971,8 +971,8 @@ def test_mcp_session_files_are_visible_only_through_their_session(tmp_path, monk
     }
 
 
-def test_mcp_uploads_pdf_and_returns_extracted_text_without_original_bytes(tmp_path, monkeypatch) -> None:
-    main = _load_main(tmp_path, monkeypatch)
+def test_mcp_uploads_pdf_and_returns_extracted_text_without_original_bytes(load_main) -> None:
+    main = load_main()
     main.store.create_session_group("Ideas", "#22c55e", "ideas")
     main.store.create_session("s1", "PDF test", "manual-context", group_id="ideas")
     raw = make_pdf("PDF context for RAG")
@@ -1001,8 +1001,8 @@ def test_mcp_uploads_pdf_and_returns_extracted_text_without_original_bytes(tmp_p
     assert "content_base64" not in downloaded["file"]
 
 
-def test_mcp_accepts_image_only_pdf_but_marks_it_unindexed(tmp_path, monkeypatch) -> None:
-    main = _load_main(tmp_path, monkeypatch)
+def test_mcp_accepts_image_only_pdf_but_marks_it_unindexed(load_main) -> None:
+    main = load_main()
     main.store.create_session("s1", "PDF test", "manual-context")
     encoded = __import__("base64").b64encode(make_pdf(None)).decode("ascii")
 
@@ -1018,8 +1018,8 @@ def test_mcp_accepts_image_only_pdf_but_marks_it_unindexed(tmp_path, monkeypatch
     assert downloaded["file"]["content"] == ""
 
 
-def test_mcp_rejects_invalid_pdf_payloads(tmp_path, monkeypatch) -> None:
-    main = _load_main(tmp_path, monkeypatch)
+def test_mcp_rejects_invalid_pdf_payloads(load_main) -> None:
+    main = load_main()
     main.store.create_session("s1", "PDF test", "manual-context")
 
     malformed = asyncio.run(main.upload_session_pdf("s1", "bad.pdf", "%%%"))
@@ -1046,8 +1046,8 @@ def test_mcp_rejects_invalid_pdf_payloads(tmp_path, monkeypatch) -> None:
     assert "filename" in wrong_extension["error"]
 
 
-def test_mcp_pdf_upload_reports_worker_saturation(tmp_path, monkeypatch) -> None:
-    main = _load_main(tmp_path, monkeypatch)
+def test_mcp_pdf_upload_reports_worker_saturation(load_main, monkeypatch) -> None:
+    main = load_main()
     main.store.create_session("s1", "PDF test", "manual-context")
 
     async def busy_worker(*args, **kwargs):
@@ -1096,8 +1096,8 @@ def test_pdf_storage_quota_is_enforced_before_insert(tmp_path) -> None:
     assert len(store.list_session_files(session_id="s1")) == 1
 
 
-def test_mcp_overview_reads_session_and_group_files_in_one_snapshot(tmp_path, monkeypatch) -> None:
-    main = _load_main(tmp_path, monkeypatch)
+def test_mcp_overview_reads_session_and_group_files_in_one_snapshot(load_main, monkeypatch) -> None:
+    main = load_main()
     main.store.create_session_group("Ideas", "#22c55e", "ideas")
     main.store.create_session("s1", "File test", "manual-context", group_id="ideas")
     main.store.save_session_file("s1", "plan.md", "# Plan")
@@ -1303,8 +1303,8 @@ def test_store_edits_session_file_with_hash_guard_and_atomic_validation(tmp_path
     assert store.get_session_file(saved.file_id) == edited
 
 
-def test_store_hard_deletes_file_and_preserves_existing_payload_keys(tmp_path, monkeypatch) -> None:
-    main = _load_main(tmp_path, monkeypatch)
+def test_store_hard_deletes_file_and_preserves_existing_payload_keys(load_main) -> None:
+    main = load_main()
     main.store.create_session("s1", "File test", "manual-context")
     uploaded = main.upload_session_file("s1", "plan.md", "# Plan")
     file_id = uploaded["file"]["file_id"]
@@ -1349,8 +1349,8 @@ def test_store_hard_deletes_file_and_preserves_existing_payload_keys(tmp_path, m
     assert replacement["file"]["file_id"] != file_id
 
 
-def test_display_timezone_setting_controls_mcp_timestamps(tmp_path, monkeypatch) -> None:
-    main = _load_main(tmp_path, monkeypatch)
+def test_display_timezone_setting_controls_mcp_timestamps(load_main) -> None:
+    main = load_main()
     main.store.set_app_setting(DISPLAY_TIMEZONE_SETTING_KEY, "Europe/Paris")
     main.store.create_session("s1", "Timezone setting", "manual-context")
 
@@ -1371,6 +1371,11 @@ def test_display_timezone_setting_controls_mcp_timestamps(tmp_path, monkeypatch)
 def test_project_prompt_documents_manual_context_and_chunk_protocol() -> None:
     prompt = Path("docs/project-prompt-template.md").read_text(encoding="utf-8")
 
+    assert (
+        '"Response from model <who you are>\n'
+        'HH:MM (weekday, Month D, YYYY)\n'
+        'Session: <session_id>"'
+    ) in prompt
     assert "`get_session_overview`" in prompt
     assert "`get_last_speaker`" in prompt
     assert "`get_session_transcript_chunk`" in prompt
@@ -1432,8 +1437,8 @@ def test_public_docs_describe_unlisted_sessions_and_scoped_file_reads() -> None:
     assert "refresh" in changelog
 
 
-def test_server_instructions_are_publication_ready(tmp_path, monkeypatch) -> None:
-    main = _load_main(tmp_path, monkeypatch)
+def test_server_instructions_are_publication_ready(load_main) -> None:
+    main = load_main()
 
     assert len(main.SERVER_INSTRUCTIONS) <= 512
     assert "MCP Session Bridge" in main.SERVER_INSTRUCTIONS
@@ -1450,7 +1455,7 @@ def test_server_instructions_are_publication_ready(tmp_path, monkeypatch) -> Non
     assert "never enumerate" in main.SERVER_INSTRUCTIONS.lower()
 
 
-def _load_main(tmp_path, monkeypatch, max_lines: int = 180, max_chars: int = 12000):
+def load_main(max_lines: int = 180, max_chars: int = 12000):
     monkeypatch.setenv("BRIDGE_PUBLIC_BASE_URL", "https://example.test")
     monkeypatch.setenv("BRIDGE_DB_PATH", str(tmp_path / "bridge.sqlite3"))
     monkeypatch.setenv("BRIDGE_TRANSCRIPT_CHUNK_MAX_LINES", str(max_lines))

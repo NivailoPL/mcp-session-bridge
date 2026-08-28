@@ -375,6 +375,7 @@ class ManagedInstaller:
             (self.layout.etc_root, 0o750),
             (self.layout.data_root, 0o1770),
             (self.layout.context_packs_dir, 0o750),
+            (self.layout.export_root, 0o3770),
             (self.layout.state_root, 0o2750),
             (self.layout.pending_root, 0o700),
             (self.layout.backup_root, 0o700),
@@ -620,6 +621,19 @@ exec {current}/.venv/bin/python -m bridge_cli "$@"
             "chown", "root:mcp-session-bridge", str(self.layout.data_root)
         )
         self.layout.data_root.chmod(0o1770)
+        self.runner.run(
+            "chown", "root:mcp-session-bridge", str(self.layout.export_root)
+        )
+        self.layout.export_root.chmod(0o3770)
+        if self.layout.export_lock_file.is_symlink():
+            raise RuntimeError(
+                f"Managed export lock must not be a symlink: {self.layout.export_lock_file}"
+            )
+        self.layout.export_lock_file.touch(mode=0o640, exist_ok=True)
+        self.runner.run(
+            "chown", "root:mcp-session-bridge", str(self.layout.export_lock_file)
+        )
+        self.layout.export_lock_file.chmod(0o640)
         self.runner.run("chown", "root:mcp-session-bridge", str(self.layout.state_root))
         self.layout.state_root.chmod(0o2750)
         self.runner.run("chown", "-R", "root:root", str(self.layout.pending_root))

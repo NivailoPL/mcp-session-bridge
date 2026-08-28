@@ -14,6 +14,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/admin/assets/pearl-gradient-nav.css">
+  <link rel="stylesheet" href="/admin/assets/admin-confirmation.css">
   <style>
     /* ============================================================
        MCP Bridge Admin - v2 "toned tech"
@@ -27,6 +28,7 @@
 
       --bg-base: #0b0d12;
       --text: #e6e8f0;
+      --text-2: #b6bccb;
       --muted: #8e93a8;
       --faint: #69708423;
       --faint-ink: #6d7386;
@@ -49,9 +51,26 @@
       --warn-soft: rgba(251, 191, 36, .1);
       --ok: #34d399;
 
-      --r-card: 14px;
-      --r-ctrl: 9px;
+      /* radii - 4 steps */
+      --r-xs: 6px;
+      --r-ctrl: 8px;
+      --r-card: 12px;
       --r-pill: 999px;
+
+      /* type ramp - 7 steps */
+      --t-label: 11px;
+      --t-meta: 12px;
+      --t-ctrl: 13px;
+      --t-body: 14px;
+      --t-name: 15px;
+      --t-title: 17px;
+      --t-display: 22px;
+
+      /* control heights - 4 steps */
+      --h-micro: 24px;
+      --h-compact: 28px;
+      --h-ctrl: 32px;
+      --h-tile: 40px;
 
       --shadow-pop: 0 20px 48px -20px rgba(0, 0, 0, .7);
 
@@ -83,7 +102,7 @@
       background: rgba(255, 255, 255, .1);
       border: 3px solid transparent;
       background-clip: padding-box;
-      border-radius: 999px;
+      border-radius: var(--r-pill);
     }
     ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, .2); background-clip: padding-box; }
 
@@ -93,14 +112,14 @@
       align-items: center;
       justify-content: center;
       gap: .45rem;
-      min-height: 2.4rem;
-      padding: .5rem .85rem;
+      min-height: var(--h-ctrl);
+      padding: 0 12px;
       border: 1px solid var(--stroke);
       border-radius: var(--r-ctrl);
       background: var(--glass-2);
       color: var(--text);
       font-weight: 600;
-      font-size: .86rem;
+      font-size: var(--t-ctrl);
       letter-spacing: .01em;
       cursor: pointer;
       transition: border-color .16s ease, background .16s ease;
@@ -140,19 +159,23 @@
       padding: .62rem .8rem;
       transition: border-color .16s ease, box-shadow .16s ease;
     }
+    input[type="text"], input[type="search"], input[type="number"], input[type="password"] {
+      min-height: var(--h-ctrl);
+      padding: 0 12px;
+    }
     input::placeholder, textarea::placeholder { color: var(--faint-ink); }
     input:focus, textarea:focus, select:focus {
       outline: none;
       border-color: var(--accent);
       box-shadow: 0 0 0 3px var(--accent-soft);
     }
-    select { min-height: 2.2rem; padding: .4rem .65rem; font-size: .78rem; }
+    select { min-height: var(--h-ctrl); padding: 0 10px; font-size: var(--t-ctrl); }
     textarea {
       min-height: 9.5rem;
       resize: vertical;
       white-space: pre-wrap;
       line-height: 1.6;
-      font-size: .9rem;
+      font-size: var(--t-body);
     }
 
     .mono {
@@ -186,15 +209,15 @@
       display: flex;
       gap: .45rem;
       align-items: center;
-      padding: .8rem 1.2rem .9rem;
+      padding: 16px;
       border-bottom: 1px solid var(--stroke-soft);
     }
-    .settings-row button { min-height: 2.05rem; padding: .36rem .68rem; font-size: .78rem; border-radius: 8px; }
+    .settings-row button { min-height: var(--h-ctrl); padding: 0 10px; font-size: var(--t-ctrl); border-radius: var(--r-ctrl); }
     .settings-button { display: inline-flex; align-items: center; gap: .42rem; }
     .settings-button svg { width: 15px; height: 15px; }
     .update-dot {
       display: inline-block; width: 8px; height: 8px; flex: 0 0 auto;
-      border-radius: 999px; background: var(--warn);
+      border-radius: var(--r-pill); background: var(--warn);
       box-shadow: 0 0 0 3px rgba(251, 191, 36, .15);
     }
     .update-dot[hidden] { display: none; }
@@ -216,30 +239,30 @@
 
     .list-head {
       display: flex; align-items: center; justify-content: space-between;
-      padding: .9rem 1.2rem .4rem;
-      color: #9aa1b0;
+      padding: 16px 16px 8px;
+      color: var(--faint-ink);
       font-family: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
-      font-size: .68rem; font-weight: 500; text-transform: uppercase; letter-spacing: .16em;
+      font-size: var(--t-label); font-weight: 500; text-transform: uppercase; letter-spacing: .16em;
     }
 
     .group-panel {
       display: grid;
-      gap: .55rem;
-      padding: .75rem 1.2rem .85rem;
+      gap: 12px;
+      padding: 16px;
       border-bottom: 1px solid var(--stroke-soft);
     }
     .group-head { display: flex; align-items: center; gap: .6rem; }
-    .group-head span { font-size: .68rem; text-transform: uppercase; letter-spacing: .14em; color: var(--faint-ink); }
+    .group-head span { font-size: var(--t-label); text-transform: uppercase; letter-spacing: .14em; color: var(--faint-ink); }
     .group-list {
       display: grid;
-      grid-template-columns: repeat(auto-fill, 2.55rem);
-      grid-auto-rows: 2.55rem;
+      grid-template-columns: repeat(auto-fill, var(--h-tile));
+      grid-auto-rows: var(--h-tile);
       gap: .45rem;
     }
     .group-filter {
       position: relative;
-      width: 2.55rem; height: 2.55rem; min-height: 2.55rem; padding: 0;
-      border-radius: 9px; color: var(--g, var(--muted));
+      width: var(--h-tile); height: var(--h-tile); min-height: var(--h-tile); padding: 0;
+      border-radius: var(--r-ctrl); color: var(--g, var(--muted));
       background: color-mix(in oklab, var(--g, var(--muted)) 9%, transparent);
       border-color: color-mix(in oklab, var(--g, var(--muted)) 30%, transparent);
     }
@@ -248,7 +271,7 @@
       position: absolute; right: -.16rem; bottom: -.16rem;
       display: grid; place-items: center;
       width: 1rem; height: 1rem;
-      border: 1px solid rgba(251, 191, 36, .58); border-radius: 999px;
+      border: 1px solid rgba(251, 191, 36, .58); border-radius: var(--r-pill);
       background: #11141b; color: var(--warn);
       box-shadow: 0 2px 7px rgba(0, 0, 0, .42);
       pointer-events: none;
@@ -259,11 +282,11 @@
       position: absolute; top: 0; right: 0;
       display: grid; place-items: center;
       min-width: 1rem; height: 1rem; padding: 0 .2rem;
-      border-radius: 999px;
+      border-radius: var(--r-pill);
       border: 1px solid color-mix(in oklab, var(--g, var(--accent)) 48%, transparent);
       background: rgba(11, 13, 18, .94);
       color: #fff;
-      font-size: .58rem; font-weight: 800; line-height: 1;
+      font-size: var(--t-label); font-weight: 800; line-height: 1;
       font-variant-numeric: tabular-nums;
       opacity: 0; transform: translate(50%, -50%) scale(.88);
       pointer-events: none;
@@ -287,130 +310,124 @@
       background: color-mix(in oklab, var(--g, var(--accent)) 26%, rgba(255, 255, 255, .03));
       border-color: color-mix(in oklab, var(--g, var(--accent)) 62%, transparent);
     }
-    .group-actions { display: flex; justify-content: flex-end; gap: .45rem; min-height: 1.9rem; }
+    .group-actions { display: flex; justify-content: flex-end; gap: .45rem; min-height: var(--h-compact); }
     .group-actions button[hidden], .edit-actions button[hidden] { display: none; }
-    .group-actions button { min-height: 1.9rem; padding: .32rem .55rem; font-size: .74rem; border-radius: 8px; }
+    .group-actions button { min-height: var(--h-compact); padding: 0 8px; font-size: var(--t-meta); border-radius: var(--r-ctrl); }
 
     .session-list {
       display: grid; align-content: start; gap: 0;
-      padding: .35rem 0 .8rem;
+      padding: 0 0 12px;
       overflow: auto; min-height: 0; flex: 1;
     }
     .session-list-region { position: relative; display: flex; min-height: 0; flex: 1; }
 
     .session-date-heading {
-      display: flex;
-      align-items: center;
-      gap: .7rem;
       grid-column: 1 / -1;
-      margin: .75rem .95rem .35rem;
-      color: #858d9c;
+      margin: 20px 16px 6px;
+      color: var(--faint-ink);
       font-family: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
-      font-size: .66rem;
+      font-size: var(--t-label);
       font-weight: 500;
-      letter-spacing: .13em;
+      letter-spacing: .09em;
       line-height: 1.2;
       text-transform: uppercase;
       white-space: nowrap;
     }
-    .session-date-heading::after {
-      content: "";
-      height: 1px;
-      flex: 1;
-      background: var(--stroke-soft);
-    }
-    .session-date-heading:first-child { margin-top: .4rem; }
+    .session-date-heading:first-child { margin-top: 12px; }
 
     .session-button {
       position: relative;
       display: block;
       width: 100%;
       min-height: auto;
-      padding: .72rem .85rem;
+      padding: 10px 16px;
       text-align: left;
       border: 0;
-      border-left: 3px solid transparent;
       border-radius: 0;
       background: transparent;
-      --session-compact-icon-offset: calc(.85rem + 1.1rem + .6rem);
+      box-shadow: inset 2px 0 0 transparent;
+      cursor: pointer;
     }
     .session-button:hover { background: rgba(255, 255, 255, .035); }
     .session-button.is-active {
-      padding-left: calc(.85rem - 3px);
-      border-left-color: #8f9df0;
-      background: rgba(143, 157, 240, .13);
+      background: rgba(84, 87, 229, .14);
+      box-shadow: inset 2px 0 0 #8f9df0;
     }
-    .session-button.is-compact {
-      padding-top: .62rem;
-      padding-bottom: .62rem;
-    }
-    .session-button.is-compact .session-card-content { gap: .25rem; }
-    .session-button { cursor: pointer; }
-    .session-card-content { display: grid; gap: .35rem; min-width: 0; }
+    .session-card-content { display: grid; gap: 2px; min-width: 0; }
     .session-compact-title {
       display: grid;
-      grid-template-columns: 1.1rem minmax(0, 1fr) auto;
+      grid-template-columns: 16px minmax(0, 1fr) auto;
       align-items: center;
-      gap: .6rem;
+      gap: 12px;
       min-width: 0;
     }
     .session-title {
       min-width: 0;
       overflow: hidden;
-      color: #e0e3eb;
-      font-size: .9rem;
+      color: var(--text-2);
+      font-size: var(--t-body);
       font-weight: 600;
-      line-height: 1.3;
+      line-height: 18px;
       text-overflow: ellipsis;
       white-space: nowrap;
     }
-    .session-button.is-active .session-title { color: #f0f1f6; font-weight: 750; }
-    .session-compact-icon { display: inline-flex; width: 1.1rem; height: 1.1rem; color: var(--g, var(--muted)); flex: 0 0 auto; }
+    .session-button.is-active .session-title { color: #f0f1f6; font-weight: 700; }
+    .session-compact-icon { display: inline-flex; width: 16px; height: 16px; color: var(--g, var(--muted)); flex: 0 0 auto; }
     .session-compact-icon svg { width: 100%; height: 100%; }
     .session-list-stamp {
-      color: var(--muted);
+      color: var(--faint-ink);
       font-family: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
-      font-size: .74rem;
+      font-size: var(--t-meta);
       font-variant-numeric: tabular-nums;
-      line-height: 1;
+      line-height: 18px;
       white-space: nowrap;
     }
-    .session-list-stamp.is-date { color: #6fb3a8; }
-    .session-selected-details {
-      display: grid;
-      gap: .25rem;
+    .session-button.is-active .session-list-stamp { color: var(--muted); }
+    .session-meta-line {
       min-width: 0;
-      margin-left: calc(1.1rem + .6rem);
-    }
-    .session-facts,
-    .session-selected-time,
-    .session-selected-id {
-      min-width: 0;
+      margin-left: 28px;
       overflow: hidden;
+      color: var(--muted);
+      font-size: var(--t-meta);
+      line-height: 16px;
       text-overflow: ellipsis;
       white-space: nowrap;
     }
-    .session-facts { color: #959cac; font-size: .72rem; }
-    .session-selected-time { color: #6fb3a8; font-size: .76rem; }
-    .session-selected-id { color: #596171; font-size: .67rem; }
     .session-actions {
-      position: absolute; inset: .55rem .55rem auto auto; display: flex; gap: .35rem;
-      opacity: 0; transform: translateY(-3px); pointer-events: none; transition: opacity .16s ease, transform .16s ease;
-      padding: .25rem; border-radius: 9px; background: #12141a; border: 1px solid var(--stroke-soft);
+      position: absolute; inset: 0 12px 0 auto; display: flex; align-items: center; gap: 2px;
+      height: var(--h-ctrl); margin: auto 0; padding: 2px;
+      border: 1px solid var(--stroke-soft); border-radius: var(--r-ctrl);
+      background: #14171f;
+      box-shadow: -10px 0 14px -8px rgba(11, 13, 18, .95);
+      opacity: 0; pointer-events: none; transition: opacity .16s ease;
     }
-    .session-button:hover .session-actions, .session-button:focus-within .session-actions { opacity: 1; transform: translateY(0); pointer-events: auto; }
-    .session-actions button { min-height: 1.75rem; padding: .28rem .48rem; border-radius: 7px; font-size: .68rem; }
+    .session-button:hover .session-actions, .session-button:focus-within .session-actions { opacity: 1; pointer-events: auto; }
+    .session-button:hover .session-list-stamp, .session-button:focus-within .session-list-stamp { opacity: 0; }
+    .session-actions button {
+      display: inline-grid; place-items: center;
+      width: var(--h-compact); min-height: var(--h-compact); padding: 0;
+      border: 0; border-radius: var(--r-xs);
+      background: transparent; color: var(--muted);
+    }
+    .session-actions button:hover { background: var(--glass-3); color: var(--text); }
+    .session-actions button svg { width: 15px; height: 15px; }
     .session-actions button:disabled { opacity: .38; cursor: not-allowed; }
+    .session-actions button:disabled:hover { background: transparent; color: var(--muted); }
+    .action-spinner {
+      width: 14px; height: 14px; border: 2px solid rgba(255, 255, 255, .22);
+      border-top-color: var(--accent-ink); border-radius: 50%;
+      animation: index-spin .8s linear infinite;
+    }
     .session-rename { display: grid; gap: .45rem; position: relative; z-index: 2; }
-    .session-rename input { width: 100%; min-height: 2rem; border-radius: 8px; font-size: .8rem; }
+    .session-rename input { width: 100%; min-height: var(--h-ctrl); border-radius: var(--r-ctrl); font-size: var(--t-ctrl); }
     .session-rename .edit-actions { gap: .35rem; }
-    .session-rename .edit-actions button { min-height: 1.8rem; padding: .28rem .52rem; font-size: .7rem; }
-    .session-sub { font-size: .7rem; color: var(--faint-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .session-rename .edit-actions button { min-height: var(--h-compact); padding: 0 8px; font-size: var(--t-label); }
+    .session-sub { font-size: var(--t-label); color: var(--faint-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .session-foot { display: grid; justify-items: start; gap: .3rem; margin-top: .1rem; }
     .mini-chip {
       display: inline-flex; align-items: center; gap: .25rem;
-      font-size: .68rem; color: var(--muted);
-      padding: .12rem .42rem; border-radius: 999px;
+      font-size: var(--t-label); color: var(--muted);
+      padding: .12rem .42rem; border-radius: var(--r-pill);
       border: 1px solid var(--stroke-soft); background: rgba(0, 0, 0, .22);
       font-variant-numeric: tabular-nums;
     }
@@ -428,73 +445,59 @@
     /* ---------- main ---------- */
     .main { position: relative; display: flex; flex-direction: column; min-width: 0; }
 
-    .sensitive-blurred {
-      filter: blur(12px);
-      user-select: none;
-      pointer-events: none;
+    /* a covered row keeps its geometry: the title is redacted, nothing else moves */
+    .session-title-redacted {
+      width: var(--redacted-width, 62%);
+      height: 9px;
+      border-radius: 3px;
+      background: rgba(255, 255, 255, .09);
     }
-    .session-button.is-compact .session-card-content.sensitive-compact-content .session-title {
-      filter: blur(12px);
-      user-select: none;
-      pointer-events: none;
-    }
-    .sensitive-overlay {
+    .session-button.is-guarded:hover .session-title-redacted { background: rgba(255, 255, 255, .15); }
+    .session-stamp-group { display: flex; align-items: center; gap: 8px; }
+    .session-guard-glyph { display: inline-flex; color: #d9b96a; transition: opacity .16s ease; }
+    .session-button.is-guarded:hover .session-guard-glyph,
+    .session-button.is-guarded:focus-within .session-guard-glyph { opacity: 0; }
+    .session-guard-glyph svg { width: 14px; height: 14px; }
+
+    /* the transcript sits behind a flat curtain; the header above it stays live */
+    .thread-sensitive-content { position: relative; display: flex; flex: 1; flex-direction: column; min-width: 0; }
+    .sensitive-curtain {
       position: absolute; inset: 0; z-index: 12;
-      display: grid; place-items: center;
-      width: 100%; min-height: 100%; padding: 1rem;
+      display: grid; place-items: start center;
+      width: 100%; padding: 2rem;
       border: 0; border-radius: 0;
-      background: rgba(11, 13, 18, .52);
-      -webkit-backdrop-filter: blur(7px) saturate(75%);
-      backdrop-filter: blur(7px) saturate(75%);
+      background: var(--bg-base);
       color: var(--text); text-align: center;
     }
-    .sensitive-overlay[hidden] { display: none; }
-    .sensitive-overlay-card {
-      display: grid; justify-items: center; gap: .45rem;
-      max-width: 18rem; padding: 1.1rem 1.35rem;
-      border: 1px solid rgba(251, 191, 36, .25); border-radius: var(--r-card);
-      background: rgba(11, 13, 18, .88); box-shadow: var(--shadow-pop);
+    .sensitive-curtain[hidden] { display: none; }
+    .sensitive-curtain-card {
+      position: sticky; top: 28vh;
+      display: grid; justify-items: center; gap: 10px; max-width: 26rem;
     }
-    .sensitive-overlay-card svg { width: 1.8rem; height: 1.8rem; color: var(--warn); }
-    .sensitive-overlay-title { font-size: .92rem; font-weight: 800; }
-    .sensitive-overlay-hint { color: var(--muted); font-size: .74rem; }
-    .session-card-sensitive-overlay {
-      inset: 0 0 0 var(--session-compact-icon-offset);
-      width: auto;
-      min-height: 0;
-      padding: .25rem .55rem;
-      border-radius: 0;
-      background: rgba(8, 11, 16, .86);
-      text-align: left;
+    .sensitive-curtain-head { display: flex; align-items: center; gap: 8px; }
+    .sensitive-overlay-icon { display: inline-flex; color: #d9b96a; }
+    .sensitive-overlay-icon svg { width: 16px; height: 16px; }
+    .sensitive-curtain-title { font-size: var(--t-body); font-weight: 700; }
+    .sensitive-curtain-hint { color: var(--muted); font-size: var(--t-meta); line-height: 1.5; }
+    .sensitive-curtain-action {
+      display: inline-flex; align-items: center; gap: 8px;
+      min-height: var(--h-ctrl); margin-top: 4px; padding: 0 14px;
+      border-radius: var(--r-ctrl); background: var(--accent);
+      color: #fff; font-size: var(--t-ctrl); font-weight: 600;
     }
-    .session-card-sensitive-overlay .sensitive-overlay-card {
-      display: flex;
-      align-items: center;
-      justify-content: flex-start;
-      gap: .45rem;
-      width: 100%;
-      max-width: none;
-      min-height: 0;
-      padding: .25rem 0;
-      border: 0;
-      border-radius: 0;
-      background: transparent;
-      box-shadow: none;
+    .sensitive-curtain:hover { background: var(--bg-base); }
+    .sensitive-curtain:hover .sensitive-curtain-action { background: var(--accent-2); }
+    .sensitive-curtain-action svg { width: 14px; height: 14px; }
+    .topbar-title h2.is-redacted {
+      position: relative;
+      width: min(18rem, 52vw); min-height: 28px; flex: 0 0 auto;
     }
-    .session-card-sensitive-overlay .sensitive-overlay-card svg { width: 1rem; height: 1rem; }
-    .session-card-sensitive-overlay .sensitive-overlay-title {
-      color: #d9b96a;
-      font-size: .78rem;
-      font-weight: 650;
+    .topbar-title h2.is-redacted::after {
+      content: "";
+      position: absolute; left: 0; top: 50%; transform: translateY(-50%);
+      width: 100%; height: 14px;
+      border-radius: 4px; background: rgba(255, 255, 255, .09);
     }
-    .session-card-sensitive-overlay .sensitive-overlay-hint {
-      color: #7f8796;
-      font-family: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
-      font-size: .68rem;
-    }
-    #threadSensitiveOverlay { place-items: start center; }
-    #threadSensitiveOverlay .sensitive-overlay-card { position: sticky; top: 32vh; margin-top: 32vh; }
-    .thread-sensitive-content { display: flex; flex: 1; flex-direction: column; min-width: 0; }
 
     /* the ONE glass surface in the app */
     .topbar {
@@ -506,34 +509,57 @@
       -webkit-backdrop-filter: blur(16px) saturate(120%);
       backdrop-filter: blur(16px) saturate(120%);
     }
-    .topbar-title { min-width: 0; display: grid; gap: .3rem; }
-    .session-title-line { display: flex; align-items: center; gap: .55rem; min-width: 0; }
+    .topbar-title { min-width: 0; display: grid; gap: 10px; }
+    .session-title-line { display: flex; align-items: center; gap: .55rem; min-width: 0; margin-bottom: 2px; }
     .session-title-icon { display: none; width: 1.35rem; height: 1.35rem; color: var(--g, var(--accent-ink)); flex: 0 0 auto; }
     .session-title-icon.show { display: inline-flex; }
     .session-title-icon svg, .session-compact-icon svg { width: 100%; height: 100%; }
     .topbar-title h2 {
       margin: 0;
-      font-size: 1.4rem; font-weight: 700; letter-spacing: -.015em; line-height: 1.15;
+      font-size: var(--t-display); font-weight: 700; letter-spacing: -.015em; line-height: 1.15;
       overflow-wrap: anywhere;
     }
-    .session-id-line { display: flex; align-items: center; gap: .5rem; min-width: 0; }
-    .session-id {
-      min-width: 0; color: var(--faint-ink); font-family: "Geist Mono", ui-monospace, monospace;
-      font-size: .74rem; overflow-wrap: anywhere;
+    .session-id-line { display: flex; align-items: center; min-width: 0; }
+    .session-id-unit {
+      display: inline-flex; align-items: stretch; justify-content: flex-start;
+      max-width: 100%; min-height: var(--h-compact); padding: 0;
+      border: 1px solid var(--stroke-soft); border-radius: var(--r-ctrl);
+      background: rgba(0, 0, 0, .16); color: var(--text-2);
+      font-weight: 400; overflow: hidden;
+      transition: border-color .16s ease, background .16s ease, color .16s ease;
     }
-    .session-id-copy { min-height: 1.7rem; padding: .2rem .55rem; font-size: .7rem; flex: 0 0 auto; }
-    .meta { display: flex; flex-wrap: wrap; align-items: center; gap: .45rem; color: var(--muted); font-size: .8rem; font-variant-numeric: tabular-nums; }
+    .session-id-unit:hover {
+      border-color: var(--stroke); background: rgba(0, 0, 0, .34); color: var(--text);
+    }
+    .session-id-glyph { display: grid; place-items: center; padding-left: 10px; color: var(--faint-ink); }
+    .session-id-glyph svg { width: 13px; height: 13px; }
+    .session-id {
+      display: inline-flex; align-items: center; min-width: 0; padding: 0 10px;
+      font-family: "Geist Mono", ui-monospace, monospace; font-size: var(--t-meta);
+      letter-spacing: .01em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .session-id-copy {
+      display: inline-flex; align-items: center; gap: 6px; flex: 0 0 auto;
+      padding: 0 10px; border-left: 1px solid var(--stroke-soft);
+      background: var(--glass); font-size: var(--t-meta); font-weight: 700;
+    }
+    .session-id-copy svg { width: 13px; height: 13px; }
+    .session-id-unit.is-copied { border-color: rgba(52, 211, 153, .42); }
+    .session-id-unit.is-copied .session-id-copy {
+      border-left-color: rgba(52, 211, 153, .42); background: rgba(52, 211, 153, .14); color: var(--ok);
+    }
+    .meta { display: flex; flex-wrap: wrap; align-items: center; gap: .45rem; color: var(--muted); font-size: var(--t-ctrl); font-variant-numeric: tabular-nums; }
     .meta .sep { width: 3px; height: 3px; border-radius: 50%; background: var(--faint-ink); }
-    .meta .mono { font-size: .74rem; color: var(--faint-ink); }
+    .meta .mono { font-size: var(--t-meta); color: var(--faint-ink); }
     .top-actions { display: flex; flex-wrap: wrap; gap: .5rem; justify-content: flex-start; align-items: center; }
     .content-wrap { position: relative; display: flex; align-items: flex-start; width: 100%; max-width: 84rem; }
     .turn-nav {
       position: sticky; top: 50vh; transform: translateY(-50%); z-index: 4; display: none; flex-direction: column; gap: .35rem;
       padding: .35rem; margin: 0 .55rem 0 1rem; border: 1px solid var(--stroke-soft);
-      border-radius: 11px; background: #10131a;
+      border-radius: var(--r-card); background: #10131a;
     }
     .turn-nav.show { display: flex; }
-    .turn-nav button { width: 2.75rem; min-height: 2.75rem; padding: 0; border-radius: 8px; }
+    .turn-nav button { width: var(--h-tile); min-height: var(--h-tile); padding: 0; border-radius: var(--r-ctrl); }
     .turn-nav svg { width: 15px; height: 15px; }
     .turn-nav-divider { width: 100%; height: 1px; margin: .1rem 0; background: var(--stroke-soft); }
     .file-workspace-launcher { position: relative; }
@@ -541,7 +567,7 @@
       position: absolute; top: -.35rem; right: -.35rem; display: grid; place-items: center;
       min-width: 1.15rem; height: 1.15rem; padding: 0 .25rem; border-radius: var(--r-pill);
       border: 1px solid #10131a; background: var(--accent); color: #fff;
-      font-size: .62rem; font-weight: 800; font-variant-numeric: tabular-nums;
+      font-size: var(--t-label); font-weight: 800; font-variant-numeric: tabular-nums;
     }
     .content { display: grid; gap: 1rem; width: 100%; min-width: 0; max-width: 80rem; padding: 1.4rem 1.5rem 3rem .4rem; }
 
@@ -555,7 +581,7 @@
       border: 1px solid rgba(52, 211, 153, .28);
       background: rgba(52, 211, 153, .08);
       color: var(--ok);
-      font-size: .84rem; font-weight: 500;
+      font-size: var(--t-ctrl); font-weight: 500;
       box-shadow: var(--shadow-pop);
       opacity: 0; transform: translateY(.5rem); pointer-events: none;
       transition: opacity .16s ease, transform .16s ease;
@@ -573,7 +599,7 @@
       border: 1px dashed rgba(122, 125, 240, .38);
       background: rgba(99, 102, 241, .07);
       color: var(--accent-ink);
-      font-size: .8rem;
+      font-size: var(--t-ctrl);
     }
     .demo-banner.show { display: flex; }
     .demo-banner b { color: #fff; font-weight: 600; }
@@ -596,9 +622,9 @@
     .file-editor-pane, .file-decision-pane { display: grid; gap: .75rem; }
     .file-editor-pane textarea {
       min-height: min(56vh, 32rem); resize: vertical; tab-size: 2;
-      font-family: "Geist Mono", ui-monospace, monospace; font-size: .82rem; line-height: 1.55;
+      font-family: "Geist Mono", ui-monospace, monospace; font-size: var(--t-ctrl); line-height: 1.55;
     }
-    .file-editor-status { min-height: 1.25rem; margin: 0; color: var(--faint-ink); font-size: .76rem; }
+    .file-editor-status { min-height: 1.25rem; margin: 0; color: var(--faint-ink); font-size: var(--t-meta); }
     .file-editor-status.is-error { color: var(--danger); }
     .file-editor-status.is-ok { color: var(--ok); }
     .file-decision-pane {
@@ -606,7 +632,7 @@
       background: rgba(255, 255, 255, .025);
     }
     .file-decision-pane.is-danger { border-color: rgba(251, 113, 133, .34); background: var(--danger-soft); }
-    .file-decision-pane h5 { margin: 0; font-size: 1rem; }
+    .file-decision-pane h5 { margin: 0; font-size: var(--t-title); }
     .file-decision-pane p { margin: 0; color: var(--muted); line-height: 1.55; }
     .file-decision-actions { display: flex; gap: .5rem; flex-wrap: wrap; }
     .file-decision-actions .danger { margin-left: auto; }
@@ -617,10 +643,10 @@
       border: 1px dashed var(--stroke); border-radius: var(--r-card); color: var(--muted);
     }
     .file-bucket { display: grid; gap: .45rem; min-width: 0; }
-    .file-bucket-title { display: flex; align-items: center; gap: .45rem; min-height: 1.55rem; font-size: .68rem; text-transform: uppercase; letter-spacing: .14em; color: var(--faint-ink); }
+    .file-bucket-title { display: flex; align-items: center; gap: .45rem; min-height: var(--h-micro); font-size: var(--t-label); text-transform: uppercase; letter-spacing: .14em; color: var(--faint-ink); }
     .group-file-identity {
       width: 1.55rem; height: 1.55rem; display: inline-grid; place-items: center; flex: 0 0 auto;
-      border-radius: 7px; color: var(--g, var(--accent-ink));
+      border-radius: var(--r-ctrl); color: var(--g, var(--accent-ink));
       background: color-mix(in oklab, var(--g, var(--accent)) 13%, transparent);
       border: 1px solid color-mix(in oklab, var(--g, var(--accent)) 38%, transparent);
     }
@@ -628,43 +654,43 @@
     .file-list { display: grid; gap: .4rem; }
     .file-drop-zone {
       display: grid; gap: .4rem; padding: .7rem; border: 1px dashed var(--stroke);
-      border-radius: 9px; background: rgba(255, 255, 255, .025); color: var(--muted);
-      font-size: .75rem; transition: border-color .16s ease, background .16s ease, box-shadow .16s ease;
+      border-radius: var(--r-ctrl); background: rgba(255, 255, 255, .025); color: var(--muted);
+      font-size: var(--t-meta); transition: border-color .16s ease, background .16s ease, box-shadow .16s ease;
     }
     .file-drop-zone:focus-within, .file-drop-zone.is-drop-target {
       border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 2px rgba(122, 125, 240, .12);
     }
     .file-drop-zone.is-pending { opacity: .65; pointer-events: none; }
-    .file-drop-zone input[type="file"] { max-width: 100%; color: var(--ink); font: inherit; }
+    .file-drop-zone input[type="file"] { max-width: 100%; color: var(--text); font: inherit; }
     .file-drop-zone input[type="file"]::file-selector-button {
       margin-right: .55rem; padding: .42rem .62rem; border: 1px solid var(--stroke);
-      border-radius: 7px; background: rgba(255, 255, 255, .06); color: var(--ink); cursor: pointer;
+      border-radius: var(--r-ctrl); background: rgba(255, 255, 255, .06); color: var(--text); cursor: pointer;
     }
-    .file-operation-status { min-height: 1.1rem; margin: 0; color: var(--faint-ink); font-size: .72rem; }
+    .file-operation-status { min-height: 1.1rem; margin: 0; color: var(--faint-ink); font-size: var(--t-meta); }
     .file-operation-status.is-error { color: var(--danger); }
     .file-operation-status.is-ok { color: var(--ok); }
-    .file-list-empty { margin: 0; padding: .65rem .75rem; border: 1px dashed var(--stroke-soft); border-radius: 9px; color: var(--faint-ink); font-size: .78rem; }
+    .file-list-empty { margin: 0; padding: .65rem .75rem; border: 1px dashed var(--stroke-soft); border-radius: var(--r-ctrl); color: var(--faint-ink); font-size: var(--t-ctrl); }
     .file-row-card { display: flex; align-items: stretch; gap: .4rem; min-width: 0; }
     .file-row-card[draggable="true"] { cursor: grab; }
     .file-row-card.is-dragging { opacity: .46; }
     .file-button {
       min-width: 0; flex: 1; min-height: 3.25rem; justify-content: flex-start; text-align: left;
-      padding: .65rem .75rem; border-radius: 9px; background: rgba(0, 0, 0, .18);
+      padding: .65rem .75rem; border-radius: var(--r-ctrl); background: rgba(0, 0, 0, .18);
     }
-    .file-move-button { flex: 0 0 auto; align-self: stretch; padding: .45rem .55rem; font-size: .7rem; }
+    .file-move-button { flex: 0 0 auto; align-self: stretch; padding: .45rem .55rem; font-size: var(--t-label); }
     .file-button.is-active { border-color: var(--accent); background: var(--accent-soft); }
     .file-row { display: flex; align-items: center; gap: .6rem; width: 100%; min-width: 0; }
-    .file-icon { width: 2rem; height: 2rem; border-radius: 8px; display: grid; place-items: center; flex: 0 0 auto; color: var(--accent-ink); background: var(--accent-soft); border: 1px solid rgba(99, 102, 241, .22); }
+    .file-icon { width: 2rem; height: 2rem; border-radius: var(--r-ctrl); display: grid; place-items: center; flex: 0 0 auto; color: var(--accent-ink); background: var(--accent-soft); border: 1px solid rgba(99, 102, 241, .22); }
     .file-icon svg { width: 16px; height: 16px; }
     .file-main { display: grid; gap: .12rem; min-width: 0; flex: 1; }
     .file-title-line { display: flex; align-items: center; gap: .4rem; min-width: 0; }
-    .file-name { min-width: 0; flex: 1; font-weight: 600; font-size: .86rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .file-name { min-width: 0; flex: 1; font-weight: 600; font-size: var(--t-body); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .file-format-badge {
       flex: 0 0 auto; padding: .13rem .35rem; border: 1px solid rgba(122, 125, 240, .35);
-      border-radius: 5px; background: var(--accent-soft); color: var(--accent-ink);
-      font-family: "Geist Mono", ui-monospace, monospace; font-size: .62rem; font-weight: 800; letter-spacing: .04em;
+      border-radius: var(--r-xs); background: var(--accent-soft); color: var(--accent-ink);
+      font-family: "Geist Mono", ui-monospace, monospace; font-size: var(--t-label); font-weight: 800; letter-spacing: .04em;
     }
-    .file-meta { font-size: .7rem; color: var(--faint-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .file-meta { font-size: var(--t-label); color: var(--faint-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
     /* ---------- exchange card (flat) ---------- */
     .exchange {
@@ -679,27 +705,37 @@
     .exchange.is-deleted { border-color: rgba(251, 191, 36, .32); background: rgba(251, 191, 36, .035); }
     .exchange:has(.context-help:hover), .exchange:has(.context-help:focus-within) { z-index: 6; }
     .turn.is-masked .turn-content, .message.is-masked .bubble { filter: blur(5px); user-select: none; opacity: .68; }
+    .masked-response-notice {
+      display: grid; gap: .25rem; padding: .65rem .75rem;
+      border: 1px solid rgba(251, 191, 36, .3); border-radius: var(--r-ctrl);
+      background: var(--warn-soft); color: var(--warn);
+    }
+    .masked-response-label { font-size: var(--t-label); font-weight: 750; letter-spacing: .08em; text-transform: uppercase; }
+    .masked-response-copy { color: #f7d982; font: var(--t-meta)/1.5 "Geist Mono", ui-monospace, monospace; overflow-wrap: anywhere; }
     .exchange.is-editing { border-color: rgba(122, 125, 240, .45); box-shadow: var(--shadow-pop); }
 
     .exchange-head {
-      display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem;
+      display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 1rem;
       padding: .9rem 1.05rem;
       border-bottom: 1px solid var(--stroke-soft);
       border-radius: calc(var(--r-card) - 1px) calc(var(--r-card) - 1px) 0 0;
       background: rgba(255, 255, 255, .02);
     }
-    .head-id { display: flex; align-items: center; gap: .7rem; min-width: 0; }
+    .head-id { display: flex; align-items: center; gap: .7rem; min-width: 0; flex: 1 1 12rem; }
     .ex-num {
-      font-family: "Geist Mono", monospace; font-size: .72rem; color: var(--faint-ink);
-      padding: .2rem .45rem; border: 1px solid var(--stroke-soft); border-radius: 6px; background: rgba(0, 0, 0, .25);
+      font-family: "Geist Mono", monospace; font-size: var(--t-meta); color: var(--faint-ink);
+      padding: .2rem .45rem; border: 1px solid var(--stroke-soft); border-radius: var(--r-xs); background: rgba(0, 0, 0, .25);
       flex: 0 0 auto;
     }
     .head-model { min-width: 0; display: grid; gap: .1rem; }
-    .head-model .name { font-weight: 700; font-size: .96rem; overflow-wrap: anywhere; }
-    .head-model .stamps { font-size: .72rem; color: var(--faint-ink); display: flex; flex-wrap: wrap; gap: .35rem; align-items: center; font-variant-numeric: tabular-nums; }
+    .head-model .name {
+      min-width: 0; font-weight: 700; font-size: var(--t-name);
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .head-model .stamps { font-size: var(--t-meta); color: var(--faint-ink); display: flex; flex-wrap: wrap; gap: .35rem; align-items: center; font-variant-numeric: tabular-nums; }
     .head-model .stamps .sep { width: 3px; height: 3px; border-radius: 50%; background: var(--faint-ink); }
 
-    .head-right { display: flex; align-items: center; gap: .55rem; flex: 0 0 auto; }
+    .head-right { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: .55rem; flex: 0 1 auto; }
 
     .pill {
       display: inline-flex; align-items: center; gap: .35rem;
@@ -708,14 +744,14 @@
       border: 1px solid rgba(52, 211, 153, .28);
       background: rgba(52, 211, 153, .08);
       color: var(--ok);
-      font-size: .68rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+      font-size: var(--t-label); font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
       white-space: nowrap;
     }
     .pill::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
     .pill.masked { border-color: rgba(122, 125, 240, .38); background: var(--accent-soft); color: var(--accent-ink); }
 
     .exchange-actions { display: flex; align-items: center; flex-wrap: wrap; gap: .4rem; }
-    .exchange-actions > button, .exchange-actions .context-action { min-height: 2.05rem; padding: .35rem .7rem; font-size: .78rem; }
+    .exchange-actions > button, .exchange-actions .context-action { min-height: var(--h-ctrl); padding: 0 12px; font-size: var(--t-ctrl); }
 
     .context-visibility-controls { display: inline-flex; align-items: center; gap: .35rem; }
     .context-action { gap: .38rem; }
@@ -736,17 +772,17 @@
 
     .context-help { position: relative; display: inline-flex; flex: 0 0 auto; }
     .context-help-trigger {
-      width: 1.45rem; min-height: 1.45rem; padding: 0;
-      border-radius: 999px; border-color: var(--stroke-soft); background: transparent;
-      color: var(--faint-ink); font-size: .68rem; font-weight: 800;
+      width: var(--h-micro); min-height: var(--h-micro); padding: 0;
+      border-radius: var(--r-pill); border-color: var(--stroke-soft); background: transparent;
+      color: var(--faint-ink); font-size: var(--t-label); font-weight: 800;
     }
     .context-help-trigger:hover { border-color: var(--stroke); background: var(--glass); color: var(--muted); }
     .context-help-box {
       position: absolute; z-index: 40; top: calc(100% + .45rem); right: 0;
       width: min(23rem, calc(100vw - 7.5rem)); padding: .72rem .8rem;
-      border: 1px solid var(--stroke); border-radius: 9px;
+      border: 1px solid var(--stroke); border-radius: var(--r-ctrl);
       background: #171a22; color: var(--muted); box-shadow: var(--shadow-pop);
-      font-size: .74rem; line-height: 1.5; text-align: left;
+      font-size: var(--t-meta); line-height: 1.5; text-align: left;
       opacity: 0; visibility: hidden; transform: translateY(-.2rem);
       pointer-events: none; transition: opacity .14s ease, transform .14s ease, visibility .14s ease;
     }
@@ -761,17 +797,17 @@
       background: rgba(251, 191, 36, .055);
     }
     .exchange > .excluded-turn-bar { border: 0; border-radius: inherit; }
-    .excluded-turn-label { color: #f7d982; font-size: .78rem; font-weight: 750; letter-spacing: .04em; }
-    .excluded-turn-note { min-width: 0; color: var(--warn); font-size: .74rem; overflow-wrap: anywhere; }
+    .excluded-turn-label { color: #f7d982; font-size: var(--t-ctrl); font-weight: 750; letter-spacing: .04em; }
+    .excluded-turn-note { min-width: 0; color: var(--warn); font-size: var(--t-meta); overflow-wrap: anywhere; }
     .excluded-turn-actions { display: flex; align-items: center; gap: .4rem; margin-left: auto; }
-    .excluded-turn-actions .context-action { min-height: 1.95rem; padding: .32rem .65rem; font-size: .76rem; }
+    .excluded-turn-actions .context-action { min-height: var(--h-compact); padding: 0 10px; font-size: var(--t-meta); }
 
     /* ---------- voiceprint avatar ----------
        colored tile + procedurally generated waveform (see avatar() in JS) */
     .avatar {
       flex: 0 0 auto;
       width: 38px; height: 38px;
-      border-radius: 11px;
+      border-radius: var(--r-card);
       display: grid; place-items: center;
       padding: 7px;
       color: var(--m);
@@ -779,8 +815,8 @@
       border: 1px solid color-mix(in oklab, var(--m) 45%, transparent);
     }
     .avatar svg { width: 100%; height: 100%; display: block; }
-    .avatar.sm { width: 28px; height: 28px; border-radius: 8px; padding: 5px; }
-    .avatar.xs { width: 22px; height: 22px; border-radius: 7px; padding: 4px; }
+    .avatar.sm { width: 28px; height: 28px; border-radius: var(--r-ctrl); padding: 5px; }
+    .avatar.xs { width: 22px; height: 22px; border-radius: var(--r-ctrl); padding: 4px; }
 
     /* exchange body — the conversation pair */
     .exchange-grid { display: grid; grid-template-columns: 1fr 1fr; overflow: hidden; border-radius: 0 0 calc(var(--r-card) - 1px) calc(var(--r-card) - 1px); }
@@ -792,13 +828,13 @@
     .turn.model { background: color-mix(in oklab, var(--m) 5%, transparent); }
     .turn-head { display: flex; align-items: center; gap: .55rem; }
     .turn-label {
-      font-size: .68rem; letter-spacing: .12em; text-transform: uppercase; font-weight: 700;
+      font-size: var(--t-label); letter-spacing: .12em; text-transform: uppercase; font-weight: 700;
       color: var(--faint-ink);
     }
     .turn.model .turn-label { color: var(--m); }
-    .token-count { color: var(--muted); font-size: .72rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .token-count { color: var(--muted); font-size: var(--t-meta); font-variant-numeric: tabular-nums; white-space: nowrap; }
     .turn-head .token-count { margin-left: auto; }
-    .turn-content { overflow-wrap: anywhere; font-size: .9rem; line-height: 1.62; color: #d4d8e2; }
+    .turn-content { overflow-wrap: anywhere; font-size: var(--t-body); line-height: 1.62; color: var(--text-2); }
     .turn.user .turn-content { color: #e6e8f0; }
 
     /* edit form */
@@ -806,7 +842,7 @@
     .exchange.is-editing .edit-form { display: grid; }
     .exchange.is-editing .exchange-grid { display: none; }
     .field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .9rem; }
-    label.field { display: grid; gap: .4rem; font-size: .72rem; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--faint-ink); }
+    label.field { display: grid; gap: .4rem; font-size: var(--t-meta); font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--faint-ink); }
     .edit-actions { display: flex; gap: .5rem; }
     .edit-actions .group-delete-action { margin-left: auto; }
 
@@ -820,11 +856,11 @@
       color: var(--muted);
     }
     .empty .ico {
-      width: 52px; height: 52px; border-radius: 14px; display: grid; place-items: center;
+      width: 52px; height: 52px; border-radius: var(--r-card); display: grid; place-items: center;
       background: var(--accent-soft); border: 1px solid rgba(99, 102, 241, .28); color: var(--accent-ink); margin-bottom: .3rem;
     }
-    .empty h3 { font-size: 1.05rem; color: var(--text); font-weight: 700; }
-    .empty p { margin: 0; font-size: .86rem; max-width: 28rem; }
+    .empty h3 { font-size: var(--t-title); color: var(--text); font-weight: 700; }
+    .empty p { margin: 0; font-size: var(--t-body); max-width: 28rem; }
 
     .skeleton {
       border: 1px solid var(--stroke-soft); border-radius: var(--r-card);
@@ -840,8 +876,8 @@
     /* ---------- toolbar: segmented control ---------- */
     .seg { display: inline-flex; padding: 3px; gap: 2px; border: 1px solid var(--stroke); border-radius: var(--r-ctrl); background: rgba(0, 0, 0, .28); }
     .seg button {
-      min-height: 1.95rem; padding: .3rem .6rem; border: 0; border-radius: 7px; background: transparent;
-      color: var(--muted); font-size: .78rem; font-weight: 600;
+      min-height: var(--h-micro); padding: 0 10px; border: 0; border-radius: var(--r-ctrl); background: transparent;
+      color: var(--muted); font-size: var(--t-ctrl); font-weight: 600;
     }
     .seg button svg { width: 14px; height: 14px; }
     .seg button:hover { background: var(--glass); color: var(--text); }
@@ -851,7 +887,7 @@
 
     dialog {
       border: 1px solid var(--stroke);
-      border-radius: 12px;
+      border-radius: var(--r-card);
       background: #10131a;
       color: var(--text);
       box-shadow: var(--shadow-pop);
@@ -861,22 +897,22 @@
     dialog::backdrop { background: rgba(0, 0, 0, .62); }
     .dialog-body { display: grid; gap: .85rem; padding: 1rem; }
     .dialog-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1rem 1rem .2rem; }
-    .dialog-head h3 { margin: 0; font-size: 1.05rem; font-weight: 700; }
+    .dialog-head h3 { margin: 0; font-size: var(--t-title); font-weight: 700; }
     .dialog-title { min-width: 0; display: grid; gap: .2rem; }
     .dialog-title h3 { overflow-wrap: anywhere; }
     .dialog-actions { display: flex; align-items: center; gap: .45rem; flex: 0 0 auto; }
-    .dialog-actions .icon-only { width: 2.45rem; min-height: 2.45rem; padding: 0; display: inline-grid; place-items: center; }
+    .dialog-actions .icon-only { width: var(--h-tile); min-height: var(--h-tile); padding: 0; display: inline-grid; place-items: center; }
     .dialog-actions .icon-only svg { width: 17px; height: 17px; }
     .icon-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(2.4rem, 1fr)); gap: .45rem; }
-    .icon-choice { min-height: 2.35rem; padding: 0; border-radius: 8px; }
+    .icon-choice { min-height: var(--h-tile); padding: 0; border-radius: var(--r-ctrl); }
     .icon-choice svg { width: 19px; height: 19px; }
     .icon-choice.is-active { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-ink); }
     .sensitive-control { position: relative; display: flex; align-items: center; gap: .42rem; margin-top: -.35rem; }
     .sensitive-control[hidden] { display: none; }
     .sensitive-toggle {
       display: inline-flex; align-items: center; justify-content: center; gap: .38rem;
-      width: auto; min-height: 2rem; padding: .34rem .62rem;
-      border-radius: 8px; font-size: .78rem;
+      width: auto; min-height: var(--h-ctrl); padding: 0 10px;
+      border-radius: var(--r-ctrl); font-size: var(--t-ctrl);
     }
     .sensitive-toggle-icon { display: inline-flex; align-items: center; justify-content: center; line-height: 0; }
     .sensitive-toggle svg { width: 14px; height: 14px; transform: none; }
@@ -886,16 +922,16 @@
     .sensitive-help { display: inline-flex; }
     .sensitive-help-trigger {
       display: inline-grid; place-items: center;
-      width: 1.65rem; min-height: 1.65rem; padding: 0;
-      border-radius: 999px; color: var(--muted);
-      font-size: .72rem; font-weight: 800;
+      width: var(--h-micro); min-height: var(--h-micro); padding: 0;
+      border-radius: var(--r-pill); color: var(--muted);
+      font-size: var(--t-meta); font-weight: 800;
     }
     .sensitive-help-box {
       position: absolute; z-index: 30; top: calc(100% + .45rem); left: 0;
       width: min(20rem, calc(100vw - 3rem)); padding: .7rem .8rem;
-      border: 1px solid var(--stroke); border-radius: 9px;
+      border: 1px solid var(--stroke); border-radius: var(--r-ctrl);
       background: #171a22; color: var(--muted); box-shadow: var(--shadow-pop);
-      font-size: .74rem; line-height: 1.45;
+      font-size: var(--t-meta); line-height: 1.45;
       opacity: 0; visibility: hidden; transform: translateY(-.2rem);
       pointer-events: none; transition: opacity .14s ease, transform .14s ease, visibility .14s ease;
     }
@@ -906,22 +942,22 @@
     .session-move-dialog { width: min(31rem, calc(100vw - 2rem)); }
     .session-move-group-list { display: grid; gap: .45rem; max-height: min(22rem, 52vh); overflow: auto; }
     .session-move-group {
-      justify-content: flex-start; gap: .65rem; width: 100%; min-height: 2.65rem;
-      padding: .55rem .7rem; text-align: left;
+      justify-content: flex-start; gap: .65rem; width: 100%; min-height: var(--h-tile);
+      padding: 0 12px; text-align: left;
     }
     .session-move-group svg { width: 18px; height: 18px; color: var(--g, var(--accent-ink)); }
-    .session-move-group-id { margin-left: auto; color: var(--faint-ink); font-family: "Geist Mono", ui-monospace, monospace; font-size: .68rem; }
+    .session-move-group-id { margin-left: auto; color: var(--faint-ink); font-family: "Geist Mono", ui-monospace, monospace; font-size: var(--t-label); }
     .session-move-confirmation {
       margin: 0; padding: 1rem; border: 1px solid rgba(251, 191, 36, .35); border-radius: var(--r-card);
       background: var(--warn-soft); color: #fff; font-weight: 700; line-height: 1.55; overflow-wrap: anywhere;
     }
-    .session-move-note { margin: .7rem 0 0; color: var(--muted); font-size: .78rem; line-height: 1.5; }
+    .session-move-note { margin: .7rem 0 0; color: var(--muted); font-size: var(--t-ctrl); line-height: 1.5; }
 
     /* ---------- alternate read layouts (bubbles / thread) ---------- */
     .chat { display: grid; width: 100%; max-width: 62rem; min-width: 0; margin: 0 auto; }
-    .msg-meta { display: flex; align-items: baseline; gap: .5rem; font-size: .76rem; color: var(--faint-ink); font-variant-numeric: tabular-nums; }
+    .msg-meta { display: flex; align-items: baseline; gap: .5rem; font-size: var(--t-meta); color: var(--faint-ink); font-variant-numeric: tabular-nums; }
     .msg-speaker { font-weight: 700; }
-    .msg-content { max-width: 100%; min-width: 0; overflow-wrap: anywhere; word-break: break-word; font-size: .92rem; line-height: 1.64; color: #d4d8e2; }
+    .msg-content { max-width: 100%; min-width: 0; overflow-wrap: anywhere; word-break: break-word; font-size: var(--t-name); line-height: 1.64; color: var(--text-2); }
     .markdown-body > :first-child { margin-top: 0; }
     .markdown-body > :last-child { margin-bottom: 0; }
     .markdown-body p { margin: 0 0 .85rem; }
@@ -939,17 +975,17 @@
       color: color-mix(in oklab, currentColor 82%, transparent);
     }
     .markdown-body pre {
-      margin: .85rem 0; padding: .75rem .85rem; border: 1px solid var(--stroke-soft); border-radius: 8px;
+      margin: .85rem 0; padding: .75rem .85rem; border: 1px solid var(--stroke-soft); border-radius: var(--r-ctrl);
       max-width: 100%; background: rgba(0, 0, 0, .32); overflow-x: auto; white-space: pre; font-family: "Geist Mono", ui-monospace, monospace; font-size: .82em; line-height: 1.55;
     }
     .markdown-body code {
-      font-family: "Geist Mono", ui-monospace, monospace; font-size: .88em; border-radius: 5px; padding: .1rem .28rem;
+      font-family: "Geist Mono", ui-monospace, monospace; font-size: .88em; border-radius: var(--r-xs); padding: .1rem .28rem;
       background: rgba(255, 255, 255, .08);
     }
     .markdown-body pre code { display: block; padding: 0; background: transparent; border-radius: 0; font-size: 1em; }
     .markdown-table-wrap {
       max-width: 100%; margin: .85rem 0; overflow-x: auto;
-      border: 1px solid var(--stroke-soft); border-radius: 8px;
+      border: 1px solid var(--stroke-soft); border-radius: var(--r-ctrl);
       background: rgba(0, 0, 0, .14);
     }
     .markdown-body table { width: max-content; min-width: 100%; border-collapse: collapse; font-size: .9em; }
@@ -971,7 +1007,7 @@
 
     .ex-group { display: grid; gap: .55rem; min-width: 0; }
     .ex-actions { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
-    .ex-actions > button, .ex-actions .context-action { min-height: 1.9rem; padding: .3rem .65rem; font-size: .76rem; }
+    .ex-actions > button, .ex-actions .context-action { min-height: var(--h-compact); padding: 0 10px; font-size: var(--t-meta); }
     .chat.bubbles { gap: 1.3rem; }
     .chat.bubbles .ex-group { padding-bottom: .25rem; }
     .chat.bubbles .message { display: grid; gap: .4rem; width: fit-content; max-width: min(42rem, 84%); min-width: 0; }
@@ -982,7 +1018,7 @@
     .chat.bubbles .message.is-user .msg-meta { justify-content: flex-end; align-items: center; padding-right: .2rem; }
     .chat.bubbles .message.is-model .msg-meta { align-items: center; }
     .chat.bubbles .message.is-model .msg-speaker { color: var(--m); }
-    .chat.bubbles .bubble { max-width: 100%; min-width: 0; overflow: hidden; padding: .8rem 1rem; border-radius: 14px; border: 1px solid var(--stroke); background: var(--glass-2); }
+    .chat.bubbles .bubble { max-width: 100%; min-width: 0; overflow: hidden; padding: .8rem 1rem; border-radius: var(--r-card); border: 1px solid var(--stroke); background: var(--glass-2); }
     /* model bubble: identity as material — a faint tint of the speaker color, no stripe */
     .chat.bubbles .message.is-model .bubble { border-top-left-radius: 5px; background: color-mix(in oklab, var(--m) 6%, rgba(255, 255, 255, .03)); }
     /* user bubble: flat accent, no gradient, no glow */
@@ -1002,12 +1038,12 @@
 
     /* ---------- markdown view ---------- */
     .raw { max-width: 62rem; margin: 0 auto; border: 1px solid var(--stroke); border-radius: var(--r-card); background: rgba(0, 0, 0, .3); }
-    .raw pre { margin: 0; padding: 1.25rem 1.4rem; white-space: pre-wrap; overflow-wrap: anywhere; font-family: "Geist Mono", ui-monospace, monospace; font-size: .8rem; line-height: 1.7; color: #c6cbd8; }
+    .raw pre { margin: 0; padding: 1.25rem 1.4rem; white-space: pre-wrap; overflow-wrap: anywhere; font-family: "Geist Mono", ui-monospace, monospace; font-size: var(--t-ctrl); line-height: 1.7; color: var(--text-2); }
     #fileWorkspaceContent.raw, .file-preview, .pdf-preview { max-height: min(68vh, 48rem); overflow: auto; }
     .pdf-preview { display: grid; gap: .75rem; min-height: 22rem; }
-    .pdf-toolbar { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; justify-content: center; gap: .45rem; flex-wrap: wrap; padding: .55rem; border: 1px solid var(--line); border-radius: .7rem; background: color-mix(in srgb, var(--panel) 94%, transparent); }
+    .pdf-toolbar { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; justify-content: center; gap: .45rem; flex-wrap: wrap; padding: .55rem; border: 1px solid var(--stroke); border-radius: var(--r-card); background: rgba(16, 19, 26, .94); }
     .pdf-toolbar .pdf-page-label { min-width: 6.5rem; text-align: center; font-variant-numeric: tabular-nums; }
-    .pdf-canvas-wrap { display: grid; place-items: start center; overflow: auto; min-height: 16rem; padding: .75rem; border: 1px solid var(--line); border-radius: .7rem; background: #4b5563; }
+    .pdf-canvas-wrap { display: grid; place-items: start center; overflow: auto; min-height: 16rem; padding: .75rem; border: 1px solid var(--stroke); border-radius: var(--r-card); background: #4b5563; }
     .pdf-canvas-wrap canvas { display: block; max-width: none; background: #fff; box-shadow: 0 .3rem 1.1rem rgba(0, 0, 0, .24); }
     .pdf-status { margin: 0; color: var(--muted); text-align: center; }
     .pdf-status.is-warning { color: var(--warn); }
@@ -1015,7 +1051,7 @@
       max-width: 62rem; margin: 0 auto; padding: 1.25rem 1.4rem;
       border: 1px solid var(--stroke); border-radius: var(--r-card);
       background: rgba(255, 255, 255, .03);
-      color: #d4d8e2; font-size: .9rem; line-height: 1.65; overflow-wrap: anywhere;
+      color: var(--text-2); font-size: var(--t-body); line-height: 1.65; overflow-wrap: anywhere;
     }
     .search-launcher { justify-content: flex-start; gap: .42rem; width: auto; }
     .search-launcher svg { width: 16px; height: 16px; }
@@ -1025,44 +1061,81 @@
       background: rgba(255,255,255,.025);
     }
     .admin-session-copy { display: grid; gap: .2rem; min-width: 0; }
-    .admin-session-copy small { color: var(--muted); font-size: .72rem; }
-    .admin-session-copy strong { overflow-wrap: anywhere; font-size: .86rem; }
+    .admin-session-copy small { color: var(--muted); font-size: var(--t-meta); }
+    .admin-session-copy strong { overflow-wrap: anywhere; font-size: var(--t-body); }
     .admin-session-card form { flex: 0 0 auto; margin: 0; }
     .settings-dialog { width: min(58rem, calc(100vw - 2rem)); max-width: none; max-height: min(48rem, calc(100vh - 2rem)); }
-    .settings-shell { display: grid; grid-template-columns: 10rem minmax(0, 1fr); min-height: 31rem; }
+    .settings-dialog[open] { display: grid; grid-template-rows: auto minmax(0, 1fr); overflow: hidden; }
+    .settings-shell {
+      display: grid;
+      grid-template-columns: 10rem minmax(0, 1fr);
+      grid-template-rows: minmax(0, 1fr);
+      min-height: 31rem;
+    }
+    .settings-body { display: grid; grid-template-rows: minmax(0, 1fr) auto; min-width: 0; min-height: 0; }
+    .settings-actionbar {
+      display: flex; align-items: center; justify-content: flex-end; gap: .55rem;
+      padding: .75rem 1.2rem;
+      border-top: 1px solid var(--stroke-soft);
+      background: rgba(255, 255, 255, .02);
+    }
+    .settings-actionbar[hidden] { display: none; }
     .settings-tabs { display: grid; align-content: start; gap: .35rem; padding: 1rem; border-right: 1px solid var(--stroke-soft); }
     .settings-tabs button { justify-content: flex-start; border-color: transparent; background: transparent; }
     .settings-tabs button.is-active { color: var(--accent-ink); border-color: rgba(122,125,240,.32); background: var(--accent-soft); }
-    .settings-content { min-width: 0; overflow: auto; padding: 1.2rem; }
+    .settings-content { min-width: 0; min-height: 0; overflow: auto; padding: 1.2rem; }
     .settings-panel, .settings-stack { display: grid; gap: 1rem; }
     .settings-section-head h4, .settings-section-head p { margin: 0; }
-    .settings-section-head h4 { font-size: 1.05rem; }
-    .settings-panel > .settings-section-head h4,
-    .mcp-settings-section > .settings-section-head h4 { color: var(--accent-ink); font-weight: 800; letter-spacing: -.01em; }
-    .settings-section-head p { margin-top: .3rem; color: var(--muted); font-size: .82rem; line-height: 1.5; }
-    .operational-summary, .operational-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .7rem; }
+    /* card */
+    .settings-section-head h4 { font-size: var(--t-name); font-weight: 700; color: var(--text); }
+    /* panel */
+    .settings-panel > .settings-section-head h4 {
+      font-size: var(--t-display); font-weight: 800; letter-spacing: -.015em; color: var(--accent-ink);
+    }
+    /* group inside a card */
+    .mcp-settings-section section > .settings-section-head h4 {
+      font-family: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: var(--t-label); font-weight: 500; letter-spacing: .09em; text-transform: uppercase;
+      color: var(--faint-ink);
+    }
+    /* the dialog names itself once, quietly */
+    .settings-dialog .dialog-head h3 {
+      font-family: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: var(--t-label); font-weight: 500; letter-spacing: .09em; text-transform: uppercase;
+      color: var(--faint-ink);
+    }
+    .settings-section-head p { margin-top: .3rem; color: var(--muted); font-size: var(--t-ctrl); line-height: 1.5; }
+    /* stat tiles */
+    .operational-summary, .index-estimate-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); gap: 12px; }
     .operational-card {
       display: grid; gap: .25rem; min-width: 0; padding: .85rem;
       border: 1px solid var(--stroke); border-radius: var(--r-card);
       background: rgba(255,255,255,.025);
     }
-    .operational-card small { color: var(--muted); font-size: .7rem; text-transform: uppercase; letter-spacing: .08em; }
+    .operational-card small {
+      font-family: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: var(--t-label); font-weight: 500; letter-spacing: .09em; text-transform: uppercase;
+      color: var(--faint-ink);
+    }
+    .verdict.is-pass { color: var(--ok); }
+    .verdict.is-warn { color: var(--warn); }
+    .verdict.is-fail { color: var(--danger); }
     .operational-card strong, .operational-card code { overflow-wrap: anywhere; }
-    .operational-card code { color: var(--ink); font-size: .76rem; }
+    .operational-card code { color: var(--text); font-size: var(--t-meta); }
     .status-check-list { display: grid; gap: .55rem; }
     .status-check {
       display: grid; grid-template-columns: .7rem minmax(0, 1fr); gap: .65rem;
-      padding: .75rem; border: 1px solid var(--stroke-soft); border-radius: 9px;
+      padding: .75rem; border: 1px solid var(--stroke-soft); border-radius: var(--r-ctrl);
     }
-    .status-state { width: .6rem; height: .6rem; margin-top: .25rem; border-radius: 999px; background: var(--faint-ink); }
+    .status-state { width: .6rem; height: .6rem; margin-top: .25rem; border-radius: var(--r-pill); background: var(--faint-ink); }
     .status-state.is-pass { background: var(--ok); }
     .status-state.is-warn, .status-state.is-waiting { background: var(--warn); }
     .status-state.is-fail { background: var(--danger); }
     .status-check-copy { display: grid; gap: .2rem; min-width: 0; }
     .status-check-copy span, .status-check-copy small { color: var(--muted); line-height: 1.45; }
-    .status-command-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .55rem; }
-    .status-command-list code { display: block; padding: .65rem .75rem; border: 1px solid var(--stroke-soft); border-radius: 8px; background: rgba(0,0,0,.22); }
-    .settings-status { min-height: 1.2rem; margin: 0 0 .8rem; color: var(--muted); font-size: .78rem; }
+    .status-command-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); gap: 12px; }
+    .status-command-list code { display: block; padding: .65rem .75rem; border: 1px solid var(--stroke-soft); border-radius: var(--r-ctrl); background: rgba(0,0,0,.22); }
+    .settings-status { min-height: 1.2rem; margin: 0 0 .8rem; color: var(--muted); font-size: var(--t-ctrl); }
     .settings-status.is-error { color: var(--danger); }
     .settings-status.is-ok { color: var(--ok); }
     .settings-switch { display: flex; align-items: flex-start; gap: .7rem; padding: .8rem; border: 1px solid var(--stroke); border-radius: var(--r-card); background: rgba(255,255,255,.025); }
@@ -1079,14 +1152,32 @@
     .chunk-settings-card > .probe-results { padding: 1rem 0 0; margin-top: 1rem; border-top: 1px solid var(--stroke-soft); }
     .tool-output-options { display: grid; gap: .55rem; }
     .tool-output-actions { display: flex; align-items: center; justify-content: space-between; gap: .7rem; flex-wrap: wrap; }
-    .tool-output-restart { display: flex; align-items: center; gap: .65rem; flex-wrap: wrap; padding: .65rem .75rem; border: 1px solid rgba(251,191,36,.35); border-radius: 9px; background: var(--warn-soft); }
+    .tool-output-restart { display: flex; align-items: center; gap: .65rem; flex-wrap: wrap; padding: .65rem .75rem; border: 1px solid rgba(251,191,36,.35); border-radius: var(--r-ctrl); background: var(--warn-soft); }
     .tool-output-restart[hidden] { display: none; }
-    .tool-output-restart span { color: var(--warn); font-size: .76rem; font-weight: 750; }
-    .tool-output-summary { margin: 0; color: var(--muted); font-size: .76rem; line-height: 1.5; }
-    .settings-fieldset { display: flex; flex-wrap: wrap; gap: .75rem 1rem; padding: .85rem; border: 1px solid var(--stroke); border-radius: var(--r-card); }
-    .settings-fieldset legend { padding: 0 .35rem; color: var(--muted); font-size: .75rem; }
+    .tool-output-restart span { color: var(--warn); font-size: var(--t-meta); font-weight: 750; }
+    .tool-output-summary { margin: 0; color: var(--muted); font-size: var(--t-meta); line-height: 1.5; }
+    .settings-fieldset { display: flex; flex-wrap: wrap; gap: .5rem; padding: .85rem; border: 1px solid var(--stroke); border-radius: var(--r-card); }
+    .settings-fieldset legend {
+      padding: 0 .35rem;
+      font-family: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: var(--t-label); font-weight: 500; letter-spacing: .09em; text-transform: uppercase;
+      color: var(--faint-ink);
+    }
+    .toggle {
+      display: inline-flex; align-items: center; gap: .5rem;
+      min-height: var(--h-ctrl); padding: 0 12px;
+      border: 1px solid var(--stroke-soft); border-radius: var(--r-ctrl);
+      background: rgba(255, 255, 255, .025);
+      color: var(--text-2); font-size: var(--t-ctrl); font-weight: 600;
+      cursor: pointer; transition: border-color .16s ease, background .16s ease, color .16s ease;
+    }
+    .toggle:hover { border-color: var(--stroke); color: var(--text); }
+    .toggle input { width: auto; min-height: 0; padding: 0; accent-color: var(--accent); }
+    .toggle:has(input:checked) {
+      border-color: rgba(122, 125, 240, .42); background: var(--accent-soft); color: var(--text);
+    }
     .rag-group-list { display: grid; grid-template-columns: repeat(auto-fill,minmax(13rem,1fr)); gap: .5rem; width: 100%; }
-    .rag-group-option { position: relative; display: grid; grid-template-columns: auto auto minmax(0,1fr) auto; align-items: center; gap: .55rem; min-width: 0; padding: .55rem; border: 1px solid transparent; border-radius: 8px; background: rgba(255,255,255,.03); }
+    .rag-group-option { position: relative; display: grid; grid-template-columns: auto auto minmax(0,1fr) auto; align-items: center; gap: .55rem; min-width: 0; padding: .55rem; border: 1px solid transparent; border-radius: var(--r-ctrl); background: rgba(255,255,255,.03); }
     .rag-group-option input { width: auto; accent-color: var(--accent); }
     .rag-group-option svg { width: 16px; height: 16px; color: var(--g); }
     .rag-group-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1094,27 +1185,28 @@
     .rag-group-option.is-sensitive:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
     .rag-sensitive-mark { display: grid; place-items: center; color: var(--warn); }
     .rag-sensitive-mark svg { width: 14px; height: 14px; color: currentColor; }
-    .rag-sensitive-help { position: absolute; z-index: 8; top: calc(100% + .45rem); left: 0; right: 0; width: auto; box-sizing: border-box; padding: .7rem .75rem; border: 1px solid var(--stroke); border-radius: 9px; background: #181b24; box-shadow: 0 .65rem 1.5rem rgba(0,0,0,.35); color: var(--ink); font-size: .75rem; line-height: 1.5; white-space: normal; opacity: 0; visibility: hidden; pointer-events: none; transform: translateY(-.2rem); transition: opacity .14s ease, transform .14s ease, visibility .14s; }
+    .rag-sensitive-help { position: absolute; z-index: 8; top: calc(100% + .45rem); left: 0; right: 0; width: auto; box-sizing: border-box; padding: .7rem .75rem; border: 1px solid var(--stroke); border-radius: var(--r-ctrl); background: #181b24; box-shadow: 0 .65rem 1.5rem rgba(0,0,0,.35); color: var(--text); font-size: var(--t-meta); line-height: 1.5; white-space: normal; opacity: 0; visibility: hidden; pointer-events: none; transform: translateY(-.2rem); transition: opacity .14s ease, transform .14s ease, visibility .14s; }
     .rag-group-option.is-sensitive:hover .rag-sensitive-help,
     .rag-group-option.is-sensitive:focus-visible .rag-sensitive-help { opacity: 1; visibility: visible; transform: translateY(0); }
     .developer-settings { border: 1px solid var(--stroke); border-radius: var(--r-card); padding: .75rem; }
-    .developer-settings summary { cursor: pointer; color: var(--muted); font-size: .82rem; }
-    .settings-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: .75rem; padding-top: .85rem; }
+    .developer-settings summary { cursor: pointer; color: var(--muted); font-size: var(--t-ctrl); }
+    /* form fields */
+    .settings-grid, .probe-config-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: 12px; }
+    .settings-grid { padding-top: .85rem; }
     .probe-config, .probe-global, .probe-recommendations, .probe-results { display: grid; gap: .75rem; }
-    .probe-config-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: .7rem; }
-    .probe-prompt { max-height: 9rem; margin: 0; padding: .75rem; overflow: auto; border: 1px solid var(--stroke-soft); border-radius: 9px; background: rgba(0,0,0,.18); color: var(--muted); font: .72rem/1.5 ui-monospace,SFMono-Regular,Menlo,monospace; white-space: pre-wrap; }
+    .probe-prompt { max-height: 9rem; margin: 0; padding: .75rem; overflow: auto; border: 1px solid var(--stroke-soft); border-radius: var(--r-ctrl); background: rgba(0,0,0,.18); color: var(--muted); font: var(--t-meta)/1.5 ui-monospace,SFMono-Regular,Menlo,monospace; white-space: pre-wrap; }
     .probe-recommendation-list, .probe-result-list { display: grid; gap: .55rem; }
-    .probe-recommendation, .probe-result { display: grid; gap: .35rem; padding: .7rem; border: 1px solid var(--stroke-soft); border-radius: 9px; background: rgba(255,255,255,.025); }
+    .probe-recommendation, .probe-result { display: grid; gap: .35rem; padding: .7rem; border: 1px solid var(--stroke-soft); border-radius: var(--r-ctrl); background: rgba(255,255,255,.025); }
     .probe-recommendation-head, .probe-result-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: .45rem; }
-    .probe-result-meta { color: var(--muted); font-size: .72rem; line-height: 1.45; }
-    .probe-result-class { font-size: .68rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+    .probe-result-meta { color: var(--muted); font-size: var(--t-meta); line-height: 1.45; }
+    .probe-result-class { font-size: var(--t-label); font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
     .probe-result-class.complete { color: var(--ok); }
     .probe-result-class.pending { color: var(--warn); }
     .provider-card, .index-card { display: grid; gap: .65rem; padding: .9rem; border: 1px solid var(--stroke); border-radius: var(--r-card); background: rgba(255,255,255,.025); }
     .index-card { grid-template-columns: minmax(0,1fr); }
     .index-card-main { min-width: 0; }
     .index-card p { margin: .25rem 0 0; }
-    .index-ready-check { display: inline-grid; place-items: center; width: 1rem; height: 1rem; border: 1px solid rgba(52,211,153,.38); border-radius: 50%; color: var(--ok); background: rgba(52,211,153,.11); font-size: .66rem; font-weight: 900; }
+    .index-ready-check { display: inline-grid; place-items: center; width: 1rem; height: 1rem; border: 1px solid rgba(52,211,153,.38); border-radius: 50%; color: var(--ok); background: rgba(52,211,153,.11); font-size: var(--t-label); font-weight: 900; }
     .index-ready-check[hidden], .index-built-at[hidden] { display: none; }
     .index-built-at::before { content: ""; width: 3px; height: 3px; border-radius: 50%; background: var(--faint-ink); }
     .index-built-at { display: inline-flex; align-items: center; gap: .45rem; }
@@ -1129,14 +1221,13 @@
     .index-estimate { display: grid; gap: .65rem; margin-top: .8rem; padding-top: .8rem; border-top: 1px solid var(--stroke-soft); }
     .index-estimate[hidden] { display: none; }
     .index-estimate-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: .35rem 1rem; }
-    .index-estimate-head b { font-size: .78rem; }
-    .index-estimate-state { color: var(--muted); font-size: .74rem; }
-    .index-estimate-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: .55rem; }
-    .index-estimate-stat { display: grid; gap: .18rem; min-width: 0; padding: .65rem .7rem; border: 1px solid var(--stroke-soft); border-radius: 9px; background: rgba(255,255,255,.025); }
-    .index-estimate-stat > span { color: var(--faint-ink); font-size: .63rem; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; }
-    .index-estimate-stat strong { overflow: hidden; font-size: .96rem; font-variant-numeric: tabular-nums; text-overflow: ellipsis; white-space: nowrap; }
-    .index-estimate-stat small { color: var(--muted); font-size: .7rem; line-height: 1.4; }
-    .index-estimate-note { color: var(--muted); font-size: .72rem; line-height: 1.45; }
+    .index-estimate-head b { font-size: var(--t-ctrl); }
+    .index-estimate-state { color: var(--muted); font-size: var(--t-meta); }
+    .index-estimate-stat { display: grid; gap: .18rem; min-width: 0; padding: .65rem .7rem; border: 1px solid var(--stroke-soft); border-radius: var(--r-ctrl); background: rgba(255,255,255,.025); }
+    .index-estimate-stat > span { color: var(--faint-ink); font-size: var(--t-label); font-weight: 700; letter-spacing: .09em; text-transform: uppercase; }
+    .index-estimate-stat strong { overflow: hidden; font-size: var(--t-name); font-variant-numeric: tabular-nums; text-overflow: ellipsis; white-space: nowrap; }
+    .index-estimate-stat small { color: var(--muted); font-size: var(--t-label); line-height: 1.4; }
+    .index-estimate-note { color: var(--muted); font-size: var(--t-meta); line-height: 1.45; }
     .index-estimate-note a { color: var(--accent-ink); }
     .search-dialog { width: min(72rem, calc(100vw - 2rem)); height: min(48rem, calc(100vh - 2rem)); max-width: none; max-height: none; }
     .search-dialog[open] { display: grid; grid-template-rows: auto auto auto minmax(0,1fr); }
@@ -1147,14 +1238,14 @@
     .search-results-pane { border-right: 1px solid var(--stroke-soft); }
     .search-results { display: grid; gap: .55rem; }
     .search-results + .search-results { margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--stroke-soft); }
-    .search-lane-title { margin: 0 0 .6rem; color: var(--faint-ink); font-size: .68rem; text-transform: uppercase; letter-spacing: .13em; }
+    .search-lane-title { margin: 0 0 .6rem; color: var(--faint-ink); font-size: var(--t-label); text-transform: uppercase; letter-spacing: .13em; }
     .search-result-card { display: grid; gap: .45rem; width: 100%; padding: .75rem; text-align: left; background: rgba(255,255,255,.025); }
     .search-result-card.is-active { border-color: var(--accent); background: var(--accent-soft); }
     .search-result-title { display: flex; align-items: center; gap: .45rem; min-width: 0; }
     .search-result-title b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .search-result-meta, .search-badges { display: flex; flex-wrap: wrap; gap: .35rem; color: var(--muted); font-size: .7rem; }
-    .search-badge { padding: .12rem .35rem; border: 1px solid var(--stroke); border-radius: 999px; color: var(--accent-ink); }
-    .search-result-card p { margin: 0; color: var(--muted); font-size: .78rem; line-height: 1.45; }
+    .search-result-meta, .search-badges { display: flex; flex-wrap: wrap; gap: .35rem; color: var(--muted); font-size: var(--t-label); }
+    .search-badge { padding: .12rem .35rem; border: 1px solid var(--stroke); border-radius: var(--r-pill); color: var(--accent-ink); }
+    .search-result-card p { margin: 0; color: var(--muted); font-size: var(--t-ctrl); line-height: 1.45; }
     .search-result-card mark, .search-detail mark { border-radius: 2px; background: rgba(246,200,95,.28); color: inherit; }
     .search-detail { display: grid; align-content: start; gap: .9rem; }
     .search-detail h4, .search-detail p { margin: 0; }
@@ -1189,9 +1280,8 @@
       .settings-tabs { grid-template-columns: repeat(2, 1fr); border-right: 0; border-bottom: 1px solid var(--stroke-soft); }
       .settings-tabs button { justify-content: center; }
       .settings-content { overflow: visible; }
-      .operational-summary, .operational-grid { grid-template-columns: 1fr; }
       .status-command-list { grid-template-columns: 1fr; }
-      .settings-grid, .index-card, .index-estimate-grid, .probe-config-grid { grid-template-columns: 1fr; }
+      .index-card { grid-template-columns: 1fr; }
       .search-command { grid-template-columns: 1fr 1fr; }
       .search-command input { grid-column: 1 / -1; }
       .search-workspace { grid-template-columns: 1fr; overflow: auto; }
@@ -1243,19 +1333,11 @@
         <div class="list-head"><span>Sessions</span></div>
         <div class="session-list-region">
           <nav id="sessionList" class="session-list" aria-label="Sessions"></nav>
-          <button id="sessionListSensitiveOverlay" type="button" class="sensitive-overlay" hidden>
-            <span class="sensitive-overlay-card">
-              <span class="sensitive-overlay-icon" aria-hidden="true"></span>
-              <span class="sensitive-overlay-title">Sensitive content</span>
-              <span class="sensitive-overlay-hint">Click to reveal</span>
-            </span>
-          </button>
         </div>
       </section>
     </aside>
 
     <section class="main" aria-label="Session corrections">
-      <div id="threadSensitiveContent" class="thread-sensitive-content">
       <header class="topbar">
         <div class="topbar-title">
           <div class="session-title-line">
@@ -1263,8 +1345,14 @@
             <h2 id="sessionTitle">Select a session</h2>
           </div>
           <div id="sessionIdLine" class="session-id-line" hidden>
-            <span id="sessionId" class="session-id"></span>
-            <button id="copySessionIdButton" type="button" class="ghost session-id-copy">Copy ID</button>
+            <button id="copySessionIdButton" type="button" class="session-id-unit" title="Copy session ID">
+              <span class="session-id-glyph" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 6.5a4.6 4.6 0 1 1 6.5 6.5l-2.2 2.2"></path><path d="M9.5 17.5a4.6 4.6 0 1 1-6.5-6.5l2.2-2.2"></path><path d="M8.8 15.2l6.4-6.4"></path></svg></span>
+              <span id="sessionId" class="session-id"></span>
+              <span class="session-id-copy">
+                <span class="session-id-copy-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"></rect><path d="M15 5H6a2 2 0 0 0-2 2v9"></path></svg></span>
+                <span id="copySessionIdLabel" class="session-id-copy-label">Copy</span>
+              </span>
+            </button>
           </div>
           <div id="sessionMeta" class="meta">Conversation history correction panel.</div>
         </div>
@@ -1294,7 +1382,8 @@
         </div>
       </header>
 
-      <div class="content-wrap">
+      <div id="threadSensitiveContent" class="thread-sensitive-content">
+      <div id="threadSensitiveBody" class="content-wrap">
         <nav id="turnNav" class="turn-nav" aria-label="Transcript navigation">
           <button id="scrollTopButton" type="button" class="ghost" title="Scroll to top"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"></path><path d="M6 5h12"></path></svg></button>
           <button id="scrollPrevButton" type="button" class="ghost" title="Previous turn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"></path></svg></button>
@@ -1312,14 +1401,20 @@
           <div id="exchangeList" aria-live="polite"></div>
         </section>
       </div>
-      </div>
-      <button id="threadSensitiveOverlay" type="button" class="sensitive-overlay" hidden>
-        <span class="sensitive-overlay-card">
-          <span class="sensitive-overlay-icon" aria-hidden="true"></span>
-          <span class="sensitive-overlay-title">Sensitive content</span>
-          <span class="sensitive-overlay-hint">Click to reveal</span>
+      <button id="threadSensitiveOverlay" type="button" class="sensitive-curtain" hidden>
+        <span class="sensitive-curtain-card">
+          <span class="sensitive-curtain-head">
+            <span class="sensitive-overlay-icon" aria-hidden="true"></span>
+            <span id="threadSensitiveTitle" class="sensitive-curtain-title">Sensitive group</span>
+          </span>
+          <span class="sensitive-curtain-hint">The conversation stays covered until you reveal it. Revealing applies to the whole group and lasts until you reload the page.</span>
+          <span class="sensitive-curtain-action">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.6 12C3.6 9.4 7 5.4 12 5.4s8.4 4 9.4 6.6c-1 2.6-4.4 6.6-9.4 6.6S3.6 14.6 2.6 12z"></path><circle cx="12" cy="12" r="2.6"></circle></svg>
+            Reveal conversation
+          </span>
         </span>
       </button>
+      </div>
     </section>
   </main>
 
@@ -1467,7 +1562,7 @@
 
   <dialog id="aiSettingsDialog" class="settings-dialog" aria-labelledby="settingsHeading">
     <div class="dialog-head">
-      <div><h3 id="settingsHeading">Settings</h3><p class="meta">Admin configuration for models, MCP delivery, and context search.</p></div>
+      <h3 id="settingsHeading">Settings</h3>
       <button type="button" class="ghost" id="aiSettingsClose">Close</button>
     </div>
     <div class="settings-shell">
@@ -1476,8 +1571,10 @@
         <button type="button" data-settings-tab="transcript">MCP</button>
         <button type="button" data-settings-tab="search">Search</button>
         <button type="button" data-settings-tab="api">API</button>
+        <button type="button" data-settings-tab="database">Database</button>
         <button type="button" data-settings-tab="status">Status <span id="statusUpdateDot" class="update-dot" hidden aria-hidden="true"></span></button>
       </nav>
+      <div class="settings-body">
       <div class="settings-content">
         <p id="aiSettingsStatus" class="settings-status" aria-live="polite"></p>
         <section data-settings-panel="general" class="settings-panel">
@@ -1493,9 +1590,9 @@
           </div>
           <label class="field">Display timezone<select id="timezoneSelect" aria-label="Display timezone"></select></label>
           <label class="field">AI rename model<input id="aiModelInput" type="text" maxlength="96" autocomplete="off"></label>
-          <div class="edit-actions"><button type="button" class="primary" id="generalSettingsSave">Save General</button></div>
         </section>
         <section data-settings-panel="transcript" class="settings-panel" hidden>
+          <div class="settings-section-head"><div><h4>MCP</h4><p>How transcripts and tool results reach the harnesses.</p></div></div>
           <section class="mcp-settings-section tool-output-card">
             <div class="settings-section-head"><div><h4>Large tool result format</h4><p>Controls transcript chunks, output probes, and downloaded file contents. Small metadata tools remain structured in both modes.</p></div></div>
             <div class="tool-output-options" role="radiogroup" aria-label="Large tool result format">
@@ -1505,7 +1602,6 @@
             <p id="toolOutputActiveSummary" class="tool-output-summary"></p>
             <p class="tool-output-summary">After changing modes and restarting, refresh the tool list or reconnect the connector in every harness. Probe results are compared only within the active mode.</p>
             <div class="tool-output-actions">
-              <button type="button" class="primary" id="toolOutputSave">Save result format</button>
               <div id="toolOutputRestartRequired" class="tool-output-restart" hidden>
                 <span id="toolOutputRestartMessage">Restart required to activate this mode.</span>
                 <button type="button" class="ghost" id="toolOutputRestart">Restart Bridge</button>
@@ -1520,7 +1616,6 @@
                 <label class="field">Maximum characters<input id="transcriptChunkMaxChars" type="number" min="1000" max="250000" step="1000"></label>
                 <label class="field">Maximum lines<input id="transcriptChunkMaxLines" type="number" min="1" max="10000"></label>
               </div>
-              <div class="edit-actions"><button type="button" class="primary" id="transcriptSettingsSave">Save global chunk size</button></div>
             </section>
             <section class="probe-config">
               <div class="settings-section-head"><div><h4>Run a harness test</h4><p>Copy this instruction into the harness being measured. Running the payload in this browser would bypass the harness and produce a false result.</p></div></div>
@@ -1585,30 +1680,34 @@
               <button id="indexDelete" type="button" class="danger">Delete index</button>
             </div></div>
           </div>
-          <div class="edit-actions"><button type="button" class="primary" id="searchSettingsSave">Save Search</button></div>
         </section>
         <section data-settings-panel="api" class="settings-panel" hidden>
           <div class="settings-section-head"><div><h4>Provider API keys</h4><p>Keys are encrypted at rest and never returned to this browser.</p></div></div>
           <div class="provider-card"><label class="field">OpenAI API key<input id="aiKeyInput" type="password" autocomplete="off" placeholder="Leave blank to keep current key"></label><p id="openaiKeyStatus" class="meta"></p><button type="button" class="danger" id="aiKeyRemoveButton">Remove OpenAI key</button></div>
           <div class="provider-card"><label class="field">Cohere API key<input id="cohereKeyInput" type="password" autocomplete="off" placeholder="Leave blank to keep current key"></label><p id="cohereKeyStatus" class="meta"></p><button type="button" class="danger" id="cohereKeyRemoveButton">Remove Cohere key</button></div>
-          <div class="edit-actions"><button type="button" class="primary" id="apiSettingsSave">Save API keys</button></div>
+        </section>
+        <section data-settings-panel="database" class="settings-panel" hidden>
+          <div class="settings-section-head"><div><h4>Database</h4><p>Create a Markdown archive on this VPS. The browser never receives or downloads the exported files.</p></div></div>
+          <section class="mcp-settings-section">
+            <div class="settings-section-head"><div><h4>Conversation archive</h4><p>The export includes sensitive sessions, excluded and masked content, exchange audit history, and all stored attachments. It is written to the same managed server location used by <code>mcp-bridge export</code>.</p></div></div>
+            <div class="edit-actions"><button type="button" class="primary" id="databaseExportButton">Export Database (.md)</button></div>
+            <p id="databaseExportResult" class="meta" aria-live="polite">No export created in this browser session.</p>
+          </section>
         </section>
         <section data-settings-panel="status" class="settings-panel" hidden>
           <div class="settings-section-head"><div><h4>Bridge status</h4><p>Read-only operational summary. Changes and updates stay in the server CLI.</p></div></div>
           <p id="bridgeStatusError" class="settings-status" aria-live="polite"></p>
           <div class="operational-summary">
-            <div class="operational-card"><small>Overall</small><strong id="bridgeStatusOverall">Loading…</strong></div>
+            <div class="operational-card"><small>Overall</small><strong id="bridgeStatusOverall" class="verdict">Loading…</strong></div>
             <div class="operational-card"><small>Version</small><strong id="bridgeStatusVersion">—</strong></div>
             <div class="operational-card"><small>Update</small><strong id="bridgeStatusUpdate">—</strong><span id="bridgeStatusChecked" class="meta"></span></div>
+            <div class="operational-card"><small>Public URL</small><code id="bridgeStatusUrl">—</code></div>
+            <div class="operational-card"><small>Database schema</small><strong id="bridgeStatusSchema">—</strong></div>
+            <div class="operational-card"><small>Last operation</small><strong id="bridgeStatusOperation">—</strong></div>
           </div>
           <div>
             <div class="settings-section-head"><h4>Checks</h4><p>Cached CLI diagnostics plus a live application and database check.</p></div>
             <div id="bridgeStatusChecks" class="status-check-list"></div>
-          </div>
-          <div class="operational-grid">
-            <div class="operational-card"><small>Public URL</small><code id="bridgeStatusUrl">—</code></div>
-            <div class="operational-card"><small>Database schema</small><strong id="bridgeStatusSchema">—</strong></div>
-            <div class="operational-card"><small>Last operation</small><strong id="bridgeStatusOperation">—</strong></div>
           </div>
           <div>
             <div class="settings-section-head"><h4>Server commands</h4><p>Run these over SSH. The panel never performs system updates.</p></div>
@@ -1617,6 +1716,10 @@
             </div>
           </div>
         </section>
+      </div>
+      <div id="settingsActionbar" class="settings-actionbar">
+        <button type="button" class="primary" id="settingsSaveButton">Save changes</button>
+      </div>
       </div>
     </div>
   </dialog>
@@ -1644,8 +1747,11 @@
 
   <script type="application/json" id="demo-data">{"ok":true,"schema":"mcp-session-bridge.viewer.v1","generated_at":1780321400,"generated_at_iso":"2026-06-01T13:43:20.000Z","session_count":4,"turn_count":22,"sessions":[{"session_id":"demo-2026-06-01-empty-followup","title":"Short follow-up session","title_is_auto":false,"context_pack_id":"manual-context","created_at":1780316600,"updated_at":1780317350,"exchange_count":1,"deleted_exchange_count":0},{"session_id":"demo-2026-06-01-incident-debugging","title":"Debugging a virtual environment issue","title_is_auto":false,"context_pack_id":"local-development","created_at":1780311200,"updated_at":1780313270,"exchange_count":3,"deleted_exchange_count":0},{"session_id":"demo-2026-06-01-ui-review","title":"Admin viewer UI review","title_is_auto":false,"context_pack_id":"viewer-design-refresh","created_at":1780305600,"updated_at":1780308330,"exchange_count":4,"deleted_exchange_count":1},{"session_id":"demo-2026-06-01-product-planning","title":"Product planning with Claude and GPT","title_is_auto":false,"context_pack_id":"public-release-notes","created_at":1780301400,"updated_at":1780303470,"exchange_count":3,"deleted_exchange_count":0}],"transcripts":{"demo-2026-06-01-product-planning":{"session_id":"demo-2026-06-01-product-planning","title":"Product planning with Claude and GPT","exchange_count":3,"turn_count":6,"char_count":2104,"sha256":"synthetic-preview-only","context_pack_id":"public-release-notes","turn_sequence":["USER","Claude","USER","GPT-5","USER","Claude"],"turns":[{"turn":1,"speaker":"USER","exchange_id":100,"created_at":"2026-06-01T08:10:00.000Z","created_at_display":null,"chars":103,"content":"We are preparing MCP Session Bridge for a public v0.1 release. What should the README make clear first?"},{"turn":2,"speaker":"Claude","exchange_id":100,"created_at":"2026-06-01T08:11:30.000Z","created_at_display":"Monday June 1, 2026 at 08:11","chars":226,"content":"Lead with the core promise: this is a small remote MCP server for shared, multi-model conversation memory. The README should show the quickest useful path, then explain tools, security assumptions, and the current limitations."},{"turn":3,"speaker":"USER","exchange_id":101,"created_at":"2026-06-01T08:21:00.000Z","created_at_display":null,"chars":50,"content":"Can you turn that into a concise launch checklist?"},{"turn":4,"speaker":"GPT-5","exchange_id":101,"created_at":"2026-06-01T08:22:30.000Z","created_at_display":"Monday June 1, 2026 at 08:22","chars":191,"content":"Yes. Suggested checklist: README quickstart, .env.example, MIT license, security policy, contributing notes, changelog, demo script, examples, and a CI workflow that runs tests plus the demo."},{"turn":5,"speaker":"USER","exchange_id":102,"created_at":"2026-06-01T08:32:00.000Z","created_at_display":null,"chars":80,"content":"The docs feel a little dense. What would make them easier for a new contributor?"},{"turn":6,"speaker":"Claude","exchange_id":102,"created_at":"2026-06-01T08:33:30.000Z","created_at_display":"Monday June 1, 2026 at 08:33","chars":199,"content":"Split the mental model from the operational steps. A first-time reader should find installation, client setup, model instructions, deployment, security, limitations, and operations as separate paths."}]},"demo-2026-06-01-ui-review":{"session_id":"demo-2026-06-01-ui-review","title":"Admin viewer UI review","exchange_count":4,"turn_count":8,"char_count":2480,"sha256":"synthetic-preview-only","context_pack_id":"viewer-design-refresh","turn_sequence":["USER","USER","USER","Claude","USER","GPT-5","USER","Claude"],"turns":[{"turn":1,"speaker":"USER","exchange_id":103,"created_at":"2026-06-01T09:20:00.000Z","created_at_display":null,"chars":113,"content":"The current admin panel works, but it feels a bit plain. I want it to stay practical while looking more polished."},{"turn":2,"speaker":"USER","exchange_id":103,"created_at":"2026-06-01T09:21:30.000Z","created_at_display":"Monday June 1, 2026 at 09:21","chars":196,"content":"The best direction is a calmer operational dashboard: stronger spacing rhythm, clearer active selection, better exchange cards, and more deliberate typography. Keep it dense enough for repeat use."},{"turn":3,"speaker":"USER","exchange_id":104,"created_at":"2026-06-01T09:31:00.000Z","created_at_display":null,"chars":66,"content":"Should the redesign use a big hero or decorative visual treatment?"},{"turn":4,"speaker":"Claude","exchange_id":104,"created_at":"2026-06-01T09:32:30.000Z","created_at_display":"Monday June 1, 2026 at 09:32","chars":150,"content":"No. This is an admin tool, so the first screen should be the working surface itself: session list, summary, transcript corrections, and clear actions."},{"turn":5,"speaker":"USER","exchange_id":105,"created_at":"2026-06-01T09:42:00.000Z","created_at_display":null,"chars":44,"content":"What UI states should the redesign preserve?"},{"turn":6,"speaker":"GPT-5","exchange_id":105,"created_at":"2026-06-01T09:43:30.000Z","created_at_display":"Monday June 1, 2026 at 09:43","chars":157,"content":"Keep loading, empty, selected, editing, deleted, error, and success states. Also preserve responsive behavior for narrow screens and long transcript content."},{"turn":7,"speaker":"USER","exchange_id":106,"created_at":"2026-06-01T09:53:00.000Z","created_at_display":null,"chars":74,"content":"The delete and restore actions need better affordance. Any recommendation?"},{"turn":8,"speaker":"Claude","exchange_id":106,"created_at":"2026-06-01T09:54:30.000Z","created_at_display":"Monday June 1, 2026 at 09:54","chars":166,"content":"Use restrained destructive styling for delete, a clear restored/saved status message, and make deleted exchanges visually distinct without making the text unreadable."}]},"demo-2026-06-01-incident-debugging":{"session_id":"demo-2026-06-01-incident-debugging","title":"Debugging a virtual environment issue","exchange_count":3,"turn_count":6,"char_count":1920,"sha256":"synthetic-preview-only","context_pack_id":"local-development","turn_sequence":["USER","USER","USER","GPT-5","USER","Claude"],"turns":[{"turn":1,"speaker":"USER","exchange_id":107,"created_at":"2026-06-01T10:53:20.000Z","created_at_display":null,"chars":70,"content":"uv run sometimes hangs on my mounted workspace. Is the project broken?"},{"turn":2,"speaker":"USER","exchange_id":107,"created_at":"2026-06-01T10:54:50.000Z","created_at_display":"Monday June 1, 2026 at 10:54","chars":192,"content":"The project is likely fine. The symptom points to the mounted filesystem and virtual environment metadata rather than app logic. Rebuilding .venv on the host where tests run is the safer path."},{"turn":3,"speaker":"USER","exchange_id":108,"created_at":"2026-06-01T11:04:20.000Z","created_at_display":null,"chars":41,"content":"What should we document for contributors?"},{"turn":4,"speaker":"GPT-5","exchange_id":108,"created_at":"2026-06-01T11:05:50.000Z","created_at_display":"Monday June 1, 2026 at 11:05","chars":171,"content":"Tell contributors to run uv sync locally on their own machine, avoid committing .venv, and rebuild the environment if packages look inconsistent after moving the checkout."},{"turn":5,"speaker":"USER","exchange_id":109,"created_at":"2026-06-01T11:15:20.000Z","created_at_display":null,"chars":33,"content":"Could this affect GitHub Actions?"},{"turn":6,"speaker":"Claude","exchange_id":109,"created_at":"2026-06-01T11:16:50.000Z","created_at_display":"Monday June 1, 2026 at 11:16","chars":160,"content":"No, GitHub Actions creates a fresh checkout and a fresh Python environment. That makes CI a useful independent signal for whether the project itself is healthy."}]},"demo-2026-06-01-empty-followup":{"session_id":"demo-2026-06-01-empty-followup","title":"Short follow-up session","exchange_count":1,"turn_count":2,"char_count":937,"sha256":"synthetic-preview-only","context_pack_id":"manual-context","turn_sequence":["USER","USER"],"turns":[{"turn":1,"speaker":"USER","exchange_id":110,"created_at":"2026-06-01T12:23:20.000Z","created_at_display":null,"chars":59,"content":"Give me a tiny explanation of what MCP Session Bridge does."},{"turn":2,"speaker":"USER","exchange_id":110,"created_at":"2026-06-01T12:24:50.000Z","created_at_display":"Monday June 1, 2026 at 12:24","chars":209,"content":"It gives multiple model clients one shared transcript store, so Claude, ChatGPT, Codex, or another MCP client can pick up the same conversation history through tools instead of relying on a single chat window."}]}}}</script>
   <script src="/admin/assets/pearl-gradient-nav.js"></script>
+  <script src="/admin/assets/admin-confirmation.js"></script>
   <script>
     (() => {
+      const MASKED_MODEL_RESPONSE = "[MODEL RESPONSE MASKED - CONTENT HIDDEN FROM ALL MODELS]";
+
       // ---------- model identity (original color + monogram, no brand logos) ----------
       function modelIdentity(name) {
         const raw = (name == null ? "" : String(name)).trim();
@@ -1796,6 +1902,7 @@
         aiSettingsStatus: document.getElementById("aiSettingsStatus"),
         copyButton: document.getElementById("copyButton"),
         copySessionIdButton: document.getElementById("copySessionIdButton"),
+        copySessionIdLabel: document.getElementById("copySessionIdLabel"),
         demoBanner: document.getElementById("demoBanner"),
         exchangeList: document.getElementById("exchangeList"),
         editGroupButton: document.getElementById("editGroupButton"),
@@ -1860,7 +1967,6 @@
         sessionFileInput: document.getElementById("sessionFileInput"),
         sessionFileStatus: document.getElementById("sessionFileStatus"),
         sessionList: document.getElementById("sessionList"),
-        sessionListSensitiveOverlay: document.getElementById("sessionListSensitiveOverlay"),
         sessionMoveBack: document.getElementById("sessionMoveBack"),
         sessionMoveCancel: document.getElementById("sessionMoveCancel"),
         sessionMoveClose: document.getElementById("sessionMoveClose"),
@@ -1877,12 +1983,14 @@
         sessionTitleIcon: document.getElementById("sessionTitleIcon"),
         status: document.getElementById("status"),
         timezoneSelect: document.getElementById("timezoneSelect"),
+        threadSensitiveBody: document.getElementById("threadSensitiveBody"),
         threadSensitiveContent: document.getElementById("threadSensitiveContent"),
         threadSensitiveOverlay: document.getElementById("threadSensitiveOverlay"),
+        threadSensitiveTitle: document.getElementById("threadSensitiveTitle"),
         turnNav: document.getElementById("turnNav"),
       };
       const settingsDom = Object.fromEntries([
-        "generalSettingsSave", "apiSettingsSave", "searchSettingsSave", "transcriptSettingsSave", "toolOutputSave", "toolOutputRestart", "toolOutputRestartRequired", "toolOutputRestartMessage", "toolOutputActiveSummary", "toolOutputOptimized", "toolOutputMaximumCompatibility", "cohereKeyInput",
+        "settingsSaveButton", "settingsActionbar", "toolOutputRestart", "toolOutputRestartRequired", "toolOutputRestartMessage", "toolOutputActiveSummary", "toolOutputOptimized", "toolOutputMaximumCompatibility", "cohereKeyInput",
         "cohereKeyRemoveButton", "openaiKeyStatus", "cohereKeyStatus", "ragEnabled",
         "ragOptions", "cohereEnabled", "sourceConversations", "sourceSessionFiles",
         "sourceGroupFiles", "ragGroupList", "chunkSize", "chunkOverlap", "embeddingModel",
@@ -1895,6 +2003,7 @@
         "contextSearchStatus", "searchResults", "localSearchResults", "searchDetail",
         "transcriptChunkMaxChars", "transcriptChunkMaxLines", "probeHarnessLabel", "probeTargetChars",
         "probeContentProfile", "probePromptPreview", "probePromptCopy", "probeRecommendations", "probeResults",
+        "databaseExportButton", "databaseExportResult",
         "statusUpdateDot", "bridgeStatusOverall", "bridgeStatusVersion", "bridgeStatusUpdate",
         "bridgeStatusChecked", "bridgeStatusChecks", "bridgeStatusUrl", "bridgeStatusSchema",
         "bridgeStatusOperation", "bridgeStatusError"
@@ -1910,17 +2019,11 @@
         const next = dom.groupSensitiveButton.getAttribute("aria-pressed") !== "true";
         dom.groupSensitiveButton.setAttribute("aria-pressed", String(next));
       });
-      dom.sessionListSensitiveOverlay.addEventListener("click", () => {
-        const groupId = state.activeGroupId;
-        if (groupId === "all") return;
-        state.revealedSensitiveSessionLists.add(groupId);
-        renderSessions();
-      });
       dom.threadSensitiveOverlay.addEventListener("click", () => {
         const groupId = state.selectedSession?.group_id;
         if (!groupId) return;
         state.revealedSensitiveThreads.add(groupId);
-        renderThreadSensitiveGuard();
+        renderExchanges();
       });
       dom.aiSettingsClose.addEventListener("click", () => dom.aiSettingsDialog.close());
       bindSettingsEvents();
@@ -2040,7 +2143,7 @@
         if (!sessionId) return;
         try {
           await navigator.clipboard.writeText(sessionId);
-          setStatus("Session ID copied to clipboard.", "ok");
+          markSessionIdCopied();
         } catch (error) {
           setStatus(`Could not copy session ID: ${error.message}`, "error");
         }
@@ -2117,8 +2220,10 @@
         const operation = status.last_operation || {};
         settingsDom.bridgeStatusError.textContent = "";
         settingsDom.bridgeStatusError.classList.remove("is-error");
-        settingsDom.bridgeStatusOverall.textContent = status.overall || "unknown";
-        settingsDom.bridgeStatusVersion.textContent = version.current || "—";
+        const overall = String(status.overall || "unknown").toLowerCase();
+        settingsDom.bridgeStatusOverall.textContent = OVERALL_STATUS_LABELS[overall] || "Unknown";
+        settingsDom.bridgeStatusOverall.className = `verdict is-${overall}`;
+        settingsDom.bridgeStatusVersion.textContent = version.label || version.current || "—";
         settingsDom.bridgeStatusUpdate.textContent = update.state === "available"
           ? `${update.latest || "New version"} available`
           : update.state === "current" ? "Up to date" : "Unknown";
@@ -2175,10 +2280,14 @@
         return ["pass", "warn", "waiting", "fail"].includes(normalized) ? normalized : "unknown";
       }
 
+      const OVERALL_STATUS_LABELS = { pass: "Passing", warn: "Needs attention", fail: "Failing" };
+
+      // one date format across the panel, in the timezone the admin picked
       function operationalTime(value) {
         if (!value) return "Not checked yet";
         const date = new Date(typeof value === "number" ? value * 1000 : value);
-        return Number.isNaN(date.getTime()) ? "Last check time unavailable" : `Checked ${date.toLocaleString()}`;
+        if (Number.isNaN(date.getTime())) return "Last check time unavailable";
+        return `Checked ${formatDate(date.toISOString())}`;
       }
 
       function bindSettingsEvents() {
@@ -2186,12 +2295,10 @@
           const button = event.target.closest("[data-settings-tab]");
           if (button) selectSettingsTab(button.dataset.settingsTab);
         });
-        settingsDom.generalSettingsSave.addEventListener("click", () => saveGeneralSettings());
-        settingsDom.transcriptSettingsSave.addEventListener("click", () => saveTranscriptSettings());
-        settingsDom.toolOutputSave.addEventListener("click", () => saveToolOutputSettings());
+        settingsDom.settingsSaveButton.addEventListener("click", () => saveActiveSettingsPanel());
+        settingsDom.databaseExportButton.addEventListener("click", () => exportDatabaseMarkdown());
         settingsDom.toolOutputRestart.addEventListener("click", () => restartBridgeService());
-        settingsDom.searchSettingsSave.addEventListener("click", () => saveSearchSettings());
-        settingsDom.apiSettingsSave.addEventListener("click", () => saveApiSettings());
+
         dom.aiKeyRemoveButton.addEventListener("click", () => removeProviderKey("openai"));
         settingsDom.cohereKeyRemoveButton.addEventListener("click", () => removeProviderKey("cohere"));
         settingsDom.ragEnabled.addEventListener("change", renderRagVisibility);
@@ -2215,6 +2322,55 @@
         for (const panel of document.querySelectorAll("[data-settings-panel]")) {
           panel.hidden = panel.dataset.settingsPanel !== name;
         }
+        // Database and Status have dedicated/read-only actions, so neither gets the shared save bar
+        settingsDom.settingsActionbar.hidden = ["database", "status"].includes(name);
+      }
+
+      function activeSettingsTab() {
+        return document.querySelector("[data-settings-tab].is-active")?.dataset.settingsTab || "general";
+      }
+
+      async function saveActiveSettingsPanel() {
+        switch (activeSettingsTab()) {
+          case "general": return saveGeneralSettings();
+          case "transcript": return saveDeliverySettings();
+          case "search": return saveSearchSettings();
+          case "api": return saveApiSettings();
+          default: return undefined;
+        }
+      }
+
+      async function exportDatabaseMarkdown() {
+        const confirmed = await window.adminConfirmation.confirm({
+          title: "Create database export?",
+          message: "The archive will contain sensitive sessions, excluded and masked content, audit history, and every stored attachment.",
+          detail: "The exported files will remain on this VPS.",
+          confirmLabel: "Create export",
+          tone: "warning",
+        });
+        if (!confirmed) return;
+        settingsDom.databaseExportButton.disabled = true;
+        settingsDom.databaseExportButton.setAttribute("aria-busy", "true");
+        settingsDom.databaseExportResult.textContent = "Exporting on the VPS…";
+        try {
+          const payload = await api("/admin/api/database/export", { method: "POST" });
+          const artifact = payload.export.artifact;
+          settingsDom.databaseExportResult.textContent = `Saved ${artifact.session_count} sessions and ${artifact.attachment_count} attachments to ${artifact.path}`;
+          renderSettingsStatus("Database export completed on the VPS.", "ok");
+        } catch (error) {
+          settingsDom.databaseExportResult.textContent = `Export failed: ${error.message}`;
+          renderSettingsStatus(error.message, "error");
+        } finally {
+          settingsDom.databaseExportButton.disabled = false;
+          settingsDom.databaseExportButton.setAttribute("aria-busy", "false");
+        }
+      }
+
+      // one panel, one save: chunk limits first so the result format - which can
+      // ask for a restart - is the outcome left on screen
+      async function saveDeliverySettings() {
+        await saveTranscriptSettings();
+        if (!settingsDom.toolOutputOptimized.disabled) await saveToolOutputSettings();
       }
 
       async function openAiSettingsDialog() {
@@ -2458,7 +2614,6 @@
           : "Restart required to activate this mode.";
         settingsDom.toolOutputOptimized.disabled = restartLocked;
         settingsDom.toolOutputMaximumCompatibility.disabled = restartLocked;
-        settingsDom.toolOutputSave.disabled = restartLocked;
         settingsDom.toolOutputRestart.disabled = restartLocked || !toolOutput.restart_required;
       }
 
@@ -2489,7 +2644,14 @@
         const toolOutput = state.settings?.tool_output || {};
         if (!toolOutput.restart_required) return;
         const configured = toolOutputModeLabel(toolOutput.configured_mode);
-        if (!window.confirm(`Restart MCP Session Bridge and activate ${configured}? Active tool calls may be interrupted.`)) return;
+        const confirmed = await window.adminConfirmation.confirm({
+          title: "Restart MCP Session Bridge?",
+          message: `Restart Bridge and activate ${configured}?`,
+          detail: "Active tool calls may be interrupted.",
+          confirmLabel: "Restart Bridge",
+          tone: "warning",
+        });
+        if (!confirmed) return;
         state.toolOutputRestartInFlight = true;
         renderToolOutputState();
         renderSettingsStatus("Requesting Bridge restart…", "ok");
@@ -2686,7 +2848,14 @@
       }
 
       async function removeProviderKey(provider) {
-        if (!window.confirm(`Remove the saved ${provider} API key?`)) return;
+        const confirmed = await window.adminConfirmation.confirm({
+          title: "Remove saved API key?",
+          message: `Remove the saved ${provider} API key?`,
+          detail: "Features that use this provider will stop working until a new key is saved.",
+          confirmLabel: "Remove key",
+          tone: "danger",
+        });
+        if (!confirmed) return;
         try {
           const result = await api(`/admin/api/settings/api/${provider}/key`, { method: "DELETE" });
           state.settings = result.settings;
@@ -2699,7 +2868,16 @@
       }
 
       async function runIndexAction(action) {
-        if (action === "delete" && !window.confirm("Delete the complete vector index? BM25 will keep working.")) return;
+        if (action === "delete") {
+          const confirmed = await window.adminConfirmation.confirm({
+            title: "Delete vector index?",
+            message: "Delete the complete vector index?",
+            detail: "BM25 search will keep working. Vector search will remain unavailable until the index is rebuilt.",
+            confirmLabel: "Delete index",
+            tone: "danger",
+          });
+          if (!confirmed) return;
+        }
         const options = action === "delete" ? { method: "DELETE" } : { method: "POST" };
         const path = action === "rebuild" ? "/admin/api/search/index/rebuild"
           : action === "cancel" ? "/admin/api/search/index/cancel" : "/admin/api/search/index";
@@ -3037,7 +3215,6 @@
 
         if (!visible.length) {
           dom.sessionList.append(emptyRow("No matching sessions."));
-          renderSessionListSensitiveGuard();
           return;
         }
 
@@ -3053,11 +3230,8 @@
           item.className = "session-button";
           const isSelected = session.session_id === state.selectedSessionId;
           item.classList.toggle("is-active", isSelected);
-          item.classList.toggle("is-compact", !isSelected);
           const group = sessionGroup(session);
-          const cardIsGuarded = state.activeGroupId === "all"
-            && Boolean(group?.is_sensitive)
-            && !state.revealedSensitiveSessionLists.has(session.group_id);
+          const cardIsGuarded = sessionRowIsCovered(session, group);
           const selectSession = () => {
             if (state.fileOperationPending) {
               setStatus("Wait for the file operation to finish.", "warn");
@@ -3069,66 +3243,46 @@
             };
             runFileContinuation("session", continueSelection, item);
           };
-          if (!cardIsGuarded) {
-            item.tabIndex = 0;
-            item.role = "button";
-            if (!isSelected) {
-              item.setAttribute("aria-label", `${session.title || "Untitled"} — ${group?.name || session.group_id || "Uncategorized"}`);
-            }
-            item.addEventListener("click", selectSession);
-            item.addEventListener("keydown", (event) => {
-              if (event.key === "Enter" || event.key === " ") {
-                event.preventDefault();
-                selectSession();
-              }
-            });
+          const revealGroup = () => {
+            state.revealedSensitiveSessionLists.add(session.group_id);
+            renderSessions();
+          };
+          const activate = cardIsGuarded ? revealGroup : selectSession;
+          item.classList.toggle("is-guarded", cardIsGuarded);
+          item.tabIndex = 0;
+          item.role = "button";
+          if (cardIsGuarded) {
+            item.setAttribute("aria-label", `Covered session in ${group.name}. Activate to reveal the group.`);
+          } else if (!isSelected) {
+            item.setAttribute("aria-label", `${session.title || "Untitled"} — ${group?.name || session.group_id || "Uncategorized"}`);
           }
+          item.addEventListener("click", activate);
+          item.addEventListener("keydown", (event) => {
+            if (event.target !== item) return;
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              activate();
+            }
+          });
 
           const content = div("session-card-content");
-          if (isSelected && state.manualRenameSessionId === session.session_id) {
+          if (cardIsGuarded) {
+            content.append(
+              sessionCompactTitle(session, group, dateBucket, true),
+              sessionMetaLine(session, group),
+              renderSessionActions(session),
+            );
+          } else if (state.manualRenameSessionId === session.session_id) {
             content.append(renderSessionRenameForm(session));
           } else {
-            content.append(sessionCompactTitle(session, group, dateBucket));
-            if (isSelected) {
-              content.append(sessionSelectedDetails(session, group), renderSessionActions(session));
-            }
+            content.append(
+              sessionCompactTitle(session, group, dateBucket),
+              sessionMetaLine(session, group),
+              renderSessionActions(session),
+            );
           }
           item.append(content);
-          if (cardIsGuarded) {
-            content.inert = true;
-            if (isSelected) {
-              content.classList.add("sensitive-blurred");
-            } else {
-              content.classList.add("sensitive-compact-content");
-            }
-            const overlay = sensitiveOverlayButton("session-card-sensitive-overlay");
-            overlay.setAttribute("aria-label", `Sensitive content in ${group.name}. Click to reveal.`);
-            overlay.addEventListener("click", (event) => {
-              event.stopPropagation();
-              const groupId = session.group_id;
-              state.revealedSensitiveSessionLists.add(groupId);
-              renderSessions();
-            });
-            item.append(overlay);
-          }
           dom.sessionList.append(item);
-        }
-        renderSessionListSensitiveGuard();
-      }
-
-      function renderSessionListSensitiveGuard() {
-        const group = currentGroup();
-        const listIsGuarded = state.activeGroupId !== "all"
-          && Boolean(group?.is_sensitive)
-          && !state.revealedSensitiveSessionLists.has(group.group_id);
-        dom.sessionList.inert = listIsGuarded;
-        dom.sessionList.classList.toggle("sensitive-blurred", listIsGuarded);
-        dom.sessionListSensitiveOverlay.hidden = !listIsGuarded;
-        if (listIsGuarded) {
-          dom.sessionListSensitiveOverlay.setAttribute(
-            "aria-label",
-            `Sensitive content in ${group.name}. Click to reveal.`,
-          );
         }
       }
 
@@ -4082,8 +4236,8 @@
       const SESSION_DATE_GROUPS = [
         { key: "today", label: "Today" },
         { key: "yesterday", label: "Yesterday" },
-        { key: "more-than-2-days", label: "More than 2 days ago" },
-        { key: "more-than-7-days", label: "More than 7 days ago" },
+        { key: "more-than-2-days", label: "Earlier this week" },
+        { key: "more-than-7-days", label: "Older" },
       ];
 
       const SESSION_DATE_FORMATTERS = new Map();
@@ -4155,18 +4309,41 @@
         return heading;
       }
 
-      function sessionCompactTitle(session, group, dateBucket = null) {
+      function sessionCompactTitle(session, group, dateBucket = null, guarded = false) {
         const titleLine = div("session-compact-title");
         const icon = spanCls("session-compact-icon");
         icon.setAttribute("aria-hidden", "true");
         icon.style.setProperty("--g", group?.color || "#8b93a7");
         icon.append(svgNode(group?.icon_key || "folder"));
+        const stampGroup = div("session-stamp-group");
+        if (guarded) {
+          const glyph = spanCls("session-guard-glyph");
+          glyph.setAttribute("aria-hidden", "true");
+          glyph.innerHTML = sensitiveIconSvg();
+          stampGroup.append(glyph);
+        }
+        stampGroup.append(sessionListStampNode(session.last_turn_at_iso || session.updated_at_iso, dateBucket));
         titleLine.append(
           icon,
-          div("session-title", session.title || "Untitled"),
-          sessionListStampNode(session.last_turn_at_iso || session.updated_at_iso, dateBucket),
+          guarded ? redactedSessionTitle(session) : div("session-title", session.title || "Untitled"),
+          stampGroup,
         );
         return titleLine;
+      }
+
+      function sessionRowIsCovered(session, group = sessionGroup(session)) {
+        return Boolean(group?.is_sensitive)
+          && !state.revealedSensitiveSessionLists.has(session.group_id);
+      }
+
+      function redactedSessionTitle(session) {
+        const node = div("session-title-redacted");
+        const id = String(session.session_id || "");
+        let hash = 0;
+        for (let index = 0; index < id.length; index += 1) hash = (hash * 31 + id.charCodeAt(index)) % 997;
+        node.style.setProperty("--redacted-width", `${48 + (hash % 42)}%`);
+        node.setAttribute("aria-hidden", "true");
+        return node;
       }
 
       function sessionListFormatter(timezone, kind) {
@@ -4176,7 +4353,6 @@
         const options = {
           time: { hour: "2-digit", minute: "2-digit", hourCycle: "h23" },
           date: { day: "2-digit", month: "2-digit" },
-          meta: { weekday: "long", hour: "2-digit", minute: "2-digit", hourCycle: "h23" },
         }[kind] || { hour: "2-digit", minute: "2-digit", hourCycle: "h23" };
         let formatter;
         try {
@@ -4203,19 +4379,10 @@
       }
 
       function sessionListStampNode(value, dateBucket) {
-        const stamp = spanCls("session-list-stamp mono", sessionListStamp(value, dateBucket));
-        if (dateBucket && dateBucket !== "today") stamp.classList.add("is-date");
-        return stamp;
+        return spanCls("session-list-stamp mono", sessionListStamp(value, dateBucket));
       }
 
-      function sessionListMetaTimestamp(value) {
-        const parts = sessionListDateParts(value, "meta");
-        if (!parts) return "No timestamp";
-        return `${parts.weekday} ${parts.hour}:${parts.minute}`;
-      }
-
-      function sessionSelectedDetails(session, group) {
-        const details = div("session-selected-details");
+      function sessionMetaLine(session, group) {
         const facts = [
           group?.name || session.group_id || "Uncategorized",
           `${(Number(session.exchange_count) || 0) * 2} turns`,
@@ -4223,12 +4390,7 @@
         if (Number(session.deleted_exchange_count || 0) > 0) {
           facts.push(`${session.deleted_exchange_count} excluded`);
         }
-        details.append(
-          spanCls("session-facts mono", facts.join(" · ")),
-          spanCls("session-selected-time mono", sessionListMetaTimestamp(session.last_turn_at_iso || session.updated_at_iso)),
-          spanCls("session-selected-id mono", session.session_id || "—"),
-        );
-        return details;
+        return div("session-meta-line", facts.join(" · "));
       }
 
       function sessionGroupChip(group, fallbackId) {
@@ -4239,30 +4401,60 @@
         return groupChip;
       }
 
+      const SESSION_ACTION_ICONS = {
+        ai_rename: '<path d="M12 4l1.4 3.9 3.9 1.4-3.9 1.4L12 14.6l-1.4-3.9L6.7 9.3l3.9-1.4z"></path><path d="M17.8 14.6l.6 1.6 1.6.6-1.6.6-.6 1.6-.6-1.6-1.6-.6 1.6-.6z"></path>',
+        rename: '<path d="M4 20h4L18 10a2.1 2.1 0 10-3-3L5 17z"></path><path d="M13.5 7.5l3 3"></path>',
+        move: '<path d="M3 7.5A2.5 2.5 0 015.5 5H10l2 2h6.5A2.5 2.5 0 0121 9.5v7A2.5 2.5 0 0118.5 19h-13A2.5 2.5 0 013 16.5z"></path><path d="M9.5 13h5M12.5 10.8l2.2 2.2-2.2 2.2"></path>',
+      };
+
+      function actionIcon(key) {
+        const wrap = document.createElement("span");
+        wrap.innerHTML = `<svg ${GROUP_ICON_SVG_ATTRS}>${SESSION_ACTION_ICONS[key]}</svg>`;
+        return wrap.firstElementChild;
+      }
+
+      function iconAction(iconKey, label, onClick) {
+        const node = button("", onClick, "ghost");
+        node.append(actionIcon(iconKey));
+        node.title = label;
+        node.setAttribute("aria-label", label);
+        return node;
+      }
+
       function renderSessionActions(session) {
         const actions = div("session-actions");
-        const aiButton = button(state.renamingSessionId === session.session_id ? "..." : "AI", (event) => {
-          event.stopPropagation();
-          aiRenameSession(session.session_id);
-        }, "ghost");
-        aiButton.title = state.aiSettings.configured
-          ? "Rename from the first user message"
-          : "Configure an AI API key first";
-        aiButton.disabled = state.busy || !state.aiSettings.configured || state.renamingSessionId === session.session_id;
+        const renaming = state.renamingSessionId === session.session_id;
+        // acting on a covered row reveals its group first: every action ends up
+        // showing a title somewhere, so the cover cannot be worked around by them
+        const revealIfCovered = () => {
+          if (!sessionRowIsCovered(session)) return false;
+          state.revealedSensitiveSessionLists.add(session.group_id);
+          return true;
+        };
 
-        const manualButton = button("Edit", (event) => {
+        const aiButton = iconAction("ai_rename", state.aiSettings.configured
+          ? "Rename from the first user message"
+          : "Configure an AI API key first", (event) => {
           event.stopPropagation();
+          if (revealIfCovered()) renderSessions();
+          aiRenameSession(session.session_id);
+        });
+        if (renaming) aiButton.replaceChildren(spanCls("action-spinner"));
+        aiButton.disabled = state.busy || !state.aiSettings.configured || renaming;
+
+        const manualButton = iconAction("rename", "Set title manually", (event) => {
+          event.stopPropagation();
+          revealIfCovered();
           state.manualRenameSessionId = session.session_id;
           renderSessions();
-        }, "ghost");
-        manualButton.title = "Set title manually";
+        });
         manualButton.disabled = state.busy;
 
-        const moveButton = button("Move", (event) => {
+        const moveButton = iconAction("move", "Move to another group", (event) => {
           event.stopPropagation();
+          if (revealIfCovered()) renderSessions();
           openSessionMoveDialog(session.session_id);
-        }, "ghost");
-        moveButton.title = "Move to another group";
+        });
         moveButton.disabled = state.busy || !state.groups.some((group) => group.group_id !== session.group_id);
 
         actions.append(aiButton, manualButton, moveButton);
@@ -4548,7 +4740,14 @@
 
       async function deleteGroup(group) {
         if (!group || group.is_system) return;
-        if (!window.confirm(`Delete group "${group.name}" and move its sessions to Uncategorized?`)) return;
+        const confirmed = await window.adminConfirmation.confirm({
+          title: "Delete group?",
+          message: `Delete group "${group.name}"?`,
+          detail: "Its sessions will be moved to Uncategorized.",
+          confirmLabel: "Delete group",
+          tone: "danger",
+        });
+        if (!confirmed) return;
         setBusy(true);
         try {
           await api(`/admin/api/session-groups/${encodeURIComponent(group.group_id)}`, {
@@ -4606,6 +4805,13 @@
           { text: `updated ${formatDate(state.selectedSession.updated_at_iso)}` },
         ]);
 
+        // covered means not rendered: nothing to read off the screen, a screenshot,
+        // the accessibility tree or the DOM until the group is revealed
+        if (selectedThreadIsGuarded()) {
+          dom.sessionTitle.textContent = "";
+          return;
+        }
+
         const visible = state.exchanges;
         if (!visible.length) {
           dom.exchangeList.append(emptyState("No exchanges", "This session has no exchanges."));
@@ -4626,15 +4832,27 @@
         const groupId = state.selectedSession?.group_id;
         const group = state.groups.find((item) => item.group_id === groupId);
         const threadIsGuarded = selectedThreadIsGuarded();
-        dom.threadSensitiveContent.inert = threadIsGuarded;
-        dom.threadSensitiveContent.classList.toggle("sensitive-blurred", threadIsGuarded);
+        // the transcript is covered; the title bar keeps its session key and its actions
+        dom.threadSensitiveBody.inert = threadIsGuarded;
+        dom.sessionTitle.classList.toggle("is-redacted", threadIsGuarded);
         dom.threadSensitiveOverlay.hidden = !threadIsGuarded;
         if (threadIsGuarded) {
+          dom.threadSensitiveTitle.textContent = `${group.name} — sensitive group`;
           dom.threadSensitiveOverlay.setAttribute(
             "aria-label",
-            `Sensitive content in ${group.name}. Click to reveal.`,
+            `Conversation covered because ${group.name} is a sensitive group. Activate to reveal it.`,
           );
         }
+      }
+
+      function markSessionIdCopied() {
+        window.clearTimeout(markSessionIdCopied.timer);
+        dom.copySessionIdButton.classList.add("is-copied");
+        dom.copySessionIdLabel.textContent = "Copied";
+        markSessionIdCopied.timer = window.setTimeout(() => {
+          dom.copySessionIdButton.classList.remove("is-copied");
+          dom.copySessionIdLabel.textContent = "Copy";
+        }, 1200);
       }
 
       function selectedThreadIsGuarded() {
@@ -4754,6 +4972,15 @@
         return spanCls("pill", "In context");
       }
 
+      function maskedResponseNotice() {
+        const notice = div("masked-response-notice");
+        notice.append(
+          spanCls("masked-response-label", "Models receive"),
+          spanCls("masked-response-copy", MASKED_MODEL_RESPONSE)
+        );
+        return notice;
+      }
+
       // bubbles / thread: each exchange becomes a USER + MODEL message pair plus an action row
       function renderExGroup(exchange) {
         const group = div("ex-group" + (exchange.is_deleted ? " is-deleted" : ""));
@@ -4787,6 +5014,7 @@
           const bubble = div("bubble");
           bubble.append(markdownContent("msg-content", content || "—"));
           body.append(meta, bubble);
+          if (isMasked) body.append(maskedResponseNotice());
           article.append(avatar(isModel ? speakerName : "USER"), body);
           return article;
         }
@@ -4801,6 +5029,7 @@
         bubble.append(markdownContent("msg-content", content || "—"));
         row.append(bubble);
         article.append(meta, row);
+        if (isMasked) article.append(maskedResponseNotice());
         return article;
       }
 
@@ -4897,7 +5126,7 @@
           lines.push(`### USER (${ex.user_message_token_count || 0} tokens)`, "", ex.user_message || "", "");
           const model = ex.model_name || "Model";
           const t = ex.assistant_created_at_display ? ` — ${ex.assistant_created_at_display}` : "";
-          const response = ex.is_masked ? "[MODEL RESPONSE MASKED - CONTENT HIDDEN FROM ALL MODELS]" : (ex.assistant_response || "");
+          const response = ex.is_masked ? MASKED_MODEL_RESPONSE : (ex.assistant_response || "");
           lines.push(`### ${model}${t} (${ex.assistant_response_token_count || 0} tokens)`, "", response, "");
         }
         return lines.join("\n");
@@ -5143,6 +5372,7 @@
         const headRow = div("turn-head");
         headRow.append(avatar(identityName, true), spanCls("turn-label", label), spanCls("token-count", tokenLabel(tokenCount)));
         node.append(headRow, markdownContent("turn-content", content || "—"));
+        if (isMasked) node.append(maskedResponseNotice());
         return node;
       }
 
@@ -5201,24 +5431,53 @@
       }
 
       async function deleteExchange(exchangeId) {
-        const reason = window.prompt("Exclusion note", "temporarily excluded from model context");
+        const reason = await window.adminConfirmation.prompt({
+          title: `Exclude exchange #${exchangeId}?`,
+          message: "This complete exchange will be excluded from all MCP transcript chunks.",
+          detail: "You can include it again later.",
+          inputLabel: "Exclusion note",
+          defaultValue: "temporarily excluded from model context",
+          confirmLabel: "Exclude exchange",
+          tone: "warning",
+          initialFocus: "input",
+        });
         if (reason === null) return;
-        if (!window.confirm(`Exclude exchange #${exchangeId} from all MCP transcript chunks?`)) return;
         await mutate(`/admin/api/exchanges/${exchangeId}`, { method: "DELETE", body: JSON.stringify({ reason }) }, "Exchange excluded from model context.");
       }
 
       async function restoreExchange(exchangeId) {
-        if (!window.confirm(`Include exchange #${exchangeId} in MCP transcript chunks again?`)) return;
+        const confirmed = await window.adminConfirmation.confirm({
+          title: `Include exchange #${exchangeId}?`,
+          message: "Include this complete exchange in MCP transcript chunks again?",
+          detail: "Its user message and model response will become available to models.",
+          confirmLabel: "Include exchange",
+          tone: "warning",
+        });
+        if (!confirmed) return;
         await mutate(`/admin/api/exchanges/${exchangeId}/restore`, { method: "POST" }, "Exchange included in model context.");
       }
 
       async function maskExchange(exchangeId) {
-        if (!window.confirm(`Mask the model response in exchange #${exchangeId} for all models?`)) return;
+        const confirmed = await window.adminConfirmation.confirm({
+          title: `Mask response in exchange #${exchangeId}?`,
+          message: "Hide this model response from all models retrieving transcript chunks?",
+          detail: "The user message will remain in context. You can restore the response later.",
+          confirmLabel: "Mask response",
+          tone: "warning",
+        });
+        if (!confirmed) return;
         await mutate(`/admin/api/exchanges/${exchangeId}/mask`, { method: "POST" }, "Model response masked.");
       }
 
       async function unmaskExchange(exchangeId) {
-        if (!window.confirm(`Restore the model response in exchange #${exchangeId} to MCP transcript chunks?`)) return;
+        const confirmed = await window.adminConfirmation.confirm({
+          title: `Restore response in exchange #${exchangeId}?`,
+          message: "Restore this model response to MCP transcript chunks?",
+          detail: "The response will become available to all models retrieving this conversation.",
+          confirmLabel: "Restore response",
+          tone: "warning",
+        });
+        if (!confirmed) return;
         await mutate(`/admin/api/exchanges/${exchangeId}/unmask`, { method: "POST" }, "Model response unmasked.");
       }
 
@@ -6004,14 +6263,6 @@
 
       for (const icon of document.querySelectorAll(".sensitive-overlay-icon, .sensitive-toggle-icon")) {
         icon.innerHTML = sensitiveIconSvg();
-      }
-
-      function sensitiveOverlayButton(className = "") {
-        const overlay = document.createElement("button");
-        overlay.type = "button";
-        overlay.className = `sensitive-overlay${className ? ` ${className}` : ""}`;
-        overlay.innerHTML = `<span class="sensitive-overlay-card"><span class="sensitive-overlay-icon" aria-hidden="true">${sensitiveIconSvg()}</span><span class="sensitive-overlay-title">Sensitive content</span><span class="sensitive-overlay-hint">Click to reveal</span></span>`;
-        return overlay;
       }
 
       // ---------- tiny DOM helpers ----------

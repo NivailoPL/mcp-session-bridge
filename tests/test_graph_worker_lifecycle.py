@@ -1,29 +1,16 @@
 from __future__ import annotations
 
 import asyncio
-import importlib
-import sys
 import threading
 import time
-from pathlib import Path
 
 import pytest
 from starlette.testclient import TestClient
 
 from app.graph_runtime import GraphRuntime
-from app.security import password_hash
 from app.storage import Store
 
 
-def _load_main(tmp_path: Path, monkeypatch):
-    monkeypatch.setenv("BRIDGE_PUBLIC_BASE_URL", "https://example.test")
-    monkeypatch.setenv("BRIDGE_DB_PATH", str(tmp_path / "bridge.sqlite3"))
-    monkeypatch.setenv("BRIDGE_OWNER_USERNAME", "owner")
-    monkeypatch.setenv("BRIDGE_OWNER_PASSWORD_HASH", password_hash("secret-admin-password"))
-    monkeypatch.setenv("BRIDGE_SECRET_KEY", "test-secret")
-    monkeypatch.setenv("BRIDGE_GRAPH_EXPERIMENTAL", "true")
-    sys.modules.pop("app.main", None)
-    return importlib.import_module("app.main")
 
 
 def _session(store: Store, session_id: str, created_at: int = 1_000) -> int:
@@ -58,8 +45,8 @@ def _result(name: str = "SQLite Graph queue") -> dict:
     }]}
 
 
-def test_graph_monitor_runs_once_for_process_without_mcp_traffic(tmp_path, monkeypatch):
-    main = _load_main(tmp_path, monkeypatch)
+def test_graph_monitor_runs_once_for_process_without_mcp_traffic(load_main, monkeypatch):
+    main = load_main(graph_experimental=True)
     started = threading.Event()
     calls = []
 

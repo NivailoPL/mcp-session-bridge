@@ -6,6 +6,76 @@ This project follows a lightweight changelog format inspired by Keep a Changelog
 
 ## [Unreleased]
 
+## [2026.8.2] - 2026-08-28
+
+### Highlights
+
+- Refined the Admin workspace with a denser, more consistent session list, safer sensitive-session handling, and clearer settings controls.
+- Added complete server-side Markdown database exports through both `mcp-bridge export` and **Settings → Database**, including grouped sessions and stored attachments.
+- Adopted stable `YYYY.M.N` CalVer releases while preserving managed updates from historical `0.x` installations.
+- Added styled destructive confirmations and masked model placeholders across Admin and Graph surfaces.
+- Added a disposable demo database workflow for previewing the Admin UI without touching real Bridge data.
+
+### New Features
+
+- Added `mcp-bridge export` for complete, group-organized Markdown conversation archives with original stored attachments and machine-readable output.
+- Added **Settings → Database → Export Database (.md)** as a server-side trigger for the same managed export.
+- Added styled confirmation dialogs for destructive Admin and Graph operations.
+- Added `scripts/demo_ui.py` to rebuild and serve isolated sample sessions for local UI previews.
+
+### Quality of Life
+
+- Unified session-row density, action placement, settings layouts, and sensitive-conversation reveal behavior across the Admin workspace.
+- Preserved spaces in manually assigned session titles and included the current session ID in response guidance.
+- Added masked placeholders for configured model names and a visible development-version label during beta cycles.
+
+### Reliability and Operations
+
+- Hardened Markdown export coordination with cross-process locking, scalable archive generation, safer attachment names, and complete regression coverage.
+- Kept the PDF worker sandbox best-effort on platforms that do not support every isolation primitive.
+- Added end-to-end OAuth connector coverage plus shared Admin and viewer test infrastructure.
+- Added canonical CalVer validation to the updater and release workflow, including lockfile freshness checks and the supported `0.5.0` to `2026.8.2` transition.
+
+### Security
+
+- Markdown archives remain in the private VPS data directory; the Admin API cannot select, list, read, or download export files.
+- Sensitive conversations remain covered until explicitly revealed, including before row-level actions execute.
+
+### Included commits
+
+- [`7bdfacc`](https://github.com/NivailoPL/mcp-session-bridge/commit/7bdfaccf73f202bce6cde3c6ac1eb33f78628f75) refactor(admin): collapse the design vocabulary onto one token scale
+- [`6c1f5d3`](https://github.com/NivailoPL/mcp-session-bridge/commit/6c1f5d3ff6dfd5a819a736aa6d25ec6ad18151d5) feat(admin): one row height and one rail in the session list
+- [`027dda6`](https://github.com/NivailoPL/mcp-session-bridge/commit/027dda6492215edd2dc42fff54c7705ec26841ea) feat(admin): row actions become an icon cluster
+- [`e687447`](https://github.com/NivailoPL/mcp-session-bridge/commit/e6874474cfd7e1ae1813f4c58ff8c102e542ecd1) feat(admin): findable session key, and a cover that keeps the panel usable
+- [`5fb04ef`](https://github.com/NivailoPL/mcp-session-bridge/commit/5fb04efa4c9937978dfef7c2813b76e807707d14) fix(admin): air in the header, and a cover that survives a screenshot
+- [`259c279`](https://github.com/NivailoPL/mcp-session-bridge/commit/259c2798f0acc65e1c280699078d21f213db2c9d) fix(admin): every row action reveals a covered group before it runs
+- [`ef340ff`](https://github.com/NivailoPL/mcp-session-bridge/commit/ef340ffa89e35c84a7b5c9c8e9dc5fcceae33d41) fix(admin): the settings panel scrolls, not the whole dialog
+- [`cf97b19`](https://github.com/NivailoPL/mcp-session-bridge/commit/cf97b190926803f616b7d7a379bcd57c9fa44dee) fix(admin): one control vocabulary and one grid family in settings
+- [`bf0d3a2`](https://github.com/NivailoPL/mcp-session-bridge/commit/bf0d3a271dcf1bf89cf6a59937d3aea0abd90a6a) chore(release): mark 0.5.1 beta target
+- [`5195924`](https://github.com/NivailoPL/mcp-session-bridge/commit/519592458b5ca977fef9e796681a9ff9df607215) fix(prompt): include session id in response header
+- [`7454e2e`](https://github.com/NivailoPL/mcp-session-bridge/commit/7454e2e300dcff36b601bf77f2d369279e1b3ef2) fix(admin): restore sensitive conversation reveal
+- [`bc495c8`](https://github.com/NivailoPL/mcp-session-bridge/commit/bc495c8fefda5b04b1c1dfe12cf33cb5bae2fd1f) Refine sensitive curtain hover styling
+- [`c42ffa1`](https://github.com/NivailoPL/mcp-session-bridge/commit/c42ffa10e08b1b58f73b903dc1f3617a963f6989) feat(admin): show development version label
+- [`d782c91`](https://github.com/NivailoPL/mcp-session-bridge/commit/d782c9167bcfda92a3012d923d6e7576dde13c8a) fix(pdf): keep the worker sandbox best-effort per platform
+- [`c86f8ee`](https://github.com/NivailoPL/mcp-session-bridge/commit/c86f8eec89d864ed81a6bdf64b8745e53455e922) test(oauth): cover the connector handshake end to end
+- [`825d02c`](https://github.com/NivailoPL/mcp-session-bridge/commit/825d02cc019a3cd79f07660d7ae36af877098c0c) test(admin): assert what the viewer does, not what its source says
+- [`31ccc03`](https://github.com/NivailoPL/mcp-session-bridge/commit/31ccc0370aedaea6fce05539a1a4b08359353bc6) Merge pull request #5 from NivailoPL/chore/test-suite-health
+- [`6c2a0d4`](https://github.com/NivailoPL/mcp-session-bridge/commit/6c2a0d438c3307900affdc3d0dc5a34331cf4adc) feat(export): add server-side Markdown archive CLI
+- [`e2e2fab`](https://github.com/NivailoPL/mcp-session-bridge/commit/e2e2fab999567f26fe01a111998b138228e4feb5) feat(admin): trigger Markdown database exports on VPS
+- [`a83ffc1`](https://github.com/NivailoPL/mcp-session-bridge/commit/a83ffc11d139215c561cd88fd0216e6d1504fa26) docs(export): harden and document VPS archives
+- [`b7d28f9`](https://github.com/NivailoPL/mcp-session-bridge/commit/b7d28f98c2a1935a6e152e491e094b867915215d) refactor(export): simplify attachment filename sanitizing
+- [`578a3d0`](https://github.com/NivailoPL/mcp-session-bridge/commit/578a3d01ba7a15db07b437a4f54074642cd2aa0f) fix(export): harden archive coordination and scale
+- [`c98373e`](https://github.com/NivailoPL/mcp-session-bridge/commit/c98373e95e817ca12cd61cf52285e4f01330fb61) Merge pull request #6 from NivailoPL/codex/markdown-database-export
+- [`5249dc0`](https://github.com/NivailoPL/mcp-session-bridge/commit/5249dc06aa6393632a2ea089f606d0a9aafca6f9) fix(admin): keep spaces in manual session titles
+- [`0273522`](https://github.com/NivailoPL/mcp-session-bridge/commit/0273522ca36e893affa02c5d99f0b3280b3d18f4) chore(release): adopt CalVer versioning
+- [`9a0c068`](https://github.com/NivailoPL/mcp-session-bridge/commit/9a0c068926e91f78a58ba74c1876cf6f43f586a6) feat(admin): style destructive confirmations
+- [`526dc61`](https://github.com/NivailoPL/mcp-session-bridge/commit/526dc61beff1b3d766542ccf89896e012e00d321) feat(admin): show masked model placeholder
+- [`d4ac54c`](https://github.com/NivailoPL/mcp-session-bridge/commit/d4ac54c4cc2b8802fd2b018173c80ac47521537d) Merge pull request #7 from NivailoPL/codex/niv-7-styled-confirmations
+- [`ca57639`](https://github.com/NivailoPL/mcp-session-bridge/commit/ca57639bc92a963cf3e4fdbb8c380f4f0e2fc444) feat(demo): add demo database for admin UI previews
+- [`676ca63`](https://github.com/NivailoPL/mcp-session-bridge/commit/676ca633a6b97c81abf4b301415685cdfea87462) test(version): support stable release metadata
+
+[Compare changes: v0.5.0...v2026.8.2](https://github.com/NivailoPL/mcp-session-bridge/compare/v0.5.0...v2026.8.2)
+
 ## [0.5.0] - 2026-08-17
 
 ### Highlights

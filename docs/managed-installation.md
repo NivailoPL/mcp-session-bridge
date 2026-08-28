@@ -86,6 +86,7 @@ The managed installation uses versioned releases and stable host paths:
 | `/etc/mcp-session-bridge/bridge.env` | Active private runtime configuration |
 | `/var/lib/mcp-session-bridge/state/pending/bridge.env` | Root-owned configuration staged by setup |
 | `/var/lib/mcp-session-bridge` | SQLite database, context packs, and status state |
+| `/var/lib/mcp-session-bridge/exports` | Private server-side Markdown conversation archives |
 | `/var/backups/mcp-session-bridge` | Setup and update backups |
 | `/usr/local/bin/mcp-bridge` | Daily CLI command |
 | `/etc/systemd/system/mcp-session-bridge*.service` | Service, restart helper, and status refresh |
@@ -96,6 +97,8 @@ Setup installs a bootstrap `/usr/local/bin/mcp-bridge` command immediately. Repe
 Activation creates an unprivileged `mcp-session-bridge` service account, installs locked Python dependencies with `uv`, initializes or migrates SQLite, atomically promotes the staged environment and release, installs the staged systemd units, and configures or adopts Caddy. Setup keeps pending configuration and unit files root-owned; the service account owns only runtime data that the application must change.
 
 Secrets are written only to the private environment file. Re-running setup preserves the existing Bridge secret so OAuth records and encrypted admin settings remain readable.
+
+Markdown exports created by the CLI or **Settings → Database** remain under the private managed data root. They are not served by Caddy or the Admin API. Copy or inspect them over SSH and remove archives that are no longer needed.
 
 ### Managed Codex companion
 
@@ -207,7 +210,7 @@ cd /root/mcp-session-bridge
 
 Checkout deploy refuses tracked uncommitted changes and packages `Git HEAD`, not the mutable working directory. Each commit receives its own release directory such as `0.4.0-git-0997bfe07951`. Untracked files are reported and excluded. The deploy transaction preflights migrations, creates a final SQLite backup after stopping Bridge, atomically switches `current`, verifies the restarted service, and restores the previous release and database on failure. Once a checkout release is active, global `mcp-bridge deploy` uses the `source_root` recorded in installation metadata.
 
-The default deploy path must move forward: a lower semantic version, an older commit at the same version, or a divergent checkout is rejected. Only an intentional expert recovery may bypass this protection with `--allow-downgrade`; confirmation, backup, health verification, and rollback still apply.
+The default deploy path must move forward: a lower release version, an older commit at the same version, or a divergent checkout is rejected. Only an intentional expert recovery may bypass this protection with `--allow-downgrade`; confirmation, backup, health verification, and rollback still apply.
 
 Check without installing:
 
@@ -221,7 +224,7 @@ Install the latest stable release:
 mcp-bridge update
 ```
 
-The updater accepts only stable semantic versions, downloads the matching GitHub release asset over HTTPS, verifies its GitHub-provided SHA-256 digest, preflights database migrations on a copy, creates a live backup, switches the release symlink, and verifies the restarted service. A failed activation restores the previous release and database.
+The updater accepts only stable three-part versions, including the current `YYYY.M.N` calendar-version format and historical `MAJOR.MINOR.PATCH` releases. It downloads the matching GitHub release asset over HTTPS, verifies its GitHub-provided SHA-256 digest, preflights database migrations on a copy, creates a live backup, switches the release symlink, and verifies the restarted service. A failed activation restores the previous release and database.
 
 Roll back the most recently completed update:
 

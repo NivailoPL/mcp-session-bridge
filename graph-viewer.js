@@ -252,7 +252,13 @@ dom.refreshProcessing.addEventListener("click", () => loadProcessing());
 dom.refreshAnalysis.addEventListener("click", () => loadAnalysis());
 dom.refreshLab.addEventListener("click", loadLab);
 dom.rescanAll.addEventListener("click", async () => {
-  const confirmed = window.confirm("Delete every production Graph scan and job, then queue a fresh scan of all allowed sessions? Lab runs will be preserved.");
+  const confirmed = await window.adminConfirmation.confirm({
+    title: "Delete scans and rescan all?",
+    message: "Delete every production Graph scan and job, then queue a fresh scan of all allowed sessions?",
+    detail: "Lab runs will be preserved.",
+    confirmLabel: "Delete and rescan",
+    tone: "danger",
+  });
   if (!confirmed) return;
   const generation = ++state.dataGeneration;
   state.analysisDetailGeneration += 1;

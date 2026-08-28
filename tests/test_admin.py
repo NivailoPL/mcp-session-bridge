@@ -1,51 +1,24 @@
 import asyncio
 import base64
-import importlib
 import json
 import re
 import shutil
 import subprocess
-import sys
 from pathlib import Path
 
 import pytest
 from starlette.testclient import TestClient
 
-from app.security import password_hash
 from app.search import SearchConfig
+from app.session_package import MASKED_MODEL_RESPONSE
 from app.storage import SESSION_GROUP_ICON_KEYS
 from app.time_format import DISPLAY_TIMEZONE_SETTING_KEY
 from tests.pdf_samples import make_pdf
+from tests.viewer_harness import requires_node, run_js, slice_source, viewer_source
 
 
-def test_admin_viewer_uses_brand_lockup_and_tab_assets() -> None:
-    viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
-    head = viewer[: viewer.index("</head>")]
-    nav_script = Path("pearl-gradient-nav.js").read_text(encoding="utf-8")
-
-    assert 'rel="icon" type="image/png" sizes="16x16"' in head
-    assert 'rel="icon" type="image/png" sizes="32x32"' in head
-    assert 'rel="apple-touch-icon" sizes="180x180"' in head
-    assert 'rel="manifest" href="/admin/assets/brand/manifest.webmanifest"' in head
-    assert 'href="/admin/assets/pearl-gradient-nav.css"' in head
-    assert '<a class="workspace-brand" href="/admin/sessions" aria-label="MCP Session Bridge Sessions">' in viewer
-    assert 'src="/admin/assets/brand/svg/lockup-horizontal-dark.svg"' in viewer
-    assert viewer.count("lockup-horizontal-dark.svg") == 1
-    assert '<section class="brand">' not in viewer
-    assert '<script src="/admin/assets/pearl-gradient-nav.js"></script>' in viewer
-    assert 'class="brand-lockup"' not in viewer
-
-    assert '<nav class="workspace-nav sb-nav" role="tablist"' in viewer
-    assert 'data-label="SESSIONS">SESSIONS</a>' in viewer
-    assert 'data-label="GRAPH">GRAPH</a>' in viewer
-    assert 'data-label="CONTEXTS">CONTEXTS</span>' in viewer
-    assert 'aria-selected="true"' in viewer
-    assert 'aria-selected="false"' in viewer
-    assert "ArrowRight" in nav_script
-
-
-def test_admin_login_uses_dark_branding_and_inline_lockup(tmp_path, monkeypatch) -> None:
-    main = _load_main(tmp_path, monkeypatch)
+def test_admin_login_uses_dark_branding_and_inline_lockup(load_main) -> None:
+    main = load_main(graph_experimental=True)
     client = TestClient(main.app, base_url="http://127.0.0.1:8787")
 
     response = client.get("/admin/login?next=/admin/sessions")
@@ -87,7 +60,6 @@ def test_admin_login_uses_dark_branding_and_inline_lockup(tmp_path, monkeypatch)
     assert "Invalid username or password." in invalid.text
 
 
-
 def test_admin_viewer_group_ui_contract() -> None:
     viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
 
@@ -105,8 +77,8 @@ def test_admin_viewer_group_ui_contract() -> None:
     assert 'spanCls("file-meta", "No files")' not in viewer
 
 
-def test_admin_brand_assets_require_login_and_serve_png(tmp_path, monkeypatch) -> None:
-    main = _load_main(tmp_path, monkeypatch)
+def test_admin_brand_assets_require_login_and_serve_png(load_main) -> None:
+    main = load_main(graph_experimental=True)
     anonymous = TestClient(main.app, base_url="http://127.0.0.1:8787")
 
     login_required = anonymous.get(
@@ -131,44 +103,29 @@ def test_admin_brand_assets_require_login_and_serve_png(tmp_path, monkeypatch) -
     assert client.get("/admin/assets/brand/png/missing.png").status_code == 404
 
 
-
-
-def test_admin_viewer_compacts_unselected_sessions() -> None:
+@requires_node
+def test_admin_viewer_covered_row_keeps_the_row_contract() -> None:
     viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
 
-    render_sessions = viewer[
-        viewer.index("function renderSessions"):
-        viewer.index("function renderSessionListSensitiveGuard")
+    # a covered row is redacted in place: same grid, same height, nothing laid over it
+    assert "sensitive-compact-content" not in viewer
+    assert "session-card-sensitive-overlay" not in viewer
+    assert "sensitive-blurred" not in viewer
+
+    redacted = viewer[
+        viewer.index(".session-title-redacted {"):
+        viewer.index(".session-stamp-group")
     ]
-    assert 'item.classList.toggle("is-compact", !isSelected);' in render_sessions
-    assert 'const isSelected = session.session_id === state.selectedSessionId;' in render_sessions
-    assert 'if (isSelected && state.manualRenameSessionId === session.session_id) {' in render_sessions
-    assert 'content.append(sessionCompactTitle(session, group, dateBucket));' in render_sessions
-    assert 'item.setAttribute("aria-label"' in render_sessions
-    assert 'function sessionGroupChip(group, fallbackId)' in viewer
-    assert 'function sessionCompactTitle(session, group, dateBucket = null)' in viewer
-    assert ".session-button.is-compact" in viewer
-    assert 'content.classList.add("sensitive-compact-content");' in render_sessions
+    assert "width: var(--redacted-width, 62%);" in redacted
+    assert "height: 9px;" in redacted
 
-
-def test_admin_viewer_compact_sensitive_overlay_fits_card_contract() -> None:
-    viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
-
-    compact_overlay = viewer[
-        viewer.index(".session-card-sensitive-overlay {"):
-        viewer.index("#threadSensitiveOverlay")
-    ]
-    assert "padding: .25rem .55rem;" in compact_overlay
-    assert "background: rgba(8, 11, 16, .86);" in compact_overlay
-    assert "inset: 0 0 0 var(--session-compact-icon-offset);" in compact_overlay
-    assert "width: auto;" in compact_overlay
-    assert "display: flex;" in compact_overlay
-    assert ".session-card-sensitive-overlay .sensitive-overlay-card svg" in compact_overlay
-    assert "--session-compact-icon-offset: calc(.85rem + 1.1rem + .6rem);" in viewer
-    assert ".session-button.is-compact .session-card-content.sensitive-compact-content .session-title {" in viewer
+    assert "function redactedSessionTitle(session)" in viewer
+    assert 'node.style.setProperty("--redacted-width"' in viewer
+    assert ".session-guard-glyph svg { width: 14px; height: 14px; }" in viewer
 
 
 @pytest.mark.skipif(shutil.which("node") is None, reason="Node.js is required for the browser renderer smoke test")
+@requires_node
 def test_admin_viewer_session_date_groups_use_display_timezone() -> None:
     viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
     date_helpers = viewer[
@@ -209,8 +166,8 @@ process.stdout.write(JSON.stringify({
     assert rendered["labels"] == [
         "Today",
         "Yesterday",
-        "More than 2 days ago",
-        "More than 7 days ago",
+        "Earlier this week",
+        "Older",
     ]
     assert rendered["buckets"] == [
         "today",
@@ -227,6 +184,7 @@ process.stdout.write(JSON.stringify({
 
 
 @pytest.mark.skipif(shutil.which("node") is None, reason="Node.js is required for the browser renderer smoke test")
+@requires_node
 def test_admin_viewer_session_list_stamps_use_display_timezone() -> None:
     viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
     helpers = viewer[
@@ -237,8 +195,7 @@ def test_admin_viewer_session_list_stamps_use_display_timezone() -> None:
 const state = { displayTimezone: "Europe/Warsaw" };
 process.stdout.write(JSON.stringify({
   today: sessionListStamp("2026-08-13T07:12:00Z", "today"),
-  older: sessionListStamp("2026-08-11T15:08:00Z", "more-than-2-days"),
-  meta: sessionListMetaTimestamp("2026-08-13T15:21:00Z")
+  older: sessionListStamp("2026-08-11T15:08:00Z", "more-than-2-days")
 }));
 """
     node = shutil.which("node")
@@ -254,11 +211,11 @@ process.stdout.write(JSON.stringify({
     assert rendered == {
         "today": "09:12",
         "older": "11.08",
-        "meta": "Thursday 17:21",
     }
 
 
 @pytest.mark.skipif(shutil.which("node") is None, reason="Node.js is required for the browser renderer smoke test")
+@requires_node
 def test_admin_viewer_session_list_rendering() -> None:
     viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
     date_helpers = viewer[
@@ -271,7 +228,7 @@ def test_admin_viewer_session_list_rendering() -> None:
     ]
     render_sessions = session_list_helpers + viewer[
         viewer.index("function renderSessions"):
-        viewer.index("function renderSessionListSensitiveGuard")
+        viewer.index("function chip(text, warn)")
     ]
     harness = r"""
 class Element {
@@ -323,11 +280,18 @@ function sessionGroupChip(group, fallbackId) {
 }
 function svgNode() { return spanCls("group-icon"); }
 function renderSessionActions() { return spanCls("session-actions", "actions"); }
-function renderSessionRenameForm() { return spanCls("session-rename", "rename form"); }
+function renderSessionRenameForm() {
+  const form = new Element("form");
+  form.className = "session-rename";
+  form.textContent = "rename form";
+  form.append(new Element("input"));
+  return form;
+}
 function formatLastTurnDate() { return "date"; }
 function setStatus() {}
-function runFileContinuation() {}
-function loadSession() {}
+function runFileContinuation(_kind, continuation) { continuation(); }
+let loadSessionCalls = 0;
+function loadSession() { loadSessionCalls += 1; }
 function renderSessionListSensitiveGuard() {}
 function filteredSessions() {
   return state.sessions.filter((session) => (
@@ -367,7 +331,6 @@ const dom = {
 function cardSnapshot(node) {
   return {
     active: node.classList.contains("is-active"),
-    compact: node.classList.contains("is-compact"),
     role: node.role,
     tabIndex: node.tabIndex,
     hasKeydown: Boolean(node.listeners.keydown),
@@ -389,10 +352,37 @@ const initialStructure = listStructure();
 state.selectedSessionId = "other-id";
 state.manualRenameSessionId = "selected-id";
 renderSessions();
-const switched = dom.sessionList.children.filter((node) => hasClass(node, "session-button")).map(cardSnapshot);
+const switchedCards = dom.sessionList.children.filter((node) => hasClass(node, "session-button"));
+const switched = switchedCards.map(cardSnapshot);
 const switchedHeadings = listHeadings();
 const switchedStructure = listStructure();
-process.stdout.write(JSON.stringify({ initial, switched, initialHeadings, switchedHeadings, initialStructure, switchedStructure }));
+const renameInput = switchedCards[0].children[0].children[0].children[0];
+const renameSpace = {
+  key: " ",
+  target: renameInput,
+  prevented: false,
+  preventDefault() { this.prevented = true; },
+};
+switchedCards[0].listeners.keydown(renameSpace);
+const afterRenameInputSpace = { loadSessionCalls, prevented: renameSpace.prevented };
+const rowSpace = {
+  key: " ",
+  target: switchedCards[1],
+  prevented: false,
+  preventDefault() { this.prevented = true; },
+};
+switchedCards[1].listeners.keydown(rowSpace);
+const afterRowSpace = { loadSessionCalls, prevented: rowSpace.prevented };
+process.stdout.write(JSON.stringify({
+  initial,
+  switched,
+  initialHeadings,
+  switchedHeadings,
+  initialStructure,
+  switchedStructure,
+  afterRenameInputSpace,
+  afterRowSpace,
+}));
 """
     node = shutil.which("node")
     assert node is not None
@@ -404,15 +394,15 @@ process.stdout.write(JSON.stringify({ initial, switched, initialHeadings, switch
     )
     rendered = json.loads(completed.stdout)
 
-    expected_headings = ["Today", "Yesterday", "More than 2 days ago", "More than 7 days ago"]
+    expected_headings = ["Today", "Yesterday", "Earlier this week", "Older"]
     expected_structure = [
         "heading:Today",
         "card",
         "heading:Yesterday",
         "card",
-        "heading:More than 2 days ago",
+        "heading:Earlier this week",
         "card",
-        "heading:More than 7 days ago",
+        "heading:Older",
         "card",
     ]
     assert rendered["initialHeadings"] == expected_headings
@@ -421,26 +411,25 @@ process.stdout.write(JSON.stringify({ initial, switched, initialHeadings, switch
     assert rendered["switchedStructure"] == expected_structure
     initial_selected, initial_other, initial_two_days, initial_old = rendered["initial"]
     assert initial_selected["active"] is True
-    assert initial_selected["compact"] is False
     assert initial_selected["compactIcon"] is True
     assert initial_selected["compactIconFirst"] is True
     assert initial_selected["compactIconHidden"] is True
     assert initial_selected["ariaLabel"] == ""
-    assert "selected-id" in initial_selected["text"]
+    assert "selected-id" not in initial_selected["text"]
+    assert "Brainstorming · 4 turns" in initial_selected["text"]
     assert "actions" in initial_selected["text"]
     assert initial_selected["role"] == "button"
     assert initial_selected["tabIndex"] == 0
     assert initial_selected["hasKeydown"] is True
     assert initial_other["active"] is False
-    assert initial_other["compact"] is True
     assert initial_other["compactIcon"] is True
     assert initial_other["compactIconFirst"] is True
     assert initial_other["compactIconHidden"] is True
     assert initial_other["ariaLabel"] == "Other session — Brainstorming"
     assert initial_other["text"].startswith("Other session")
-    assert "Brainstorming" not in initial_other["text"]
+    assert "Brainstorming · 2 turns" in initial_other["text"]
     assert "other-id" not in initial_other["text"]
-    assert "actions" not in initial_other["text"]
+    assert "actions" in initial_other["text"]
     assert initial_other["role"] == "button"
     assert initial_other["tabIndex"] == 0
     assert initial_other["hasKeydown"] is True
@@ -448,25 +437,23 @@ process.stdout.write(JSON.stringify({ initial, switched, initialHeadings, switch
     assert initial_old["text"].startswith("Old session")
 
     switched_selected, switched_other, switched_two_days, switched_old = rendered["switched"]
+    # renaming no longer requires opening the session first
     assert switched_selected["active"] is False
-    assert switched_selected["compact"] is True
-    assert switched_selected["compactIcon"] is True
-    assert switched_selected["compactIconFirst"] is True
-    assert switched_selected["compactIconHidden"] is True
     assert switched_selected["ariaLabel"] == "Selected session — Brainstorming"
-    assert "rename form" not in switched_selected["text"]
-    assert "Brainstorming" not in switched_selected["text"]
+    assert "rename form" in switched_selected["text"]
+    assert switched_selected["compactIcon"] is False
     assert switched_other["active"] is True
-    assert switched_other["compact"] is False
     assert switched_other["compactIcon"] is True
     assert switched_other["compactIconFirst"] is True
     assert switched_other["compactIconHidden"] is True
     assert switched_other["ariaLabel"] == ""
-    assert "other-id" in switched_other["text"]
-    assert "Brainstorming" in switched_other["text"]
+    assert "other-id" not in switched_other["text"]
+    assert "Brainstorming · 2 turns" in switched_other["text"]
     assert "actions" in switched_other["text"]
     assert switched_two_days["text"].startswith("Two-day session")
     assert switched_old["text"].startswith("Old session")
+    assert rendered["afterRenameInputSpace"] == {"loadSessionCalls": 0, "prevented": False}
+    assert rendered["afterRowSpace"] == {"loadSessionCalls": 1, "prevented": True}
 
 
 def test_admin_viewer_sensitive_group_privacy_contract() -> None:
@@ -478,13 +465,26 @@ def test_admin_viewer_sensitive_group_privacy_contract() -> None:
     assert viewer.count("sensitiveIconSvg()") >= 4
     assert 'revealedSensitiveSessionLists: new Set()' in viewer
     assert 'revealedSensitiveThreads: new Set()' in viewer
-    assert 'id="sessionListSensitiveOverlay"' in viewer
     assert 'id="threadSensitiveOverlay"' in viewer
-    assert viewer.count("Sensitive content") >= 2
-    assert viewer.count("Click to reveal") >= 2
-    assert "dom.sessionList.inert = listIsGuarded;" in viewer
-    assert "dom.threadSensitiveContent.inert = threadIsGuarded;" in viewer
-    assert "state.revealedSensitiveSessionLists.add(groupId);" in viewer
+    assert "The conversation stays covered until you reveal it." in viewer
+    assert "Reveal conversation" in viewer
+    assert 'id="threadSensitiveBody"' in viewer
+    assert "dom.threadSensitiveBody.inert = threadIsGuarded;" in viewer
+    assert "dom.threadSensitiveContent.inert" not in viewer
+    assert ".sensitive-curtain:hover { background: var(--bg-base); }" in viewer
+    # a covered thread keeps its header usable, but not its title
+    assert 'dom.sessionTitle.classList.toggle("is-redacted", threadIsGuarded);' in viewer
+    assert ".topbar-title h2.is-redacted" in viewer
+    # a covered transcript is never built, so nothing survives in a screenshot or the DOM
+    render_exchanges = viewer[
+        viewer.index("function renderExchanges()"):
+        viewer.index("function renderThreadSensitiveGuard()")
+    ]
+    assert "if (selectedThreadIsGuarded()) {" in render_exchanges
+    assert 'dom.sessionTitle.textContent = "";' in render_exchanges
+    guarded_return = render_exchanges.index("if (selectedThreadIsGuarded()) {")
+    assert render_exchanges.index("const visible = state.exchanges;") > guarded_return
+    assert "state.revealedSensitiveSessionLists.add(session.group_id);" in viewer
     assert "state.revealedSensitiveThreads.add(groupId);" in viewer
     assert 'input.disabled = Boolean(group.is_sensitive);' in viewer
     assert "This group stays in local BM25 search." in viewer
@@ -510,109 +510,36 @@ def test_admin_viewer_sensitive_group_privacy_contract() -> None:
     assert "group.is_sensitive ? sensitiveIconSvg()" not in group_button
 
 
-    all_sessions_guard = viewer[
-        viewer.index("const cardIsGuarded = state.activeGroupId === \"all\""):
+    # covering follows the group, under every filter the list can be in
+    covered = viewer[
+        viewer.index("function sessionRowIsCovered(session"):
+        viewer.index("function redactedSessionTitle(session)")
+    ]
+    assert "Boolean(group?.is_sensitive)" in covered
+    assert "!state.revealedSensitiveSessionLists.has(session.group_id)" in covered
+    assert "state.activeGroupId" not in covered
+
+    guard = viewer[
+        viewer.index("const cardIsGuarded = sessionRowIsCovered(session, group);"):
         viewer.index("dom.sessionList.append(item);", viewer.index("const cardIsGuarded"))
     ]
-    assert 'if (!cardIsGuarded) {' in all_sessions_guard
-    assert 'item.addEventListener("keydown"' in all_sessions_guard
-    assert "content.inert = true;" in all_sessions_guard
-    reveal_handler = all_sessions_guard[all_sessions_guard.index('overlay.addEventListener("click"'):]
-    assert "state.revealedSensitiveSessionLists.add(groupId);" in reveal_handler
+    assert "const activate = cardIsGuarded ? revealGroup : selectSession;" in guard
+    assert 'item.addEventListener("keydown"' in guard
+    assert "sessionCompactTitle(session, group, dateBucket, true)" in guard
+    reveal_handler = guard[guard.index("const revealGroup"):guard.index("const activate")]
+    assert "state.revealedSensitiveSessionLists.add(session.group_id);" in reveal_handler
     assert "renderSessions();" in reveal_handler
-    assert "selectSession();" not in reveal_handler
+    assert "loadSession" not in reveal_handler
 
-
-def test_admin_viewer_initializes_sensitive_icons_after_svg_constants() -> None:
-    viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
-
-    svg_constants = viewer.index("const GROUP_ICON_SVG_ATTRS")
-    static_icon_initialization = viewer.index(
-        'for (const icon of document.querySelectorAll(".sensitive-overlay-icon, .sensitive-toggle-icon"))'
-    )
-    assert svg_constants < static_icon_initialization
-
-
-def test_admin_viewer_admin_session_and_timezone_live_in_general_settings() -> None:
-    viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
-
-    sidebar_menu = viewer[
-        viewer.index('<div class="settings-row"'):
-        viewer.index('<section class="group-panel"')
+    # every row action reveals a covered group first, so none of them can work around the cover
+    actions = viewer[
+        viewer.index("function renderSessionActions(session)"):
+        viewer.index("function renderSessionRenameForm(session)")
     ]
-    general = viewer[
-        viewer.index('<section data-settings-panel="general"'):
-        viewer.index('<section data-settings-panel="transcript"')
-    ]
-    assert 'id="identity"' not in sidebar_menu
-    assert 'action="/admin/logout"' not in sidebar_menu
-    assert "\n          Search\n" in sidebar_menu
-    assert 'Search context' not in sidebar_menu
-    assert sidebar_menu.index("\n          Search\n") < sidebar_menu.index("\n          Settings\n")
-    assert 'id="identity"' in general
-    assert 'action="/admin/logout"' in general
-    assert general.index('id="identity"') < general.index('id="timezoneSelect"')
-    assert 'id="timezoneSelect"' in general
-
-
-def test_admin_viewer_settings_opens_before_refreshing_configuration() -> None:
-    viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
-    opener = viewer[
-        viewer.index("async function openAiSettingsDialog()"):
-        viewer.index("function fillSettingsForm()")
-    ]
-
-    assert opener.index('selectSettingsTab("general")') < opener.index("await loadSettings()")
-    assert opener.index("dom.aiSettingsDialog.showModal()") < opener.index("await loadSettings()")
-    assert "dom.aiSettingsStatus.textContent" in opener
-
-
-def test_admin_viewer_exposes_large_tool_result_compatibility_controls() -> None:
-    viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
-
-    mcp_panel = viewer[
-        viewer.index('<section data-settings-panel="transcript"'):
-        viewer.index('<section data-settings-panel="search"')
-    ]
-    settings_tabs = viewer[
-        viewer.index('<nav class="settings-tabs"'):
-        viewer.index('<div class="settings-content">')
-    ]
-    assert 'data-settings-tab="transcript">MCP</button>' in settings_tabs
-    assert 'data-settings-tab="transcript">Transcript</button>' not in settings_tabs
-    assert "Transcript delivery" not in mcp_panel
-    assert mcp_panel.count('class="mcp-settings-section') == 2
-    assert mcp_panel.index("Large tool result format") < mcp_panel.index("Chunk settings")
-    assert mcp_panel.index("Chunk settings") < mcp_panel.index("Global transcript chunk")
-    for heading in (
-        "Global transcript chunk",
-        "Run a harness test",
-        "Checkpoint-verified recommendations",
-        "Recent results",
-    ):
-        assert heading in mcp_panel
-    assert 'id="toolOutputOptimized"' in mcp_panel
-    assert 'value="optimized"' in mcp_panel
-    assert 'id="toolOutputMaximumCompatibility"' in mcp_panel
-    assert 'value="maximum_compatibility"' in mcp_panel
-    assert "returns large payloads once" in mcp_panel
-    assert "can nearly double" in mcp_panel
-    assert 'id="toolOutputRestartRequired"' in mcp_panel
-    assert 'id="toolOutputRestart"' in mcp_panel
-    assert 'id="toolOutputRestartMessage"' in mcp_panel
-    assert "refresh the tool list" in mcp_panel.lower()
-    assert 'saveToolOutputSettings()' in viewer
-    assert 'restartBridgeService()' in viewer
-    assert "toolOutput.restart_pending || state.toolOutputRestartInFlight" in viewer
-    assert "!payload.tool_output.restart_pending && !payload.tool_output.restart_required" in viewer
-
-
-def test_admin_viewer_does_not_expose_codex_workspace() -> None:
-    viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
-
-    assert 'id="codexOpenButton"' not in viewer
-    assert 'id="codexDialog"' not in viewer
-    assert "/admin/api/codex" not in viewer
+    assert "const revealIfCovered = () => {" in actions
+    assert "if (!sessionRowIsCovered(session)) return false;" in actions
+    assert "state.revealedSensitiveSessionLists.add(session.group_id);" in actions
+    assert actions.count("revealIfCovered()") == 3
 
 
 def test_deployment_includes_narrow_restart_helper() -> None:
@@ -623,106 +550,7 @@ def test_deployment_includes_narrow_restart_helper() -> None:
     assert "User=" not in helper
 
 
-def test_admin_viewer_session_move_requires_explicit_confirmation() -> None:
-    viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
-
-    assert 'id="sessionMoveDialog"' in viewer
-    assert 'id="sessionMoveGroupList"' in viewer
-    assert 'id="sessionMoveConfirmation"' in viewer
-    assert 'id="sessionMoveConfirm"' in viewer
-    assert 'button("Move", (event) =>' in viewer
-    assert 'openSessionMoveDialog(session.session_id);' in viewer
-    assert 'openSessionMoveDialog(state.selectedSession.session_id, groupId);' in viewer
-    assert (
-        'Session ${pending.sessionId} will be moved from group '
-        '${sourceGroup.name} to ${destinationGroup.name}.'
-    ) in viewer
-    assert 'await moveSession(pending.sessionId, pending.destinationGroupId);' in viewer
-    selection_flow = viewer[
-        viewer.index("async function moveSelectedSession"):
-        viewer.index("function openSessionMoveDialog")
-    ]
-    assert "api(" not in selection_flow
-    assert 'const movedSessionIsVisible = filteredSessions().some' in viewer
-    assert 'else await loadSession("");' in viewer
-    assert "Session files will stay with the conversation." in viewer
-
-
-def test_admin_viewer_file_workspace_shell_contract() -> None:
-    viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
-
-    assert 'id="filesPanel"' not in viewer
-    assert 'id="fileDialog"' not in viewer
-    assert viewer.count('<dialog id="fileWorkspaceDialog"') == 1
-
-    rail = viewer[viewer.index('<nav id="turnNav"'):viewer.index("</nav>", viewer.index('<nav id="turnNav"'))]
-    assert 'id="fileWorkspaceOpen"' in rail
-    assert 'id="fileWorkspaceCount"' in rail
-    assert "pdfJsPromise = null;" in viewer
-    assert "queueCurrentPageSafely" in viewer
-    assert "invalidateFileOpen();" in viewer
-    assert "clearPdfPreview();" in viewer
-    assert "PDF uploads are unavailable in offline demo mode." in viewer
-    assert 'aria-haspopup="dialog"' in rail
-
-    assert 'dom.turnNav.classList.toggle("show", Boolean(state.selectedSession));' in viewer
-    assert 'button.disabled = !hasTurns;' in viewer
-    assert 'class="file-workspace-grid"' in viewer
-    assert 'id="fileWorkspaceListPane"' in viewer
-    assert 'id="fileWorkspaceDetailPane"' in viewer
-    assert 'id="fileWorkspaceBack"' in viewer
-    assert 'spanCls("file-format-badge", fileFormatLabel(file))' in viewer
-
-    assert 'dom.fileWorkspaceContent.innerHTML = renderMarkdown(content || "\u2014");' in viewer
-    assert 'dom.fileWorkspaceContent.replaceChildren(preNode(content));' in viewer
-    assert 'const MAX_PDF_BYTES = 20_000_000;' in viewer
-    assert 'import("/admin/assets/pdfjs/pdf.min.mjs?v=6.1.200")' in viewer
-    assert 'function renderPdfPreview(file)' in viewer
-    assert 'return file?.content_kind === "pdf";' in viewer
-    assert 'extraction_status === "no_text"' in viewer
-    assert "state.pdfAbortController.abort();" in viewer
-    assert "OCR is not supported" in viewer
-    assert 'dom.fileWorkspaceOpen.focus();' in viewer
-
-
-def test_admin_viewer_markdown_table_contract() -> None:
-    viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
-
-    assert 'function parseMarkdownTable(lines, startIndex)' in viewer
-    assert 'function splitMarkdownTableRow(line)' in viewer
-    assert 'class="markdown-table-wrap"' in viewer
-    assert '<thead><tr>${headerHtml}</tr></thead>' in viewer
-    assert '<tbody>${bodyHtml}</tbody>' in viewer
-    assert 'rows.push(header.map((_, index) => cells[index] || ""));' in viewer
-    assert 'if (cells.length < 2) break;' not in viewer
-    assert 'isMarkdownTableStart(line, nextLine)' in viewer
-    assert '.markdown-table-wrap {' in viewer
-    assert '.markdown-body table {' in viewer
-    assert '.markdown-body th, .markdown-body td {' in viewer
-
-
-def test_admin_viewer_session_html_export_contract() -> None:
-    viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
-
-    assert 'id="exportHtmlButton"' in viewer
-    assert 'dom.exportHtmlButton.addEventListener("click", exportSessionHtml);' in viewer
-    assert 'function buildSessionExportHtml()' in viewer
-    assert 'state.exchanges.filter((exchange) => !exchange.is_deleted)' in viewer
-    assert 'function selectedThreadIsGuarded()' in viewer
-    assert 'dom.exportHtmlButton.disabled = !state.selectedSession || selectedThreadIsGuarded();' in viewer
-    assert 'if (selectedThreadIsGuarded()) return "";' in viewer
-    assert 'renderMarkdown(content || "\u2014")' in viewer
-    assert '<meta name="viewport" content="width=device-width, initial-scale=1">' in viewer
-    assert '@media (max-width: 640px)' in viewer
-    export_flow = viewer[
-        viewer.index("function exportSessionHtml()"):
-        viewer.index("function renderSessionTitleIcon")
-    ]
-    assert 'URL.createObjectURL(blob)' in export_flow
-    assert 'link.download = `${sessionExportFilename(state.selectedSession)}.html`;' in export_flow
-    assert 'URL.revokeObjectURL(url);' in export_flow
-
-
+@requires_node
 def test_admin_viewer_context_visibility_controls_contract() -> None:
     viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
 
@@ -749,6 +577,14 @@ def test_admin_viewer_context_visibility_controls_contract() -> None:
     assert "Mask hides only the model response and leaves an explicit placeholder for all models." in viewer
     assert "Exclude removes the complete user and model exchange from all MCP transcript chunks." in viewer
     assert "Both actions are reversible." in viewer
+    assert f'const MASKED_MODEL_RESPONSE = "{MASKED_MODEL_RESPONSE}";' in viewer
+    assert 'function maskedResponseNotice()' in viewer
+    assert 'spanCls("masked-response-copy", MASKED_MODEL_RESPONSE)' in viewer
+    assert viewer.count("if (isMasked) node.append(maskedResponseNotice());") == 1
+    assert viewer.count("if (isMasked) body.append(maskedResponseNotice());") == 1
+    assert viewer.count("if (isMasked) article.append(maskedResponseNotice());") == 1
+    assert 'const response = ex.is_masked ? MASKED_MODEL_RESPONSE' in viewer
+    assert ".masked-response-notice" in viewer
     assert 'function renderExcludedTurnBar(exchange)' in viewer
     assert '"Excluded turn"' in viewer
     assert 'spanCls("excluded-turn-note", `Note: ${exchange.deleted_reason}`)' in viewer
@@ -756,6 +592,7 @@ def test_admin_viewer_context_visibility_controls_contract() -> None:
 
 
 @pytest.mark.skipif(shutil.which("node") is None, reason="Node.js is required for the browser renderer smoke test")
+@requires_node
 def test_admin_viewer_excluded_turn_rendering_hides_message_content() -> None:
     viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
     render_group = viewer[viewer.index("function renderExGroup"):viewer.index("function renderMsg")]
@@ -827,6 +664,7 @@ process.stdout.write(JSON.stringify({
 
 
 @pytest.mark.skipif(shutil.which("node") is None, reason="Node.js is required for the browser renderer smoke test")
+@requires_node
 def test_admin_viewer_markdown_hides_excluded_message_content() -> None:
     viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
     renderer = viewer[viewer.index("function buildMarkdown()"):viewer.index("function buildSessionExportHtml")]
@@ -858,6 +696,7 @@ const state = {
 
 
 @pytest.mark.skipif(shutil.which("node") is None, reason="Node.js is required for the browser renderer smoke test")
+@requires_node
 def test_admin_viewer_markdown_table_rendering() -> None:
     viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
     renderer = viewer[viewer.index("function renderMarkdown"):viewer.index("function svgNode")]
@@ -893,133 +732,8 @@ def test_admin_viewer_markdown_table_rendering() -> None:
     assert "<script>" not in html
 
 
-def test_admin_viewer_file_upload_and_move_contract() -> None:
-    viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
-
-    # Each scope remains fully usable without drag-and-drop.
-    assert 'id="sessionFileInput"' in viewer
-    assert 'id="groupFileInput"' in viewer
-    assert viewer.count('class="file-drop-zone"') == 2
-    assert 'aria-describedby="sessionFileStatus"' in viewer
-    assert 'aria-describedby="groupFileStatus"' in viewer
-    assert 'data-file-action="move"' in viewer
-    assert 'runFileContinuation("move", () => moveFile(fileId, targetScope, moveButton), moveButton);' in viewer
-
-    # Browser preflight happens on bytes before the JSON/base64 request is built.
-    assert 'const MAX_FILE_BYTES = 1_000_000;' in viewer
-    assert 'new Set([".md", ".markdown", ".txt", ".json", ".yaml", ".yml", ".csv", ".tsv"])' in viewer
-    assert 'new TextDecoder("utf-8", { fatal: true })' in viewer
-    assert 'bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf' in viewer
-    assert 'content_base64: bytesToBase64(prepared.bytes)' in viewer
-
-    # DnD is an enhancement with explicit internal-vs-OS discrimination.
-    assert 'const INTERNAL_FILE_DRAG_TYPE = "application/x-mcp-session-file";' in viewer
-    assert 'types.includes(INTERNAL_FILE_DRAG_TYPE)' in viewer
-    assert 'types.includes("Files")' in viewer
-    assert 'event.dataTransfer.getData(INTERNAL_FILE_DRAG_TYPE)' in viewer
-    assert 'event.dataTransfer.files' in viewer
-    assert 'dropEffect = kind === "internal" ? "move" : "copy"' in viewer
-
-    # Current-scope moves are local no-ops; successful responses commit manifests locally.
-    assert 'if (sourceScope === targetScope)' in viewer
-    assert 'Already in ${scopeLabel(targetScope)} files.' in viewer
-    assert 'function applyFileManifest(file)' in viewer
-    assert 'function removeFileManifest(fileId)' in viewer
-    assert 'Number(right.created_at || 0) - Number(left.created_at || 0)' in viewer
-    assert 'const operationSessionId = state.selectedSessionId;' in viewer
-    assert 'encodeURIComponent(operationSessionId)' in viewer
-    assert 'if (state.selectedSessionId !== operationSessionId) return;' in viewer
-    assert 'const movingSelectedFile = state.selectedFile && String(state.selectedFile.file_id) === String(fileId);' in viewer
-    assert 'window.requestAnimationFrame(() => focusTarget.focus());' in viewer
-
-    # Demo mode uses the same create/move paths and mutates its in-memory manifests.
-    assert 'const demoCreate = path.match(/^\\/admin\\/api\\/sessions\\/(.+)\\/files$/);' in viewer
-    assert 'const demoFileMutation = path.match(/^\\/admin\\/api\\/sessions\\/(.+)\\/files\\/(\\d+)$/);' in viewer
-    assert 'created_by: "demo"' in viewer
-    assert 'moveDemoFile(entry, demoFile, body.scope_type);' in viewer
-
-
-def test_admin_viewer_file_edit_delete_and_dirty_guard_contract() -> None:
-    viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
-
-    # Preview, edit, guard, conflict, and delete all live inside one workspace.
-    assert viewer.count('<dialog id="fileWorkspaceDialog"') == 1
-    workspace = viewer[
-        viewer.index('<dialog id="fileWorkspaceDialog"'):
-        viewer.index('<dialog id="aiSettingsDialog"')
-    ]
-    assert workspace.count("<dialog") == 1
-    assert 'id="fileEditButton"' in workspace
-    assert 'id="fileEditor"' in workspace
-    assert 'id="fileGuardPane"' in workspace
-    assert 'id="fileDeletePane"' in workspace
-    assert 'id="fileDeleteWarning"' in workspace
-
-    # Dirty means draft differs from the content opened from this exact hash.
-    assert "fileBaselineContent: \"\"" in viewer
-    assert "fileOpenedSha256: \"\"" in viewer
-    assert "fileDraft: \"\"" in viewer
-    assert "state.fileDraft !== state.fileBaselineContent" in viewer
-    assert "expected_sha256: state.fileOpenedSha256" in viewer
-    assert 'method: "PATCH"' in viewer
-
-    # One continuation guard owns every draft-losing action, including Escape.
-    for action in ("close", "back", "select", "move", "delete"):
-        assert f'runFileContinuation("{action}"' in viewer
-    assert 'dom.fileWorkspaceDialog.addEventListener("cancel"' in viewer
-    assert "event.preventDefault();" in viewer
-    assert "state.pendingFileContinuation" in viewer
-    assert "if (state.pendingFileContinuation) return Promise.resolve();" in viewer
-    assert 'const interactionsLocked = pending || mode === "guard";' in viewer
-    assert 'for (const button of dom.fileWorkspaceDialog.querySelectorAll(".file-button"))' in viewer
-    assert 'id="fileGuardSave"' in workspace
-    assert 'id="fileGuardDiscard"' in workspace
-    assert 'id="fileGuardKeepEditing"' in workspace
-
-    # Invalid/conflicting saves retain the editor buffer and give recovery help.
-    assert "File content cannot be empty." in viewer
-    assert "File content is larger than 1 MB." in viewer
-    assert "Your draft is still here." in viewer
-    assert "Reload the latest file or copy your draft" in viewer
-
-    # Permanent delete is accessible, inline, explicit, and server-confirmed.
-    assert "Delete ${file.filename" in viewer
-    assert "permanent" in workspace.lower()
-    assert "fileOpenGeneration: 0" in viewer
-    assert "sessionLoadGeneration: 0" in viewer
-    assert "function invalidateFileOpen()" in viewer
-    assert "const openGeneration = ++state.fileOpenGeneration;" in viewer
-    assert "openGeneration !== state.fileOpenGeneration" in viewer
-    assert "const loadGeneration = ++state.sessionLoadGeneration;" in viewer
-    assert "loadGeneration !== state.sessionLoadGeneration" in viewer
-    assert 'runFileContinuation("session", continueSelection, item);' in viewer
-    assert 'Wait for the file operation to finish.' in viewer
-    assert "!dom.fileWorkspaceDialog.open" in viewer
-    assert "no recovery" in workspace.lower()
-    assert "Models may still have references in conversation context" in workspace
-    assert "may no longer find or download the file" in workspace
-    assert 'method: "DELETE"' in viewer
-
-    # Demo mode exercises the same PATCH edit and DELETE endpoints.
-    assert "updateDemoFileContent(demoFile, body.content);" in viewer
-    assert "demo.files = demo.files.filter" in viewer
-
-
-def test_admin_viewer_demo_group_delete_reassigns_group_files() -> None:
-    viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
-
-    delete_branch = viewer[
-        viewer.index('if (groupMatch && method === "DELETE")'):
-        viewer.index('if (path === "/admin/api/sessions")')
-    ]
-    assert 'const destinationGroupId = body.destination_group_id || "uncategorized";' in delete_branch
-    assert "for (const file of demo.files)" in delete_branch
-    assert 'file.scope_type === "group" && file.group_id === groupId' in delete_branch
-    assert "file.group_id = destinationGroupId;" in delete_branch
-
-
-def test_admin_api_requires_login_and_csrf_for_mutations(tmp_path, monkeypatch) -> None:
-    main = _load_main(tmp_path, monkeypatch)
+def test_admin_api_requires_login_and_csrf_for_mutations(load_main) -> None:
+    main = load_main(graph_experimental=True)
     session = main.store.create_session("s1", "Admin test", "manual-context")
     exchange = main.store.save_exchange("s1", "Claude", "Message.", "Answer to correct.")
 
@@ -1094,8 +808,95 @@ def test_admin_api_requires_login_and_csrf_for_mutations(tmp_path, monkeypatch) 
     assert unmasked.json()["exchange"]["is_masked"] is False
 
 
-def test_admin_can_configure_ai_rename_and_update_session_title(tmp_path, monkeypatch) -> None:
-    main = _load_main(tmp_path, monkeypatch)
+def test_admin_database_export_requires_csrf_and_keeps_files_on_server(
+    load_main, tmp_path: Path
+) -> None:
+    main = load_main(graph_experimental=True)
+    main.store.create_session("export-me", "Export me", "manual-context")
+    client = TestClient(main.app, base_url="http://127.0.0.1:8787")
+
+    assert client.post("/admin/api/database/export").status_code == 401
+    login = client.post(
+        "/admin/login",
+        data={
+            "username": "owner",
+            "password": "secret-admin-password",
+            "next": "/admin/sessions",
+        },
+        follow_redirects=False,
+    )
+    assert login.status_code == 303
+    assert client.post("/admin/api/database/export").status_code == 403
+    csrf = client.get("/admin/api/me").json()["csrf_token"]
+
+    requested_path = tmp_path / "browser-selected-path"
+    response = client.post(
+        "/admin/api/database/export",
+        headers={"x-csrf-token": csrf},
+        json={"output": str(requested_path)},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    destination = Path(payload["export"]["artifact"]["path"])
+    assert destination.parent == tmp_path / "exports"
+    assert destination.is_dir()
+    assert list(destination.glob("*/*.md"))
+    assert "download" not in json.dumps(payload).lower()
+    assert not requested_path.exists()
+    assert response.headers["cache-control"] == "no-store"
+
+
+@requires_node
+def test_admin_database_export_button_sends_only_a_trigger_and_renders_vps_path() -> None:
+    source = slice_source(
+        "async function exportDatabaseMarkdown()", "// one panel, one save"
+    )
+    rendered = run_js(
+        r"""
+        const settingsDom = {
+          databaseExportButton: document.createElement("button"),
+          databaseExportResult: document.createElement("p"),
+        };
+        const calls = [];
+        const statuses = [];
+        const window = { adminConfirmation: { confirm: async () => true } };
+        async function api(path, options) {
+          calls.push({ path, options });
+          return { export: { artifact: {
+            path: "/var/lib/mcp-session-bridge/exports/mcp-bridge-export-test",
+            session_count: 3,
+            attachment_count: 2,
+          } } };
+        }
+        function renderSettingsStatus(message, kind) { statuses.push({ message, kind }); }
+        """
+        + source
+        + r"""
+        (async () => {
+          await exportDatabaseMarkdown();
+          emit({
+            calls,
+            result: settingsDom.databaseExportResult.textContent,
+            disabled: settingsDom.databaseExportButton.disabled,
+            busy: settingsDom.databaseExportButton.getAttribute("aria-busy"),
+            statuses,
+          });
+        })();
+        """,
+    )
+
+    assert rendered["calls"] == [
+        {"path": "/admin/api/database/export", "options": {"method": "POST"}}
+    ]
+    assert "/var/lib/mcp-session-bridge/exports/" in rendered["result"]
+    assert rendered["disabled"] is False
+    assert rendered["busy"] == "false"
+    assert rendered["statuses"][-1]["kind"] == "ok"
+
+
+def test_admin_can_configure_ai_rename_and_update_session_title(load_main, monkeypatch) -> None:
+    main = load_main(graph_experimental=True)
     main.store.create_session("s1", "Chaotic long title", "manual-context")
     main.store.save_exchange("s1", "Claude", "Pierwsza wiadomość użytkownika o ewaluacji LLM.", "OK")
     client = TestClient(main.app, base_url="http://127.0.0.1:8787")
@@ -1177,8 +978,8 @@ def test_admin_can_configure_ai_rename_and_update_session_title(tmp_path, monkey
     assert removed.json()["settings"]["configured"] is False
 
 
-def test_admin_can_update_display_timezone(tmp_path, monkeypatch) -> None:
-    main = _load_main(tmp_path, monkeypatch)
+def test_admin_can_update_display_timezone(load_main) -> None:
+    main = load_main(graph_experimental=True)
     client = TestClient(main.app, base_url="http://127.0.0.1:8787")
 
     login = client.post(
@@ -1216,8 +1017,8 @@ def test_admin_can_update_display_timezone(tmp_path, monkeypatch) -> None:
     assert legacy_updated.json()["display_timezone"] == "UTC"
 
 
-def test_admin_can_manage_session_groups_and_move_sessions(tmp_path, monkeypatch) -> None:
-    main = _load_main(tmp_path, monkeypatch)
+def test_admin_can_manage_session_groups_and_move_sessions(load_main) -> None:
+    main = load_main(graph_experimental=True)
     main.store.create_session("s1", "Admin group test", "manual-context")
     client = TestClient(main.app, base_url="http://127.0.0.1:8787")
 
@@ -1292,8 +1093,8 @@ def test_admin_can_manage_session_groups_and_move_sessions(tmp_path, monkeypatch
     assert bad_move.status_code == 404
 
 
-def test_admin_sensitive_group_prunes_and_blocks_external_rag_scope(tmp_path, monkeypatch) -> None:
-    main = _load_main(tmp_path, monkeypatch)
+def test_admin_sensitive_group_prunes_and_blocks_external_rag_scope(load_main, monkeypatch) -> None:
+    main = load_main(graph_experimental=True)
     main.store.create_session_group("Private", "#ef4444", "lock", group_id="private")
     client = TestClient(main.app, base_url="http://127.0.0.1:8787")
     client.post(
@@ -1342,8 +1143,8 @@ def test_admin_sensitive_group_prunes_and_blocks_external_rag_scope(tmp_path, mo
     assert main.admin.search.get_config().included_group_ids == ("private",)
 
 
-def test_admin_can_view_session_and_group_files(tmp_path, monkeypatch) -> None:
-    main = _load_main(tmp_path, monkeypatch)
+def test_admin_can_view_session_and_group_files(load_main) -> None:
+    main = load_main(graph_experimental=True)
     main.store.create_session_group("Tests", "#22c55e", "science")
     main.store.create_session("s1", "File admin test", "manual-context", group_id="tests")
     session_file = main.store.save_session_file("s1", "plan.md", "# Plan")
@@ -1374,18 +1175,8 @@ def test_admin_can_view_session_and_group_files(tmp_path, monkeypatch) -> None:
     assert session_file.file_id != group_file.file_id
 
 
-def _admin_client(main):
-    client = TestClient(main.app, base_url="http://127.0.0.1:8787")
-    client.post(
-        "/admin/login",
-        data={"username": "owner", "password": "secret-admin-password", "next": "/admin/sessions"},
-        follow_redirects=False,
-    )
-    return client, client.get("/admin/api/me").json()["csrf_token"]
-
-
-def test_codex_admin_api_auth_csrf_and_chat_contract(tmp_path, monkeypatch) -> None:
-    main = _load_main(tmp_path, monkeypatch)
+def test_codex_admin_api_auth_csrf_and_chat_contract(admin_client, load_main) -> None:
+    main = load_main(graph_experimental=True)
 
     class FakeCodex:
         async def status(self):
@@ -1422,7 +1213,7 @@ def test_codex_admin_api_auth_csrf_and_chat_contract(tmp_path, monkeypatch) -> N
     assert anonymous.get("/admin/api/codex/status").status_code == 401
     assert anonymous.post("/admin/api/codex/chat", json={"message": "Hello"}).status_code == 401
 
-    client, csrf = _admin_client(main)
+    client, csrf = admin_client(main)
     status = client.get("/admin/api/codex/status")
     assert status.status_code == 200
     assert status.headers["cache-control"] == "no-store"
@@ -1459,8 +1250,8 @@ def test_codex_admin_api_auth_csrf_and_chat_contract(tmp_path, monkeypatch) -> N
     ).status_code == 400
 
 
-def test_codex_admin_api_sanitizes_unavailable_and_protocol_errors(tmp_path, monkeypatch) -> None:
-    main = _load_main(tmp_path, monkeypatch)
+def test_codex_admin_api_sanitizes_unavailable_and_protocol_errors(admin_client, load_main) -> None:
+    main = load_main(graph_experimental=True)
     from app.codex_app_server import CodexProtocolError, CodexUnavailableError
 
     class UnavailableCodex:
@@ -1471,7 +1262,7 @@ def test_codex_admin_api_sanitizes_unavailable_and_protocol_errors(tmp_path, mon
             raise CodexProtocolError("raw frame bearer-secret")
 
     main.admin.codex = UnavailableCodex()
-    client, csrf = _admin_client(main)
+    client, csrf = admin_client(main)
 
     status = client.get("/admin/api/codex/status")
     assert status.status_code == 503
@@ -1489,15 +1280,15 @@ def test_codex_admin_api_sanitizes_unavailable_and_protocol_errors(tmp_path, mon
     assert "bearer" not in chat.text
 
 
-def test_codex_expired_conversation_has_stable_error_code(tmp_path, monkeypatch) -> None:
-    main = _load_main(tmp_path, monkeypatch)
+def test_codex_expired_conversation_has_stable_error_code(admin_client, load_main) -> None:
+    main = load_main(graph_experimental=True)
 
     class ExpiredCodex:
         async def chat(self, message, *, thread_id=None):
             raise ValueError("Unknown or expired Codex conversation.")
 
     main.admin.codex = ExpiredCodex()
-    client, csrf = _admin_client(main)
+    client, csrf = admin_client(main)
     response = client.post(
         "/admin/api/codex/chat",
         json={"message": "Continue", "thread_id": "old-thread"},
@@ -1517,8 +1308,8 @@ def _encoded_file(content: bytes, *, filename: str = "notes.md", scope_type: str
     }
 
 
-def test_admin_file_mutations_require_login_and_csrf(tmp_path, monkeypatch) -> None:
-    main = _load_main(tmp_path, monkeypatch)
+def test_admin_file_mutations_require_login_and_csrf(admin_client, load_main) -> None:
+    main = load_main(graph_experimental=True)
     main.store.create_session("s1", "File mutations", "manual-context")
     saved = main.store.save_session_file("s1", "existing.md", "old")
     anonymous = TestClient(main.app, base_url="http://127.0.0.1:8787")
@@ -1530,17 +1321,17 @@ def test_admin_file_mutations_require_login_and_csrf(tmp_path, monkeypatch) -> N
     for method, path, payload in calls:
         assert anonymous.request(method, path, json=payload).status_code == 401
 
-    client, csrf = _admin_client(main)
+    client, csrf = admin_client(main)
     for method, path, payload in calls:
         assert client.request(method, path, json=payload).status_code == 403
     assert csrf
 
 
-def test_admin_uploads_bounded_utf8_files_to_selected_session_or_group(tmp_path, monkeypatch) -> None:
-    main = _load_main(tmp_path, monkeypatch)
+def test_admin_uploads_bounded_utf8_files_to_selected_session_or_group(admin_client, load_main) -> None:
+    main = load_main(graph_experimental=True)
     main.store.create_session_group("Tests", "#22c55e", "science")
     main.store.create_session("s1", "File mutations", "manual-context", group_id="tests")
-    client, csrf = _admin_client(main)
+    client, csrf = admin_client(main)
     headers = {"x-csrf-token": csrf}
 
     uploaded = client.post(
@@ -1600,10 +1391,10 @@ def test_admin_uploads_bounded_utf8_files_to_selected_session_or_group(tmp_path,
     assert len(main.store.list_session_files(session_id="s1")) == 1
 
 
-def test_admin_uploads_previews_and_downloads_original_pdf(tmp_path, monkeypatch) -> None:
-    main = _load_main(tmp_path, monkeypatch)
+def test_admin_uploads_previews_and_downloads_original_pdf(admin_client, load_main) -> None:
+    main = load_main(graph_experimental=True)
     main.store.create_session("s1", "PDF admin", "manual-context")
-    client, csrf = _admin_client(main)
+    client, csrf = admin_client(main)
     raw = make_pdf("Admin PDF text")
 
     uploaded = client.post(
@@ -1642,10 +1433,10 @@ def test_admin_uploads_previews_and_downloads_original_pdf(tmp_path, monkeypatch
     assert group_upload.json()["file"]["group_id"] == "uncategorized"
 
 
-def test_admin_pdf_raw_requires_login_and_pdf_cannot_be_edited(tmp_path, monkeypatch) -> None:
-    main = _load_main(tmp_path, monkeypatch)
+def test_admin_pdf_raw_requires_login_and_pdf_cannot_be_edited(admin_client, load_main) -> None:
+    main = load_main(graph_experimental=True)
     main.store.create_session("s1", "PDF admin", "manual-context")
-    client, csrf = _admin_client(main)
+    client, csrf = admin_client(main)
     uploaded = client.post(
         "/admin/api/sessions/s1/files",
         json=_encoded_file(make_pdf(), filename="brief.pdf"),
@@ -1683,12 +1474,12 @@ def test_admin_pdf_raw_requires_login_and_pdf_cannot_be_edited(tmp_path, monkeyp
     assert client.get("/admin/assets/pdfjs/not-allowed.mjs").status_code == 404
 
 
-def test_admin_group_upload_uses_session_current_group_atomically(tmp_path, monkeypatch) -> None:
-    main = _load_main(tmp_path, monkeypatch)
+def test_admin_group_upload_uses_session_current_group_atomically(admin_client, load_main, monkeypatch) -> None:
+    main = load_main(graph_experimental=True)
     main.store.create_session_group("First", "#22c55e", "science")
     main.store.create_session_group("Second", "#3b82f6", "ideas")
     main.store.create_session("s1", "File mutations", "manual-context", group_id="first")
-    client, csrf = _admin_client(main)
+    client, csrf = admin_client(main)
     original_selected_session = main.admin._selected_session
 
     def select_then_move(request):
@@ -1709,15 +1500,15 @@ def test_admin_group_upload_uses_session_current_group_atomically(tmp_path, monk
     assert main.store.list_session_files(group_id="first") == []
 
 
-def test_admin_edits_moves_and_deletes_only_visible_files(tmp_path, monkeypatch) -> None:
-    main = _load_main(tmp_path, monkeypatch)
+def test_admin_edits_moves_and_deletes_only_visible_files(admin_client, load_main) -> None:
+    main = load_main(graph_experimental=True)
     main.store.create_session_group("Tests", "#22c55e", "science")
     main.store.create_session_group("Other", "#ef4444", "camera")
     main.store.create_session("s1", "File mutations", "manual-context", group_id="tests")
     main.store.create_session("s2", "Other session", "manual-context", group_id="other")
     saved = main.store.save_session_file("s1", "notes.md", "old")
     unrelated = main.store.save_session_file("s2", "private.md", "untouched")
-    client, csrf = _admin_client(main)
+    client, csrf = admin_client(main)
     headers = {"x-csrf-token": csrf}
     path = f"/admin/api/sessions/s1/files/{saved.file_id}"
 
@@ -1773,8 +1564,8 @@ def test_admin_edits_moves_and_deletes_only_visible_files(tmp_path, monkeypatch)
     assert main.store.get_session_file(unrelated.file_id).content == "untouched"
 
 
-def test_admin_file_mutations_conflict_if_file_moves_after_visibility_check(tmp_path, monkeypatch) -> None:
-    main = _load_main(tmp_path, monkeypatch)
+def test_admin_file_mutations_conflict_if_file_moves_after_visibility_check(admin_client, load_main, monkeypatch) -> None:
+    main = load_main(graph_experimental=True)
     main.store.create_session_group("First", "#22c55e", "science")
     main.store.create_session_group("Second", "#ef4444", "camera")
     main.store.create_session("s1", "First", "manual-context", group_id="first")
@@ -1793,7 +1584,7 @@ def test_admin_file_mutations_conflict_if_file_moves_after_visibility_check(tmp_
         return saved
 
     monkeypatch.setattr(main.store, "get_session_file", move_after_visibility_check)
-    client, csrf = _admin_client(main)
+    client, csrf = admin_client(main)
     headers = {"x-csrf-token": csrf}
 
     assert client.patch(
@@ -1819,11 +1610,11 @@ def test_admin_file_mutations_conflict_if_file_moves_after_visibility_check(tmp_
         assert current.content == "Original"
 
 
-def test_admin_rejects_oversized_or_malformed_patch_lengths_without_mutation(tmp_path, monkeypatch) -> None:
-    main = _load_main(tmp_path, monkeypatch)
+def test_admin_rejects_oversized_or_malformed_patch_lengths_without_mutation(admin_client, load_main) -> None:
+    main = load_main(graph_experimental=True)
     main.store.create_session("s1", "File mutations", "manual-context")
     saved = main.store.save_session_file("s1", "notes.md", "Original")
-    client, csrf = _admin_client(main)
+    client, csrf = admin_client(main)
     headers = {"x-csrf-token": csrf, "content-type": "application/json"}
     path = f"/admin/api/sessions/s1/files/{saved.file_id}"
     oversized = (
@@ -1854,12 +1645,12 @@ def test_admin_rejects_oversized_or_malformed_patch_lengths_without_mutation(tmp
     assert main.store.get_session_file(saved.file_id) == saved
 
 
-def test_admin_file_workspace_stays_consistent_with_mcp_reads(tmp_path, monkeypatch) -> None:
-    main = _load_main(tmp_path, monkeypatch)
+def test_admin_file_workspace_stays_consistent_with_mcp_reads(admin_client, load_main) -> None:
+    main = load_main(graph_experimental=True)
     main.store.create_session_group("Ideas", "#22c55e", "science")
     main.store.create_session("s1", "Owner session", "manual-context", group_id="ideas")
     main.store.create_session("s2", "Peer session", "manual-context", group_id="ideas")
-    client, csrf = _admin_client(main)
+    client, csrf = admin_client(main)
     headers = {"x-csrf-token": csrf}
 
     uploaded = client.post(
@@ -1943,20 +1734,8 @@ def test_admin_file_workspace_stays_consistent_with_mcp_reads(tmp_path, monkeypa
     }
 
 
-def _load_main(tmp_path: Path, monkeypatch):
-    monkeypatch.setenv("BRIDGE_PUBLIC_BASE_URL", "https://example.test")
-    monkeypatch.setenv("BRIDGE_DB_PATH", str(tmp_path / "bridge.sqlite3"))
-    monkeypatch.setenv("BRIDGE_OWNER_USERNAME", "owner")
-    monkeypatch.setenv("BRIDGE_OWNER_PASSWORD_HASH", password_hash("secret-admin-password"))
-    monkeypatch.setenv("BRIDGE_SECRET_KEY", "test-secret")
-    monkeypatch.setenv("BRIDGE_GRAPH_EXPERIMENTAL", "true")
-
-    sys.modules.pop("app.main", None)
-    return importlib.import_module("app.main")
-
-
-def test_restart_helper_uses_fixed_systemctl_command(tmp_path, monkeypatch) -> None:
-    main = _load_main(tmp_path, monkeypatch)
+def test_restart_helper_uses_fixed_systemctl_command(load_main, monkeypatch) -> None:
+    main = load_main(graph_experimental=True)
     invocation = {}
 
     class Process:
@@ -1987,11 +1766,13 @@ def test_restart_helper_uses_fixed_systemctl_command(tmp_path, monkeypatch) -> N
     }
 
 
-def test_managed_restart_writes_runtime_request_file(tmp_path, monkeypatch) -> None:
+def test_managed_restart_writes_runtime_request_file(load_main, tmp_path, monkeypatch) -> None:
     request_file = tmp_path / "run" / "restart-request"
     request_file.parent.mkdir()
-    monkeypatch.setenv("BRIDGE_RESTART_REQUEST_FILE", str(request_file))
-    main = _load_main(tmp_path, monkeypatch)
+    main = load_main(
+        graph_experimental=True,
+        env={"BRIDGE_RESTART_REQUEST_FILE": str(request_file)},
+    )
 
     asyncio.run(main._request_service_restart())
 
@@ -1999,8 +1780,8 @@ def test_managed_restart_writes_runtime_request_file(tmp_path, monkeypatch) -> N
     assert request_file.stat().st_mode & 0o777 == 0o600
 
 
-def test_restart_helper_surfaces_nonzero_systemctl_result(tmp_path, monkeypatch) -> None:
-    main = _load_main(tmp_path, monkeypatch)
+def test_restart_helper_surfaces_nonzero_systemctl_result(load_main, monkeypatch) -> None:
+    main = load_main(graph_experimental=True)
 
     class Process:
         returncode = 1
@@ -2017,8 +1798,8 @@ def test_restart_helper_surfaces_nonzero_systemctl_result(tmp_path, monkeypatch)
         asyncio.run(main._request_service_restart())
 
 
-def test_restart_helper_terminates_and_reaps_timed_out_systemctl(tmp_path, monkeypatch) -> None:
-    main = _load_main(tmp_path, monkeypatch)
+def test_restart_helper_terminates_and_reaps_timed_out_systemctl(load_main, monkeypatch) -> None:
+    main = load_main(graph_experimental=True)
 
     class Process:
         returncode = None
@@ -2058,8 +1839,8 @@ def test_restart_helper_terminates_and_reaps_timed_out_systemctl(tmp_path, monke
     assert process.killed is True
     assert process.wait_calls == 2
 
-def test_admin_search_settings_keys_and_basic_search_api(tmp_path, monkeypatch) -> None:
-    main = _load_main(tmp_path, monkeypatch)
+def test_admin_search_settings_keys_and_basic_search_api(load_main) -> None:
+    main = load_main(graph_experimental=True)
     main.store.create_session("search-session", "Searchable session", "manual-context")
     main.store.save_exchange(
         "search-session", "Codex", "The admin search contains a kumquat marker.", "Confirmed."
@@ -2261,7 +2042,9 @@ def test_admin_search_settings_keys_and_basic_search_api(tmp_path, monkeypatch) 
     assert removed.json()["settings"]["api"]["cohere"]["configured"] is False
 
 
-def test_admin_operational_status_is_authenticated_and_secret_free(tmp_path, monkeypatch) -> None:
+def test_admin_operational_status_is_authenticated_and_secret_free(load_main, tmp_path, monkeypatch) -> None:
+    import app.admin as admin_module
+
     status_path = tmp_path / "status.json"
     status_path.write_text(
         json.dumps(
@@ -2288,8 +2071,11 @@ def test_admin_operational_status_is_authenticated_and_secret_free(tmp_path, mon
         ),
         encoding="utf-8",
     )
-    monkeypatch.setenv("BRIDGE_OPERATIONAL_STATUS_FILE", str(status_path))
-    main = _load_main(tmp_path, monkeypatch)
+    monkeypatch.setattr(admin_module, "BRIDGE_VERSION_LABEL", "2026.8.2-beta")
+    main = load_main(
+        graph_experimental=True,
+        env={"BRIDGE_OPERATIONAL_STATUS_FILE": str(status_path)},
+    )
     anonymous = TestClient(main.app, base_url="http://127.0.0.1:8787")
     assert anonymous.get("/admin/api/status").status_code == 401
 
@@ -2307,92 +2093,348 @@ def test_admin_operational_status_is_authenticated_and_secret_free(tmp_path, mon
     assert status["format_version"] == 1
     assert "schema_version" not in status
     assert status["version"]["database_schema"] == 2
+    assert status["version"]["current"] == "0.4.0"
+    assert status["version"]["label"] == "2026.8.2-beta"
     assert status["update"]["state"] == "available"
     assert status["live"]["application"] == "pass"
     assert "test-secret" not in response.text
 
-def test_admin_viewer_rag_settings_and_search_overlay_contract() -> None:
-    viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
+@requires_node
+def test_search_snippets_highlight_matches_without_interpreting_markup() -> None:
+    """Search snippets come from stored transcripts, so they must never be HTML."""
+    source = slice_source("function appendHighlightedText", "function selectSearchResult")
+    result = run_js(
+        source
+        + """
+        const container = document.createElement("div");
+        appendHighlightedText(container, input.text, input.ranges);
+        emit({ tree: describe(container), text: flatText(container) });
+        """,
+        payload={
+            "text": "before <img src=x onerror=alert(1)> after",
+            "ranges": [{"start": 7, "end": 10}],
+        },
+    )
 
-    assert 'id="searchInput"' not in viewer
-    assert 'id="searchOpenButton"' in viewer
-    assert viewer.count('<dialog id="searchDialog"') == 1
-    assert viewer.count('<dialog id="aiSettingsDialog"') == 1
-    for tab in ("general", "search", "api", "transcript", "status"):
-        assert f'data-settings-tab="{tab}"' in viewer
-        assert f'data-settings-panel="{tab}"' in viewer
+    assert result["text"] == "before <img src=x onerror=alert(1)> after"
+    marks = [child for child in result["tree"]["children"] if child["tag"] == "mark"]
+    assert [mark["text"] for mark in marks] == ["<im"]
+    # Every node carries text, never markup: nothing can inject an element.
+    assert all(child["innerHTML"] == "" for child in result["tree"]["children"])
 
-    assert 'id="settingsUpdateDot"' in viewer
-    assert 'id="statusUpdateDot"' in viewer
-    assert 'id="bridgeStatusChecks"' in viewer
-    assert 'async function loadOperationalStatus' in viewer
-    assert 'function renderOperationalStatus' in viewer
-    assert 'selectSettingsTab(state.operationalStatus?.update?.state === "available" ? "status" : "general")' in viewer
 
-    assert 'id="transcriptChunkMaxChars"' in viewer
-    assert 'id="transcriptChunkMaxLines"' in viewer
-    assert 'id="probeHarnessLabel"' in viewer
-    assert 'id="probeTargetChars"' in viewer
-    assert 'id="probeContentProfile"' in viewer
-    assert 'id="probePromptCopy"' in viewer
-    assert 'id="probeResults"' in viewer
-    assert 'function renderOutputProbeResults' in viewer
-    assert 'run_output_probe' in viewer
+@requires_node
+def test_deleting_a_group_moves_its_files_to_the_destination_group() -> None:
+    source = slice_source(
+        'if (groupMatch && method === "DELETE")', 'if (path === "/admin/api/sessions")'
+    )
+    result = run_js(
+        """
+        const demo = input.demo;
+        const jsonResponse = (value) => value;
+        function handleDelete(body, method, groupMatch) {
+        """
+        + source
+        + """
+        }
+        // groupMatch is the route regex match: [full, groupId]
+        handleDelete(input.body, "DELETE", ["", input.groupId]);
+        emit(demo.files);
+        """,
+        payload={
+            "groupId": "research",
+            "body": {"destination_group_id": "archive"},
+            "demo": {
+                "groups": [{"group_id": "research"}, {"group_id": "archive"}],
+                "sessions": [],
+                "files": [
+                    {"file_id": "f1", "scope_type": "group", "group_id": "research"},
+                    {"file_id": "f2", "scope_type": "group", "group_id": "other"},
+                    {"file_id": "f3", "scope_type": "session", "group_id": "research"},
+                ],
+            },
+        },
+        dom=False,
+    )
 
-    assert 'id="ragEnabled"' in viewer
-    assert 'id="cohereEnabled"' in viewer
-    assert 'id="ragGroupList"' in viewer
-    assert 'Groups allowed for external processing' in viewer
-    assert 'Only checked groups may leave this server' in viewer
-    assert 'className = "rag-group-name"' in viewer
-    assert 'className = "rag-sensitive-mark"' in viewer
-    assert ".rag-sensitive-mark { display: grid; place-items: center; color: var(--warn); }" in viewer
-    assert 'className = "rag-sensitive-help"' in viewer
-    assert 'help.setAttribute("role", "tooltip")' in viewer
-    assert 'label.setAttribute("aria-disabled", "true")' in viewer
-    assert 'label.setAttribute("aria-label", `${group.name}, sensitive group`)' in viewer
-    assert 'label.setAttribute("aria-describedby", help.id)' in viewer
-    assert "label.tabIndex = 0" in viewer
-    assert 'icon.innerHTML = iconSvg(group.icon_key || "folder")' in viewer
-    assert "This group stays in local BM25 search." in viewer
-    assert "It cannot use OpenAI embeddings or Cohere reranking." in viewer
-    assert ".rag-group-option.is-sensitive:hover .rag-sensitive-help" in viewer
-    assert ".rag-group-option.is-sensitive:focus-visible .rag-sensitive-help" in viewer
-    assert "left: 0; right: 0; width: auto; box-sizing: border-box;" in viewer
-    assert "width: min(22rem, calc(100vw - 3rem))" not in viewer
-    assert 'note.textContent = "Sensitive · local search only"' not in viewer
-    assert 'id="indexRebuild"' in viewer
-    assert 'id="indexReadyCheck"' in viewer
-    assert 'id="indexBuiltAt"' in viewer
-    assert "index.completed_at * 1000" in viewer
-    assert 'id="indexRebuildSpinner"' in viewer
-    assert 'id="indexRebuildLabel"' in viewer
-    assert 'id="indexCancel"' in viewer
-    assert 'id="indexDelete"' in viewer
-    assert 'class="index-actions"' in viewer
-    assert "@keyframes index-spin" in viewer
-    assert 'settingsDom.indexCancel.hidden = !building' in viewer
-    assert '? "Building…"' in viewer
-    assert 'id="indexEstimate"' in viewer
-    assert 'id="indexEstimateDocuments"' in viewer
-    assert 'id="indexEstimateTokens"' in viewer
-    assert 'id="indexEstimateCost"' in viewer
-    assert '>Scope</span>' in viewer
-    assert '>Tokens</span>' in viewer
-    assert '>OpenAI cost</span>' in viewer
-    assert "Estimated full rebuild" in viewer
-    assert "not included in the rebuild cost" in viewer
-    assert "function bindDialogBackdropClose" in viewer
-    assert "if (outside) closeButton.click()" in viewer
-    for dialog_name in ("groupDialog", "fileWorkspaceDialog", "aiSettingsDialog"):
-        assert f"bindDialogBackdropClose(dom.{dialog_name}" in viewer
-    assert "bindDialogBackdropClose(settingsDom.searchDialog" in viewer
+    moved = {file["file_id"]: file["group_id"] for file in result}
+    assert moved["f1"] == "archive", "a group file must follow the group it belonged to"
+    assert moved["f2"] == "other", "files of other groups must be left alone"
+    assert moved["f3"] == "research", "session-scoped files are not group files"
 
-    assert 'data-search-mode="basic"' in viewer
-    assert 'data-search-mode="hybrid"' in viewer
-    assert 'id="localSearchResults"' in viewer
-    assert 'new AbortController()' in viewer
-    assert 'state.searchController?.abort()' in viewer
-    assert "function appendHighlightedText" in viewer
-    assert "mark.textContent =" in viewer
-    assert 'snippet.innerHTML' not in viewer
+
+@requires_node
+def test_viewer_startup_script_has_no_use_before_definition() -> None:
+    """The sensitive-icon pass runs at load time and reads SVG constants.
+
+    Ordering the two wrongly throws a ReferenceError that blanks the whole page,
+    which is invisible to any assertion about the source text.
+    """
+    source = viewer_source()
+    constants = source.index("const GROUP_ICON_SVG_ATTRS")
+    startup = source.index(
+        'for (const icon of document.querySelectorAll('
+        '".sensitive-overlay-icon, .sensitive-toggle-icon"))'
+    )
+    assert constants < startup, (
+        "GROUP_ICON_SVG_ATTRS is declared after the startup pass that reads it; "
+        "the const is in its temporal dead zone and the page will not render"
+    )
+
+    # Prove the ordering is what actually matters by running the two together.
+    declaration = source[constants : source.index("\n", constants)]
+    result = run_js(
+        declaration
+        + """
+        try { emit({ ok: Boolean(GROUP_ICON_SVG_ATTRS) }); }
+        catch (error) { emit({ ok: false, error: error.name }); }
+        """,
+        dom=False,
+    )
+    assert result["ok"] is True
+
+
+def test_admin_page_serves_every_asset_it_references(admin_client) -> None:
+    """A reference in the page is worthless if the route behind it is missing."""
+    client, _ = admin_client(graph_experimental=True)
+    page = client.get("/admin/sessions")
+    assert page.status_code == 200
+
+    referenced = sorted(set(re.findall(r'(?:href|src)="(/admin/assets/[^"]+)"', page.text)))
+    assert referenced, "the admin page should reference its stylesheets and scripts"
+
+    broken = {
+        asset: client.get(asset).status_code
+        for asset in referenced
+        if client.get(asset).status_code != 200
+    }
+    assert broken == {}
+
+    lockup = "/admin/assets/brand/svg/lockup-horizontal-dark.svg"
+    assert lockup in referenced
+    assert page.text.count(lockup) == 1, "the brand lockup should appear once"
+
+
+def test_admin_workspaces_share_styled_confirmation_contract() -> None:
+    sessions = Path("admin-viewer.html").read_text(encoding="utf-8")
+    graph = Path("graph-viewer.html").read_text(encoding="utf-8")
+    graph_script = Path("graph-viewer.js").read_text(encoding="utf-8")
+    confirmation_script = Path("admin-confirmation.js").read_text(encoding="utf-8")
+    confirmation_css = Path("admin-confirmation.css").read_text(encoding="utf-8")
+
+    for page in (sessions, graph):
+        assert page.count('href="/admin/assets/admin-confirmation.css"') == 1
+        assert page.count('src="/admin/assets/admin-confirmation.js"') == 1
+
+    for source in (sessions, graph_script):
+        assert "window.confirm" not in source
+        assert "window.prompt" not in source
+        assert "window.alert" not in source
+
+    assert "window.adminConfirmation" in confirmation_script
+    assert "confirm(options" in confirmation_script
+    assert "prompt(options" in confirmation_script
+    assert 'id="adminConfirmationDialog"' not in sessions
+    assert ".admin-confirmation" in confirmation_css
+    assert 'defaultValue: "temporarily excluded from model context"' in sessions
+
+
+@requires_node
+def test_styled_confirmation_dialog_resolves_actions_and_restores_focus() -> None:
+    source = Path("admin-confirmation.js").read_text(encoding="utf-8")
+    harness = r"""
+const elementsById = {};
+class Element {
+  constructor(tag) {
+    this.tag = tag;
+    this.children = [];
+    this.listeners = {};
+    this.dataset = {};
+    this.hidden = false;
+    this.open = false;
+    this.textContent = "";
+    this.value = "";
+    this.required = false;
+    this.className = "";
+    this.attributes = {};
+  }
+  set id(value) { this._id = value; elementsById[value] = this; }
+  get id() { return this._id || ""; }
+  append(...nodes) { this.children.push(...nodes); }
+  setAttribute(name, value) { this.attributes[name] = String(value); }
+  addEventListener(name, handler) { (this.listeners[name] ||= []).push(handler); }
+  emit(name, extra = {}) {
+    const event = {
+      target: this,
+      clientX: 50,
+      clientY: 50,
+      preventDefault() { this.defaultPrevented = true; },
+      ...extra,
+    };
+    for (const handler of this.listeners[name] || []) handler(event);
+    return event;
+  }
+  focus() { document.activeElement = this; }
+  showModal() { this.open = true; }
+  close() { if (!this.open) return; this.open = false; this.emit("close"); }
+  reportValidity() { return !this.required || Boolean(this.value); }
+  getBoundingClientRect() { return { left: 0, right: 100, top: 0, bottom: 100 }; }
+}
+global.HTMLElement = Element;
+global.document = {
+  body: new Element("body"),
+  activeElement: null,
+  createElement: (tag) => new Element(tag),
+  getElementById: (id) => elementsById[id] || null,
+};
+global.window = { requestAnimationFrame: (callback) => callback() };
+"""
+    scenario = r"""
+(async () => {
+  const trigger = new Element("button");
+  document.activeElement = trigger;
+  const cancelledPromise = window.adminConfirmation.confirm({
+    title: "Delete index?", message: "Delete it?", tone: "danger"
+  });
+  const initialFocus = document.activeElement.id;
+  elementsById.adminConfirmationCancel.emit("click");
+  const cancelled = await cancelledPromise;
+
+  document.activeElement = trigger;
+  const notePromise = window.adminConfirmation.prompt({
+    title: "Exclude?", message: "Add a note", defaultValue: "initial", initialFocus: "input"
+  });
+  const promptFocus = document.activeElement.id;
+  elementsById.adminConfirmationInput.value = "edited note";
+  elementsById.adminConfirmationDialog.children[0].emit("submit");
+  const note = await notePromise;
+
+  document.activeElement = trigger;
+  const escapedPromise = window.adminConfirmation.confirm({ title: "Restart?" });
+  const escapeEvent = elementsById.adminConfirmationDialog.emit("cancel");
+  const escaped = await escapedPromise;
+
+  process.stdout.write(JSON.stringify({
+    cancelled,
+    initialFocus,
+    focusRestored: document.activeElement === trigger,
+    note,
+    promptFocus,
+    escaped,
+    escapePrevented: Boolean(escapeEvent.defaultPrevented),
+  }));
+})().catch((error) => { console.error(error); process.exit(1); });
+"""
+    completed = subprocess.run(
+        [shutil.which("node"), "-e", harness + source + scenario],
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+
+    assert json.loads(completed.stdout) == {
+        "cancelled": False,
+        "initialFocus": "adminConfirmationCancel",
+        "focusRestored": True,
+        "note": "edited note",
+        "promptFocus": "adminConfirmationInput",
+        "escaped": False,
+        "escapePrevented": True,
+    }
+
+
+FEATURE_CONTROLS = {
+    "session list": ["sessionMoveDialog", "sessionMoveGroupList", "sessionMoveConfirmation", "sessionMoveConfirm"],
+    "file workspace": ["fileWorkspaceDialog", "fileWorkspaceOpen", "fileWorkspaceCount", "fileWorkspaceListPane", "fileWorkspaceDetailPane", "fileWorkspaceBack"],
+    "file editing": ["fileEditButton", "fileEditor", "fileDeletePane", "fileDeleteWarning", "fileGuardPane", "fileGuardSave", "fileGuardDiscard", "fileGuardKeepEditing"],
+    "file upload": ["groupFileInput", "sessionFileInput"],
+    "session export": ["exportHtmlButton"],
+    "general settings": ["identity", "timezoneSelect"],
+    "transcript settings": ["transcriptChunkMaxChars", "transcriptChunkMaxLines"],
+    "tool output compatibility": ["toolOutputMaximumCompatibility", "toolOutputOptimized", "toolOutputRestart", "toolOutputRestartMessage", "toolOutputRestartRequired"],
+    "output probe": ["probeHarnessLabel", "probeTargetChars", "probeContentProfile", "probePromptCopy", "probeResults"],
+    "search": ["searchOpenButton", "searchDialog", "localSearchResults"],
+    "rag settings": ["ragEnabled", "cohereEnabled", "ragGroupList"],
+    "search index": ["indexRebuild", "indexReadyCheck", "indexBuiltAt", "indexCancel", "indexDelete", "indexEstimate", "indexEstimateDocuments", "indexEstimateTokens", "indexEstimateCost"],
+    "bridge status": ["settingsUpdateDot", "statusUpdateDot", "bridgeStatusChecks"],
+    "database export": ["databaseExportButton", "databaseExportResult"],
+}
+
+
+@pytest.mark.parametrize("feature", sorted(FEATURE_CONTROLS))
+def test_admin_page_exposes_the_controls_each_feature_needs(admin_client, feature) -> None:
+    """Element ids are the contract between the markup and the viewer script.
+
+    This deliberately checks ids and nothing about styling or wording: a control
+    that disappears breaks the feature, whereas a restyled one does not.
+    """
+    client, _ = admin_client(graph_experimental=True)
+    page = client.get("/admin/sessions").text
+
+    missing = [name for name in FEATURE_CONTROLS[feature] if f'id="{name}"' not in page]
+    assert missing == [], f"{feature} lost its controls: {missing}"
+
+
+def test_admin_page_does_not_ship_retired_controls(admin_client) -> None:
+    client, _ = admin_client(graph_experimental=True)
+    page = client.get("/admin/sessions").text
+
+    # Codex was removed from the workspace: neither markup nor route may return.
+    for retired in ('id="codexOpenButton"', 'id="codexDialog"', "/admin/api/codex"):
+        assert retired not in page
+    assert client.get("/admin/api/codex").status_code == 404
+
+    # Replaced by the search dialog and the file workspace respectively.
+    for retired in ('id="searchInput"', 'id="filesPanel"', 'id="fileDialog"'):
+        assert retired not in page
+
+    # Dialogs are declared once; a second copy makes getElementById ambiguous.
+    for dialog in ("searchDialog", "aiSettingsDialog", "fileWorkspaceDialog"):
+        assert page.count(f'<dialog id="{dialog}"') == 1
+
+    for tab in ("general", "search", "api", "transcript", "database", "status"):
+        assert f'data-settings-tab="{tab}"' in page
+        assert f'data-settings-panel="{tab}"' in page
+
+
+@requires_node
+def test_session_export_produces_nothing_for_an_unrevealed_sensitive_thread() -> None:
+    """Export is a download: a guarded conversation must not reach the disk."""
+    source = slice_source(
+        "function selectedThreadIsGuarded()", "function setLayout(layout)"
+    ) + slice_source("function buildSessionExportHtml()", "function exportMessageHtml")
+
+    def build(*, is_sensitive: bool, revealed: bool) -> str:
+        return run_js(
+            """
+            const state = {
+              selectedSession: { session_id: "s1", title: "Quarterly numbers", group_id: "g1" },
+              groups: [{ group_id: "g1", is_sensitive: input.is_sensitive }],
+              revealedSensitiveThreads: new Set(input.revealed ? ["g1"] : []),
+              exchanges: [{ user_message: "Ask", assistant_response: "SECRET-PAYLOAD", is_deleted: 0 }],
+            };
+            const userDisplayName = () => "Owner";
+            const formatDate = () => "date";
+            const exportMessageHtml = (name, body) => `<p>${name}: ${body}</p>`;
+            const escapeHtml = (value) => String(value).replace(/[&<>"]/g, (c) => (
+              { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]
+            ));
+            """
+            + source
+            + """
+            emit(buildSessionExportHtml());
+            """,
+            payload={"is_sensitive": is_sensitive, "revealed": revealed},
+            dom=False,
+        )
+
+    guarded = build(is_sensitive=True, revealed=False)
+    assert guarded == ""
+
+    revealed = build(is_sensitive=True, revealed=True)
+    assert "SECRET-PAYLOAD" in revealed
+    assert "Quarterly numbers" in revealed
+
+    ordinary = build(is_sensitive=False, revealed=False)
+    assert "SECRET-PAYLOAD" in ordinary

@@ -7,6 +7,7 @@ import hashlib
 import hmac
 import html
 import json
+import logging
 import re
 import time
 import urllib.error
@@ -19,7 +20,7 @@ from typing import Any
 from cryptography.fernet import Fernet, InvalidToken
 from starlette.requests import Request
 from starlette.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
-from bridge_cli.version import BRIDGE_VERSION
+from bridge_cli.version import BRIDGE_VERSION, BRIDGE_VERSION_LABEL
 
 from app.graph_config import GraphConfigError
 from app.graph_runtime import GraphRuntime
@@ -63,6 +64,7 @@ from app.output_probe import (
 )
 from app.security import token_urlsafe, verify_password
 from app.settings import Settings
+from app.conversation_export import ExportInProgressError, export_database_to_markdown
 from app.storage import (
     MAX_SESSION_FILE_BYTES,
     ExchangeRecord,
@@ -124,6 +126,7 @@ BRAND_ASSET_MEDIA_TYPES = {
 }
 GRAPH_NAV_LINK = '<a class="sb-nav__tab" role="tab" href="/admin/graph" aria-selected="false" tabindex="-1" data-label="GRAPH">GRAPH</a>'
 GRAPH_NAV_WIP = '<span class="sb-nav__tab" role="tab" aria-disabled="true" aria-selected="false" data-label="GRAPH">GRAPH <small>WIP</small></span>'
+logger = logging.getLogger(__name__)
 
 
 class AdminHandlers:
@@ -193,6 +196,8 @@ class AdminHandlers:
         media_types = {
             "graph-viewer.css": "text/css",
             "graph-data.css": "text/css",
+            "admin-confirmation.css": "text/css",
+            "admin-confirmation.js": "text/javascript",
             "pearl-gradient-nav.js": "text/javascript",
             "pearl-gradient-nav.css": "text/css",
             "graph-viewer.js": "text/javascript",
@@ -626,6 +631,31 @@ class AdminHandlers:
             return error
         return JSONResponse(
             {"ok": True, "settings": await asyncio.to_thread(self._settings_payload)},
+            headers=self._no_store_headers(),
+        )
+
+    async def api_export_database(self, request: Request) -> Response:
+        _, error = self._require_admin_mutation(request)
+        if error:
+            return error
+        try:
+            result = await asyncio.to_thread(
+                export_database_to_markdown,
+                self.settings.db_path,
+                export_root=self.settings.markdown_export_root,
+            )
+        except ExportInProgressError:
+            return self._json_error(
+                "A database export is already in progress.", status_code=409
+            )
+        except (OSError, RuntimeError, ValueError):
+            logger.exception("Admin Markdown database export failed")
+            return self._json_error(
+                "Database export failed. Check the Bridge service logs.",
+                status_code=500,
+            )
+        return JSONResponse(
+            {"ok": True, "export": result},
             headers=self._no_store_headers(),
         )
 
@@ -1672,6 +1702,8 @@ class AdminHandlers:
 
         version = _public_keys(cached.get("version"), {"current", "database_schema"})
         version.setdefault("current", BRIDGE_VERSION)
+        if BRIDGE_VERSION_LABEL is not None:
+            version["label"] = BRIDGE_VERSION_LABEL
         version["database_schema"] = self.store.schema_version()
         installation = _public_keys(
             cached.get("installation"),

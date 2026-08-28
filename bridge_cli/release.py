@@ -28,6 +28,9 @@ LATEST_RELEASE_URL = (
     "https://api.github.com/repos/NivailoPL/mcp-session-bridge/releases/latest"
 )
 _STABLE_VERSION = re.compile(r"^v?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$")
+_CALVER_VERSION = re.compile(
+    r"^(?P<year>[1-9]\d{3})\.(?P<month>[1-9]|1[0-2])\.(?P<sequence>[1-9]\d*)$"
+)
 
 
 @dataclass(frozen=True)
@@ -110,11 +113,20 @@ def is_newer(candidate: str, current: str) -> bool:
     return _version_tuple(candidate) > _version_tuple(current)
 
 
+def parse_calver_version(value: str) -> str:
+    if not _CALVER_VERSION.fullmatch(value):
+        raise ValueError(f"Not a CalVer YYYY.M.N version: {value}")
+    return value
+
+
 def _parse_version(value: str) -> str:
     match = _STABLE_VERSION.fullmatch(value)
     if not match:
-        raise ValueError(f"Not a stable semantic version: {value}")
-    return ".".join(match.groups())
+        raise ValueError(f"Not a supported stable version: {value}")
+    normalized = ".".join(match.groups())
+    if len(match.group(1)) == 4:
+        parse_calver_version(normalized)
+    return normalized
 
 
 def _version_tuple(value: str) -> tuple[int, int, int]:

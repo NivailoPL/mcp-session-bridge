@@ -10,7 +10,8 @@ from app.storage import Store
 from bridge_cli.config import update_env_file
 from bridge_cli.database_probe import verify_writable_database
 from bridge_cli.migrations import CURRENT_SCHEMA_VERSION, migrate_database
-from bridge_cli.__main__ import build_parser
+from bridge_cli.__main__ import build_parser, main
+from bridge_cli.layout import Layout
 from bridge_cli.status import CheckResult, StatusReport, UpdateStatus
 
 
@@ -145,3 +146,52 @@ def test_deploy_command_contract_supports_confirmation_and_json() -> None:
     assert args.yes is True
     assert args.allow_downgrade is True
     assert args.as_json is True
+
+
+def test_markdown_export_command_contract() -> None:
+    args = build_parser().parse_args(
+        ["export", "--output", "/tmp/archive", "--json"]
+    )
+
+    assert args.command == "export"
+    assert args.output == Path("/tmp/archive")
+    assert args.as_json is True
+
+
+def test_markdown_export_cli_uses_managed_default_and_reports_json(
+    tmp_path: Path, monkeypatch, capsys
+) -> None:
+    root = tmp_path / "root"
+    layout = Layout.for_root(root)
+    store = Store(layout.db_path)
+    store.create_session("session-001", "CLI session", "manual-context")
+    monkeypatch.setattr("bridge_cli.__main__.os.geteuid", lambda: 0)
+
+    exit_code = main(["--root", str(root), "export", "--json"])
+
+    assert exit_code == 0
+    payload = json.loads(capsys.readouterr().out)
+    destination = Path(payload["artifact"]["path"])
+    assert destination.parent == layout.export_root
+    assert payload["operation"] == "export.markdown"
+    assert payload["artifact"]["session_count"] == 1
+    assert list(destination.glob("*/*.md"))
+
+
+def test_markdown_export_cli_never_overwrites_custom_destination(
+    tmp_path: Path, monkeypatch, capsys
+) -> None:
+    root = tmp_path / "root"
+    layout = Layout.for_root(root)
+    Store(layout.db_path)
+    destination = tmp_path / "archive"
+    destination.mkdir()
+    monkeypatch.setattr("bridge_cli.__main__.os.geteuid", lambda: 0)
+
+    exit_code = main(
+        ["--root", str(root), "export", "--output", str(destination)]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 1
+    assert "already exists" in captured.err

@@ -67,6 +67,12 @@ The admin UI can edit, soft-delete, and restore transcript exchanges. Mutations 
 
 Deleted exchanges remain in SQLite with `deleted_at` and `deleted_reason`, but active transcript reads skip them.
 
+## Markdown Conversation Exports
+
+Markdown archives are deliberately written only to the VPS under `/var/lib/mcp-session-bridge/exports` by default. The Admin UI has one authenticated, CSRF-protected trigger with no path or file input; it returns only result metadata and the server path. There is no HTTP route for listing, reading, or downloading an export.
+
+Treat every archive as highly sensitive. It contains sensitive-group sessions, raw content hidden by exchange masking or exclusion, available exchange audit snapshots, uploaded text, and original PDFs. Directory and file modes are restricted to `0700` and `0600`. Copy archives only over an authenticated administrative channel, store them encrypted when they leave the VPS, and remove obsolete copies manually.
+
 ## Codex App Server Isolation
 
 The optional App Server runs as `mcp-session-bridge-codex`, not as root or the Bridge service account. It receives no Bridge environment, database path, provider keys, Caddy listener, or repository workspace. A dedicated socket group permits only local Bridge-to-Codex transport; the browser talks to authenticated, CSRF-protected Bridge endpoints.

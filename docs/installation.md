@@ -80,6 +80,25 @@ Local MCP endpoint:
 http://127.0.0.1:8787/mcp
 ```
 
+## Preview The Admin UI With Demo Data
+
+To look at the admin UI with realistic content instead of an empty database:
+
+```bash
+uv run python scripts/demo_ui.py
+```
+
+The script rebuilds a throwaway demo database of ten English sessions across
+four groups, one of which is marked sensitive, and serves the admin UI on
+`http://127.0.0.1:8788/admin` with the credentials `owner` / `demo`. It uses a
+separate port so it never collides with your own local instance, always writes
+to the git-ignored `examples/output/demo.sqlite3`, and never reads or modifies
+the real `data/` database.
+
+Because the database is rebuilt on every run, it always matches the current
+schema. Editing `admin-viewer.html` needs only a browser refresh; add
+`--build-only` to regenerate the database without serving it.
+
 ## Run Tests
 
 ```bash
