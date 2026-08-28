@@ -15,6 +15,10 @@ uv run python scripts/demo_session.py
 uv run pytest
 ```
 
+To preview the admin UI with realistic demo content, run
+`uv run python scripts/demo_ui.py` and open `http://127.0.0.1:8788/admin`
+(`owner` / `demo`). See [docs/installation.md](docs/installation.md) for details.
+
 ## Pull Requests
 
 Before opening a pull request:
