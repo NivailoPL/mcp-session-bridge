@@ -12,7 +12,12 @@ def test_repository_development_version_metadata_matches_status_label() -> None:
     development = config["tool"]["mcp-session-bridge"]["development"]
     assert development["target-version"] == "2026.8.2"
     assert development["label"] == "2026.8.2-beta"
-    assert BRIDGE_VERSION_LABEL == development["label"]
+    expected_label = (
+        development["label"]
+        if config["project"]["version"] != development["target-version"]
+        else None
+    )
+    assert BRIDGE_VERSION_LABEL == expected_label
 
 
 def test_development_label_is_used_until_target_becomes_package_version(tmp_path: Path) -> None:
