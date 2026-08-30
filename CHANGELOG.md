@@ -13,6 +13,9 @@ This project follows a lightweight changelog format inspired by Keep a Changelog
 - Removed the in-repo `docs/plans/` archive and an unreferenced 1.1 MB documentation image.
 - Gave the README a documentation index that leads with the managed installation, sourced its logo from `brand/`, and added a `README.md` to `web/`, `tools/`, `scripts/` and `docs/`.
 - Dropped stale `v0.1` framing from the documentation.
+- Rewrote the brand package guide in English, with color names matching the asset filenames.
+- Corrected the versioning example, which was a cycle behind, and a limitation that described a surface the repository no longer has.
+- Added the context-packs and PDF storage quota variables to `.env.example`.
 
 ## [2026.8.2] - 2026-08-28
 
