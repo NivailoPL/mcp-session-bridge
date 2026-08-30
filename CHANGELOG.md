@@ -6,6 +6,14 @@ This project follows a lightweight changelog format inspired by Keep a Changelog
 
 ## [Unreleased]
 
+### Housekeeping
+
+- Moved the served admin, graph and shared navigation assets out of the repository root into `web/`.
+- Moved `session_audit.py` and the offline `session-viewer.html` into `tools/`, so the exporter and the page that reads its output live together; the export now defaults to landing beside the viewer.
+- Removed the in-repo `docs/plans/` archive and an unreferenced 1.1 MB documentation image.
+- Gave the README a documentation index that leads with the managed installation, sourced its logo from `brand/`, and added a `README.md` to `web/`, `tools/`, `scripts/` and `docs/`.
+- Dropped stale `v0.1` framing from the documentation.
+
 ## [2026.8.2] - 2026-08-28
 
 ### Highlights
