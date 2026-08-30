@@ -20,7 +20,7 @@ from app.storage import (
     session_file_payload,
 )
 from app.pdf_files import extract_pdf_text_isolated
-from scripts.session_audit import build_viewer_payload
+from tools.session_audit import build_viewer_payload
 from tests.pdf_samples import make_pdf
 
 

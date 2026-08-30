@@ -117,45 +117,48 @@ Expected response:
 List sessions:
 
 ```bash
-uv run python scripts/session_audit.py list
+uv run python tools/session_audit.py list
 ```
 
 Show a transcript as Markdown:
 
 ```bash
-uv run python scripts/session_audit.py show <session_id>
+uv run python tools/session_audit.py show <session_id>
 ```
 
 Show speaker sequence:
 
 ```bash
-uv run python scripts/session_audit.py show <session_id> --format sequence
+uv run python tools/session_audit.py show <session_id> --format sequence
 ```
 
 Show JSON:
 
 ```bash
-uv run python scripts/session_audit.py show <session_id> --format json
+uv run python tools/session_audit.py show <session_id> --format json
 ```
 
 ## Offline Viewer
 
+The viewer and its exporter live together in `tools/`. The export is written
+next to the HTML by default, which is where the page fetches it from.
+
 Export data:
 
 ```bash
-uv run python scripts/session_audit.py export-viewer --output session-viewer-data.json
+uv run python tools/session_audit.py export-viewer
 ```
 
 Continuously refresh the export:
 
 ```bash
-uv run python scripts/session_audit.py export-viewer --output session-viewer-data.json --watch 5
+uv run python tools/session_audit.py export-viewer --watch 5
 ```
 
 Serve the viewer locally:
 
 ```bash
-python3 -m http.server 8799 --bind 127.0.0.1
+python3 -m http.server 8799 --bind 127.0.0.1 --directory tools
 ```
 
 Open:
@@ -164,7 +167,7 @@ Open:
 http://127.0.0.1:8799/session-viewer.html
 ```
 
-If you open `session-viewer.html` directly from disk, use its JSON load button and select `session-viewer-data.json`.
+If you open `tools/session-viewer.html` directly from disk, use its JSON load button and select the exported `session-viewer-data.json`.
 
 ## Admin UI
 

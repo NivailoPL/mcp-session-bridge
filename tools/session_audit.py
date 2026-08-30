@@ -8,7 +8,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-ROOT = Path(__file__).resolve().parents[1]
+HERE = Path(__file__).resolve().parent
+ROOT = HERE.parent
 sys.path.insert(0, str(ROOT))
 
 from app.session_package import render_session_transcript  # noqa: E402
@@ -35,8 +36,8 @@ def main() -> int:
     export_parser = subparsers.add_parser("export-viewer", help="Export session data for the offline HTML viewer.")
     export_parser.add_argument(
         "--output",
-        default=str(ROOT / "session-viewer-data.json"),
-        help="JSON output path consumed by session-viewer.html.",
+        default=str(HERE / "session-viewer-data.json"),
+        help="JSON output path, written next to session-viewer.html so the viewer can fetch it.",
     )
     export_parser.add_argument(
         "--watch",
