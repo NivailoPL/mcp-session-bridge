@@ -319,7 +319,7 @@ def test_processing_and_analysis_apis_require_auth_and_return_durable_state(admi
 
 def test_rescan_all_api_requires_csrf_and_returns_reset_counts(admin_client, load_main) -> None:
     main = load_main(graph_experimental=True)
-    main.store.create_session("fresh-session", "Fresh session", "manual-context")
+    main.store.create_session("fresh-session", "Fresh session")
     exchange = main.store.save_exchange(
         "fresh-session", "model", "Recent user text", "Recent model text"
     )
@@ -410,7 +410,7 @@ def test_failed_graph_job_details_reach_processing_and_analysis_ui(admin_client,
     draft = main.store.unlock_graph_profile("owner")
     main.store.update_graph_draft({**draft, "inactivity_hours": 1}, "owner")
     main.store.activate_graph_draft("owner")
-    main.store.create_session("failed-session", "Failed Graph session", "manual-context")
+    main.store.create_session("failed-session", "Failed Graph session")
     exchange = main.store.save_exchange(
         "failed-session", "model", "A durable Graph decision.", "The decision is stored."
     )

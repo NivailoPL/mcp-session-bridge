@@ -8,7 +8,7 @@ from app.storage import Store
 
 def test_lab_run_is_append_only_and_does_not_publish_production_analysis(tmp_path) -> None:
     store = Store(tmp_path / "bridge.sqlite3")
-    store.create_session("s1", "Lab session", "manual-context")
+    store.create_session("s1", "Lab session")
     store.save_exchange("s1", "model", "Panda is the evaluation subject.", "Confirmed.")
     store.set_graph_enabled(True)
 
@@ -33,7 +33,7 @@ def test_lab_run_is_append_only_and_does_not_publish_production_analysis(tmp_pat
 
 def test_lab_requires_graph_master_switch(tmp_path) -> None:
     store = Store(tmp_path / "bridge.sqlite3")
-    store.create_session("s1", "Lab session", "manual-context")
+    store.create_session("s1", "Lab session")
     store.save_exchange("s1", "model", "hello", "world")
 
     runtime = GraphRuntime(store, object(), worker_id="lab-test")
@@ -51,7 +51,7 @@ def test_lab_honors_sensitive_scope_and_graph_off_cancels_active_run(tmp_path) -
         store = Store(tmp_path / "bridge.sqlite3")
         store.create_session_group("Private", "#f59e0b", "lock", "private")
         store.update_session_group("private", is_sensitive=True)
-        store.create_session("secret", "Secret", "manual-context")
+        store.create_session("secret", "Secret")
         store.set_session_group("secret", "private")
         store.save_exchange("secret", "model", "private", "content")
         store.set_graph_enabled(True)
@@ -63,7 +63,7 @@ def test_lab_honors_sensitive_scope_and_graph_off_cancels_active_run(tmp_path) -
         else:
             raise AssertionError("Sensitive sessions must be excluded by default")
 
-        store.create_session("public", "Public", "manual-context")
+        store.create_session("public", "Public")
         store.save_exchange("public", "model", "public", "content")
         started = asyncio.Event()
 

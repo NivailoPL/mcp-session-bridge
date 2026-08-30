@@ -105,7 +105,7 @@ def test_managed_store_accepts_existing_schema_two_after_feature_removal(
 def test_migration_is_idempotent_and_preserves_data(tmp_path: Path) -> None:
     db_path = tmp_path / "bridge.sqlite3"
     legacy = Store(db_path)
-    legacy.create_session("keep-me", "Existing session", "manual-context")
+    legacy.create_session("keep-me", "Existing session")
 
     first = migrate_database(db_path)
     second = migrate_database(db_path)
@@ -164,7 +164,7 @@ def test_markdown_export_cli_uses_managed_default_and_reports_json(
     root = tmp_path / "root"
     layout = Layout.for_root(root)
     store = Store(layout.db_path)
-    store.create_session("session-001", "CLI session", "manual-context")
+    store.create_session("session-001", "CLI session")
     monkeypatch.setattr("bridge_cli.__main__.os.geteuid", lambda: 0)
 
     exit_code = main(["--root", str(root), "export", "--json"])

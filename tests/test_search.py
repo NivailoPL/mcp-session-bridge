@@ -11,8 +11,8 @@ from tests.pdf_samples import make_pdf
 def make_store(tmp_path):
     store = Store(tmp_path / "bridge.sqlite3")
     store.create_session_group("Private", "#ef4444", "lock", group_id="private")
-    store.create_session("public-session", "Public board", "manual-context")
-    store.create_session("private-session", "Private board", "manual-context", group_id="private")
+    store.create_session("public-session", "Public board")
+    store.create_session("private-session", "Private board", group_id="private")
     return store
 
 

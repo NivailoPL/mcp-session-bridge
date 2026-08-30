@@ -27,6 +27,10 @@ from app.tool_output import (
 
 UNCATEGORIZED_GROUP_ID = "uncategorized"
 SCHEMA_VERSION = 2
+
+# Written into the retired sessions.context_pack_id column, which is NOT NULL and
+# cannot be dropped without a schema bump. Nothing reads this value.
+RETIRED_CONTEXT_PACK_ID = "manual-context"
 GRAPH_ENABLED_SETTING = "graph.enabled"
 GRAPH_ACTIVE_PROFILE_SETTING = "graph.active_profile_id"
 GRAPH_FAILURE_RECOVERY_SETTING = "graph.recovered_terminal_failures_v1"
@@ -176,8 +180,6 @@ class SessionRecord:
     session_id: str
     title: str
     group_id: str
-    context_pack_id: str
-    context_pack_version: str | None
     title_is_auto: bool
     created_at: int
     updated_at: int
@@ -415,6 +417,9 @@ class Store:
                     session_id TEXT PRIMARY KEY,
                     title TEXT NOT NULL,
                     group_id TEXT NOT NULL DEFAULT 'uncategorized',
+                    -- Retired context-pack columns. Nothing reads them; they are kept
+                    -- so this schema stays version 2 and a rollback to an older Bridge
+                    -- still opens the database. Drop them only with a schema bump.
                     context_pack_id TEXT NOT NULL,
                     context_pack_version TEXT,
                     title_is_auto INTEGER NOT NULL DEFAULT 0,
@@ -2206,8 +2211,6 @@ class Store:
         self,
         session_id: str,
         title: str,
-        context_pack_id: str,
-        context_pack_version: str | None = None,
         title_is_auto: bool = False,
         group_id: str = UNCATEGORIZED_GROUP_ID,
     ) -> SessionRecord:
@@ -2220,14 +2223,13 @@ class Store:
                 INSERT INTO sessions (
                     session_id, title, group_id, context_pack_id, context_pack_version,
                     title_is_auto, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, NULL, ?, ?, ?)
                 """,
                 (
                     session_id,
                     title,
                     resolved_group_id,
-                    context_pack_id,
-                    context_pack_version,
+                    RETIRED_CONTEXT_PACK_ID,
                     int(title_is_auto),
                     now,
                     now,
@@ -2237,8 +2239,6 @@ class Store:
             session_id=session_id,
             title=title,
             group_id=resolved_group_id,
-            context_pack_id=context_pack_id,
-            context_pack_version=context_pack_version,
             title_is_auto=title_is_auto,
             created_at=now,
             updated_at=now,
@@ -2819,8 +2819,6 @@ class Store:
                     s.session_id,
                     s.title,
                     s.group_id,
-                    s.context_pack_id,
-                    s.context_pack_version,
                     s.title_is_auto,
                     s.created_at,
                     s.updated_at,
@@ -2852,8 +2850,6 @@ class Store:
                 "title": row["title"],
                 "group_id": row["group_id"],
                 "group": _group_payload_from_join(row),
-                "context_pack_id": row["context_pack_id"],
-                "context_pack_version": row["context_pack_version"],
                 "title_is_auto": bool(row["title_is_auto"]),
                 "created_at": row["created_at"],
                 "updated_at": row["updated_at"],
@@ -3214,8 +3210,6 @@ def _session_from_row(row: sqlite3.Row) -> SessionRecord:
         session_id=row["session_id"],
         title=row["title"],
         group_id=row["group_id"] or UNCATEGORIZED_GROUP_ID,
-        context_pack_id=row["context_pack_id"],
-        context_pack_version=row["context_pack_version"],
         title_is_auto=bool(row["title_is_auto"]),
         created_at=row["created_at"],
         updated_at=row["updated_at"],

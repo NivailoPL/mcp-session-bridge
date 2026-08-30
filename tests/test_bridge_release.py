@@ -713,7 +713,7 @@ def test_failed_rollback_restores_current_release_and_database(tmp_path: Path) -
     manager = UpdateManager(layout, runner, StubClient(info, archive))
     manager.update(info)
     Store(layout.db_path, allow_startup_migrations=False).create_session(
-        "after-update", "Must survive failed rollback", "manual-context"
+        "after-update", "Must survive failed rollback"
     )
     runner.fail_on = ("systemctl", "is-active")
 

@@ -63,7 +63,7 @@ def source_tree(tmp_path: Path) -> Path:
 def test_setup_dashboard_detects_legacy_installation_without_writing(tmp_path: Path) -> None:
     source = source_tree(tmp_path)
     legacy_db = source / "data/bridge.sqlite3"
-    Store(legacy_db).create_session("existing", "Existing session", "manual-context")
+    Store(legacy_db).create_session("existing", "Existing session")
     (source / ".env").write_text(
         "BRIDGE_PUBLIC_BASE_URL=https://bridge.example.test\n"
         "BRIDGE_OWNER_USERNAME=owner\n"
@@ -157,7 +157,7 @@ def test_setup_bootstrap_does_not_overwrite_foreign_command(tmp_path: Path) -> N
 def test_adoption_decision_is_resumable_and_advances_recommended_step(tmp_path: Path) -> None:
     source = source_tree(tmp_path)
     legacy_db = source / "data/bridge.sqlite3"
-    Store(legacy_db).create_session("existing", "Existing session", "manual-context")
+    Store(legacy_db).create_session("existing", "Existing session")
     layout = Layout.for_root(tmp_path / "target")
     answers = iter(["y"])
     wizard = SetupWizard(
@@ -322,7 +322,7 @@ def test_corrupt_database_is_reported_as_attention(tmp_path: Path) -> None:
 def test_detected_admin_and_domain_must_each_be_confirmed_before_service_step(tmp_path: Path) -> None:
     source = source_tree(tmp_path)
     legacy_db = source / "data/bridge.sqlite3"
-    Store(legacy_db).create_session("existing", "Existing", "manual-context")
+    Store(legacy_db).create_session("existing", "Existing")
     legacy_env = source / ".env"
     legacy_env.write_text(
         "BRIDGE_PUBLIC_BASE_URL=https://bridge.example.test\n"
@@ -393,7 +393,7 @@ def test_prepare_does_not_replace_live_systemd_or_caddy(tmp_path: Path) -> None:
 def test_activation_adopts_existing_caddy_site_and_restarts_service(tmp_path: Path, monkeypatch) -> None:
     source = source_tree(tmp_path)
     legacy_db = source / "data/bridge.sqlite3"
-    Store(legacy_db).create_session("existing", "Existing session", "manual-context")
+    Store(legacy_db).create_session("existing", "Existing session")
     layout = Layout.for_root(tmp_path / "target")
     layout.caddyfile.parent.mkdir(parents=True)
     layout.caddyfile.write_text(
@@ -601,7 +601,7 @@ def test_domain_validation_rejects_caddy_control_input(tmp_path: Path, domain: s
 def test_setup_requires_adoption_decision_before_dependent_steps(tmp_path: Path) -> None:
     source = source_tree(tmp_path)
     legacy_db = source / "data/bridge.sqlite3"
-    Store(legacy_db).create_session("existing", "Existing", "manual-context")
+    Store(legacy_db).create_session("existing", "Existing")
     wizard = SetupWizard(
         Layout.for_root(tmp_path / "target"),
         source,
@@ -619,7 +619,7 @@ def test_setup_requires_adoption_decision_before_dependent_steps(tmp_path: Path)
 def test_setup_rejects_adoption_change_after_dependent_staging(tmp_path: Path) -> None:
     source = source_tree(tmp_path)
     legacy_db = source / "data/bridge.sqlite3"
-    Store(legacy_db).create_session("existing", "Existing", "manual-context")
+    Store(legacy_db).create_session("existing", "Existing")
     answers = iter(["n"])
     wizard = SetupWizard(
         Layout.for_root(tmp_path / "target"),
@@ -659,7 +659,7 @@ def test_reactivation_of_managed_installation_never_readopts_legacy_database(
 ) -> None:
     source = source_tree(tmp_path)
     legacy_db = source / "data/bridge.sqlite3"
-    Store(legacy_db).create_session("legacy", "Legacy", "manual-context")
+    Store(legacy_db).create_session("legacy", "Legacy")
     layout = Layout.for_root(tmp_path / "target")
     runner = RecordingRunner(active=True)
     monkeypatch.setattr("bridge_cli.install._dns_resolves", lambda _domain: True)
@@ -671,7 +671,7 @@ def test_reactivation_of_managed_installation_never_readopts_legacy_database(
         activate=True,
     )
     Store(layout.db_path, allow_startup_migrations=False).create_session(
-        "managed-only", "Created after adoption", "manual-context"
+        "managed-only", "Created after adoption"
     )
 
     installer.activate(legacy_db)
@@ -697,7 +697,7 @@ def test_failed_managed_reactivation_keeps_last_write_and_removes_wal_sidecars(
         def run(self, *args: str, check: bool = True):
             if args == ("systemctl", "stop", "mcp-session-bridge.service") and not self.wrote:
                 Store(layout.db_path, allow_startup_migrations=False).create_session(
-                    "last-write", "Accepted before stop", "manual-context"
+                    "last-write", "Accepted before stop"
                 )
                 self.wrote = True
             if args and args[0] == "curl":
@@ -719,8 +719,8 @@ def test_failed_managed_reactivation_keeps_last_write_and_removes_wal_sidecars(
 def test_atomic_database_replacement_removes_previous_wal_sidecars(tmp_path: Path) -> None:
     source = tmp_path / "source.sqlite3"
     destination = tmp_path / "destination.sqlite3"
-    Store(source).create_session("source", "Source", "manual-context")
-    Store(destination).create_session("old", "Old", "manual-context")
+    Store(source).create_session("source", "Source")
+    Store(destination).create_session("old", "Old")
     Path(f"{destination}-wal").write_bytes(b"stale-wal")
     Path(f"{destination}-shm").write_bytes(b"stale-shm")
 

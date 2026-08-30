@@ -27,7 +27,6 @@ DB_PATH = ROOT / "examples" / "output" / "demo.sqlite3"
 DEFAULT_PORT = 8788
 OWNER_USERNAME = "owner"
 OWNER_PASSWORD = "demo"
-CONTEXT_PACK_ID = "manual-context"
 
 # Conversations are spread backwards over this many days so the session list
 # shows a plausible range of dates instead of ten identical timestamps.
@@ -425,7 +424,6 @@ def build_database() -> tuple[int, int]:
             store.create_session(
                 session["session_id"],
                 session["title"],
-                CONTEXT_PACK_ID,
                 title_is_auto=session.get("auto_title", False),
                 group_id=session["group_id"],
             )

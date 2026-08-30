@@ -31,7 +31,7 @@ def test_uninstall_dry_run_does_not_change_files(tmp_path: Path) -> None:
     layout = Layout.for_root(tmp_path / "root")
     layout.service_unit.parent.mkdir(parents=True)
     layout.service_unit.write_text("owned", encoding="utf-8")
-    Store(layout.db_path).create_session("keep", "Keep", "manual-context")
+    Store(layout.db_path).create_session("keep", "Keep")
     export = tmp_path / "portable.sqlite3"
     manager = UninstallManager(layout, Runner())
 
@@ -48,7 +48,7 @@ def test_uninstall_exports_database_then_removes_only_managed_targets(tmp_path: 
     layout = Layout.for_root(tmp_path / "root")
     layout.service_unit.parent.mkdir(parents=True)
     layout.service_unit.write_text("owned", encoding="utf-8")
-    Store(layout.db_path).create_session("keep", "Keep", "manual-context")
+    Store(layout.db_path).create_session("keep", "Keep")
     unrelated = layout.caddy_root / "unrelated.caddy"
     unrelated.parent.mkdir(parents=True)
     unrelated.write_text("unrelated.test {}", encoding="utf-8")
@@ -76,7 +76,7 @@ def test_uninstall_exports_database_then_removes_only_managed_targets(tmp_path: 
 
 def test_uninstall_refuses_unverified_legacy_paths_without_explicit_consent(tmp_path: Path) -> None:
     layout = Layout.for_root(tmp_path / "root")
-    Store(layout.db_path).create_session("keep", "Keep", "manual-context")
+    Store(layout.db_path).create_session("keep", "Keep")
 
     with pytest.raises(RuntimeError, match="ownership manifest is missing"):
         UninstallManager(layout, Runner()).plan(
@@ -86,7 +86,7 @@ def test_uninstall_refuses_unverified_legacy_paths_without_explicit_consent(tmp_
 
 def test_database_export_cannot_be_placed_inside_codex_state(tmp_path: Path) -> None:
     layout = Layout.for_root(tmp_path / "root")
-    Store(layout.db_path).create_session("keep", "Keep", "manual-context")
+    Store(layout.db_path).create_session("keep", "Keep")
     layout.codex_state_root.mkdir(parents=True)
 
     with pytest.raises(ValueError, match="outside every Bridge-managed path"):

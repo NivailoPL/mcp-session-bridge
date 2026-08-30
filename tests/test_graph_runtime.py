@@ -18,7 +18,7 @@ def _ready_store(tmp_path) -> tuple[Store, int]:
     draft = store.unlock_graph_profile("owner")
     store.update_graph_draft({**draft, "inactivity_hours": 1}, "owner")
     store.activate_graph_draft("owner")
-    store.create_session("s1", "Graph session", "manual-context")
+    store.create_session("s1", "Graph session")
     exchange = store.save_exchange(
         "s1", "model", "We use SQLite for the durable Graph queue.", "That is the implementation decision."
     )

@@ -82,7 +82,11 @@ class Layout:
         return self.data_root / "bridge.sqlite3"
 
     @property
-    def context_packs_dir(self) -> Path:
+    def legacy_context_packs_dir(self) -> Path:
+        """Created by installations that predate the removal of context packs.
+
+        Setup no longer creates or configures it; uninstall still removes it.
+        """
         return self.data_root / "context-packs"
 
     @property

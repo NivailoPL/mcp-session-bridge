@@ -168,7 +168,6 @@ class ManagedInstaller:
                 "BRIDGE_PUBLIC_BASE_URL": f"https://{normalized}",
                 "BRIDGE_RESOURCE_PATH": "/mcp",
                 "BRIDGE_DB_PATH": str(self.layout.db_path),
-                "BRIDGE_CONTEXT_PACKS_DIR": str(self.layout.context_packs_dir),
                 "BRIDGE_SECRET_KEY": existing.get("BRIDGE_SECRET_KEY") or token_urlsafe(48),
                 "BRIDGE_TRANSPORT_ALLOWED_HOSTS": f"127.0.0.1:8787,localhost:8787,{normalized}",
                 "BRIDGE_RESTART_REQUEST_FILE": str(self.layout._path("run/mcp-session-bridge/restart-request")),
@@ -313,7 +312,7 @@ class ManagedInstaller:
                         self.layout.db_path,
                         Path(f"{self.layout.db_path}-wal"),
                         Path(f"{self.layout.db_path}-shm"),
-                        self.layout.context_packs_dir,
+                        self.layout.legacy_context_packs_dir,
                         self.layout.pending_root,
                         self.layout.installation_file,
                         self.layout.status_file,
@@ -374,7 +373,6 @@ class ManagedInstaller:
             (self.layout.releases_root, 0o755),
             (self.layout.etc_root, 0o750),
             (self.layout.data_root, 0o1770),
-            (self.layout.context_packs_dir, 0o750),
             (self.layout.export_root, 0o3770),
             (self.layout.state_root, 0o2750),
             (self.layout.pending_root, 0o700),
@@ -503,7 +501,6 @@ class ManagedInstaller:
         updates = {
             "BRIDGE_RESOURCE_PATH": "/mcp",
             "BRIDGE_DB_PATH": str(self.layout.db_path),
-            "BRIDGE_CONTEXT_PACKS_DIR": str(self.layout.context_packs_dir),
             "BRIDGE_SECRET_KEY": existing.get("BRIDGE_SECRET_KEY") or token_urlsafe(48),
             "BRIDGE_RESTART_REQUEST_FILE": str(self.layout._path("run/mcp-session-bridge/restart-request")),
             "BRIDGE_OPERATIONAL_STATUS_FILE": str(self.layout.status_file),
@@ -649,10 +646,6 @@ exec {current}/.venv/bin/python -m bridge_cli "$@"
                     "chown", "root:mcp-session-bridge", str(readable_state)
                 )
                 readable_state.chmod(0o640)
-        self.runner.run(
-            "chown", "-R", "mcp-session-bridge:mcp-session-bridge",
-            str(self.layout.context_packs_dir),
-        )
         text = (
             self.layout.caddyfile.read_text(encoding="utf-8")
             if self.layout.caddyfile.exists() else ""

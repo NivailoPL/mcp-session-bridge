@@ -26,7 +26,7 @@ from tests.pdf_samples import make_pdf
 
 def test_store_saves_session_and_exchange(tmp_path) -> None:
     store = Store(tmp_path / "bridge.sqlite3")
-    session = store.create_session("s1", "Test session", "manual-context")
+    session = store.create_session("s1", "Test session")
 
     exchange = store.save_exchange(
         session_id=session.session_id,
@@ -50,8 +50,8 @@ def test_store_saves_session_and_exchange(tmp_path) -> None:
 
 def test_store_sorts_sessions_by_last_active_turn_not_admin_update(tmp_path) -> None:
     store = Store(tmp_path / "bridge.sqlite3")
-    store.create_session("older", "Older", "manual-context")
-    store.create_session("newer", "Newer", "manual-context")
+    store.create_session("older", "Older")
+    store.create_session("newer", "Newer")
     older_exchange = store.save_exchange(
         "older",
         "Claude",
@@ -87,7 +87,7 @@ def test_store_manages_session_groups_and_reassigns_deleted_group(tmp_path) -> N
     store.create_session_group("Health", "#ef4444", "medical_plus", group_id="health")
 
     ideas = store.create_session_group("Ideas", "#22c55e", "ideas")
-    session = store.create_session("s1", "Grouped", "manual-context", group_id=ideas.group_id)
+    session = store.create_session("s1", "Grouped", group_id=ideas.group_id)
 
     assert ideas.group_id == "ideas"
     assert ideas.is_system is False
@@ -115,7 +115,7 @@ def test_store_manages_session_groups_and_reassigns_deleted_group(tmp_path) -> N
     with pytest.raises(ValueError, match="session group name already exists"):
         store.create_session_group("idea lab", "#22c55e", "ideas", group_id="idea-lab-2")
     with pytest.raises(ValueError, match="Unknown session group"):
-        store.create_session("s2", "Bad group", "manual-context", group_id="missing")
+        store.create_session("s2", "Bad group", group_id="missing")
 
     store.set_session_group("s1", "brainstorming")
     assert store.get_session("s1").group_id == "brainstorming"
@@ -181,7 +181,7 @@ def test_store_demotes_legacy_non_default_system_groups(tmp_path) -> None:
                 ("health", "Health", "#ef4444", "medical_plus", 20, now, now),
             ),
         )
-    store.create_session("legacy-session", "Legacy group", "manual-context", group_id="brainstorming")
+    store.create_session("legacy-session", "Legacy group", group_id="brainstorming")
 
     reopened = Store(db_path)
     groups = {group["group_id"]: group for group in reopened.list_session_groups()}
@@ -202,7 +202,7 @@ def test_store_demotes_legacy_non_default_system_groups(tmp_path) -> None:
 def test_store_migrates_legacy_text_file_rows_before_saving_pdfs(tmp_path) -> None:
     db_path = tmp_path / "bridge.sqlite3"
     store = Store(db_path)
-    store.create_session("s1", "Legacy files", "manual-context")
+    store.create_session("s1", "Legacy files")
     with sqlite3.connect(db_path) as conn:
         conn.execute("DROP TABLE session_files")
         conn.execute(
@@ -275,7 +275,7 @@ def test_store_migrates_legacy_text_file_rows_before_saving_pdfs(tmp_path) -> No
 
 def test_store_soft_deletes_exchange_and_hides_it_from_transcript(tmp_path) -> None:
     store = Store(tmp_path / "bridge.sqlite3")
-    session = store.create_session("s1", "Correction test", "manual-context")
+    session = store.create_session("s1", "Correction test")
     first = store.save_exchange("s1", "Claude", "First message.", "First answer.")
     duplicate = store.save_exchange("s1", "Claude", "Duplicate.", "Second answer accidentally saved twice.")
 
@@ -305,7 +305,7 @@ def test_store_soft_deletes_exchange_and_hides_it_from_transcript(tmp_path) -> N
 
 def test_store_masks_assistant_response_without_hiding_exchange(tmp_path) -> None:
     store = Store(tmp_path / "bridge.sqlite3")
-    session = store.create_session("s1", "Masking test", "manual-context")
+    session = store.create_session("s1", "Masking test")
     exchange = store.save_exchange("s1", "GPT-5", "Give me a fresh opinion.", "A strongly anchoring answer.")
 
     masked = store.mask_exchange_response(exchange.exchange_id, actor="owner")
@@ -334,7 +334,7 @@ def test_store_masks_assistant_response_without_hiding_exchange(tmp_path) -> Non
 def test_store_migrates_existing_exchanges_with_unmasked_default(tmp_path) -> None:
     db_path = tmp_path / "bridge.sqlite3"
     store = Store(db_path)
-    store.create_session("s1", "Migration test", "manual-context")
+    store.create_session("s1", "Migration test")
     exchange = store.save_exchange("s1", "Claude", "Question.", "Answer.")
 
     with store._connect() as conn:
@@ -347,7 +347,7 @@ def test_store_migrates_existing_exchanges_with_unmasked_default(tmp_path) -> No
 
 def test_get_latest_exchange_returns_newest_active_exchange(tmp_path) -> None:
     store = Store(tmp_path / "bridge.sqlite3")
-    store.create_session("s1", "Latest speaker", "manual-context")
+    store.create_session("s1", "Latest speaker")
 
     assert store.get_latest_exchange("s1") is None
 
@@ -367,7 +367,7 @@ def test_get_latest_exchange_returns_newest_active_exchange(tmp_path) -> None:
 
 def test_store_edits_exchange_and_records_admin_event(tmp_path) -> None:
     store = Store(tmp_path / "bridge.sqlite3")
-    session = store.create_session("s1", "Edit test", "manual-context")
+    session = store.create_session("s1", "Edit test")
     exchange = store.save_exchange("s1", "Claude", "Old message.", "Old answer.")
 
     edited = store.update_exchange(
@@ -396,7 +396,7 @@ def test_store_edits_exchange_and_records_admin_event(tmp_path) -> None:
 
 def test_store_renames_auto_titled_session_from_first_exchange(tmp_path) -> None:
     store = Store(tmp_path / "bridge.sqlite3")
-    store.create_session("s1", "Session 2026-05-26 18:00 UTC", "manual-context", title_is_auto=True)
+    store.create_session("s1", "Session 2026-05-26 18:00 UTC", title_is_auto=True)
 
     store.save_exchange(
         session_id="s1",
@@ -412,9 +412,9 @@ def test_store_renames_auto_titled_session_from_first_exchange(tmp_path) -> None
     assert session.title == "I want to discuss how to explain a work story without corporate jargon"
 
 
-def test_session_transcript_renders_conversation_without_context_pack(tmp_path) -> None:
+def test_session_transcript_renders_conversation(tmp_path) -> None:
     store = Store(tmp_path / "bridge.sqlite3")
-    session = store.create_session("s1", "Audit test", "manual-context")
+    session = store.create_session("s1", "Audit test")
     first_response_at = int(datetime(2026, 5, 26, 19, 21, tzinfo=UTC).timestamp())
     second_response_at = int(datetime(2026, 5, 27, 8, 21, tzinfo=UTC).timestamp())
     store.save_exchange(
@@ -437,7 +437,6 @@ def test_session_transcript_renders_conversation_without_context_pack(tmp_path) 
     assert transcript["turn_sequence"] == ["USER", "ChatGPT", "USER", "Claude"]
     assert transcript["exchange_count"] == 2
     assert transcript["turn_count"] == 4
-    assert "context_pack_id" not in transcript["transcript_markdown"]
     assert "## Turn Sequence\n\nUSER\nChatGPT\nUSER\nClaude" in transcript["transcript_markdown"]
     assert "### ChatGPT - 19:21 (Tuesday, May 26, 2026)" in transcript["transcript_markdown"]
     assert "### Claude - 08:21 (Wednesday, May 27, 2026)" in transcript["transcript_markdown"]
@@ -449,7 +448,7 @@ def test_session_transcript_renders_conversation_without_context_pack(tmp_path) 
 
 def test_session_transcript_uses_configured_display_timezone(tmp_path) -> None:
     store = Store(tmp_path / "bridge.sqlite3")
-    session = store.create_session("s1", "Timezone test", "manual-context")
+    session = store.create_session("s1", "Timezone test")
     response_at = int(datetime(2026, 5, 26, 19, 21, tzinfo=UTC).timestamp())
     store.save_exchange(
         "s1",
@@ -468,7 +467,7 @@ def test_session_transcript_uses_configured_display_timezone(tmp_path) -> None:
 def test_store_migrates_existing_exchanges_with_response_timestamp(tmp_path) -> None:
     db_path = tmp_path / "bridge.sqlite3"
     store = Store(db_path)
-    session = store.create_session("s1", "Migration source", "manual-context")
+    session = store.create_session("s1", "Migration source")
     store.save_exchange("s1", "Claude", "Old message.", "Old answer.")
     original_exchange = store.list_exchanges(session.session_id)[0]
 
@@ -509,7 +508,7 @@ def test_store_migrates_existing_exchanges_with_response_timestamp(tmp_path) -> 
 
 def test_session_audit_builds_offline_viewer_payload(tmp_path) -> None:
     store = Store(tmp_path / "bridge.sqlite3")
-    store.create_session("s1", "Viewer test", "manual-context")
+    store.create_session("s1", "Viewer test")
     store.save_exchange(
         "s1",
         "ChatGPT",
@@ -556,7 +555,7 @@ def test_output_probe_mode_migration_marks_historical_runs_as_maximum_compatibil
     assert run["tool_output_mode"] == "maximum_compatibility"
 
 
-def test_public_tools_hide_context_pack_tools(load_main) -> None:
+def test_public_tool_surface_excludes_retired_tools(load_main) -> None:
     main = load_main()
 
     tool_names = _tool_names(main)
@@ -589,7 +588,7 @@ def test_public_tools_hide_context_pack_tools(load_main) -> None:
 
 def test_large_tool_results_default_to_optimized_unstructured_output(load_main) -> None:
     main = load_main()
-    main.store.create_session("shape", "Result shape", "manual-context")
+    main.store.create_session("shape", "Result shape")
     main.store.save_exchange("shape", "Codex", "hello", "world")
 
     async def inspect_tools():
@@ -627,7 +626,7 @@ def test_invalid_persisted_tool_output_mode_falls_back_to_optimized(load_main) -
 
 def test_large_tool_results_can_restore_maximum_compatibility(load_main) -> None:
     main = load_main()
-    main.store.create_session("shape", "Result shape", "manual-context")
+    main.store.create_session("shape", "Result shape")
     main.store.save_exchange("shape", "Codex", "hello", "world")
     main.store.set_app_setting("mcp.tool_output_mode", "maximum_compatibility")
     sys.modules.pop("app.main", None)
@@ -766,7 +765,7 @@ def test_output_probe_report_is_immutable_and_retry_is_idempotent(load_main) -> 
 
 def test_runtime_transcript_chunk_setting_overrides_environment(load_main) -> None:
     main = load_main(transcript_max_lines=180, transcript_max_chars=12_000)
-    session = main.store.create_session("runtime-chunks", "Runtime chunks", "manual-context")
+    session = main.store.create_session("runtime-chunks", "Runtime chunks")
     main.store.save_exchange(
         session.session_id,
         "Claude",
@@ -789,7 +788,7 @@ def test_runtime_transcript_chunk_setting_overrides_environment(load_main) -> No
 
 def test_transcript_chunks_mask_model_response_for_every_consumer(load_main) -> None:
     main = load_main()
-    session = main.store.create_session("masked-chunk", "Masked chunk", "manual-context")
+    session = main.store.create_session("masked-chunk", "Masked chunk")
     exchange = main.store.save_exchange(
         session.session_id,
         "GPT-5",
@@ -812,7 +811,7 @@ def test_transcript_chunks_mask_model_response_for_every_consumer(load_main) -> 
 
 def test_get_last_speaker_reports_continuity_decision(load_main) -> None:
     main = load_main()
-    main.store.create_session("s1", "Continuity", "manual-context")
+    main.store.create_session("s1", "Continuity")
 
     unknown = main.get_last_speaker("missing", "Claude")
     assert unknown["ok"] is False
@@ -845,7 +844,7 @@ def test_get_last_speaker_reports_continuity_decision(load_main) -> None:
     assert after_delete["should_fetch_transcript"] is False
 
 
-def test_create_session_works_without_context_pack_manifest(load_main) -> None:
+def test_create_session_resolves_group_and_rejects_unknown_group(load_main) -> None:
     main = load_main()
 
     main.store.create_session_group("Ideas", "#22c55e", "ideas")
@@ -866,16 +865,13 @@ def test_create_session_works_without_context_pack_manifest(load_main) -> None:
     assert "is_sensitive" not in overview["group"]
     assert invalid_result["ok"] is False
     assert invalid_result["error"] == "Unknown session group: missing"
-    assert result["context_source"] == "manual"
-    assert "context_pack_id" not in result
     assert session is not None
-    assert session.context_pack_id == "manual-context"
     assert session.group_id == "ideas"
 
 
 def test_session_overview_and_transcript_chunks_round_trip(load_main) -> None:
     main = load_main(transcript_max_lines=8, transcript_max_chars=220)
-    session = main.store.create_session("s1", "Chunk test", "manual-context")
+    session = main.store.create_session("s1", "Chunk test")
     for index in range(1, 8):
         main.store.save_exchange(
             "s1",
@@ -889,7 +885,6 @@ def test_session_overview_and_transcript_chunks_round_trip(load_main) -> None:
     full_transcript = render_session_transcript(session, main.store.list_exchanges("s1"))["transcript_markdown"]
 
     assert overview["ok"] is True
-    assert overview["context_source"] == "manual"
     assert overview["group_id"] == "uncategorized"
     assert overview["group"]["name"] == "Uncategorized"
     assert overview["exchange_count"] == 7
@@ -909,9 +904,9 @@ def test_mcp_session_files_are_visible_only_through_their_session(load_main) -> 
     main = load_main()
     main.store.create_session_group("Ideas", "#22c55e", "ideas")
     main.store.create_session_group("Health", "#ef4444", "medical_plus", group_id="health")
-    main.store.create_session("s1", "File test", "manual-context", group_id="ideas")
-    main.store.create_session("s2", "Other session", "manual-context", group_id="ideas")
-    main.store.create_session("s3", "Health session", "manual-context", group_id="health")
+    main.store.create_session("s1", "File test", group_id="ideas")
+    main.store.create_session("s2", "Other session", group_id="ideas")
+    main.store.create_session("s3", "Health session", group_id="health")
 
     session_file = main.upload_session_file("s1", "plan.md", "# Plan\n\nDo the thing.")
     other_session_file = main.upload_session_file("s2", "private.md", "Other session context.")
@@ -974,7 +969,7 @@ def test_mcp_session_files_are_visible_only_through_their_session(load_main) -> 
 def test_mcp_uploads_pdf_and_returns_extracted_text_without_original_bytes(load_main) -> None:
     main = load_main()
     main.store.create_session_group("Ideas", "#22c55e", "ideas")
-    main.store.create_session("s1", "PDF test", "manual-context", group_id="ideas")
+    main.store.create_session("s1", "PDF test", group_id="ideas")
     raw = make_pdf("PDF context for RAG")
     encoded = __import__("base64").b64encode(raw).decode("ascii")
 
@@ -1003,7 +998,7 @@ def test_mcp_uploads_pdf_and_returns_extracted_text_without_original_bytes(load_
 
 def test_mcp_accepts_image_only_pdf_but_marks_it_unindexed(load_main) -> None:
     main = load_main()
-    main.store.create_session("s1", "PDF test", "manual-context")
+    main.store.create_session("s1", "PDF test")
     encoded = __import__("base64").b64encode(make_pdf(None)).decode("ascii")
 
     uploaded = asyncio.run(main.upload_session_pdf("s1", "scan.pdf", encoded))
@@ -1020,7 +1015,7 @@ def test_mcp_accepts_image_only_pdf_but_marks_it_unindexed(load_main) -> None:
 
 def test_mcp_rejects_invalid_pdf_payloads(load_main) -> None:
     main = load_main()
-    main.store.create_session("s1", "PDF test", "manual-context")
+    main.store.create_session("s1", "PDF test")
 
     malformed = asyncio.run(main.upload_session_pdf("s1", "bad.pdf", "%%%"))
     not_pdf = asyncio.run(
@@ -1048,7 +1043,7 @@ def test_mcp_rejects_invalid_pdf_payloads(load_main) -> None:
 
 def test_mcp_pdf_upload_reports_worker_saturation(load_main, monkeypatch) -> None:
     main = load_main()
-    main.store.create_session("s1", "PDF test", "manual-context")
+    main.store.create_session("s1", "PDF test")
 
     async def busy_worker(*args, **kwargs):
         raise main.PdfWorkerBusyError("PDF processing is busy; retry shortly")
@@ -1071,7 +1066,7 @@ def test_pdf_storage_quota_is_enforced_before_insert(tmp_path) -> None:
     extraction = extract_pdf_text_isolated(raw)
     quota = len(raw) + extraction.extracted_text_bytes
     store = Store(tmp_path / "bridge.sqlite3", pdf_storage_max_bytes=quota)
-    store.create_session("s1", "Quota", "manual-context")
+    store.create_session("s1", "Quota")
 
     store.save_session_pdf(
         "s1",
@@ -1099,7 +1094,7 @@ def test_pdf_storage_quota_is_enforced_before_insert(tmp_path) -> None:
 def test_mcp_overview_reads_session_and_group_files_in_one_snapshot(load_main, monkeypatch) -> None:
     main = load_main()
     main.store.create_session_group("Ideas", "#22c55e", "ideas")
-    main.store.create_session("s1", "File test", "manual-context", group_id="ideas")
+    main.store.create_session("s1", "File test", group_id="ideas")
     main.store.save_session_file("s1", "plan.md", "# Plan")
     main.store.save_group_file("ideas", "context.md", "Shared context")
     calls: list[dict[str, str | None]] = []
@@ -1120,7 +1115,7 @@ def test_mcp_overview_reads_session_and_group_files_in_one_snapshot(load_main, m
 
 def test_list_session_files_does_not_select_content_bodies(tmp_path) -> None:
     store = Store(tmp_path / "bridge.sqlite3")
-    store.create_session("s1", "File test", "manual-context")
+    store.create_session("s1", "File test")
     store.save_session_file("s1", "large.md", "x" * 100_000)
     statements: list[str] = []
     original_connect = store._connect
@@ -1157,8 +1152,8 @@ def test_list_session_files_does_not_select_content_bodies(tmp_path) -> None:
 def test_store_moves_session_files_without_changing_identity_or_metadata(tmp_path) -> None:
     store = Store(tmp_path / "bridge.sqlite3")
     store.create_session_group("Ideas", "#22c55e", "ideas")
-    store.create_session("s1", "First", "manual-context", group_id="ideas")
-    store.create_session("s2", "Peer", "manual-context", group_id="ideas")
+    store.create_session("s1", "First", group_id="ideas")
+    store.create_session("s2", "Peer", group_id="ideas")
     saved = store.save_session_file("s1", "plan.md", "# Plan", created_by="test-owner")
     immutable_metadata = (
         saved.file_id,
@@ -1202,8 +1197,8 @@ def test_store_file_mutations_recheck_admin_visibility_atomically(tmp_path) -> N
     store = Store(tmp_path / "bridge.sqlite3")
     store.create_session_group("Ideas", "#22c55e", "ideas")
     store.create_session_group("Other", "#ef4444", "camera")
-    store.create_session("s1", "First", "manual-context", group_id="ideas")
-    store.create_session("s2", "Other", "manual-context", group_id="other")
+    store.create_session("s1", "First", group_id="ideas")
+    store.create_session("s2", "Other", group_id="other")
     edit_file = store.save_session_file("s1", "edit.md", "Original")
     move_file = store.save_session_file("s1", "move.md", "Original")
     delete_file = store.save_session_file("s1", "delete.md", "Original")
@@ -1247,7 +1242,7 @@ def test_store_rejects_invalid_file_moves_without_partial_updates(tmp_path) -> N
     store.create_session_group("Ideas", "#22c55e", "ideas")
     store.create_session_group("Archive", "#64748b", "archive", group_id="archive-test")
     store.delete_session_group("archive-test")
-    store.create_session("s1", "First", "manual-context", group_id="ideas")
+    store.create_session("s1", "First", group_id="ideas")
     saved = store.save_session_file("s1", "plan.md", "# Plan")
 
     invalid_moves = (
@@ -1272,7 +1267,7 @@ def test_store_rejects_invalid_file_moves_without_partial_updates(tmp_path) -> N
 
 def test_store_edits_session_file_with_hash_guard_and_atomic_validation(tmp_path) -> None:
     store = Store(tmp_path / "bridge.sqlite3")
-    store.create_session("s1", "First", "manual-context")
+    store.create_session("s1", "First")
     saved = store.save_session_file("s1", "plan.md", "Old content", created_by="test-owner")
 
     edited = store.update_session_file(saved.file_id, "New content", expected_sha256=saved.sha256)
@@ -1305,7 +1300,7 @@ def test_store_edits_session_file_with_hash_guard_and_atomic_validation(tmp_path
 
 def test_store_hard_deletes_file_and_preserves_existing_payload_keys(load_main) -> None:
     main = load_main()
-    main.store.create_session("s1", "File test", "manual-context")
+    main.store.create_session("s1", "File test")
     uploaded = main.upload_session_file("s1", "plan.md", "# Plan")
     file_id = uploaded["file"]["file_id"]
     expected_manifest_keys = {
@@ -1352,7 +1347,7 @@ def test_store_hard_deletes_file_and_preserves_existing_payload_keys(load_main) 
 def test_display_timezone_setting_controls_mcp_timestamps(load_main) -> None:
     main = load_main()
     main.store.set_app_setting(DISPLAY_TIMEZONE_SETTING_KEY, "Europe/Paris")
-    main.store.create_session("s1", "Timezone setting", "manual-context")
+    main.store.create_session("s1", "Timezone setting")
 
     result = main.save_exchange(
         "s1",

@@ -15,8 +15,6 @@ class Settings:
     public_base_url: str
     resource_path: str
     db_path: Path
-    context_packs_dir: Path
-    default_context_pack_id: str
     transcript_chunk_max_lines: int
     transcript_chunk_max_chars: int
     owner_username: str
@@ -72,8 +70,6 @@ def load_settings() -> Settings:
         public_base_url=public_base_url,
         resource_path=resource_path,
         db_path=db_path,
-        context_packs_dir=Path(os.getenv("BRIDGE_CONTEXT_PACKS_DIR", str(ROOT / "data" / "context-packs"))),
-        default_context_pack_id=os.getenv("BRIDGE_DEFAULT_CONTEXT_PACK_ID", "manual-context"),
         transcript_chunk_max_lines=int(os.getenv("BRIDGE_TRANSCRIPT_CHUNK_MAX_LINES", "180")),
         transcript_chunk_max_chars=int(os.getenv("BRIDGE_TRANSCRIPT_CHUNK_MAX_CHARS", "12000")),
         owner_username=os.getenv("BRIDGE_OWNER_USERNAME", "owner"),

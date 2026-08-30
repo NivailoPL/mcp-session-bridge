@@ -759,7 +759,7 @@ def test_admin_viewer_markdown_table_rendering() -> None:
 
 def test_admin_api_requires_login_and_csrf_for_mutations(load_main) -> None:
     main = load_main(graph_experimental=True)
-    session = main.store.create_session("s1", "Admin test", "manual-context")
+    session = main.store.create_session("s1", "Admin test")
     exchange = main.store.save_exchange("s1", "Claude", "Message.", "Answer to correct.")
 
     client = TestClient(main.app, base_url="http://127.0.0.1:8787")
@@ -837,7 +837,7 @@ def test_admin_database_export_requires_csrf_and_keeps_files_on_server(
     load_main, tmp_path: Path
 ) -> None:
     main = load_main(graph_experimental=True)
-    main.store.create_session("export-me", "Export me", "manual-context")
+    main.store.create_session("export-me", "Export me")
     client = TestClient(main.app, base_url="http://127.0.0.1:8787")
 
     assert client.post("/admin/api/database/export").status_code == 401
@@ -922,7 +922,7 @@ def test_admin_database_export_button_sends_only_a_trigger_and_renders_vps_path(
 
 def test_admin_can_configure_ai_rename_and_update_session_title(load_main, monkeypatch) -> None:
     main = load_main(graph_experimental=True)
-    main.store.create_session("s1", "Chaotic long title", "manual-context")
+    main.store.create_session("s1", "Chaotic long title")
     main.store.save_exchange("s1", "Claude", "Pierwsza wiadomość użytkownika o ewaluacji LLM.", "OK")
     client = TestClient(main.app, base_url="http://127.0.0.1:8787")
 
@@ -1044,7 +1044,7 @@ def test_admin_can_update_display_timezone(load_main) -> None:
 
 def test_admin_can_manage_session_groups_and_move_sessions(load_main) -> None:
     main = load_main(graph_experimental=True)
-    main.store.create_session("s1", "Admin group test", "manual-context")
+    main.store.create_session("s1", "Admin group test")
     client = TestClient(main.app, base_url="http://127.0.0.1:8787")
 
     client.post(
@@ -1171,7 +1171,7 @@ def test_admin_sensitive_group_prunes_and_blocks_external_rag_scope(load_main, m
 def test_admin_can_view_session_and_group_files(load_main) -> None:
     main = load_main(graph_experimental=True)
     main.store.create_session_group("Tests", "#22c55e", "science")
-    main.store.create_session("s1", "File admin test", "manual-context", group_id="tests")
+    main.store.create_session("s1", "File admin test", group_id="tests")
     session_file = main.store.save_session_file("s1", "plan.md", "# Plan")
     group_file = main.store.save_group_file("tests", "shared.md", "Shared context")
     client = TestClient(main.app, base_url="http://127.0.0.1:8787")
@@ -1335,7 +1335,7 @@ def _encoded_file(content: bytes, *, filename: str = "notes.md", scope_type: str
 
 def test_admin_file_mutations_require_login_and_csrf(admin_client, load_main) -> None:
     main = load_main(graph_experimental=True)
-    main.store.create_session("s1", "File mutations", "manual-context")
+    main.store.create_session("s1", "File mutations")
     saved = main.store.save_session_file("s1", "existing.md", "old")
     anonymous = TestClient(main.app, base_url="http://127.0.0.1:8787")
     calls = [
@@ -1355,7 +1355,7 @@ def test_admin_file_mutations_require_login_and_csrf(admin_client, load_main) ->
 def test_admin_uploads_bounded_utf8_files_to_selected_session_or_group(admin_client, load_main) -> None:
     main = load_main(graph_experimental=True)
     main.store.create_session_group("Tests", "#22c55e", "science")
-    main.store.create_session("s1", "File mutations", "manual-context", group_id="tests")
+    main.store.create_session("s1", "File mutations", group_id="tests")
     client, csrf = admin_client(main)
     headers = {"x-csrf-token": csrf}
 
@@ -1418,7 +1418,7 @@ def test_admin_uploads_bounded_utf8_files_to_selected_session_or_group(admin_cli
 
 def test_admin_uploads_previews_and_downloads_original_pdf(admin_client, load_main) -> None:
     main = load_main(graph_experimental=True)
-    main.store.create_session("s1", "PDF admin", "manual-context")
+    main.store.create_session("s1", "PDF admin")
     client, csrf = admin_client(main)
     raw = make_pdf("Admin PDF text")
 
@@ -1460,7 +1460,7 @@ def test_admin_uploads_previews_and_downloads_original_pdf(admin_client, load_ma
 
 def test_admin_pdf_raw_requires_login_and_pdf_cannot_be_edited(admin_client, load_main) -> None:
     main = load_main(graph_experimental=True)
-    main.store.create_session("s1", "PDF admin", "manual-context")
+    main.store.create_session("s1", "PDF admin")
     client, csrf = admin_client(main)
     uploaded = client.post(
         "/admin/api/sessions/s1/files",
@@ -1503,7 +1503,7 @@ def test_admin_group_upload_uses_session_current_group_atomically(admin_client, 
     main = load_main(graph_experimental=True)
     main.store.create_session_group("First", "#22c55e", "science")
     main.store.create_session_group("Second", "#3b82f6", "ideas")
-    main.store.create_session("s1", "File mutations", "manual-context", group_id="first")
+    main.store.create_session("s1", "File mutations", group_id="first")
     client, csrf = admin_client(main)
     original_selected_session = main.admin._selected_session
 
@@ -1529,8 +1529,8 @@ def test_admin_edits_moves_and_deletes_only_visible_files(admin_client, load_mai
     main = load_main(graph_experimental=True)
     main.store.create_session_group("Tests", "#22c55e", "science")
     main.store.create_session_group("Other", "#ef4444", "camera")
-    main.store.create_session("s1", "File mutations", "manual-context", group_id="tests")
-    main.store.create_session("s2", "Other session", "manual-context", group_id="other")
+    main.store.create_session("s1", "File mutations", group_id="tests")
+    main.store.create_session("s2", "Other session", group_id="other")
     saved = main.store.save_session_file("s1", "notes.md", "old")
     unrelated = main.store.save_session_file("s2", "private.md", "untouched")
     client, csrf = admin_client(main)
@@ -1593,8 +1593,8 @@ def test_admin_file_mutations_conflict_if_file_moves_after_visibility_check(admi
     main = load_main(graph_experimental=True)
     main.store.create_session_group("First", "#22c55e", "science")
     main.store.create_session_group("Second", "#ef4444", "camera")
-    main.store.create_session("s1", "First", "manual-context", group_id="first")
-    main.store.create_session("s2", "Second", "manual-context", group_id="second")
+    main.store.create_session("s1", "First", group_id="first")
+    main.store.create_session("s2", "Second", group_id="second")
     edit_file = main.store.save_session_file("s1", "edit.md", "Original")
     move_file = main.store.save_session_file("s1", "move.md", "Original")
     delete_file = main.store.save_session_file("s1", "delete.md", "Original")
@@ -1637,7 +1637,7 @@ def test_admin_file_mutations_conflict_if_file_moves_after_visibility_check(admi
 
 def test_admin_rejects_oversized_or_malformed_patch_lengths_without_mutation(admin_client, load_main) -> None:
     main = load_main(graph_experimental=True)
-    main.store.create_session("s1", "File mutations", "manual-context")
+    main.store.create_session("s1", "File mutations")
     saved = main.store.save_session_file("s1", "notes.md", "Original")
     client, csrf = admin_client(main)
     headers = {"x-csrf-token": csrf, "content-type": "application/json"}
@@ -1673,8 +1673,8 @@ def test_admin_rejects_oversized_or_malformed_patch_lengths_without_mutation(adm
 def test_admin_file_workspace_stays_consistent_with_mcp_reads(admin_client, load_main) -> None:
     main = load_main(graph_experimental=True)
     main.store.create_session_group("Ideas", "#22c55e", "science")
-    main.store.create_session("s1", "Owner session", "manual-context", group_id="ideas")
-    main.store.create_session("s2", "Peer session", "manual-context", group_id="ideas")
+    main.store.create_session("s1", "Owner session", group_id="ideas")
+    main.store.create_session("s2", "Peer session", group_id="ideas")
     client, csrf = admin_client(main)
     headers = {"x-csrf-token": csrf}
 
@@ -1866,7 +1866,7 @@ def test_restart_helper_terminates_and_reaps_timed_out_systemctl(load_main, monk
 
 def test_admin_search_settings_keys_and_basic_search_api(load_main) -> None:
     main = load_main(graph_experimental=True)
-    main.store.create_session("search-session", "Searchable session", "manual-context")
+    main.store.create_session("search-session", "Searchable session")
     main.store.save_exchange(
         "search-session", "Codex", "The admin search contains a kumquat marker.", "Confirmed."
     )

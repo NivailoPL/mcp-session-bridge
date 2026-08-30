@@ -2105,8 +2105,6 @@ def _session_payload(session: SessionRecord) -> dict[str, Any]:
         "session_id": session.session_id,
         "title": session.title,
         "group_id": session.group_id,
-        "context_pack_id": session.context_pack_id,
-        "context_pack_version": session.context_pack_version,
         "title_is_auto": session.title_is_auto,
         "created_at": session.created_at,
         "created_at_iso": format_timestamp_iso(session.created_at),

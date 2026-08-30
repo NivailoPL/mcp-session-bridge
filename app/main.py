@@ -51,7 +51,6 @@ from app.time_format import (
 )
 from app.tool_output import configured_tool_output_mode, large_tool_structured_output
 
-MANUAL_CONTEXT_ID = "manual-context"
 SERVER_INSTRUCTIONS = (
     "MCP Session Bridge shares model transcripts. Sessions are unlisted: without a "
     "session_id, ask the user or create a new session; never enumerate or guess sessions. With a "
@@ -814,7 +813,6 @@ def create_session(title: str = "", group_id: str = "") -> dict[str, Any]:
         session = store.create_session(
             session_id=session_id,
             title=resolved_title,
-            context_pack_id=MANUAL_CONTEXT_ID,
             title_is_auto=title_is_auto,
             group_id=group_id,
         )
@@ -827,7 +825,6 @@ def create_session(title: str = "", group_id: str = "") -> dict[str, Any]:
         "title": session.title,
         "group_id": session.group_id,
         "group": _group_payload(group),
-        "context_source": "manual",
         "title_is_auto": session.title_is_auto,
         "created_at": session.created_at,
     }
@@ -853,7 +850,6 @@ def get_session_overview(session_id: str) -> dict[str, Any]:
     chunk_max_chars, chunk_max_lines = _current_transcript_chunk_limits()
     return {
         "ok": True,
-        "context_source": "manual",
         "group": _group_payload(group),
         "files": files,
         **render_session_overview(

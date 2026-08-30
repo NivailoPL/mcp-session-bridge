@@ -14,7 +14,7 @@ from app.storage import Store
 
 
 def _session(store: Store, session_id: str, created_at: int = 1_000) -> int:
-    store.create_session(session_id, session_id, "manual-context")
+    store.create_session(session_id, session_id)
     exchange = store.save_exchange(
         session_id, "model", f"SQLite backs Graph session {session_id}.",
         f"That is the implementation decision for {session_id}.",

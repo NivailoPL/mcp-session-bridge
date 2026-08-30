@@ -477,8 +477,6 @@ def _settings(tmp_path: Path) -> Settings:
         public_base_url="https://mcp.example.test",
         resource_path="/mcp",
         db_path=tmp_path / "bridge.sqlite3",
-        context_packs_dir=tmp_path / "context-packs",
-        default_context_pack_id="manual-context",
         transcript_chunk_max_lines=180,
         transcript_chunk_max_chars=12000,
         owner_username="owner",
