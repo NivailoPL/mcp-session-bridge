@@ -443,7 +443,10 @@
     .mini-chip.group svg { width: 12px; height: 12px; }
 
     /* ---------- main ---------- */
-    .main { position: relative; display: flex; flex-direction: column; min-width: 0; }
+    .main {
+      position: relative; display: flex; flex-direction: column; min-width: 0; min-height: 0;
+      height: calc(100vh - var(--workspace-bar-height)); overflow: hidden;
+    }
 
     /* a covered row keeps its geometry: the title is redacted, nothing else moves */
     .session-title-redacted {
@@ -460,7 +463,10 @@
     .session-guard-glyph svg { width: 14px; height: 14px; }
 
     /* the transcript sits behind a flat curtain; the header above it stays live */
-    .thread-sensitive-content { position: relative; display: flex; flex: 1; flex-direction: column; min-width: 0; }
+    .thread-sensitive-content {
+      position: relative; display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0;
+      overflow: auto; overscroll-behavior: contain;
+    }
     .sensitive-curtain {
       position: absolute; inset: 0; z-index: 12;
       display: grid; place-items: start center;
@@ -554,7 +560,7 @@
     .top-actions { display: flex; flex-wrap: wrap; gap: .5rem; justify-content: flex-start; align-items: center; }
     .content-wrap { position: relative; display: flex; align-items: flex-start; width: 100%; max-width: 84rem; }
     .turn-nav {
-      position: sticky; top: 50vh; transform: translateY(-50%); z-index: 4; display: none; flex-direction: column; gap: .35rem;
+      position: sticky; top: 50%; transform: translateY(-50%); z-index: 4; display: none; flex-direction: column; gap: .35rem;
       padding: .35rem; margin: 0 .55rem 0 1rem; border: 1px solid var(--stroke-soft);
       border-radius: var(--r-card); background: #10131a;
     }
@@ -5261,6 +5267,7 @@
 
       function scrollTranscript(direction) {
         const nodes = transcriptTurnNodes();
+        const container = transcriptScrollContainer();
         if (direction === "top") {
           scrollToNode(dom.exchangeList, "start");
           return;
@@ -5272,30 +5279,40 @@
         }
         if (!nodes.length) return;
         const topOffset = scrollTopOffset();
-        const currentY = window.scrollY + topOffset;
+        const currentY = container.scrollTop + topOffset;
         let target = null;
         if (direction === "next") {
-          target = nodes.find((node) => node.getBoundingClientRect().top + window.scrollY > currentY + 12) || nodes[nodes.length - 1];
+          target = nodes.find((node) => transcriptNodeTop(node) > currentY + 12) || nodes[nodes.length - 1];
         } else {
-          target = [...nodes].reverse().find((node) => node.getBoundingClientRect().top + window.scrollY < currentY - 12) || nodes[0];
+          target = [...nodes].reverse().find((node) => transcriptNodeTop(node) < currentY - 12) || nodes[0];
         }
         scrollToNode(target, "start");
       }
 
+      function transcriptScrollContainer() {
+        return dom.threadSensitiveContent;
+      }
+
+      function transcriptNodeTop(node) {
+        const container = transcriptScrollContainer();
+        const nodeRect = node.getBoundingClientRect();
+        const containerRect = container.getBoundingClientRect();
+        return nodeRect.top - containerRect.top + container.scrollTop;
+      }
+
       function scrollTopOffset() {
-        const topbar = document.querySelector(".topbar");
-        const height = topbar ? topbar.getBoundingClientRect().height : 0;
-        return Math.ceil(height + 22);
+        return 22;
       }
 
       function scrollToNode(node, align = "start") {
+        const container = transcriptScrollContainer();
         const rect = node.getBoundingClientRect();
-        const absoluteTop = rect.top + window.scrollY;
+        const absoluteTop = transcriptNodeTop(node);
         const offset = scrollTopOffset();
         const targetY = align === "end"
-          ? absoluteTop + rect.height - window.innerHeight + offset
+          ? absoluteTop + rect.height - container.clientHeight + offset
           : absoluteTop - offset;
-        window.scrollTo({ top: Math.max(0, targetY), behavior: "smooth" });
+        container.scrollTo({ top: Math.max(0, targetY), behavior: "smooth" });
       }
 
       function renderMeta(parts) {

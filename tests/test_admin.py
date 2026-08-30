@@ -77,6 +77,31 @@ def test_admin_viewer_group_ui_contract() -> None:
     assert 'spanCls("file-meta", "No files")' not in viewer
 
 
+def test_admin_viewer_transcript_owns_vertical_scroll() -> None:
+    viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
+
+    main_css = viewer[viewer.index(".main {"):viewer.index(".session-title-redacted")]
+    transcript_css = viewer[
+        viewer.index(".thread-sensitive-content {"):
+        viewer.index(".sensitive-curtain {")
+    ]
+    topbar_css = viewer[viewer.index(".topbar {"):viewer.index(".topbar-title {")]
+    scroll_helpers = viewer[
+        viewer.index("function scrollTranscript"):
+        viewer.index("function renderMeta")
+    ]
+
+    assert "height: calc(100vh - var(--workspace-bar-height));" in main_css
+    assert "min-height: 0;" in main_css
+    assert "overflow: hidden;" in main_css
+    assert "min-height: 0;" in transcript_css
+    assert "overflow: auto;" in transcript_css
+    assert "top: 0;" in topbar_css
+    assert "dom.threadSensitiveContent" in scroll_helpers
+    assert "window.scrollY" not in scroll_helpers
+    assert "window.scrollTo" not in scroll_helpers
+
+
 def test_admin_brand_assets_require_login_and_serve_png(load_main) -> None:
     main = load_main(graph_experimental=True)
     anonymous = TestClient(main.app, base_url="http://127.0.0.1:8787")
