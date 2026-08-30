@@ -63,7 +63,7 @@ from app.output_probe import (
     validate_transcript_chunk_limits,
 )
 from app.security import token_urlsafe, verify_password
-from app.settings import Settings
+from app.settings import ROOT, Settings
 from app.conversation_export import ExportInProgressError, export_database_to_markdown
 from app.storage import (
     MAX_SESSION_FILE_BYTES,
@@ -147,8 +147,8 @@ class AdminHandlers:
         self.graph_html_path = html_path.parent / "graph-viewer.html"
         self.graph_wip_html_path = html_path.parent / "graph-wip.html"
         self.graph_asset_dir = html_path.parent
-        self.brand_dir = html_path.parent / "brand"
-        self.pdfjs_dir = html_path.parent / "vendor" / "pdfjs"
+        self.brand_dir = ROOT / "brand"
+        self.pdfjs_dir = ROOT / "vendor" / "pdfjs"
         self.search = SearchService(store)
         self.active_tool_output_mode = active_tool_output_mode
         self.restart_requester = restart_requester

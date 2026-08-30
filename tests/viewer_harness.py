@@ -17,7 +17,7 @@ from pathlib import Path
 
 import pytest
 
-VIEWER_PATH = Path(__file__).parents[1] / "admin-viewer.html"
+VIEWER_PATH = Path(__file__).parents[1] / "web" / "admin-viewer.html"
 
 requires_node = pytest.mark.skipif(
     shutil.which("node") is None,

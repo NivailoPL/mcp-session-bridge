@@ -61,7 +61,7 @@ def test_admin_login_uses_dark_branding_and_inline_lockup(load_main) -> None:
 
 
 def test_admin_viewer_group_ui_contract() -> None:
-    viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
+    viewer = Path("web/admin-viewer.html").read_text(encoding="utf-8")
 
     icon_match = re.search(r"const GROUP_ICONS = (\[[\s\S]*?\]);", viewer)
     assert icon_match is not None
@@ -78,7 +78,7 @@ def test_admin_viewer_group_ui_contract() -> None:
 
 
 def test_admin_viewer_transcript_owns_vertical_scroll() -> None:
-    viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
+    viewer = Path("web/admin-viewer.html").read_text(encoding="utf-8")
 
     main_css = viewer[viewer.index(".main {"):viewer.index(".session-title-redacted")]
     transcript_css = viewer[
@@ -130,7 +130,7 @@ def test_admin_brand_assets_require_login_and_serve_png(load_main) -> None:
 
 @requires_node
 def test_admin_viewer_covered_row_keeps_the_row_contract() -> None:
-    viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
+    viewer = Path("web/admin-viewer.html").read_text(encoding="utf-8")
 
     # a covered row is redacted in place: same grid, same height, nothing laid over it
     assert "sensitive-compact-content" not in viewer
@@ -152,7 +152,7 @@ def test_admin_viewer_covered_row_keeps_the_row_contract() -> None:
 @pytest.mark.skipif(shutil.which("node") is None, reason="Node.js is required for the browser renderer smoke test")
 @requires_node
 def test_admin_viewer_session_date_groups_use_display_timezone() -> None:
-    viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
+    viewer = Path("web/admin-viewer.html").read_text(encoding="utf-8")
     date_helpers = viewer[
         viewer.index("const SESSION_DATE_GROUPS"):
         viewer.index("function sessionCompactTitle")
@@ -211,7 +211,7 @@ process.stdout.write(JSON.stringify({
 @pytest.mark.skipif(shutil.which("node") is None, reason="Node.js is required for the browser renderer smoke test")
 @requires_node
 def test_admin_viewer_session_list_stamps_use_display_timezone() -> None:
-    viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
+    viewer = Path("web/admin-viewer.html").read_text(encoding="utf-8")
     helpers = viewer[
         viewer.index("function sessionCompactTitle"):
         viewer.index("function sessionGroupChip")
@@ -242,7 +242,7 @@ process.stdout.write(JSON.stringify({
 @pytest.mark.skipif(shutil.which("node") is None, reason="Node.js is required for the browser renderer smoke test")
 @requires_node
 def test_admin_viewer_session_list_rendering() -> None:
-    viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
+    viewer = Path("web/admin-viewer.html").read_text(encoding="utf-8")
     date_helpers = viewer[
         viewer.index("const SESSION_DATE_GROUPS"):
         viewer.index("function sessionCompactTitle")
@@ -482,7 +482,7 @@ process.stdout.write(JSON.stringify({
 
 
 def test_admin_viewer_sensitive_group_privacy_contract() -> None:
-    viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
+    viewer = Path("web/admin-viewer.html").read_text(encoding="utf-8")
 
     assert 'id="groupSensitiveButton"' in viewer
     assert 'aria-pressed="false"' in viewer
@@ -577,7 +577,7 @@ def test_deployment_includes_narrow_restart_helper() -> None:
 
 @requires_node
 def test_admin_viewer_context_visibility_controls_contract() -> None:
-    viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
+    viewer = Path("web/admin-viewer.html").read_text(encoding="utf-8")
 
     assert '"Exclude"' in viewer
     assert '"Include"' in viewer
@@ -619,7 +619,7 @@ def test_admin_viewer_context_visibility_controls_contract() -> None:
 @pytest.mark.skipif(shutil.which("node") is None, reason="Node.js is required for the browser renderer smoke test")
 @requires_node
 def test_admin_viewer_excluded_turn_rendering_hides_message_content() -> None:
-    viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
+    viewer = Path("web/admin-viewer.html").read_text(encoding="utf-8")
     render_group = viewer[viewer.index("function renderExGroup"):viewer.index("function renderMsg")]
     context_controls = viewer[viewer.index("const CONTEXT_ACTION_ICONS"):viewer.index("function renderExActions")]
     render_exchange = viewer[viewer.index("function renderExchange(exchange)"):viewer.index("function renderTurn")]
@@ -691,7 +691,7 @@ process.stdout.write(JSON.stringify({
 @pytest.mark.skipif(shutil.which("node") is None, reason="Node.js is required for the browser renderer smoke test")
 @requires_node
 def test_admin_viewer_markdown_hides_excluded_message_content() -> None:
-    viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
+    viewer = Path("web/admin-viewer.html").read_text(encoding="utf-8")
     renderer = viewer[viewer.index("function buildMarkdown()"):viewer.index("function buildSessionExportHtml")]
     state = """
 const state = {
@@ -723,7 +723,7 @@ const state = {
 @pytest.mark.skipif(shutil.which("node") is None, reason="Node.js is required for the browser renderer smoke test")
 @requires_node
 def test_admin_viewer_markdown_table_rendering() -> None:
-    viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
+    viewer = Path("web/admin-viewer.html").read_text(encoding="utf-8")
     renderer = viewer[viewer.index("function renderMarkdown"):viewer.index("function svgNode")]
     markdown = "\n".join(
         [
@@ -2241,11 +2241,11 @@ def test_admin_page_serves_every_asset_it_references(admin_client) -> None:
 
 
 def test_admin_workspaces_share_styled_confirmation_contract() -> None:
-    sessions = Path("admin-viewer.html").read_text(encoding="utf-8")
-    graph = Path("graph-viewer.html").read_text(encoding="utf-8")
-    graph_script = Path("graph-viewer.js").read_text(encoding="utf-8")
-    confirmation_script = Path("admin-confirmation.js").read_text(encoding="utf-8")
-    confirmation_css = Path("admin-confirmation.css").read_text(encoding="utf-8")
+    sessions = Path("web/admin-viewer.html").read_text(encoding="utf-8")
+    graph = Path("web/graph-viewer.html").read_text(encoding="utf-8")
+    graph_script = Path("web/graph-viewer.js").read_text(encoding="utf-8")
+    confirmation_script = Path("web/admin-confirmation.js").read_text(encoding="utf-8")
+    confirmation_css = Path("web/admin-confirmation.css").read_text(encoding="utf-8")
 
     for page in (sessions, graph):
         assert page.count('href="/admin/assets/admin-confirmation.css"') == 1
@@ -2266,7 +2266,7 @@ def test_admin_workspaces_share_styled_confirmation_contract() -> None:
 
 @requires_node
 def test_styled_confirmation_dialog_resolves_actions_and_restores_focus() -> None:
-    source = Path("admin-confirmation.js").read_text(encoding="utf-8")
+    source = Path("web/admin-confirmation.js").read_text(encoding="utf-8")
     harness = r"""
 const elementsById = {};
 class Element {

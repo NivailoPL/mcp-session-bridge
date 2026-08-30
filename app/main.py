@@ -215,7 +215,7 @@ def _write_restart_request(path) -> None:
 admin = AdminHandlers(
     settings,
     store,
-    ROOT / "admin-viewer.html",
+    ROOT / "web" / "admin-viewer.html",
     active_tool_output_mode=ACTIVE_TOOL_OUTPUT_MODE,
     restart_requester=_request_service_restart,
     codex_client=codex,

@@ -146,8 +146,8 @@ def test_graph_release_gate_prevents_background_processing(load_main, monkeypatc
 
 
 def test_graph_viewer_owns_ephemeral_codex_workspace() -> None:
-    viewer = Path("graph-viewer.html").read_text(encoding="utf-8")
-    script = Path("graph-viewer.js").read_text(encoding="utf-8")
+    viewer = Path("web/graph-viewer.html").read_text(encoding="utf-8")
+    script = Path("web/graph-viewer.js").read_text(encoding="utf-8")
 
     assert 'id="codexOpenButton"' in viewer
     assert 'aria-controls="codexDialog"' in viewer
@@ -258,7 +258,7 @@ def test_graph_cannot_enable_without_authenticated_codex(admin_client, load_main
 
 
 def test_sessions_view_exposes_workspace_navigation_contract() -> None:
-    viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
+    viewer = Path("web/admin-viewer.html").read_text(encoding="utf-8")
     assert '<a class="workspace-brand" href="/admin/sessions" aria-label="MCP Session Bridge Sessions">' in viewer
     assert '<img src="/admin/assets/brand/svg/lockup-horizontal-dark.svg" alt="MCP Session Bridge">' in viewer
     assert viewer.count("lockup-horizontal-dark.svg") == 1
@@ -271,10 +271,10 @@ def test_sessions_view_exposes_workspace_navigation_contract() -> None:
 
 
 def test_sessions_and_graph_share_workspace_header_contract() -> None:
-    sessions = Path("admin-viewer.html").read_text(encoding="utf-8")
-    graph = Path("graph-viewer.html").read_text(encoding="utf-8")
-    graph_css = Path("graph-viewer.css").read_text(encoding="utf-8")
-    shared_css = Path("pearl-gradient-nav.css").read_text(encoding="utf-8")
+    sessions = Path("web/admin-viewer.html").read_text(encoding="utf-8")
+    graph = Path("web/graph-viewer.html").read_text(encoding="utf-8")
+    graph_css = Path("web/graph-viewer.css").read_text(encoding="utf-8")
+    shared_css = Path("web/pearl-gradient-nav.css").read_text(encoding="utf-8")
 
     for page in (sessions, graph):
         head = page[: page.index("</head>")]
