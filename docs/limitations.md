@@ -14,7 +14,7 @@ The bridge preserves the original PDF and extracts an existing text layer for MC
 
 PDF limits are 20 MB through the admin UI, 10 MB through MCP, 500 pages, and 5 MB of extracted UTF-8 text. Durable PDF storage has a 1 GB global default quota, configurable with `BRIDGE_PDF_STORAGE_MAX_BYTES`.
 
-The offline admin demo remains text-only and rejects PDF uploads explicitly.
+The offline viewer in `tools/` shows transcripts only. Its export carries sessions and turns, so no uploaded file is visible there, PDF or otherwise.
 
 ## SQLite Storage
 
