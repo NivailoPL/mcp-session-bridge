@@ -108,3 +108,29 @@ auth_whoami
 ```
 
 `bridge_ping` proves the authenticated MCP tool path works. `auth_whoami` shows which OAuth client is attached to the current token.
+
+## Checking Two Clients Share One Bridge
+
+`save_probe` and `read_probe` are a key/value scratchpad for exactly one job:
+confirming that two connectors reach the same Bridge. Write from one client:
+
+```text
+save_probe(key="connector-check", value="written from ChatGPT")
+```
+
+Then read it from another:
+
+```text
+read_probe(key="connector-check")
+```
+
+The read returns the value along with `updated_by`, the OAuth client ID that
+wrote it, and `updated_at`. A missing key comes back as `{"found": false}`
+rather than an error, so a fresh key is a safe thing to try.
+
+Keys are overwritten in place and are not part of any session or transcript.
+Nothing prunes them, and the value is stored as plain text in the database that
+holds your conversations, so keep probe values throwaway: use them to prove a
+connector works, not to pass anything you would not want sitting in the database
+indefinitely. To move real text between clients, save it to a session or upload
+it as a file.
