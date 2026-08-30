@@ -15,7 +15,10 @@ This project follows a lightweight changelog format inspired by Keep a Changelog
 - Dropped stale `v0.1` framing from the documentation.
 - Rewrote the brand package guide in English, with color names matching the asset filenames.
 - Corrected the versioning example, which was a cycle behind, and a limitation that described a surface the repository no longer has.
-- Added the context-packs and PDF storage quota variables to `.env.example`.
+- Added the PDF storage quota variable to `.env.example`.
+- Removed the retired context-packs feature: the unused module, its settings and environment variables, the constant `context_source` field in two MCP responses, and the directory the installer created on every setup. The two database columns are kept so the schema stays version 2 and rollback still works.
+- Documented the `database`, `service`, `migrate` and `installation` command families, which had no coverage at all, and rewrote Backups around `mcp-bridge database backup`.
+- Rewrote client setup around the managed installation and named the clients the Bridge has been verified against.
 
 ## [2026.8.2] - 2026-08-28
 
