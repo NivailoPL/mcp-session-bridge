@@ -96,7 +96,7 @@ to the git-ignored `examples/output/demo.sqlite3`, and never reads or modifies
 the real `data/` database.
 
 Because the database is rebuilt on every run, it always matches the current
-schema. Editing `admin-viewer.html` needs only a browser refresh; add
+schema. Editing `web/admin-viewer.html` needs only a browser refresh; add
 `--build-only` to regenerate the database without serving it.
 
 ## Run Tests

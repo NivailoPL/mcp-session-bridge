@@ -1,5 +1,8 @@
 <p align="center">
-  <img src="https://panchmurka.wtf/lockup-vertical-dark.png" width="300" alt="">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="brand/svg/lockup-vertical-dark.svg">
+    <img src="brand/svg/lockup-vertical-light.svg" width="300" alt="MCP Session Bridge">
+  </picture>
 </p>
 
 
@@ -57,7 +60,8 @@ Sessions are not listable from outside. They cannot be enumerated or guessed. If
 you have the ID you have the thread; if you do not, there is nothing to find.
 
 Set up a project in your harness with a prompt template for these conversations.
-One ships with the repo — `project-prompt-template.md`. It tells the model when
+One ships with the repo — [docs/project-prompt-template.md](docs/project-prompt-template.md).
+It tells the model when
 to fetch the transcript and when to save, so you do not have to ask each time.
 
 ---
@@ -88,7 +92,8 @@ everywhere:
 
 1. Add a custom connector pointing at your domain — `https://mcp.example.com`
 2. Authorise it. The Bridge uses OAuth 2.1 with PKCE; your harness runs the flow.
-3. Create a project and paste `project-prompt-template.md` into its instructions.
+3. Create a project and paste [docs/project-prompt-template.md](docs/project-prompt-template.md)
+   into its instructions.
 
 Verified against: chatgpt.com, claude.ai, grok.com, Codex App, Claude Code App.
 
@@ -107,8 +112,10 @@ Verified against: chatgpt.com, claude.ai, grok.com, Codex App, Claude Code App.
 | **Admin UI**            | Browse sessions, read transcripts, manage files and groups.  |
 | **CLI**                 | `setup`, `config`, `doctor`, `status`.                       |
 
-Files enter the Bridge only when you upload them. Nothing on your machine is
-scanned, indexed, or ingested in the background.
+Files enter the Bridge only when you upload them — you through the admin UI, or
+an assistant through `upload_session_file`, `upload_group_file` and
+`upload_session_pdf` when you ask it to. Nothing on your machine is scanned,
+indexed, or ingested in the background.
 
 ---
 
@@ -123,6 +130,28 @@ notes — without first unpicking somebody's summary. I leave the raw data for y
 to manage.
 
 Bulk export to Markdown is operational. Runyourself or automate for agentic use with `mcp-bridge export`.
+
+---
+
+## Documentation
+
+Start here:
+
+| | |
+| --- | --- |
+| [Managed installation](docs/managed-installation.md) | **The supported path.** `./mcp-bridge setup` on a VPS — certificates, systemd, updates, rollback. |
+| [Client setup](docs/client-setup.md) | Connecting ChatGPT, Claude, Grok, Codex and Claude Code. |
+| [Model instructions](docs/model-instructions.md) | What the server tells models about the tool protocol. |
+| [Operations](docs/operations.md) | Day-to-day commands: status, logs, export, backups. |
+
+Reference:
+
+| | |
+| --- | --- |
+| [Limitations](docs/limitations.md) | What the Bridge deliberately does not do. |
+| [Security](docs/security.md) | Threat model, credentials, what is stored. |
+| [Local installation](docs/installation.md) | Running from a checkout for development and demos. |
+| [Manual deployment](docs/deployment.md) | Uvicorn, systemd and Caddy templates, for hosts that opt out of the managed installer. |
 
 ---
 
@@ -149,6 +178,14 @@ Expect rough edges, and open an issue when you find one.
 
 ---
 
+## Project
+
+- [CONTRIBUTING.md](CONTRIBUTING.md) — development setup and pull request expectations.
+- [SECURITY.md](SECURITY.md) — reporting a vulnerability.
+- [CHANGELOG.md](CHANGELOG.md) — what changed in each release.
+
+---
+
 ## License
 
-MIT.
+MIT — see [LICENSE](LICENSE).

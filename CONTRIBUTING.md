@@ -33,7 +33,7 @@ Before opening a pull request:
 
 - Use English for public docs, examples, tests, and user-facing strings.
 - Keep MCP tool behavior explicit and easy for models to follow.
-- Prefer simple storage and deployment assumptions for v0.1.
+- Prefer simple storage and deployment assumptions.
 - Do not add Docker support until the project intentionally scopes it in.
 
 ## Reporting Security Issues

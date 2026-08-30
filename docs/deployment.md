@@ -4,7 +4,7 @@ This project can run as a normal ASGI app behind a reverse proxy. The included d
 
 The recommended VPS path is the guided [managed server installation](managed-installation.md). The manual templates below remain useful for custom layouts that deliberately opt out of CLI-managed releases and updates.
 
-Docker is intentionally out of scope for v0.1.
+Docker is intentionally out of scope.
 
 ## Environment
 
