@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import json
 import logging
 import re
@@ -15,11 +16,19 @@ from mcp.server.auth.middleware.auth_context import get_access_token
 from mcp.server.auth.provider import AccessToken, TokenVerifier
 from mcp.server.auth.settings import AuthSettings
 from mcp.server.fastmcp import FastMCP
+from mcp.types import CallToolResult, ImageContent, TextContent
 from mcp.server.transport_security import TransportSecuritySettings
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
 from app.admin import AdminHandlers
+from app.image_files import (
+    MAX_IMAGE_BYTES,
+    ImageWorkerBusyError,
+    decode_image_base64,
+    run_image_worker,
+    validate_image_isolated,
+)
 from app.codex_app_server import CodexAppServerClient
 from app.graph_runtime import GraphRuntime
 from app.oauth import OAuthHandlers
@@ -42,7 +51,7 @@ from app.request_limits import RequestBodyLimitMiddleware
 from app.security import hash_secret
 from app.session_package import render_session_overview, render_session_transcript_chunk
 from app.settings import ROOT, load_settings
-from app.storage import PdfStorageQuotaError, SessionFileConflictError, Store, session_file_payload
+from app.storage import ImageStorageQuotaError, PdfStorageQuotaError, SessionFileConflictError, Store, session_file_payload
 from app.time_format import (
     DEFAULT_DISPLAY_TIMEZONE_NAME,
     DISPLAY_TIMEZONE_SETTING_KEY,
@@ -65,10 +74,11 @@ settings = load_settings()
 store = Store(
     settings.db_path,
     pdf_storage_max_bytes=settings.pdf_storage_max_bytes,
+    image_storage_max_bytes=settings.image_storage_max_bytes,
     allow_startup_migrations=settings.allow_startup_migrations,
 )
 logger = logging.getLogger(__name__)
-MCP_REQUEST_MAX_BODY_BYTES = ((MAX_MCP_PDF_BYTES + 2) // 3 * 4) + 262_144
+MCP_REQUEST_MAX_BODY_BYTES = ((max(MAX_MCP_PDF_BYTES, MAX_IMAGE_BYTES) + 2) // 3 * 4) + 262_144
 BRIDGE_RESTART_HELPER_UNIT = "mcp-session-bridge-restart.service"
 CODEX_SOCKET_PATH = Path("/run/mcp-session-bridge-codex/app-server.sock")
 CODEX_WORKSPACE_PATH = Path("/var/lib/mcp-session-bridge-codex/workspace")
@@ -1079,6 +1089,53 @@ async def upload_group_pdf(
     return {"ok": True, "file": session_file_payload(saved)}
 
 
+def _ingest_image(filename: str, content_base64: str, created_by: str, **scope):
+    image = validate_image_isolated(filename, decode_image_base64(content_base64))
+    return store.save_image(filename, image, created_by=created_by, **scope)
+
+
+async def _upload_image(filename: str, content_base64: str, **scope) -> dict[str, Any]:
+    token = get_access_token()
+    try:
+        saved = await run_image_worker(_ingest_image, filename, content_base64,
+                                       token.client_id if token else "unknown", **scope)
+    except ImageWorkerBusyError as exc:
+        return {"ok": False, "error": str(exc), "error_code": "image_worker_busy", "retryable": True, "retry_after_seconds": 2}
+    except ImageStorageQuotaError as exc:
+        return {"ok": False, "error": str(exc), "error_code": "image_storage_quota", "retryable": False}
+    except ValueError as exc:
+        return {"ok": False, "error": str(exc), "error_code": "invalid_image", "retryable": False}
+    return {"ok": True, "file": session_file_payload(saved)}
+
+
+@mcp.tool()
+async def upload_session_image(session_id: str, filename: str, content_base64: str) -> dict[str, Any]:
+    """Save an existing JPEG/PNG in one session (10 MB, 40 MP, no animation). Supply base64 from real file bytes using code; seeing an image in chat does not provide its bytes. Returns metadata; use view_session_image to see it."""
+    return await _upload_image(filename, content_base64, session_id=session_id)
+
+
+@mcp.tool()
+async def upload_group_image(group_id: str, filename: str, content_base64: str) -> dict[str, Any]:
+    """Save an existing JPEG/PNG for a group (10 MB, 40 MP, no animation). Supply base64 from real file bytes using code. Sessions in this group can call view_session_image to see it."""
+    return await _upload_image(filename, content_base64, group_id=group_id)
+
+
+@mcp.tool(structured_output=False)
+async def view_session_image(session_id: str, file_id: int) -> CallToolResult:
+    """View an image belonging to this session or its current group as native MCP image content. Requires a client that forwards image tool results to a vision model. Use list_session_files to find file_id."""
+    try:
+        result = await asyncio.to_thread(store.get_image_for_session, session_id, file_id)
+        if result is None:
+            raise ValueError("File is unavailable for this session")
+        saved, raw = result
+    except (ValueError, SessionFileConflictError) as exc:
+        return CallToolResult(isError=True, content=[TextContent(type="text", text=str(exc))])
+    return CallToolResult(content=[
+        TextContent(type="text", text=json.dumps(session_file_payload(saved), ensure_ascii=False)),
+        ImageContent(type="image", data=base64.b64encode(raw).decode("ascii"), mimeType=saved.mime_type),
+    ])
+
+
 @mcp.tool()
 def list_session_files(session_id: str) -> dict[str, Any]:
     """List files belonging to a session or its current group."""
@@ -1091,7 +1148,7 @@ def list_session_files(session_id: str) -> dict[str, Any]:
 
 @mcp.tool(structured_output=LARGE_TOOL_STRUCTURED_OUTPUT)
 def download_session_file(session_id: str, file_id: int) -> dict[str, Any]:
-    """Read a file visible to a session; PDFs return extracted text, never original bytes."""
+    """Read a visible text file or extracted PDF text. Images return metadata and direct you to view_session_image, never base64 text."""
     try:
         saved = store.get_session_file_for_session(session_id, file_id)
     except SessionFileConflictError:
@@ -1100,6 +1157,8 @@ def download_session_file(session_id: str, file_id: int) -> dict[str, Any]:
         return {"ok": False, "error": str(exc)}
     if saved is None:
         return {"ok": False, "error": "File is unavailable for this session."}
+    if saved.content_kind == "image":
+        return {"ok": True, "file": session_file_payload(saved), "view_tool": "view_session_image"}
     return {"ok": True, "file": session_file_payload(saved, include_content=True)}
 
 

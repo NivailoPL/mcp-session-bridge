@@ -11,6 +11,8 @@ from pathlib import Path
 from threading import Lock
 from typing import Any
 
+from app.image_files import ValidatedImage
+
 from app.graph_config import (
     GRAPH_SCHEMA_VERSION,
     default_graph_profile,
@@ -219,16 +221,24 @@ class SessionFileRecord:
     extracted_text_bytes: int
 
 
+class ImageStorageQuotaError(ValueError):
+    pass
+
+
 class Store:
     def __init__(
         self,
         db_path: Path,
         *,
         pdf_storage_max_bytes: int = 1_000_000_000,
+        image_storage_max_bytes: int = 1_000_000_000,
         allow_startup_migrations: bool = True,
     ):
         self.db_path = db_path
         self.pdf_storage_max_bytes = pdf_storage_max_bytes
+        if image_storage_max_bytes <= 0:
+            raise ValueError("Image storage quota must be positive")
+        self.image_storage_max_bytes = image_storage_max_bytes
         self._lock = Lock()
         if not allow_startup_migrations:
             self._require_current_schema()
@@ -2373,6 +2383,61 @@ class Store:
             ).fetchone()
         return _session_file_from_row(row)
 
+    def save_image(
+        self, filename: str, image: ValidatedImage, *, session_id: str | None = None,
+        group_id: str | None = None, for_session_group: bool = False,
+        created_by: str = "model",
+    ) -> SessionFileRecord:
+        filename = _validate_file_name(filename)
+        if not isinstance(image, ValidatedImage):
+            raise ValueError("Image must be validated before storage")
+        if (session_id is None) == (group_id is None) or (for_session_group and session_id is None):
+            raise ValueError("Choose exactly one image scope")
+        with self._lock, self._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            if session_id is not None:
+                session_id = session_id.strip()
+                session = conn.execute("SELECT group_id FROM sessions WHERE session_id = ?", (session_id,)).fetchone()
+                if session is None:
+                    raise ValueError(f"Unknown session_id: {session_id}")
+                if for_session_group:
+                    group_id, session_id = session["group_id"], None
+            if group_id is not None:
+                group_id = group_id.strip() or UNCATEGORIZED_GROUP_ID
+                self._require_active_group(conn, group_id)
+            current = conn.execute("SELECT COALESCE(SUM(size_bytes), 0) FROM session_files WHERE content_kind = 'image'").fetchone()[0]
+            if current + len(image.data) > self.image_storage_max_bytes:
+                raise ImageStorageQuotaError(f"Image storage quota exceeded ({self.image_storage_max_bytes} bytes)")
+            cursor = conn.execute(
+                """INSERT INTO session_files
+                (scope_type, session_id, group_id, filename, mime_type, content,
+                 binary_content, sha256, size_bytes, created_by, created_at, content_kind)
+                VALUES (?, ?, ?, ?, ?, '', ?, ?, ?, ?, ?, 'image')""",
+                ("group" if group_id is not None else "session", session_id, group_id,
+                 filename, image.mime_type, image.data, hashlib.sha256(image.data).hexdigest(),
+                 len(image.data), created_by.strip() or "model", int(time.time())),
+            )
+            row = conn.execute(f"SELECT {SESSION_FILE_RECORD_COLUMNS} FROM session_files WHERE file_id = ?", (cursor.lastrowid,)).fetchone()
+        return _session_file_from_row(row)
+
+    def get_image_for_session(self, session_id: str, file_id: int) -> tuple[SessionFileRecord, bytes] | None:
+        session_id = session_id.strip()
+        with self._lock, self._connect() as conn:
+            conn.execute("BEGIN")
+            session = conn.execute("SELECT group_id FROM sessions WHERE session_id = ?", (session_id,)).fetchone()
+            if session is None:
+                raise ValueError(f"Unknown session_id: {session_id}")
+            row = conn.execute(
+                f"SELECT {SESSION_FILE_RECORD_COLUMNS}, binary_content FROM session_files WHERE file_id = ?",
+                (file_id,),
+            ).fetchone()
+            if row is None:
+                return None
+            _require_file_visible_to_session(conn, row, session_id=session_id, group_id=session["group_id"])
+            if row["content_kind"] != "image" or row["binary_content"] is None:
+                raise ValueError("File is not an image")
+            return _session_file_from_row(row), row["binary_content"]
+
     def save_session_pdf(
         self,
         session_id: str,
@@ -2617,11 +2682,11 @@ class Store:
             )
         return _session_file_from_row(row)
 
-    def get_session_file_binary(self, file_id: int) -> tuple[str, str, bytes | None] | None:
+    def get_session_file_binary(self, file_id: int) -> tuple[str, str, str, bytes | None] | None:
         with self._lock, self._connect() as conn:
             row = conn.execute(
                 """
-                SELECT filename, content_kind, binary_content
+                SELECT filename, content_kind, mime_type, binary_content
                 FROM session_files
                 WHERE file_id = ?
                 """,
@@ -2629,7 +2694,7 @@ class Store:
             ).fetchone()
         if row is None:
             return None
-        return row["filename"], row["content_kind"], row["binary_content"]
+        return row["filename"], row["content_kind"], row["mime_type"], row["binary_content"]
 
     def update_session_file(
         self,
@@ -2660,8 +2725,8 @@ class Store:
                 raise SessionFileConflictError(
                     f"File {file_id} changed since it was opened"
                 )
-            if row["content_kind"] == "pdf":
-                raise ValueError("PDF files cannot be edited")
+            if row["content_kind"] != "text":
+                raise ValueError("PDF and image files cannot be edited")
             conn.execute(
                 """
                 UPDATE session_files
@@ -3311,7 +3376,7 @@ def _session_file_manifest_from_row(row: sqlite3.Row) -> dict[str, Any]:
         "page_count": row["page_count"],
         "extraction_status": row["extraction_status"],
         "extracted_text_bytes": row["extracted_text_bytes"],
-        "text_available": row["content_kind"] != "pdf" or row["extraction_status"] == "ready",
+        "text_available": row["content_kind"] == "text" or (row["content_kind"] == "pdf" and row["extraction_status"] == "ready"),
     }
 
 
@@ -3360,7 +3425,7 @@ def session_file_payload(file: SessionFileRecord, include_content: bool = False)
         "page_count": file.page_count,
         "extraction_status": file.extraction_status,
         "extracted_text_bytes": file.extracted_text_bytes,
-        "text_available": file.content_kind != "pdf" or file.extraction_status == "ready",
+        "text_available": file.content_kind == "text" or (file.content_kind == "pdf" and file.extraction_status == "ready"),
     }
     if include_content:
         payload["content"] = file.content

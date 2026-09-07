@@ -330,14 +330,14 @@ def _write_attachment(
     size = 0
     try:
         with destination.open("xb") as target:
-            if file_row["content_kind"] == "pdf":
+            if file_row["content_kind"] in {"pdf", "image"}:
                 try:
                     blob = connection.blobopen(
                         "session_files", "binary_content", file_row["file_id"], readonly=True
                     )
                 except sqlite3.Error as exc:
                     raise RuntimeError(
-                        f"PDF file {file_row['file_id']} has no readable original content."
+                        f"Binary file {file_row['file_id']} has no readable original content."
                     ) from exc
                 with blob:
                     while block := blob.read(1024 * 1024):

@@ -47,6 +47,13 @@ from app.pdf_files import (
     extract_pdf_text_isolated,
     run_pdf_worker,
 )
+from app.image_files import (
+    IMAGE_EXTENSIONS,
+    ImageWorkerBusyError,
+    decode_image_base64,
+    run_image_worker,
+    validate_image_isolated,
+)
 from app.output_probe import (
     MAX_PROBE_TARGET_CHARS,
     MAX_TRANSCRIPT_CHUNK_CHARS,
@@ -68,6 +75,7 @@ from app.conversation_export import ExportInProgressError, export_database_to_ma
 from app.storage import (
     MAX_SESSION_FILE_BYTES,
     ExchangeRecord,
+    ImageStorageQuotaError,
     PdfStorageQuotaError,
     SessionFileConflictError,
     SessionFileRecord,
@@ -117,6 +125,7 @@ ADMIN_FILE_EXTENSIONS = {
     ".csv": "text/csv",
     ".tsv": "text/tab-separated-values",
     ".pdf": "application/pdf",
+    **IMAGE_EXTENSIONS,
 }
 BRAND_ASSET_MEDIA_TYPES = {
     ".json": "application/json",
@@ -1195,14 +1204,14 @@ class AdminHandlers:
         binary_record = await asyncio.to_thread(self.store.get_session_file_binary, file_id)
         if binary_record is None:
             return self._json_error(f"Unknown file_id: {file_id}", status_code=404)
-        filename, content_kind, binary_content = binary_record
-        if content_kind != "pdf" or binary_content is None:
-            return self._json_error("Raw binary content is available only for PDF files.", status_code=400)
+        filename, content_kind, mime_type, binary_content = binary_record
+        if content_kind not in {"pdf", "image"} or binary_content is None:
+            return self._json_error("Raw binary content is available only for PDF and image files.", status_code=400)
         disposition = "attachment" if request.query_params.get("download") == "1" else "inline"
         encoded_filename = urllib.parse.quote(filename, safe="")
         return Response(
             binary_content,
-            media_type="application/pdf",
+            media_type=mime_type,
             headers={
                 **self._no_store_headers(),
                 "Content-Disposition": f"{disposition}; filename*=UTF-8''{encoded_filename}",
@@ -1292,7 +1301,12 @@ class AdminHandlers:
         if not isinstance(encoded, str):
             return self._json_error("content_base64 must be a string.", status_code=400)
         try:
-            if mime_type == "application/pdf":
+            if mime_type in IMAGE_EXTENSIONS.values():
+                saved = await run_image_worker(
+                    self._ingest_admin_image, selected.session_id, scope_type,
+                    filename, encoded, admin_session["username"],
+                )
+            elif mime_type == "application/pdf":
                 saved = await run_pdf_worker(
                     self._ingest_admin_pdf,
                     selected.session_id,
@@ -1331,19 +1345,28 @@ class AdminHandlers:
                         mime_type=mime_type,
                         created_by=admin_session["username"],
                     )
-        except PdfWorkerBusyError as exc:
+        except (PdfWorkerBusyError, ImageWorkerBusyError) as exc:
             return JSONResponse(
                 {"ok": False, "error": str(exc)},
                 status_code=503,
                 headers={**self._no_store_headers(), "Retry-After": "2"},
             )
-        except PdfStorageQuotaError as exc:
+        except (PdfStorageQuotaError, ImageStorageQuotaError) as exc:
             return self._json_error(str(exc), status_code=507)
         except ValueError as exc:
             return self._value_error(exc)
         return JSONResponse(
             {"ok": True, "file": session_file_payload(saved)},
             headers=self._no_store_headers(),
+        )
+
+    def _ingest_admin_image(
+        self, session_id: str, scope_type: str, filename: str, encoded: str, created_by: str,
+    ) -> SessionFileRecord:
+        image = validate_image_isolated(filename, decode_image_base64(encoded))
+        return self.store.save_image(
+            filename, image, session_id=session_id,
+            for_session_group=scope_type == "group", created_by=created_by,
         )
 
     def _ingest_admin_pdf(

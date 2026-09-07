@@ -1503,8 +1503,8 @@
         <section class="file-bucket" aria-labelledby="sessionFilesHeading">
           <div id="sessionFilesHeading" class="file-bucket-title">Session files</div>
           <label class="file-drop-zone" data-scope="session">
-            <span>Upload one text file or PDF here, or drop it from your computer.</span>
-            <input id="sessionFileInput" type="file" accept=".md,.markdown,.txt,.json,.yaml,.yml,.csv,.tsv,.pdf" aria-describedby="sessionFileStatus">
+            <span>Upload one text file, PDF, JPG or PNG here, or drop it from your computer.</span>
+            <input id="sessionFileInput" type="file" accept=".md,.markdown,.txt,.json,.yaml,.yml,.csv,.tsv,.pdf,.jpg,.jpeg,.png" aria-describedby="sessionFileStatus">
           </label>
           <p id="sessionFileStatus" class="file-operation-status" aria-live="polite"></p>
           <div id="sessionFileList" class="file-list"></div>
@@ -1512,8 +1512,8 @@
         <section class="file-bucket" aria-labelledby="groupFilesHeading">
           <div id="groupFilesHeading" class="file-bucket-title">Group files</div>
           <label class="file-drop-zone" data-scope="group">
-            <span>Upload one shared text file or PDF here, or drop it from your computer.</span>
-            <input id="groupFileInput" type="file" accept=".md,.markdown,.txt,.json,.yaml,.yml,.csv,.tsv,.pdf" aria-describedby="groupFileStatus">
+            <span>Upload one shared text file, PDF, JPG or PNG here, or drop it from your computer.</span>
+            <input id="groupFileInput" type="file" accept=".md,.markdown,.txt,.json,.yaml,.yml,.csv,.tsv,.pdf,.jpg,.jpeg,.png" aria-describedby="groupFileStatus">
           </label>
           <p id="groupFileStatus" class="file-operation-status" aria-live="polite"></p>
           <div id="groupFileList" class="file-list"></div>
@@ -1843,8 +1843,10 @@
       const INTERNAL_FILE_DRAG_TYPE = "application/x-mcp-session-file";
       const MAX_FILE_BYTES = 1_000_000;
       const MAX_PDF_BYTES = 20_000_000;
+      const MAX_IMAGE_BYTES = 10_000_000;
+      const IMAGE_FILE_EXTENSIONS = new Set([".jpg", ".jpeg", ".png"]);
       const TEXT_FILE_EXTENSIONS = new Set([".md", ".markdown", ".txt", ".json", ".yaml", ".yml", ".csv", ".tsv"]);
-      const ALLOWED_FILE_EXTENSIONS = new Set([...TEXT_FILE_EXTENSIONS, ".pdf"]);
+      const ALLOWED_FILE_EXTENSIONS = new Set([...TEXT_FILE_EXTENSIONS, ".pdf", ...IMAGE_FILE_EXTENSIONS]);
 
       const state = {
         csrfToken: "",
@@ -3491,10 +3493,16 @@
         const lowerName = String(file.name || "").toLowerCase();
         const extension = lowerName.includes(".") ? lowerName.slice(lowerName.lastIndexOf(".")) : "";
         if (!ALLOWED_FILE_EXTENSIONS.has(extension)) {
-          throw new Error("Unsupported format. Use PDF, MD, TXT, JSON, YAML, CSV, or TSV.");
+          throw new Error("Unsupported format. Use JPG, PNG, PDF, MD, TXT, JSON, YAML, CSV, or TSV.");
         }
+        if (IMAGE_FILE_EXTENSIONS.has(extension) && file.size > MAX_IMAGE_BYTES) throw new Error("Image is larger than 10 MB.");
         const bytes = new Uint8Array(await file.arrayBuffer());
         if (bytes.byteLength === 0) throw new Error("File is empty.");
+        if (IMAGE_FILE_EXTENSIONS.has(extension)) {
+          if (demo.enabled) throw new Error("Image uploads are unavailable in offline demo mode.");
+          if (bytes.byteLength > MAX_IMAGE_BYTES) throw new Error("Image is larger than 10 MB.");
+          return { file, bytes };
+        }
         if (extension === ".pdf") {
           if (demo.enabled) throw new Error("PDF uploads are unavailable in offline demo mode.");
           if (bytes.byteLength > MAX_PDF_BYTES) throw new Error("PDF is larger than 20 MB.");
@@ -3751,7 +3759,9 @@
         dom.fileWorkspaceContent.dataset.content = content;
         dom.fileWorkspaceContent.dataset.filename = file.filename || `file-${file.file_id}.txt`;
         dom.fileWorkspaceContent.dataset.mimeType = file.mime_type || "text/plain";
-        if (isPdfFile(file)) {
+        if (isImageFile(file)) {
+          renderImagePreview(file);
+        } else if (isPdfFile(file)) {
           renderPdfPreview(file);
         } else if (isMarkdownFile(file)) {
           dom.fileWorkspaceContent.className = "file-preview markdown-body";
@@ -3760,6 +3770,26 @@
           dom.fileWorkspaceContent.className = "raw";
           dom.fileWorkspaceContent.replaceChildren(preNode(content));
         }
+      }
+
+      function isImageFile(file) {
+        return file?.content_kind === "image";
+      }
+
+      function renderImagePreview(file) {
+        dom.fileWorkspaceContent.className = "file-preview";
+        const image = document.createElement("img");
+        image.alt = file.filename || "Image attachment";
+        image.style.maxWidth = "100%";
+        image.style.height = "auto";
+        image.style.display = "block";
+        image.addEventListener("error", () => {
+          if (image.isConnected) {
+            dom.fileWorkspaceContent.replaceChildren(preNode("Could not load image. Refresh and try again."));
+          }
+        });
+        image.src = `/admin/api/files/${encodeURIComponent(file.file_id)}/raw`;
+        dom.fileWorkspaceContent.replaceChildren(image);
       }
 
       function isPdfFile(file) {
@@ -3967,6 +3997,7 @@
       }
 
       function isEditableTextFile(file) {
+        if (file?.content_kind && file.content_kind !== "text") return false;
         const filename = String(file?.filename || "").toLowerCase();
         return [...TEXT_FILE_EXTENSIONS].some((extension) => filename.endsWith(extension));
       }
@@ -4005,6 +4036,7 @@
         for (const button of dom.fileWorkspaceDialog.querySelectorAll(".file-button")) button.disabled = interactionsLocked;
         for (const button of dom.fileWorkspaceDialog.querySelectorAll('[data-file-action="move"]')) button.disabled = interactionsLocked;
         dom.fileCopyButton.disabled = pending || !state.selectedFile || mode === "delete"
+          || isImageFile(state.selectedFile)
           || (isPdfFile(state.selectedFile) && !state.selectedFile.text_available);
         dom.fileDownloadButton.disabled = pending || !state.selectedFile || mode === "delete";
         dom.fileEditButton.disabled = pending || !state.selectedFile || !isEditableTextFile(state.selectedFile);
@@ -4180,7 +4212,7 @@
       }
 
       function downloadOpenFile() {
-        if (state.selectedFile && isPdfFile(state.selectedFile)) {
+        if (state.selectedFile && (isPdfFile(state.selectedFile) || isImageFile(state.selectedFile))) {
           const filename = sanitizeDownloadName(state.selectedFile.filename || "session-file.pdf");
           const link = document.createElement("a");
           link.href = `/admin/api/files/${encodeURIComponent(state.selectedFile.file_id)}/raw?download=1`;
@@ -4188,7 +4220,7 @@
           document.body.append(link);
           link.click();
           link.remove();
-          setStatus("Original PDF download started.", "ok");
+          setStatus("Original file download started.", "ok");
           return;
         }
         const content = dom.fileWorkspaceContent.dataset.content || "";

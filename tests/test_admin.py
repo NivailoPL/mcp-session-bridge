@@ -1478,7 +1478,7 @@ def test_admin_pdf_raw_requires_login_and_pdf_cannot_be_edited(admin_client, loa
     assert text_raw.status_code == 400
     assert text_raw.json() == {
         "ok": False,
-        "error": "Raw binary content is available only for PDF files.",
+        "error": "Raw binary content is available only for PDF and image files.",
     }
     edited = client.patch(
         f"/admin/api/sessions/s1/files/{uploaded['file_id']}",
