@@ -9,7 +9,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from app.security import password_hash, token_urlsafe
+from app.security import SECRET_KEY_PLACEHOLDER, password_hash, token_urlsafe, validate_secret_key
+from bridge_cli.config import read_env_file, update_env_file
 
 
 def main() -> None:
@@ -22,7 +23,20 @@ def main() -> None:
 
     env_path = Path(args.env)
     password = args.password or _generated_password()
-    values = _read_env(env_path)
+    values = read_env_file(env_path)
+    key = values.get("BRIDGE_SECRET_KEY", "")
+    if not key.strip() or key.strip() == SECRET_KEY_PLACEHOLDER:
+        db_path = Path(values.get("BRIDGE_DB_PATH") or str(ROOT / "data" / "bridge.sqlite3"))
+        if db_path.exists():
+            parser.error(
+                "Cannot replace BRIDGE_SECRET_KEY while an existing database is present. "
+                "See docs/security.md for existing-installation recovery."
+            )
+        key = token_urlsafe(48)
+    try:
+        values["BRIDGE_SECRET_KEY"] = validate_secret_key(key)
+    except ValueError as exc:
+        parser.error(str(exc))
     values.setdefault("BRIDGE_PUBLIC_BASE_URL", "http://127.0.0.1:8787")
     values.setdefault("BRIDGE_RESOURCE_PATH", "/mcp")
     values.setdefault("BRIDGE_DB_PATH", str(ROOT / "data" / "bridge.sqlite3"))
@@ -30,7 +44,6 @@ def main() -> None:
     values.setdefault("BRIDGE_TRANSCRIPT_CHUNK_MAX_CHARS", "12000")
     values["BRIDGE_OWNER_USERNAME"] = args.username
     values["BRIDGE_OWNER_PASSWORD_HASH"] = password_hash(password)
-    values.setdefault("BRIDGE_SECRET_KEY", token_urlsafe(48))
     values.setdefault("BRIDGE_ACCESS_TOKEN_SECONDS", "1800")
     values.setdefault("BRIDGE_REFRESH_TOKEN_SECONDS", "2592000")
     values.setdefault("BRIDGE_AUTH_CODE_SECONDS", "300")
@@ -42,7 +55,7 @@ def main() -> None:
         "http://127.0.0.1:8787,http://localhost:8787,https://claude.ai,https://chatgpt.com,https://chat.openai.com",
     )
 
-    _write_env(env_path, values)
+    update_env_file(env_path, values)
     env_path.chmod(0o600)
 
     if args.write_once_file:
@@ -62,41 +75,6 @@ def main() -> None:
 def _generated_password() -> str:
     alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789"
     return "".join(secrets.choice(alphabet) for _ in range(28))
-
-
-def _read_env(path: Path) -> dict[str, str]:
-    if not path.exists():
-        return {}
-    values: dict[str, str] = {}
-    for line in path.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, value = line.split("=", 1)
-        values[key] = value
-    return values
-
-
-def _write_env(path: Path, values: dict[str, str]) -> None:
-    order = [
-        "BRIDGE_PUBLIC_BASE_URL",
-        "BRIDGE_RESOURCE_PATH",
-        "BRIDGE_DB_PATH",
-        "BRIDGE_TRANSCRIPT_CHUNK_MAX_LINES",
-        "BRIDGE_TRANSCRIPT_CHUNK_MAX_CHARS",
-        "BRIDGE_OWNER_USERNAME",
-        "BRIDGE_OWNER_PASSWORD_HASH",
-        "BRIDGE_SECRET_KEY",
-        "BRIDGE_ACCESS_TOKEN_SECONDS",
-        "BRIDGE_REFRESH_TOKEN_SECONDS",
-        "BRIDGE_AUTH_CODE_SECONDS",
-        "BRIDGE_AUTH_CHALLENGE_SECONDS",
-        "BRIDGE_SCOPE",
-        "BRIDGE_TRANSPORT_ALLOWED_HOSTS",
-        "BRIDGE_TRANSPORT_ALLOWED_ORIGINS",
-    ]
-    lines = [f"{key}={values[key]}" for key in order if key in values]
-    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 if __name__ == "__main__":

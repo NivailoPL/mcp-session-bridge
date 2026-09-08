@@ -68,7 +68,7 @@ def test_setup_dashboard_detects_legacy_installation_without_writing(tmp_path: P
         "BRIDGE_PUBLIC_BASE_URL=https://bridge.example.test\n"
         "BRIDGE_OWNER_USERNAME=owner\n"
         "BRIDGE_OWNER_PASSWORD_HASH=existing-hash\n"
-        "BRIDGE_SECRET_KEY=existing-secret\n",
+        "BRIDGE_SECRET_KEY=existing-secret-for-isolated-fixtures\n",
         encoding="utf-8",
     )
     layout = Layout.for_root(tmp_path / "target")
@@ -328,7 +328,7 @@ def test_detected_admin_and_domain_must_each_be_confirmed_before_service_step(tm
         "BRIDGE_PUBLIC_BASE_URL=https://bridge.example.test\n"
         "BRIDGE_OWNER_USERNAME=owner\n"
         "BRIDGE_OWNER_PASSWORD_HASH=existing-hash\n"
-        "BRIDGE_SECRET_KEY=existing-secret\n",
+        "BRIDGE_SECRET_KEY=existing-secret-for-isolated-fixtures\n",
         encoding="utf-8",
     )
     layout = Layout.for_root(tmp_path / "target")
@@ -539,7 +539,7 @@ def test_prepare_can_keep_existing_owner_password_hash(tmp_path: Path) -> None:
     legacy_env.write_text(
         "BRIDGE_OWNER_USERNAME=owner\n"
         "BRIDGE_OWNER_PASSWORD_HASH=keep-this-hash\n"
-        "BRIDGE_SECRET_KEY=keep-this-secret\n",
+        "BRIDGE_SECRET_KEY=keep-this-secret-for-isolated-fixtures\n",
         encoding="utf-8",
     )
     layout = Layout.for_root(tmp_path / "target")
@@ -553,7 +553,7 @@ def test_prepare_can_keep_existing_owner_password_hash(tmp_path: Path) -> None:
     staged = layout.pending_env_file.read_text(encoding="utf-8")
     assert "BRIDGE_OWNER_USERNAME=owner" in staged
     assert "BRIDGE_OWNER_PASSWORD_HASH=keep-this-hash" in staged
-    assert "BRIDGE_SECRET_KEY=keep-this-secret" in staged
+    assert "BRIDGE_SECRET_KEY=keep-this-secret-for-isolated-fixtures" in staged
     assert f"BRIDGE_DB_PATH={layout.db_path}" in staged
 
 
@@ -565,7 +565,7 @@ def test_prepare_keeps_live_managed_environment_unchanged(tmp_path: Path) -> Non
         "BRIDGE_PUBLIC_BASE_URL=https://old.example.test\n"
         "BRIDGE_OWNER_USERNAME=old-owner\n"
         "BRIDGE_OWNER_PASSWORD_HASH=old-hash\n"
-        "BRIDGE_SECRET_KEY=old-secret\n"
+        "BRIDGE_SECRET_KEY=old-secret-for-isolated-fixtures-only\n"
     )
     layout.env_file.write_text(live, encoding="utf-8")
 

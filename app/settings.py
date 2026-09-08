@@ -6,6 +6,8 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
+from app.security import validate_secret_key
+
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -75,7 +77,7 @@ def load_settings() -> Settings:
         transcript_chunk_max_chars=int(os.getenv("BRIDGE_TRANSCRIPT_CHUNK_MAX_CHARS", "12000")),
         owner_username=os.getenv("BRIDGE_OWNER_USERNAME", "owner"),
         owner_password_hash=_required("BRIDGE_OWNER_PASSWORD_HASH"),
-        secret_key=_required("BRIDGE_SECRET_KEY"),
+        secret_key=validate_secret_key(_required("BRIDGE_SECRET_KEY")),
         access_token_seconds=int(os.getenv("BRIDGE_ACCESS_TOKEN_SECONDS", "1800")),
         refresh_token_seconds=int(os.getenv("BRIDGE_REFRESH_TOKEN_SECONDS", "2592000")),
         auth_code_seconds=int(os.getenv("BRIDGE_AUTH_CODE_SECONDS", "300")),

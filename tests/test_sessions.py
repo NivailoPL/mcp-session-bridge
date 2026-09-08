@@ -1456,7 +1456,7 @@ def load_main(max_lines: int = 180, max_chars: int = 12000):
     monkeypatch.setenv("BRIDGE_TRANSCRIPT_CHUNK_MAX_LINES", str(max_lines))
     monkeypatch.setenv("BRIDGE_TRANSCRIPT_CHUNK_MAX_CHARS", str(max_chars))
     monkeypatch.setenv("BRIDGE_OWNER_PASSWORD_HASH", "not-used-in-this-test")
-    monkeypatch.setenv("BRIDGE_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("BRIDGE_SECRET_KEY", "test-secret-for-isolated-fixtures-only")
 
     sys.modules.pop("app.main", None)
     return importlib.import_module("app.main")

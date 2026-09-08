@@ -51,7 +51,7 @@ def load_main(
         monkeypatch.setenv("BRIDGE_DB_PATH", str(tmp_path / "bridge.sqlite3"))
         monkeypatch.setenv("BRIDGE_OWNER_USERNAME", owner_username)
         monkeypatch.setenv("BRIDGE_OWNER_PASSWORD_HASH", password_hash(owner_password))
-        monkeypatch.setenv("BRIDGE_SECRET_KEY", "test-secret")
+        monkeypatch.setenv("BRIDGE_SECRET_KEY", "test-secret-for-isolated-fixtures-only")
         monkeypatch.setenv(
             "BRIDGE_TRANSCRIPT_CHUNK_MAX_LINES", str(transcript_max_lines)
         )

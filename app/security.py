@@ -7,6 +7,17 @@ import os
 import secrets
 
 PASSWORD_ITERATIONS = 240_000
+SECRET_KEY_PLACEHOLDER = "replace-with-a-long-random-secret"
+
+
+def validate_secret_key(value: str) -> str:
+    if len(value.strip()) < 32 or value.strip() == SECRET_KEY_PLACEHOLDER:
+        raise ValueError(
+            "BRIDGE_SECRET_KEY must be a randomly generated secret of at least 32 "
+            "characters, not the example placeholder. See docs/security.md before "
+            "changing an existing installation's key."
+        )
+    return value
 
 
 def token_urlsafe(bytes_count: int = 32) -> str:
