@@ -14,9 +14,9 @@ The bridge preserves the original PDF and extracts an existing text layer for MC
 
 PDF limits are 20 MB through the admin UI, 10 MB through MCP, 500 pages, and 5 MB of extracted UTF-8 text. Durable PDF storage has a 1 GB global default quota, configurable with `BRIDGE_PDF_STORAGE_MAX_BYTES`.
 
-Image attachments support static JPEG and PNG, up to 10 MB and 40 megapixels through either admin or MCP. Original bytes (including EXIF) are retained in SQLite, without resizing, conversion or OCR. The separate global image quota defaults to 1 GB (`BRIDGE_IMAGE_STORAGE_MAX_BYTES`, a positive byte count). The admin panel offers a simple attachment preview and original download; images are not embedded into transcript messages. Image uploads are unavailable in the offline demo.
+Image attachments support static JPEG and PNG, up to 10 MB and 40 megapixels through manual upload in the admin panel. Image access through MCP is read-only via `view_session_image`. Original bytes (including EXIF) are retained in SQLite, without resizing, conversion or OCR. The separate global image quota defaults to 1 GB (`BRIDGE_IMAGE_STORAGE_MAX_BYTES`, a positive byte count). The admin panel offers a simple attachment preview and original download; images are not embedded into transcript messages. Image uploads are unavailable in the offline demo.
 
-Native image results require an MCP client that forwards them to a vision model. Compatibility is separate from ordinary text-tool support; ChatGPT, Claude, Grok, Codex and Claude Code image workflows remain subject to manual testing. A client may see a chat image without exposing its file bytes to an upload tool. Bridge does not import images from arbitrary URLs.
+Native image results require an MCP client that forwards them to a vision model. Compatibility is separate from ordinary text-tool support; ChatGPT, Claude, Grok, Codex and Claude Code image workflows remain subject to manual testing. Bridge does not expose image upload tools to models. Bridge does not import images from arbitrary URLs.
 
 The offline viewer in `tools/` shows transcripts only. Its export carries sessions and turns, so no uploaded file is visible there, PDF or otherwise.
 

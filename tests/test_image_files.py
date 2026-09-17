@@ -14,13 +14,21 @@ from app.image_worker import inspect_image
 from app.storage import Store, SessionFileConflictError, ImageStorageQuotaError
 
 
-def test_image_upload_persists_original_and_returns_native_image(load_main):
+def upload_admin_image(admin_client, main, session_id, filename, raw):
+    client, csrf = admin_client(main)
+    return client.post(f"/admin/api/sessions/{session_id}/files",
+        headers={"x-csrf-token": csrf},
+        json={"scope_type": "session", "filename": filename,
+              "content_base64": base64.b64encode(raw).decode()})
+
+
+def test_image_upload_persists_original_and_returns_native_image(load_main, admin_client):
     main = load_main()
     main.store.create_session("images", "Images")
     raw = make_image()
-    result = asyncio.run(main.upload_session_image("images", "test.png", base64.b64encode(raw).decode()))
-    assert result["ok"], result
-    file = result["file"]
+    response = upload_admin_image(admin_client, main, "images", "test.png", raw)
+    assert response.status_code == 200, response.text
+    file = response.json()["file"]
     assert file["content_kind"] == "image"
     assert file["text_available"] is False
     assert file["sha256"] == hashlib.sha256(raw).hexdigest()
@@ -31,11 +39,11 @@ def test_image_upload_persists_original_and_returns_native_image(load_main):
 
 
 @pytest.mark.parametrize("raw,name", [(b"not an image", "x.png"), (make_image(), "x.jpg"), (make_image("GIF"), "x.gif")])
-def test_invalid_upload_does_not_write(load_main, raw, name):
+def test_invalid_upload_does_not_write(load_main, admin_client, raw, name):
     main = load_main()
     main.store.create_session("images", "Images")
-    result = asyncio.run(main.upload_session_image("images", name, base64.b64encode(raw).decode()))
-    assert not result["ok"]
+    response = upload_admin_image(admin_client, main, "images", name, raw)
+    assert response.status_code == 400
     assert main.list_session_files("images")["files"] == []
 
 
@@ -56,15 +64,15 @@ def test_admin_image_upload_and_raw_download(admin_client, load_main):
     assert response.headers["content-disposition"].startswith("attachment")
 
 
-def test_export_includes_original_image(load_main, tmp_path):
+def test_export_includes_original_image(load_main, admin_client, tmp_path):
     from pathlib import Path
     from app.conversation_export import export_database_to_markdown
 
     main = load_main()
     main.store.create_session("images", "Images")
     raw = make_image()
-    result = asyncio.run(main.upload_session_image("images", "original.png", base64.b64encode(raw).decode()))
-    assert result["ok"]
+    response = upload_admin_image(admin_client, main, "images", "original.png", raw)
+    assert response.status_code == 200, response.text
     exported = export_database_to_markdown(main.store.db_path, export_root=tmp_path / "exports")
     files = list(Path(exported["artifact"]["path"]).rglob("*.png"))
     assert len(files) == 1 and files[0].read_bytes() == raw
@@ -213,17 +221,20 @@ def test_admin_group_upload_auth_csrf_and_edit_block(admin_client, load_main):
     assert response.status_code == 400
 
 
-def test_image_quota_config_and_errors(load_main):
+def test_image_quota_config_and_errors(load_main, admin_client):
     main = load_main(env={"BRIDGE_IMAGE_STORAGE_MAX_BYTES": "1"})
     main.store.create_session("a", "A")
     assert main.settings.image_storage_max_bytes == 1
-    result = asyncio.run(main.upload_session_image("a", "x.png", base64.b64encode(make_image()).decode()))
-    assert result["error_code"] == "image_storage_quota"
+    response = upload_admin_image(admin_client, main, "a", "x.png", make_image())
+    assert response.status_code == 507
     assert main.list_session_files("a")["files"] == []
 
 
-def test_upload_busy_is_retryable(load_main, monkeypatch):
+def test_upload_busy_is_retryable(load_main, admin_client, monkeypatch):
     main = load_main()
     monkeypatch.setattr(image_files, "_image_worker_admitted", 4)
-    result = asyncio.run(main.upload_session_image("a", "x.png", ""))
-    assert result["error_code"] == "image_worker_busy" and result["retryable"]
+    main.store.create_session("a", "A")
+    response = upload_admin_image(admin_client, main, "a", "x.png", make_image())
+    assert response.status_code == 503
+    assert response.headers["retry-after"] == "2"
+    assert main.list_session_files("a")["files"] == []

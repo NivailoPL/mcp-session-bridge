@@ -22,13 +22,6 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
 from app.admin import AdminHandlers
-from app.image_files import (
-    MAX_IMAGE_BYTES,
-    ImageWorkerBusyError,
-    decode_image_base64,
-    run_image_worker,
-    validate_image_isolated,
-)
 from app.codex_app_server import CodexAppServerClient
 from app.graph_runtime import GraphRuntime
 from app.oauth import OAuthHandlers
@@ -51,7 +44,7 @@ from app.request_limits import RequestBodyLimitMiddleware
 from app.security import hash_secret
 from app.session_package import render_session_overview, render_session_transcript_chunk
 from app.settings import ROOT, load_settings
-from app.storage import ImageStorageQuotaError, PdfStorageQuotaError, SessionFileConflictError, Store, session_file_payload
+from app.storage import PdfStorageQuotaError, SessionFileConflictError, Store, session_file_payload
 from app.time_format import (
     DEFAULT_DISPLAY_TIMEZONE_NAME,
     DISPLAY_TIMEZONE_SETTING_KEY,
@@ -78,7 +71,7 @@ store = Store(
     allow_startup_migrations=settings.allow_startup_migrations,
 )
 logger = logging.getLogger(__name__)
-MCP_REQUEST_MAX_BODY_BYTES = ((max(MAX_MCP_PDF_BYTES, MAX_IMAGE_BYTES) + 2) // 3 * 4) + 262_144
+MCP_REQUEST_MAX_BODY_BYTES = ((MAX_MCP_PDF_BYTES + 2) // 3 * 4) + 262_144
 BRIDGE_RESTART_HELPER_UNIT = "mcp-session-bridge-restart.service"
 CODEX_SOCKET_PATH = Path("/run/mcp-session-bridge-codex/app-server.sock")
 CODEX_WORKSPACE_PATH = Path("/var/lib/mcp-session-bridge-codex/workspace")
@@ -1087,37 +1080,6 @@ async def upload_group_pdf(
             "retryable": False,
         }
     return {"ok": True, "file": session_file_payload(saved)}
-
-
-def _ingest_image(filename: str, content_base64: str, created_by: str, **scope):
-    image = validate_image_isolated(filename, decode_image_base64(content_base64))
-    return store.save_image(filename, image, created_by=created_by, **scope)
-
-
-async def _upload_image(filename: str, content_base64: str, **scope) -> dict[str, Any]:
-    token = get_access_token()
-    try:
-        saved = await run_image_worker(_ingest_image, filename, content_base64,
-                                       token.client_id if token else "unknown", **scope)
-    except ImageWorkerBusyError as exc:
-        return {"ok": False, "error": str(exc), "error_code": "image_worker_busy", "retryable": True, "retry_after_seconds": 2}
-    except ImageStorageQuotaError as exc:
-        return {"ok": False, "error": str(exc), "error_code": "image_storage_quota", "retryable": False}
-    except ValueError as exc:
-        return {"ok": False, "error": str(exc), "error_code": "invalid_image", "retryable": False}
-    return {"ok": True, "file": session_file_payload(saved)}
-
-
-@mcp.tool()
-async def upload_session_image(session_id: str, filename: str, content_base64: str) -> dict[str, Any]:
-    """Save an existing JPEG/PNG in one session (10 MB, 40 MP, no animation). Supply base64 from real file bytes using code; seeing an image in chat does not provide its bytes. Returns metadata; use view_session_image to see it."""
-    return await _upload_image(filename, content_base64, session_id=session_id)
-
-
-@mcp.tool()
-async def upload_group_image(group_id: str, filename: str, content_base64: str) -> dict[str, Any]:
-    """Save an existing JPEG/PNG for a group (10 MB, 40 MP, no animation). Supply base64 from real file bytes using code. Sessions in this group can call view_session_image to see it."""
-    return await _upload_image(filename, content_base64, group_id=group_id)
 
 
 @mcp.tool(structured_output=False)

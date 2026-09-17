@@ -6,6 +6,10 @@ This project follows a lightweight changelog format inspired by Keep a Changelog
 
 ## [Unreleased]
 
+### Changed
+
+- Removed the `upload_session_image` and `upload_group_image` MCP tools. Users upload images through the admin panel; models can still view session and group images with `view_session_image`. Existing images and admin preview/download remain available.
+
 ### Housekeeping
 
 - Moved the served admin, graph and shared navigation assets out of the repository root into `web/`.
