@@ -956,6 +956,20 @@ def test_mcp_settings_save_keeps_the_chosen_result_format() -> None:
     assert save("optimized", "optimized") == []
 
 
+def test_ai_rename_title_respects_word_and_character_limits() -> None:
+    from app.admin import _title_from_ai_content
+
+    assert _title_from_ai_content('{"title": "Plan wdrożenia nowego panelu ustawień w adminie"}', 4) == (
+        "Plan wdrożenia nowego panelu"
+    )
+    # trailing punctuation left by the word cut is dropped
+    assert _title_from_ai_content('{"title": "Ewaluacja LLM: metryki, koszty i ryzyka"}', 2) == "Ewaluacja LLM"
+    long_words = " ".join(["konfiguracyjny"] * 10)
+    title = _title_from_ai_content(json.dumps({"title": long_words}), 10)
+    assert len(title) <= 72
+    assert title.split() == ["konfiguracyjny"] * len(title.split())
+
+
 def test_admin_can_configure_ai_rename_and_update_session_title(load_main, monkeypatch) -> None:
     main = load_main(graph_experimental=True)
     main.store.create_session("s1", "Chaotic long title")
@@ -994,10 +1008,11 @@ def test_admin_can_configure_ai_rename_and_update_session_title(load_main, monke
 
     captured = {}
 
-    def fake_suggest(api_key: str, model: str, first_user_message: str) -> str:
+    def fake_suggest(api_key: str, model: str, first_user_message: str, max_words: int) -> str:
         captured["api_key"] = api_key
         captured["model"] = model
         captured["first_user_message"] = first_user_message
+        captured["max_words"] = max_words
         return "Ewaluacja LLM"
 
     monkeypatch.setattr(admin_module, "_suggest_session_title", fake_suggest)
@@ -1013,7 +1028,35 @@ def test_admin_can_configure_ai_rename_and_update_session_title(load_main, monke
         "api_key": "sk-test-secret",
         "model": "gpt-5.4-nano",
         "first_user_message": "Pierwsza wiadomość użytkownika o ewaluacji LLM.",
+        "max_words": 6,
     }
+
+    general = client.get("/admin/api/settings").json()["settings"]["general"]
+    assert general["rename_max_words"] == 6
+    assert general["rename_max_words_range"] == [2, 10]
+    for invalid in (1, 11, "5", 4.5, True):
+        rejected = client.put(
+            "/admin/api/settings/general",
+            json={"rename_model": "gpt-5.4-nano", "rename_max_words": invalid},
+            headers={"x-csrf-token": csrf_token},
+        )
+        assert rejected.status_code == 400, invalid
+    shorter = client.put(
+        "/admin/api/settings/general",
+        json={"rename_model": "gpt-5.4-nano", "rename_max_words": 3},
+        headers={"x-csrf-token": csrf_token},
+    )
+    assert shorter.status_code == 200
+    assert shorter.json()["settings"]["general"]["rename_max_words"] == 3
+    # a save that omits the word limit keeps the current one
+    model_only = client.put(
+        "/admin/api/settings/general",
+        json={"rename_model": "gpt-5.4-nano"},
+        headers={"x-csrf-token": csrf_token},
+    )
+    assert model_only.json()["settings"]["general"]["rename_max_words"] == 3
+    client.post("/admin/api/sessions/s1/rename/ai", headers={"x-csrf-token": csrf_token})
+    assert captured["max_words"] == 3
 
     manual = client.patch(
         "/admin/api/sessions/s1",
@@ -2411,7 +2454,7 @@ FEATURE_CONTROLS = {
     "file editing": ["fileEditButton", "fileEditor", "fileDeletePane", "fileDeleteWarning", "fileGuardPane", "fileGuardSave", "fileGuardDiscard", "fileGuardKeepEditing"],
     "file upload": ["groupFileInput", "sessionFileInput"],
     "session export": ["exportHtmlButton"],
-    "general settings": ["identity", "timezoneSelect"],
+    "general settings": ["identity", "timezoneSelect", "aiModelInput", "aiRenameMaxWords"],
     "transcript settings": ["transcriptChunkMaxChars", "transcriptChunkMaxLines"],
     "tool output compatibility": ["toolOutputMaximumCompatibility", "toolOutputOptimized", "toolOutputRestart", "toolOutputRestartMessage", "toolOutputRestartRequired"],
     "output probe": ["probeHarnessLabel", "probeTargetChars", "probeContentProfile", "probePromptCopy", "probeResults"],
