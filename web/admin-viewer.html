@@ -222,7 +222,6 @@
     }
     .update-dot[hidden] { display: none; }
     .settings-button .update-dot { margin-left: .1rem; }
-    .settings-tabs .update-dot { margin-left: auto; }
     .search-wrap { position: relative; }
     .search-wrap svg {
       position: absolute; left: .72rem; top: 50%; transform: translateY(-50%);
@@ -1061,180 +1060,223 @@
     }
     .search-launcher { justify-content: flex-start; gap: .42rem; width: auto; }
     .search-launcher svg { width: 16px; height: 16px; }
-    .admin-session-card {
-      display: flex; align-items: center; justify-content: space-between; gap: 1rem;
-      padding: .8rem; border: 1px solid var(--stroke); border-radius: var(--r-card);
-      background: rgba(255,255,255,.025);
-    }
-    .admin-session-copy { display: grid; gap: .2rem; min-width: 0; }
-    .admin-session-copy small { color: var(--muted); font-size: var(--t-meta); }
-    .admin-session-copy strong { overflow-wrap: anywhere; font-size: var(--t-body); }
-    .admin-session-card form { flex: 0 0 auto; margin: 0; }
-    .settings-dialog { width: min(58rem, calc(100vw - 2rem)); max-width: none; max-height: min(48rem, calc(100vh - 2rem)); }
+    /* ---------- settings ----------
+       One skeleton for every tab: panel head (title, ?, verdict pill) ->
+       groups (mono label, rows, disclosures). Explanations live only behind ?. */
+    .settings-dialog { width: min(58rem, calc(100vw - 2rem)); height: min(46rem, calc(100vh - 2rem)); max-width: none; max-height: none; }
     .settings-dialog[open] { display: grid; grid-template-rows: auto minmax(0, 1fr); overflow: hidden; }
-    .settings-shell {
-      display: grid;
-      grid-template-columns: 10rem minmax(0, 1fr);
-      grid-template-rows: minmax(0, 1fr);
-      min-height: 31rem;
-    }
+    .settings-shell { display: grid; grid-template-columns: 11.75rem minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); min-height: 0; }
     .settings-body { display: grid; grid-template-rows: minmax(0, 1fr) auto; min-width: 0; min-height: 0; }
-    .settings-actionbar {
-      display: flex; align-items: center; justify-content: flex-end; gap: .55rem;
-      padding: .75rem 1.2rem;
-      border-top: 1px solid var(--stroke-soft);
-      background: rgba(255, 255, 255, .02);
-    }
-    .settings-actionbar[hidden] { display: none; }
-    .settings-tabs { display: grid; align-content: start; gap: .35rem; padding: 1rem; border-right: 1px solid var(--stroke-soft); }
-    .settings-tabs button { justify-content: flex-start; border-color: transparent; background: transparent; }
-    .settings-tabs button.is-active { color: var(--accent-ink); border-color: rgba(122,125,240,.32); background: var(--accent-soft); }
-    .settings-content { min-width: 0; min-height: 0; overflow: auto; padding: 1.2rem; }
-    .settings-panel, .settings-stack { display: grid; gap: 1rem; }
-    .settings-section-head h4, .settings-section-head p { margin: 0; }
-    /* card */
-    .settings-section-head h4 { font-size: var(--t-name); font-weight: 700; color: var(--text); }
-    /* panel */
-    .settings-panel > .settings-section-head h4 {
-      font-size: var(--t-display); font-weight: 800; letter-spacing: -.015em; color: var(--accent-ink);
-    }
-    /* group inside a card */
-    .mcp-settings-section section > .settings-section-head h4 {
-      font-family: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
-      font-size: var(--t-label); font-weight: 500; letter-spacing: .09em; text-transform: uppercase;
-      color: var(--faint-ink);
-    }
-    /* the dialog names itself once, quietly */
+    .settings-content { min-width: 0; min-height: 0; overflow: auto; padding: 1.25rem 1.5rem 1.5rem; }
     .settings-dialog .dialog-head h3 {
       font-family: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
       font-size: var(--t-label); font-weight: 500; letter-spacing: .09em; text-transform: uppercase;
       color: var(--faint-ink);
     }
-    .settings-section-head p { margin-top: .3rem; color: var(--muted); font-size: var(--t-ctrl); line-height: 1.5; }
-    /* stat tiles */
-    .operational-summary, .index-estimate-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); gap: 12px; }
-    .operational-card {
-      display: grid; gap: .25rem; min-width: 0; padding: .85rem;
-      border: 1px solid var(--stroke); border-radius: var(--r-card);
-      background: rgba(255,255,255,.025);
-    }
-    .operational-card small {
+
+    /* nav: every tab says whether it needs you before you open it */
+    .settings-tabs { display: grid; align-content: start; gap: .25rem; padding: .9rem .75rem; border-right: 1px solid var(--stroke-soft); }
+    .settings-tabs button { justify-content: space-between; min-height: 34px; padding: 0 10px; border-color: transparent; background: transparent; color: var(--text-2); }
+    .settings-tabs button.is-active { color: var(--accent-ink); border-color: rgba(122,125,240,.32); background: var(--accent-soft); }
+    .settings-tab-meta { display: inline-flex; align-items: center; gap: .4rem; min-width: 0; }
+    .settings-tab-hint { display: inline-flex; align-items: center; gap: .35rem; color: var(--muted); font-size: var(--t-label); font-weight: 600; white-space: nowrap; }
+    .settings-tab-hint:empty { display: none; }
+    .settings-tab-hint[data-tone]::after { content: ""; width: 6px; height: 6px; border-radius: var(--r-pill); background: var(--muted); }
+    .settings-tab-hint[data-tone="ok"]::after { background: var(--ok); }
+    .settings-tab-hint[data-tone="warn"]::after { background: var(--warn); }
+    .settings-tab-hint[data-tone="fail"]::after { background: var(--danger); }
+    .settings-tab-dirty { width: 7px; height: 7px; border-radius: var(--r-pill); background: var(--accent-ink); }
+    .settings-tab-dirty[hidden] { display: none; }
+
+    /* panel head */
+    .settings-panel, .settings-stack { display: grid; align-content: start; gap: .9rem; }
+    .settings-panel[hidden], .settings-stack[hidden] { display: none; }
+    .settings-panel-head { display: flex; align-items: center; gap: .55rem; min-height: 30px; }
+    .settings-panel-head h4 { margin: 0; font-size: 20px; font-weight: 800; letter-spacing: -.015em; color: var(--text); }
+    .settings-verdict { margin-left: auto; }
+
+    /* the ? next to Mask / Exclude, reused; opens toward the content */
+    .settings-dialog .context-help-box { left: -.5rem; right: auto; width: min(21rem, calc(100vw - 4rem)); }
+    .settings-dialog .context-help-trigger { width: 20px; min-height: 20px; height: 20px; }
+
+    /* group */
+    .settings-group { border: 1px solid var(--stroke); border-radius: var(--r-card); background: rgba(255,255,255,.025); }
+    .settings-group-head { display: flex; align-items: center; gap: .45rem; min-height: 38px; padding: 0 16px; border-bottom: 1px solid var(--stroke-soft); }
+    .settings-group-head h5 {
+      margin: 0;
       font-family: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
       font-size: var(--t-label); font-weight: 500; letter-spacing: .09em; text-transform: uppercase;
       color: var(--faint-ink);
     }
-    .verdict.is-pass { color: var(--ok); }
-    .verdict.is-warn { color: var(--warn); }
-    .verdict.is-fail { color: var(--danger); }
-    .operational-card strong, .operational-card code { overflow-wrap: anywhere; }
-    .operational-card code { color: var(--text); font-size: var(--t-meta); }
-    .status-check-list { display: grid; gap: .55rem; }
-    .status-check {
-      display: grid; grid-template-columns: .7rem minmax(0, 1fr); gap: .65rem;
-      padding: .75rem; border: 1px solid var(--stroke-soft); border-radius: var(--r-ctrl);
+    .settings-group-head > :last-child:not(h5):not(.context-help) { margin-left: auto; }
+    .settings-group-aside { color: var(--muted); font-size: var(--t-label); }
+    .settings-group > * + *:not(.settings-group-head + *) { border-top: 1px solid var(--stroke-soft); }
+
+    /* row: label (+?) left, control right, one live status line at most */
+    .settings-item { display: flex; align-items: center; justify-content: space-between; gap: 1rem; min-height: 36px; padding: 10px 16px; }
+    .settings-item[hidden] { display: none; }
+    .settings-item.is-stacked { flex-direction: column; align-items: stretch; gap: .7rem; }
+    .settings-item-label { display: grid; gap: 3px; min-width: 0; }
+    .settings-item-title { display: inline-flex; align-items: center; gap: .45rem; font-size: 13.5px; font-weight: 600; color: var(--text); }
+    .settings-item-title label { cursor: pointer; }
+    .settings-item-sub { color: var(--muted); font-size: var(--t-meta); line-height: 1.4; }
+    .settings-item-sub:empty { display: none; }
+    .settings-item-sub.is-ok { color: var(--ok); }
+    .settings-item-sub.is-warn { color: var(--warn); }
+    .settings-item-sub.is-accent { color: var(--accent-ink); }
+    .settings-item-control { display: flex; align-items: center; justify-content: flex-end; gap: .5rem; flex-wrap: wrap; min-width: 0; }
+    .settings-item-control[hidden] { display: none; }
+    .settings-item-control form { margin: 0; }
+    .settings-value { color: var(--text); font-size: var(--t-ctrl); font-weight: 600; overflow-wrap: anywhere; }
+    .settings-value-mono { font-family: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; font-weight: 500; }
+    .settings-value-muted { color: var(--muted); font-size: var(--t-ctrl); }
+    .settings-footnote { margin: 0; color: var(--muted); font-size: var(--t-meta); line-height: 1.5; }
+
+    /* controls */
+    .settings-dialog button.settings-compact { min-height: var(--h-compact); padding: 0 11px; }
+    .settings-input-number { width: 8rem; text-align: right; font-family: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; }
+    .settings-input-medium { width: 13rem; }
+    .settings-input-wide { width: 17rem; }
+    .settings-input-key { width: 17rem; }
+    .settings-input-mono { font-family: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; }
+    button.settings-quiet-danger { border-color: transparent; background: transparent; color: var(--danger); }
+    button.settings-quiet-danger:hover { border-color: rgba(251,113,133,.3); background: var(--danger-soft); }
+    button.settings-link { min-height: var(--h-compact); padding: 0 4px; border-color: transparent; background: transparent; color: var(--accent-ink); }
+    button.settings-link:hover { background: transparent; border-color: transparent; color: #c7c9fa; }
+    button.settings-link[hidden] { display: none; }
+    .settings-switch-input {
+      appearance: none; -webkit-appearance: none; position: relative; flex: 0 0 auto;
+      width: 34px; min-height: 20px; height: 20px; padding: 0; margin: 0;
+      border: 0; border-radius: var(--r-pill); background: rgba(255,255,255,.12); cursor: pointer;
+      transition: background .16s ease;
     }
-    .status-state { width: .6rem; height: .6rem; margin-top: .25rem; border-radius: var(--r-pill); background: var(--faint-ink); }
-    .status-state.is-pass { background: var(--ok); }
-    .status-state.is-warn, .status-state.is-waiting { background: var(--warn); }
-    .status-state.is-fail { background: var(--danger); }
-    .status-check-copy { display: grid; gap: .2rem; min-width: 0; }
-    .status-check-copy span, .status-check-copy small { color: var(--muted); line-height: 1.45; }
-    .status-command-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); gap: 12px; }
-    .status-command-list code { display: block; padding: .65rem .75rem; border: 1px solid var(--stroke-soft); border-radius: var(--r-ctrl); background: rgba(0,0,0,.22); }
+    .settings-switch-input::after {
+      content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px;
+      border-radius: var(--r-pill); background: #fff; transition: transform .16s ease;
+    }
+    .settings-switch-input:checked { background: var(--accent); }
+    .settings-switch-input:checked::after { transform: translateX(14px); }
+    .settings-switch-input:disabled { cursor: not-allowed; opacity: .45; }
+    .settings-switch-input:focus { box-shadow: 0 0 0 3px var(--accent-soft); }
+    .settings-seg { display: inline-flex; gap: 2px; padding: 2px; border: 1px solid var(--stroke); border-radius: var(--r-ctrl); background: rgba(0,0,0,.28); }
+    .settings-seg label { position: relative; display: inline-flex; align-items: center; min-height: 26px; padding: 0 11px; border: 1px solid transparent; border-radius: var(--r-xs); color: var(--muted); font-size: 12.5px; font-weight: 600; cursor: pointer; }
+    .settings-seg input { position: absolute; opacity: 0; width: 1px; height: 1px; pointer-events: none; }
+    .settings-seg label:hover { color: var(--text); }
+    .settings-seg label:has(input:checked) { border-color: rgba(122,125,240,.38); background: var(--accent-soft); color: var(--text); }
+    .settings-seg label:has(input:focus-visible) { outline: 2px solid var(--accent-2); outline-offset: 1px; }
+    .settings-seg label:has(input:disabled) { cursor: progress; opacity: .6; }
+    .settings-chips { gap: .4rem; }
+
+    /* pill: four tones, one shape */
+    .settings-pill {
+      display: inline-flex; align-items: center; gap: .4rem; height: 22px; padding: 0 9px;
+      border: 1px solid var(--stroke); border-radius: var(--r-pill); background: rgba(255,255,255,.04);
+      color: var(--muted); font-size: 11.5px; font-weight: 700; white-space: nowrap;
+    }
+    .settings-pill:empty, .settings-pill[hidden] { display: none; }
+    .settings-pill[data-tone]::before { content: ""; width: 6px; height: 6px; border-radius: var(--r-pill); background: currentColor; }
+    .settings-pill[data-tone="ok"] { color: var(--ok); border-color: rgba(52,211,153,.28); background: rgba(52,211,153,.10); }
+    .settings-pill[data-tone="warn"] { color: var(--warn); border-color: rgba(251,191,36,.30); background: rgba(251,191,36,.10); }
+    .settings-pill[data-tone="fail"] { color: var(--danger); border-color: rgba(251,113,133,.30); background: rgba(251,113,133,.10); }
+    .settings-pill[data-tone="accent"] { color: var(--accent-ink); border-color: rgba(122,125,240,.32); background: var(--accent-soft); }
+    .settings-pill[data-tone="off"] { color: var(--muted); }
+
+    /* notice: only when action is required */
+    .settings-notice { display: flex; align-items: center; gap: .65rem; flex-wrap: wrap; margin: 0; padding: 8px 10px 8px 16px; background: var(--warn-soft); }
+    .settings-notice[hidden] { display: none; }
+    .settings-notice span { flex: 1 1 12rem; color: var(--warn); font-size: var(--t-meta); font-weight: 700; }
+    .settings-group > .settings-notice:last-child { border-radius: 0 0 calc(var(--r-card) - 1px) calc(var(--r-card) - 1px); }
+
+    /* disclosure: anything not needed right away */
+    .settings-disclosure > summary { display: flex; align-items: center; gap: .5rem; min-height: 36px; padding: 8px 16px; list-style: none; cursor: pointer; }
+    .settings-disclosure > summary::-webkit-details-marker { display: none; }
+    .settings-disclosure > summary::before {
+      content: ""; width: 6px; height: 6px; margin: 0 .2rem 0 .1rem; flex: 0 0 auto;
+      border-right: 1.6px solid var(--faint-ink); border-bottom: 1.6px solid var(--faint-ink);
+      transform: rotate(-45deg); transition: transform .15s ease;
+    }
+    .settings-disclosure[open] > summary::before { transform: rotate(45deg); }
+    .settings-disclosure > summary:hover .settings-disclosure-title { color: var(--accent-ink); }
+    .settings-disclosure-title { font-size: 13.5px; font-weight: 600; color: var(--text); }
+    .settings-disclosure-meta { margin-left: auto; color: var(--muted); font-size: var(--t-meta); text-align: right; }
+    .settings-disclosure-body { display: grid; gap: .7rem; padding: 2px 16px 14px 34px; }
+
+    /* status line + save bar */
     .settings-status { min-height: 1.2rem; margin: 0 0 .8rem; color: var(--muted); font-size: var(--t-ctrl); }
+    .settings-content > .settings-status:empty, .settings-panel > .settings-status:empty { display: none; }
     .settings-status.is-error { color: var(--danger); }
     .settings-status.is-ok { color: var(--ok); }
-    .settings-switch { display: flex; align-items: flex-start; gap: .7rem; padding: .8rem; border: 1px solid var(--stroke); border-radius: var(--r-card); background: rgba(255,255,255,.025); }
-    .settings-switch input { width: auto; margin-top: .2rem; accent-color: var(--accent); }
-    .settings-switch span { display: grid; gap: .15rem; }
-    .settings-switch small { color: var(--muted); line-height: 1.45; }
-    .mcp-settings-section { display: grid; gap: 1rem; padding: 1rem; border: 1px solid var(--stroke); border-radius: var(--r-card); background: rgba(255,255,255,.025); }
-    .tool-output-card { gap: .8rem; }
-    .chunk-settings-card { gap: 0; }
-    .chunk-settings-card > .settings-section-head { padding-bottom: .2rem; }
-    .chunk-settings-card > .probe-config,
-    .chunk-settings-card > .probe-global,
-    .chunk-settings-card > .probe-recommendations,
-    .chunk-settings-card > .probe-results { padding: 1rem 0 0; margin-top: 1rem; border-top: 1px solid var(--stroke-soft); }
-    .tool-output-options { display: grid; gap: .55rem; }
-    .tool-output-actions { display: flex; align-items: center; justify-content: space-between; gap: .7rem; flex-wrap: wrap; }
-    .tool-output-restart { display: flex; align-items: center; gap: .65rem; flex-wrap: wrap; padding: .65rem .75rem; border: 1px solid rgba(251,191,36,.35); border-radius: var(--r-ctrl); background: var(--warn-soft); }
-    .tool-output-restart[hidden] { display: none; }
-    .tool-output-restart span { color: var(--warn); font-size: var(--t-meta); font-weight: 750; }
-    .tool-output-summary { margin: 0; color: var(--muted); font-size: var(--t-meta); line-height: 1.5; }
-    .settings-fieldset { display: flex; flex-wrap: wrap; gap: .5rem; padding: .85rem; border: 1px solid var(--stroke); border-radius: var(--r-card); }
-    .settings-fieldset legend {
-      padding: 0 .35rem;
-      font-family: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
-      font-size: var(--t-label); font-weight: 500; letter-spacing: .09em; text-transform: uppercase;
-      color: var(--faint-ink);
+    .settings-actionbar {
+      display: flex; align-items: center; gap: .55rem;
+      padding: .7rem 1.25rem; border-top: 1px solid var(--stroke-soft); background: rgba(255,255,255,.02);
     }
+    .settings-actionbar[hidden] { display: none; }
+    .settings-actionbar-dot { width: 7px; height: 7px; border-radius: var(--r-pill); background: var(--accent-ink); }
+    .settings-actionbar-text { flex: 1; color: var(--text-2); font-size: var(--t-meta); }
+
+    /* MCP */
+    .probe-config-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); gap: 10px; }
+    .probe-prompt { max-height: 7.5rem; margin: 0; padding: .7rem .8rem; overflow: auto; border: 1px solid var(--stroke-soft); border-radius: var(--r-ctrl); background: rgba(0,0,0,.18); color: var(--muted); font: var(--t-meta)/1.5 "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; }
+    .probe-recommendation-list, .probe-result-list { display: grid; gap: .35rem; }
+    .probe-recommendation, .probe-result {
+      display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: .75rem;
+      min-height: 30px; font-size: var(--t-meta);
+    }
+    .probe-result { grid-template-columns: minmax(0, 1fr) 6.5rem 6.5rem 7.5rem; }
+    .probe-result-name { overflow: hidden; color: var(--text); font-family: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace; text-overflow: ellipsis; white-space: nowrap; }
+    .probe-result-meta { color: var(--muted); font-size: var(--t-meta); text-align: right; font-variant-numeric: tabular-nums; }
+    .probe-result-class { justify-self: end; }
+    .probe-result-empty { color: var(--muted); font-size: var(--t-meta); }
+
+    /* Search */
+    .rag-group-list { display: grid; grid-template-columns: repeat(auto-fill,minmax(12rem,1fr)); gap: .5rem; width: 100%; }
+    .rag-group-option { position: relative; display: grid; grid-template-columns: auto auto minmax(0,1fr) auto; align-items: center; gap: .6rem; min-width: 0; min-height: 40px; padding: 0 .75rem; border: 1px solid transparent; border-radius: var(--r-ctrl); background: rgba(255,255,255,.035); cursor: pointer; }
+    .rag-group-option:hover { background: rgba(255,255,255,.055); }
+    .rag-group-option input { width: auto; accent-color: var(--accent); }
+    .rag-group-option svg { width: 16px; height: 16px; color: var(--g); }
+    .rag-group-name { min-width: 0; overflow: hidden; font-size: 13.5px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+    .rag-group-option.is-sensitive { border-color: rgba(255,255,255,.12); background: rgba(139,147,167,.06); color: var(--muted); cursor: help; }
+    .rag-group-option.is-sensitive:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .rag-sensitive-mark { display: grid; place-items: center; color: var(--warn); }
+    .rag-sensitive-mark svg { width: 15px; height: 15px; color: currentColor; }
+    .rag-sensitive-help { position: absolute; z-index: 8; top: calc(100% + .45rem); left: 0; right: 0; width: auto; box-sizing: border-box; padding: .7rem .75rem; border: 1px solid var(--stroke); border-radius: var(--r-ctrl); background: #181b24; box-shadow: 0 .65rem 1.5rem rgba(0,0,0,.35); color: var(--text); font-size: var(--t-meta); font-weight: 500; line-height: 1.5; white-space: normal; opacity: 0; visibility: hidden; pointer-events: none; transform: translateY(-.2rem); transition: opacity .14s ease, transform .14s ease, visibility .14s; }
+    .rag-group-option.is-sensitive:hover .rag-sensitive-help,
+    .rag-group-option.is-sensitive:focus-visible .rag-sensitive-help { opacity: 1; visibility: visible; transform: translateY(0); }
     .toggle {
       display: inline-flex; align-items: center; gap: .5rem;
-      min-height: var(--h-ctrl); padding: 0 12px;
+      min-height: var(--h-compact); padding: 0 11px;
       border: 1px solid var(--stroke-soft); border-radius: var(--r-ctrl);
       background: rgba(255, 255, 255, .025);
-      color: var(--text-2); font-size: var(--t-ctrl); font-weight: 600;
+      color: var(--text-2); font-size: 12.5px; font-weight: 600;
       cursor: pointer; transition: border-color .16s ease, background .16s ease, color .16s ease;
     }
     .toggle:hover { border-color: var(--stroke); color: var(--text); }
     .toggle input { width: auto; min-height: 0; padding: 0; accent-color: var(--accent); }
-    .toggle:has(input:checked) {
-      border-color: rgba(122, 125, 240, .42); background: var(--accent-soft); color: var(--text);
-    }
-    .rag-group-list { display: grid; grid-template-columns: repeat(auto-fill,minmax(13rem,1fr)); gap: .5rem; width: 100%; }
-    .rag-group-option { position: relative; display: grid; grid-template-columns: auto auto minmax(0,1fr) auto; align-items: center; gap: .55rem; min-width: 0; padding: .55rem; border: 1px solid transparent; border-radius: var(--r-ctrl); background: rgba(255,255,255,.03); }
-    .rag-group-option input { width: auto; accent-color: var(--accent); }
-    .rag-group-option svg { width: 16px; height: 16px; color: var(--g); }
-    .rag-group-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .rag-group-option.is-sensitive { border-color: rgba(139,147,167,.14); background: rgba(139,147,167,.08); color: var(--muted); cursor: help; }
-    .rag-group-option.is-sensitive:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-    .rag-sensitive-mark { display: grid; place-items: center; color: var(--warn); }
-    .rag-sensitive-mark svg { width: 14px; height: 14px; color: currentColor; }
-    .rag-sensitive-help { position: absolute; z-index: 8; top: calc(100% + .45rem); left: 0; right: 0; width: auto; box-sizing: border-box; padding: .7rem .75rem; border: 1px solid var(--stroke); border-radius: var(--r-ctrl); background: #181b24; box-shadow: 0 .65rem 1.5rem rgba(0,0,0,.35); color: var(--text); font-size: var(--t-meta); line-height: 1.5; white-space: normal; opacity: 0; visibility: hidden; pointer-events: none; transform: translateY(-.2rem); transition: opacity .14s ease, transform .14s ease, visibility .14s; }
-    .rag-group-option.is-sensitive:hover .rag-sensitive-help,
-    .rag-group-option.is-sensitive:focus-visible .rag-sensitive-help { opacity: 1; visibility: visible; transform: translateY(0); }
-    .developer-settings { border: 1px solid var(--stroke); border-radius: var(--r-card); padding: .75rem; }
-    .developer-settings summary { cursor: pointer; color: var(--muted); font-size: var(--t-ctrl); }
-    /* form fields */
-    .settings-grid, .probe-config-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: 12px; }
-    .settings-grid { padding-top: .85rem; }
-    .probe-config, .probe-global, .probe-recommendations, .probe-results { display: grid; gap: .75rem; }
-    .probe-prompt { max-height: 9rem; margin: 0; padding: .75rem; overflow: auto; border: 1px solid var(--stroke-soft); border-radius: var(--r-ctrl); background: rgba(0,0,0,.18); color: var(--muted); font: var(--t-meta)/1.5 ui-monospace,SFMono-Regular,Menlo,monospace; white-space: pre-wrap; }
-    .probe-recommendation-list, .probe-result-list { display: grid; gap: .55rem; }
-    .probe-recommendation, .probe-result { display: grid; gap: .35rem; padding: .7rem; border: 1px solid var(--stroke-soft); border-radius: var(--r-ctrl); background: rgba(255,255,255,.025); }
-    .probe-recommendation-head, .probe-result-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: .45rem; }
-    .probe-result-meta { color: var(--muted); font-size: var(--t-meta); line-height: 1.45; }
-    .probe-result-class { font-size: var(--t-label); font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
-    .probe-result-class.complete { color: var(--ok); }
-    .probe-result-class.pending { color: var(--warn); }
-    .provider-card, .index-card { display: grid; gap: .65rem; padding: .9rem; border: 1px solid var(--stroke); border-radius: var(--r-card); background: rgba(255,255,255,.025); }
-    .index-card { grid-template-columns: minmax(0,1fr); }
-    .index-card-main { min-width: 0; }
-    .index-card p { margin: .25rem 0 0; }
-    .index-ready-check { display: inline-grid; place-items: center; width: 1rem; height: 1rem; border: 1px solid rgba(52,211,153,.38); border-radius: 50%; color: var(--ok); background: rgba(52,211,153,.11); font-size: var(--t-label); font-weight: 900; }
+    .toggle:has(input:checked) { border-color: rgba(122, 125, 240, .42); background: var(--accent-soft); color: var(--text); }
+    .settings-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); gap: 12px; }
+    .index-ready-check { display: inline-grid; place-items: center; width: 1rem; height: 1rem; margin-right: .35rem; border: 1px solid rgba(52,211,153,.38); border-radius: 50%; color: var(--ok); background: rgba(52,211,153,.11); font-size: var(--t-label); font-weight: 900; vertical-align: -2px; }
     .index-ready-check[hidden], .index-built-at[hidden] { display: none; }
+    .index-built-at { display: inline-flex; align-items: center; gap: .45rem; margin-left: .45rem; }
     .index-built-at::before { content: ""; width: 3px; height: 3px; border-radius: 50%; background: var(--faint-ink); }
-    .index-built-at { display: inline-flex; align-items: center; gap: .45rem; }
-    .index-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .55rem; margin-top: .2rem; padding-top: .8rem; border-top: 1px solid var(--stroke-soft); }
-    .index-actions .danger { margin-left: auto; }
     button.index-build-button { border-color: rgba(52,211,153,.36); color: #a7f3d0; background: rgba(52,211,153,.14); }
     button.index-build-button:hover { border-color: rgba(52,211,153,.58); background: rgba(52,211,153,.22); }
     button.index-build-button:disabled { opacity: .8; }
     .index-build-spinner { width: .9rem; height: .9rem; border: 2px solid rgba(167,243,208,.35); border-top-color: #a7f3d0; border-radius: 50%; animation: index-spin .8s linear infinite; }
     .index-build-spinner[hidden] { display: none; }
     @keyframes index-spin { to { transform: rotate(360deg); } }
-    .index-estimate { display: grid; gap: .65rem; margin-top: .8rem; padding-top: .8rem; border-top: 1px solid var(--stroke-soft); }
-    .index-estimate[hidden] { display: none; }
-    .index-estimate-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: .35rem 1rem; }
-    .index-estimate-head b { font-size: var(--t-ctrl); }
-    .index-estimate-state { color: var(--muted); font-size: var(--t-meta); }
-    .index-estimate-stat { display: grid; gap: .18rem; min-width: 0; padding: .65rem .7rem; border: 1px solid var(--stroke-soft); border-radius: var(--r-ctrl); background: rgba(255,255,255,.025); }
-    .index-estimate-stat > span { color: var(--faint-ink); font-size: var(--t-label); font-weight: 700; letter-spacing: .09em; text-transform: uppercase; }
-    .index-estimate-stat strong { overflow: hidden; font-size: var(--t-name); font-variant-numeric: tabular-nums; text-overflow: ellipsis; white-space: nowrap; }
-    .index-estimate-stat small { color: var(--muted); font-size: var(--t-label); line-height: 1.4; }
-    .index-estimate-note { color: var(--muted); font-size: var(--t-meta); line-height: 1.45; }
-    .index-estimate-note a { color: var(--accent-ink); }
+    a.index-estimate-cost { color: var(--ok); text-decoration: none; }
+    a.index-estimate-cost:hover { text-decoration: underline; }
+
+    /* API keys */
+    .provider-key-view, .provider-key-edit { display: inline-flex; align-items: center; justify-content: flex-end; gap: .5rem; flex-wrap: wrap; }
+    .provider-key-view[hidden], .provider-key-edit[hidden] { display: none; }
+
+    /* System */
+    .status-check-list { display: grid; }
+    .status-check-list > * + * { border-top: 1px solid var(--stroke-soft); }
+    .status-check-list .settings-footnote { padding: 10px 16px; }
+    .status-command-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); gap: 8px; }
+    .status-command-list code { display: block; padding: .5rem .7rem; border: 1px solid var(--stroke-soft); border-radius: var(--r-ctrl); background: rgba(0,0,0,.22); font-size: var(--t-meta); }
     .search-dialog { width: min(72rem, calc(100vw - 2rem)); height: min(48rem, calc(100vh - 2rem)); max-width: none; max-height: none; }
     .search-dialog[open] { display: grid; grid-template-rows: auto auto auto minmax(0,1fr); }
     .search-command { display: grid; grid-template-columns: minmax(12rem,1fr) auto auto auto; gap: .6rem; padding: .9rem 1rem; border-bottom: 1px solid var(--stroke-soft); }
@@ -1282,12 +1324,21 @@
       .file-workspace-back { display: inline-flex; }
       .file-workspace-list, .file-workspace-detail { height: 100%; border-right: 0; }
       .dialog-actions { gap: .25rem; }
-      .settings-shell { grid-template-columns: 1fr; min-height: 0; overflow: auto; }
-      .settings-tabs { grid-template-columns: repeat(2, 1fr); border-right: 0; border-bottom: 1px solid var(--stroke-soft); }
-      .settings-tabs button { justify-content: center; }
-      .settings-content { overflow: visible; }
+      .settings-shell { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); }
+      .settings-tabs { display: flex; gap: .25rem; overflow-x: auto; padding: .6rem .75rem; border-right: 0; border-bottom: 1px solid var(--stroke-soft); }
+      .settings-tabs button { flex: 0 0 auto; gap: .5rem; }
+      .settings-tab-hint { display: none; }
+      .settings-content { padding: 1rem; }
+      .settings-item { flex-wrap: wrap; }
+      .settings-item-control { justify-content: flex-start; }
+      .settings-input-wide, .settings-input-key { width: 100%; }
+      /* on a phone the ? opens across the whole row instead of from the ? itself */
+      .settings-dialog .context-help { position: static; }
+      .settings-item, .settings-group-head, .settings-panel-head { position: relative; }
+      .settings-dialog .context-help-box { left: 12px; right: 12px; width: auto; }
+      .probe-result { grid-template-columns: minmax(0, 1fr) auto auto; }
+      .probe-result > :nth-child(4) { display: none; }
       .status-command-list { grid-template-columns: 1fr; }
-      .index-card { grid-template-columns: 1fr; }
       .search-command { grid-template-columns: 1fr 1fr; }
       .search-command input { grid-column: 1 / -1; }
       .search-workspace { grid-template-columns: 1fr; overflow: auto; }
@@ -1573,157 +1624,314 @@
     </div>
     <div class="settings-shell">
       <nav class="settings-tabs" aria-label="Settings sections">
-        <button type="button" data-settings-tab="general" class="is-active">General</button>
-        <button type="button" data-settings-tab="transcript">MCP</button>
-        <button type="button" data-settings-tab="search">Search</button>
-        <button type="button" data-settings-tab="api">API</button>
-        <button type="button" data-settings-tab="database">Database</button>
-        <button type="button" data-settings-tab="status">Status <span id="statusUpdateDot" class="update-dot" hidden aria-hidden="true"></span></button>
+        <button type="button" data-settings-tab="general" class="is-active"><span>General</span><span class="settings-tab-meta"><span class="settings-tab-dirty" hidden aria-label="Unsaved changes"></span></span></button>
+        <button type="button" data-settings-tab="transcript"><span>MCP</span><span class="settings-tab-meta"><span id="settingsHintTranscript" class="settings-tab-hint"></span><span class="settings-tab-dirty" hidden aria-label="Unsaved changes"></span></span></button>
+        <button type="button" data-settings-tab="search"><span>Search</span><span class="settings-tab-meta"><span id="settingsHintSearch" class="settings-tab-hint"></span><span class="settings-tab-dirty" hidden aria-label="Unsaved changes"></span></span></button>
+        <button type="button" data-settings-tab="api"><span>API keys</span><span class="settings-tab-meta"><span id="settingsHintApi" class="settings-tab-hint"></span></span></button>
+        <button type="button" data-settings-tab="system"><span>System</span><span class="settings-tab-meta"><span id="settingsHintSystem" class="settings-tab-hint"></span><span id="statusUpdateDot" class="update-dot" hidden aria-hidden="true"></span></span></button>
       </nav>
       <div class="settings-body">
       <div class="settings-content">
         <p id="aiSettingsStatus" class="settings-status" aria-live="polite"></p>
+
         <section data-settings-panel="general" class="settings-panel">
-          <div class="settings-section-head"><div><h4>General</h4><p>Display and automation defaults for the admin.</p></div></div>
-          <div class="admin-session-card">
-            <div class="admin-session-copy">
-              <small>Signed in</small>
-              <strong id="identity">Loading...</strong>
-            </div>
-            <form method="post" action="/admin/logout">
-              <button type="submit" class="ghost">Sign out</button>
-            </form>
+          <div class="settings-panel-head">
+            <h4>General</h4>
+            <span class="context-help"><button type="button" class="context-help-trigger" aria-label="About General" aria-describedby="settingsHelpGeneral">?</button><span id="settingsHelpGeneral" class="context-help-box" role="tooltip">Account, display and naming defaults for this admin. Nothing here changes what models see.</span></span>
           </div>
-          <label class="field">Display timezone<select id="timezoneSelect" aria-label="Display timezone"></select></label>
-          <label class="field">AI rename model<input id="aiModelInput" type="text" maxlength="96" autocomplete="off"></label>
+          <section class="settings-group">
+            <div class="settings-group-head"><h5>Account</h5></div>
+            <div class="settings-item">
+              <div class="settings-item-label"><span class="settings-item-title">Signed in as</span></div>
+              <div class="settings-item-control">
+                <strong id="identity" class="settings-value">Loading...</strong>
+                <form method="post" action="/admin/logout"><button type="submit" class="ghost settings-compact">Sign out</button></form>
+              </div>
+            </div>
+          </section>
+          <section class="settings-group">
+            <div class="settings-group-head"><h5>Display</h5></div>
+            <div class="settings-item">
+              <div class="settings-item-label">
+                <span class="settings-item-title"><label for="timezoneSelect">Timezone</label><span class="context-help"><button type="button" class="context-help-trigger" aria-label="About Timezone" aria-describedby="settingsHelpTimezone">?</button><span id="settingsHelpTimezone" class="context-help-box" role="tooltip">Used for every timestamp in this admin and saved as soon as you pick it. Stored transcripts keep UTC; models are not affected.</span></span></span>
+              </div>
+              <div class="settings-item-control" data-settings-instant><select id="timezoneSelect" class="settings-input-wide" aria-label="Display timezone"></select></div>
+            </div>
+          </section>
+          <section class="settings-group">
+            <div class="settings-group-head"><h5>Session titles</h5></div>
+            <div class="settings-item">
+              <div class="settings-item-label">
+                <span class="settings-item-title"><label for="aiModelInput">AI rename model</label><span class="context-help"><button type="button" class="context-help-trigger" aria-label="About AI rename model" aria-describedby="settingsHelpRename">?</button><span id="settingsHelpRename" class="context-help-box" role="tooltip">The OpenAI model used when you press AI rename on a session. It uses the OpenAI key from API keys.</span></span></span>
+                <span id="aiModelKeyState" class="settings-item-sub"></span>
+              </div>
+              <div class="settings-item-control"><input id="aiModelInput" class="settings-input-mono settings-input-medium" type="text" maxlength="96" autocomplete="off"></div>
+            </div>
+          </section>
         </section>
+
         <section data-settings-panel="transcript" class="settings-panel" hidden>
-          <div class="settings-section-head"><div><h4>MCP</h4><p>How transcripts and tool results reach the harnesses.</p></div></div>
-          <section class="mcp-settings-section tool-output-card">
-            <div class="settings-section-head"><div><h4>Large tool result format</h4><p>Controls transcript chunks, output probes, and downloaded file contents. Small metadata tools remain structured in both modes.</p></div></div>
-            <div class="tool-output-options" role="radiogroup" aria-label="Large tool result format">
-              <label class="settings-switch"><input id="toolOutputOptimized" type="radio" name="toolOutputMode" value="optimized"><span><b>Optimized <small>Recommended</small></b><small>Optimized returns large payloads once as text. This avoids duplicate context and reduces the chance of truncation.</small></span></label>
-              <label class="settings-switch"><input id="toolOutputMaximumCompatibility" type="radio" name="toolOutputMode" value="maximum_compatibility"><span><b>Maximum compatibility</b><small>Returns both text and structured representations for clients that require them. This can nearly double each large tool result.</small></span></label>
-            </div>
-            <p id="toolOutputActiveSummary" class="tool-output-summary"></p>
-            <p class="tool-output-summary">After changing modes and restarting, refresh the tool list or reconnect the connector in every harness. Probe results are compared only within the active mode.</p>
-            <div class="tool-output-actions">
-              <div id="toolOutputRestartRequired" class="tool-output-restart" hidden>
-                <span id="toolOutputRestartMessage">Restart required to activate this mode.</span>
-                <button type="button" class="ghost" id="toolOutputRestart">Restart Bridge</button>
+          <div class="settings-panel-head">
+            <h4>MCP</h4>
+            <span class="context-help"><button type="button" class="context-help-trigger" aria-label="About MCP" aria-describedby="settingsHelpMcp">?</button><span id="settingsHelpMcp" class="context-help-box" role="tooltip">How transcripts and large tool results reach connected harnesses such as ChatGPT, Claude or Codex.</span></span>
+            <span id="transcriptVerdict" class="settings-pill settings-verdict" hidden></span>
+          </div>
+          <section class="settings-group tool-output-card">
+            <div class="settings-group-head"><h5>Tool output</h5></div>
+            <div class="settings-item">
+              <div class="settings-item-label">
+                <span class="settings-item-title">Large result format<span class="context-help"><button type="button" class="context-help-trigger" aria-label="About Large result format" aria-describedby="settingsHelpToolOutput">?</button><span id="settingsHelpToolOutput" class="context-help-box" role="tooltip">Applies to transcript chunks, output probes and downloaded file contents. Optimized (recommended) returns large payloads once, as text: less duplicate context, less truncation. Maximum compatibility also returns a structured copy for clients that need it, which can nearly double each large result. A change needs a Bridge restart; afterwards refresh the tool list or reconnect the connector in every harness. Probe results are compared only within the active mode. Small metadata tools stay structured in both modes.</span></span></span>
+                <span id="toolOutputActiveSummary" class="settings-item-sub"></span>
+              </div>
+              <div class="settings-item-control">
+                <div class="settings-seg" role="radiogroup" aria-label="Large tool result format">
+                  <label><input id="toolOutputOptimized" type="radio" name="toolOutputMode" value="optimized"><span>Optimized</span></label>
+                  <label><input id="toolOutputMaximumCompatibility" type="radio" name="toolOutputMode" value="maximum_compatibility"><span>Max compatibility</span></label>
+                </div>
               </div>
             </div>
+            <div id="toolOutputRestartRequired" class="settings-notice tool-output-restart" hidden>
+              <span id="toolOutputRestartMessage">Restart required to activate this mode.</span>
+              <button type="button" class="ghost settings-compact" id="toolOutputRestart">Restart Bridge</button>
+            </div>
           </section>
-          <section class="mcp-settings-section chunk-settings-card">
-            <div class="settings-section-head"><div><h4>Chunk settings</h4><p>Set one conservative transcript limit and measure the real single-tool-result capacity of each MCP harness.</p></div></div>
-            <section class="probe-global">
-              <div class="settings-section-head"><div><h4>Global transcript chunk</h4><p>The bridge starts a new chunk when either limit is reached. Changes apply immediately without a service restart.</p></div></div>
-              <div class="settings-grid">
-                <label class="field">Maximum characters<input id="transcriptChunkMaxChars" type="number" min="1000" max="250000" step="1000"></label>
-                <label class="field">Maximum lines<input id="transcriptChunkMaxLines" type="number" min="1" max="10000"></label>
-              </div>
-            </section>
-            <section class="probe-config">
-              <div class="settings-section-head"><div><h4>Run a harness test</h4><p>Copy this instruction into the harness being measured. Running the payload in this browser would bypass the harness and produce a false result.</p></div></div>
-              <div class="probe-config-grid">
-                <label class="field">Harness label<input id="probeHarnessLabel" type="text" maxlength="80" placeholder="chatgpt-web"></label>
-                <label class="field">Payload characters<input id="probeTargetChars" type="number" min="4096" max="250000" step="1000" value="100000"></label>
-                <label class="field">Content profile<select id="probeContentProfile"><option value="transcript_markdown">Transcript Markdown</option><option value="transport_canary">Transport canary</option></select></label>
-              </div>
-              <pre id="probePromptPreview" class="probe-prompt"></pre>
-              <div class="edit-actions"><button type="button" class="primary" id="probePromptCopy">Copy test instruction</button></div>
-            </section>
-            <section class="probe-recommendations">
-              <div class="settings-section-head"><div><h4>Checkpoint-verified recommendations</h4><p>Each recommendation keeps a 25% safety margin. Use the weakest verified harness when all clients share one global size.</p></div></div>
-              <div id="probeRecommendations" class="probe-recommendation-list"></div>
-            </section>
-            <section class="probe-results">
-              <div class="settings-section-head"><div><h4>Recent results</h4><p>Pending runs reached the server but never produced a model report; this can indicate a rejected or unusable tool result.</p></div></div>
-              <div id="probeResults" class="probe-result-list"></div>
-            </section>
+          <section class="settings-group">
+            <div class="settings-group-head">
+              <h5>Transcript chunks</h5>
+              <span class="context-help"><button type="button" class="context-help-trigger" aria-label="About Transcript chunks" aria-describedby="settingsHelpChunks">?</button><span id="settingsHelpChunks" class="context-help-box" role="tooltip">The bridge starts a new transcript chunk when either limit is reached. Saved changes apply immediately, without a restart.</span></span>
+              <span class="settings-group-aside">No restart needed</span>
+            </div>
+            <div class="settings-item">
+              <div class="settings-item-label"><span class="settings-item-title"><label for="transcriptChunkMaxChars">Max characters</label></span></div>
+              <div class="settings-item-control"><input id="transcriptChunkMaxChars" class="settings-input-number" type="number" min="1000" max="250000" step="1000"></div>
+            </div>
+            <div class="settings-item">
+              <div class="settings-item-label"><span class="settings-item-title"><label for="transcriptChunkMaxLines">Max lines</label></span></div>
+              <div class="settings-item-control"><input id="transcriptChunkMaxLines" class="settings-input-number" type="number" min="1" max="10000"></div>
+            </div>
           </section>
-        </section>
-        <section data-settings-panel="search" class="settings-panel" hidden>
-          <div class="settings-section-head"><div><h4>RAG search</h4><p>BM25 stays local. Only checked groups may leave this server for embeddings or reranking.</p></div></div>
-          <label class="settings-switch"><input id="ragEnabled" type="checkbox"><span><b>Enable RAG search</b><small>Build and use the vector index for Hybrid mode.</small></span></label>
-          <div id="ragOptions" class="settings-stack">
-            <label class="settings-switch"><input id="cohereEnabled" type="checkbox"><span><b>Enable Cohere Rerank</b><small>Applied only to externally approved Hybrid candidates.</small></span></label>
-            <fieldset class="settings-fieldset"><legend>Sources</legend>
-              <label class="toggle"><input id="sourceConversations" type="checkbox"> Conversations</label>
-              <label class="toggle"><input id="sourceSessionFiles" type="checkbox"> Session files</label>
-              <label class="toggle"><input id="sourceGroupFiles" type="checkbox"> Group files</label>
-            </fieldset>
-            <p class="meta"><b>PDF note:</b> OCR is not supported. Scanned or image-only PDFs without a text layer are preserved for preview/download but are not indexed.</p>
-            <fieldset class="settings-fieldset"><legend>Groups allowed for external processing</legend><div id="ragGroupList" class="rag-group-list"></div></fieldset>
-            <details class="developer-settings"><summary>Developer settings</summary>
-              <div class="settings-grid">
-                <label class="field">Chunk size (tokens)<input id="chunkSize" type="number" min="64" max="4000"></label>
-                <label class="field">Overlap (tokens)<input id="chunkOverlap" type="number" min="0" max="3999"></label>
-                <label class="field">Embedding model<input id="embeddingModel" type="text"></label>
-                <label class="field">Dimensions<input id="embeddingDimensions" type="number" min="1" max="4096"></label>
-                <label class="field">New messages threshold<input id="rebuildThreshold" type="number" min="1" max="10000"></label>
-                <label class="field">Maximum wait (minutes)<input id="rebuildMaxWait" type="number" min="1" max="10080"></label>
-                <label class="field">BM25 candidates<input id="bm25Candidates" type="number" min="1" max="500"></label>
-                <label class="field">Vector candidates<input id="vectorCandidates" type="number" min="1" max="500"></label>
-                <label class="field">Results<input id="resultLimit" type="number" min="1" max="500"></label>
-                <label class="field">Cohere model<input id="cohereModel" type="text"></label>
-                <label class="field">Rerank candidates<input id="rerankCandidates" type="number" min="1" max="500"></label>
+          <section class="settings-group">
+            <div class="settings-group-head">
+              <h5>Harness capacity</h5>
+              <span class="context-help"><button type="button" class="context-help-trigger" aria-label="About Harness capacity" aria-describedby="settingsHelpCapacity">?</button><span id="settingsHelpCapacity" class="context-help-box" role="tooltip">Measures how large a single tool result each harness really accepts. Every recommendation keeps a 25% safety margin; when all clients share one chunk size, stay at or below the weakest verified harness.</span></span>
+              <span id="probeVerifiedCount" class="settings-pill"></span>
+            </div>
+            <div class="settings-item">
+              <div class="settings-item-label"><span class="settings-item-title">Safe chunk size</span><span id="probeSafeSource" class="settings-item-sub"></span></div>
+              <div class="settings-item-control"><span id="probeSafeValue" class="settings-value settings-value-mono"></span><button type="button" class="ghost settings-compact" id="probeSafeApply" hidden>Use</button></div>
+            </div>
+            <details class="settings-disclosure">
+              <summary><span class="settings-disclosure-title">Per-harness recommendations</span><span id="probeRecommendationsMeta" class="settings-disclosure-meta"></span></summary>
+              <div id="probeRecommendations" class="settings-disclosure-body probe-recommendation-list"></div>
+            </details>
+            <details class="settings-disclosure">
+              <summary><span class="settings-disclosure-title">Recent results</span><span id="probeResultsMeta" class="settings-disclosure-meta"></span></summary>
+              <div class="settings-disclosure-body">
+                <div id="probeResults" class="probe-result-list"></div>
+                <p class="settings-footnote">Pending means the call reached the server but the model never reported back; often a rejected or unusable result.</p>
               </div>
             </details>
-            <div class="index-card"><div class="index-card-main"><b>Vector index</b><p id="indexStatus" class="meta"><span id="indexReadyCheck" class="index-ready-check" aria-label="Ready" hidden>✓</span><span id="indexStatusText"></span><span id="indexBuiltAt" class="index-built-at" hidden></span></p>
-              <section id="indexEstimate" class="index-estimate" aria-label="Estimated full rebuild" aria-live="polite" hidden>
-                <div class="index-estimate-head"><b>Estimated full rebuild</b><span id="indexEstimateState" class="index-estimate-state"></span></div>
-                <div id="indexEstimateMetrics" class="index-estimate-grid">
-                  <div class="index-estimate-stat"><span>Scope</span><strong id="indexEstimateDocuments"></strong><small id="indexEstimateChunks"></small></div>
-                  <div class="index-estimate-stat"><span>Tokens</span><strong id="indexEstimateTokens"></strong><small id="indexEstimateOverlap"></small></div>
-                  <div class="index-estimate-stat"><span>OpenAI cost</span><strong id="indexEstimateCost"></strong><small id="indexEstimateModel"></small></div>
+            <details class="settings-disclosure" data-settings-instant>
+              <summary><span class="settings-disclosure-title">Run a harness test</span><span class="settings-disclosure-meta">copy an instruction into the harness</span></summary>
+              <div class="settings-disclosure-body probe-config">
+                <p class="settings-footnote">Paste this into the harness being measured. Running it from this browser would bypass the harness and give a false result.</p>
+                <div class="probe-config-grid">
+                  <label class="field">Harness label<input id="probeHarnessLabel" type="text" maxlength="80" placeholder="chatgpt-web"></label>
+                  <label class="field">Payload characters<input id="probeTargetChars" type="number" min="4096" max="250000" step="1000" value="100000"></label>
+                  <label class="field">Content profile<select id="probeContentProfile"><option value="transcript_markdown">Transcript Markdown</option><option value="transport_canary">Transport canary</option></select></label>
                 </div>
-                <p class="index-estimate-note"><b>Cohere rerank:</b> not included in the rebuild cost; it is charged only when Hybrid search runs. <a id="indexEstimatePricing" href="#" target="_blank" rel="noreferrer">OpenAI pricing</a></p>
-              </section>
-            </div><div class="index-actions">
-              <button id="indexRebuild" type="button" class="index-build-button"><span id="indexRebuildSpinner" class="index-build-spinner" aria-hidden="true" hidden></span><span id="indexRebuildLabel">Build index</span></button>
-              <button id="indexCancel" type="button" class="ghost" hidden>Stop</button>
-              <button id="indexDelete" type="button" class="danger">Delete index</button>
-            </div></div>
-          </div>
-        </section>
-        <section data-settings-panel="api" class="settings-panel" hidden>
-          <div class="settings-section-head"><div><h4>Provider API keys</h4><p>Keys are encrypted at rest and never returned to this browser.</p></div></div>
-          <div class="provider-card"><label class="field">OpenAI API key<input id="aiKeyInput" type="password" autocomplete="off" placeholder="Leave blank to keep current key"></label><p id="openaiKeyStatus" class="meta"></p><button type="button" class="danger" id="aiKeyRemoveButton">Remove OpenAI key</button></div>
-          <div class="provider-card"><label class="field">Cohere API key<input id="cohereKeyInput" type="password" autocomplete="off" placeholder="Leave blank to keep current key"></label><p id="cohereKeyStatus" class="meta"></p><button type="button" class="danger" id="cohereKeyRemoveButton">Remove Cohere key</button></div>
-        </section>
-        <section data-settings-panel="database" class="settings-panel" hidden>
-          <div class="settings-section-head"><div><h4>Database</h4><p>Create a Markdown archive on this VPS. The browser never receives or downloads the exported files.</p></div></div>
-          <section class="mcp-settings-section">
-            <div class="settings-section-head"><div><h4>Conversation archive</h4><p>The export includes sensitive sessions, excluded and masked content, exchange audit history, and all stored attachments. It is written to the same managed server location used by <code>mcp-bridge export</code>.</p></div></div>
-            <div class="edit-actions"><button type="button" class="primary" id="databaseExportButton">Export Database (.md)</button></div>
-            <p id="databaseExportResult" class="meta" aria-live="polite">No export created in this browser session.</p>
+                <pre id="probePromptPreview" class="probe-prompt"></pre>
+                <div><button type="button" class="primary settings-compact" id="probePromptCopy">Copy test instruction</button></div>
+              </div>
+            </details>
           </section>
         </section>
-        <section data-settings-panel="status" class="settings-panel" hidden>
-          <div class="settings-section-head"><div><h4>Bridge status</h4><p>Read-only operational summary. Changes and updates stay in the server CLI.</p></div></div>
-          <p id="bridgeStatusError" class="settings-status" aria-live="polite"></p>
-          <div class="operational-summary">
-            <div class="operational-card"><small>Overall</small><strong id="bridgeStatusOverall" class="verdict">Loading…</strong></div>
-            <div class="operational-card"><small>Version</small><strong id="bridgeStatusVersion">—</strong></div>
-            <div class="operational-card"><small>Update</small><strong id="bridgeStatusUpdate">—</strong><span id="bridgeStatusChecked" class="meta"></span></div>
-            <div class="operational-card"><small>Public URL</small><code id="bridgeStatusUrl">—</code></div>
-            <div class="operational-card"><small>Database schema</small><strong id="bridgeStatusSchema">—</strong></div>
-            <div class="operational-card"><small>Last operation</small><strong id="bridgeStatusOperation">—</strong></div>
+
+        <section data-settings-panel="search" class="settings-panel" hidden>
+          <div class="settings-panel-head">
+            <h4>Search</h4>
+            <span class="context-help"><button type="button" class="context-help-trigger" aria-label="About Search" aria-describedby="settingsHelpSearch">?</button><span id="settingsHelpSearch" class="context-help-box" role="tooltip">Basic search (BM25) is always available and never leaves this server. Hybrid search adds vector search through OpenAI embeddings and optional Cohere reranking, only for the groups you allow.</span></span>
+            <span id="searchVerdict" class="settings-pill settings-verdict" hidden></span>
           </div>
-          <div>
-            <div class="settings-section-head"><h4>Checks</h4><p>Cached CLI diagnostics plus a live application and database check.</p></div>
-            <div id="bridgeStatusChecks" class="status-check-list"></div>
-          </div>
-          <div>
-            <div class="settings-section-head"><h4>Server commands</h4><p>Run these over SSH. The panel never performs system updates.</p></div>
-            <div class="status-command-list">
-              <code>mcp-bridge status</code><code>mcp-bridge doctor</code><code>mcp-bridge logs</code><code>mcp-bridge update</code>
+          <section class="settings-group">
+            <div class="settings-group-head"><h5>Hybrid search</h5></div>
+            <div class="settings-item">
+              <div class="settings-item-label">
+                <span class="settings-item-title"><label for="ragEnabled">Vector search (RAG)</label><span class="context-help"><button type="button" class="context-help-trigger" aria-label="About Vector search" aria-describedby="settingsHelpRag">?</button><span id="settingsHelpRag" class="context-help-box" role="tooltip">Builds and uses a vector index so the Hybrid mode in Search also finds related wording, not only exact words. Needs an OpenAI key.</span></span></span>
+                <span id="ragKeyState" class="settings-item-sub"></span>
+              </div>
+              <div class="settings-item-control"><input id="ragEnabled" class="settings-switch-input" type="checkbox" role="switch"></div>
             </div>
+            <div class="settings-item" id="cohereRow">
+              <div class="settings-item-label">
+                <span class="settings-item-title"><label for="cohereEnabled">Cohere rerank</label><span class="context-help"><button type="button" class="context-help-trigger" aria-label="About Cohere rerank" aria-describedby="settingsHelpCohere">?</button><span id="settingsHelpCohere" class="context-help-box" role="tooltip">Re-orders Hybrid results for relevance. Applied only to candidates from groups allowed for external processing, and billed per search rather than per index rebuild.</span></span></span>
+                <span id="cohereKeyState" class="settings-item-sub"></span>
+              </div>
+              <div class="settings-item-control"><button type="button" class="settings-link" id="cohereAddKey" hidden>Add key</button><input id="cohereEnabled" class="settings-switch-input" type="checkbox" role="switch"></div>
+            </div>
+          </section>
+          <div id="ragOptions" class="settings-stack">
+            <section class="settings-group">
+              <div class="settings-group-head"><h5>What gets indexed</h5></div>
+              <div class="settings-item">
+                <div class="settings-item-label">
+                  <span class="settings-item-title">Sources<span class="context-help"><button type="button" class="context-help-trigger" aria-label="About Sources" aria-describedby="settingsHelpSources">?</button><span id="settingsHelpSources" class="context-help-box" role="tooltip">PDFs are indexed from their text layer. OCR is not supported: scanned or image-only PDFs are kept for preview and download but are not indexed.</span></span></span>
+                </div>
+                <div class="settings-item-control settings-chips">
+                  <label class="toggle"><input id="sourceConversations" type="checkbox"> Conversations</label>
+                  <label class="toggle"><input id="sourceSessionFiles" type="checkbox"> Session files</label>
+                  <label class="toggle"><input id="sourceGroupFiles" type="checkbox"> Group files</label>
+                </div>
+              </div>
+              <div class="settings-item is-stacked">
+                <div class="settings-item-label">
+                  <span class="settings-item-title">Sent to OpenAI / Cohere<span class="context-help"><button type="button" class="context-help-trigger" aria-label="About external processing" aria-describedby="settingsHelpGroups">?</button><span id="settingsHelpGroups" class="context-help-box" role="tooltip">Only checked groups ever leave this server for embeddings or reranking. Sensitive groups (crossed eye) are never sent; they stay searchable with local BM25 only.</span></span></span>
+                  <span id="ragGroupSummary" class="settings-item-sub"></span>
+                </div>
+                <div id="ragGroupList" class="rag-group-list"></div>
+              </div>
+            </section>
+            <section class="settings-group index-card">
+              <div class="settings-group-head">
+                <h5>Vector index</h5>
+                <span id="indexStatePill" class="settings-pill"></span>
+              </div>
+              <div class="settings-item">
+                <div class="settings-item-label">
+                  <span class="settings-item-title">Index</span>
+                  <span id="indexStatus" class="settings-item-sub"><span id="indexReadyCheck" class="index-ready-check" aria-label="Ready" hidden>✓</span><span id="indexStatusText"></span><span id="indexBuiltAt" class="index-built-at" hidden></span></span>
+                </div>
+                <div class="settings-item-control">
+                  <button id="indexRebuild" type="button" class="index-build-button settings-compact"><span id="indexRebuildSpinner" class="index-build-spinner" aria-hidden="true" hidden></span><span id="indexRebuildLabel">Build index</span></button>
+                  <button id="indexCancel" type="button" class="ghost settings-compact" hidden>Stop</button>
+                </div>
+              </div>
+              <div class="settings-item" id="indexEstimate" aria-label="Estimated full rebuild" aria-live="polite" hidden>
+                <div class="settings-item-label">
+                  <span class="settings-item-title">Full rebuild cost<span class="context-help"><button type="button" class="context-help-trigger" aria-label="About rebuild cost" aria-describedby="settingsHelpEstimate">?</button><span id="settingsHelpEstimate" class="context-help-box" role="tooltip">Estimate for re-embedding everything with the settings on this tab: <span id="indexEstimateDocuments"></span>, <span id="indexEstimateChunks"></span>, <span id="indexEstimateOverlap"></span>, model <span id="indexEstimateModel"></span>. Cohere rerank is not included; it is billed only when Hybrid search runs.</span></span></span>
+                  <span id="indexEstimateState" class="settings-item-sub"></span>
+                </div>
+                <div id="indexEstimateMetrics" class="settings-item-control" hidden>
+                  <span class="settings-value settings-value-mono">≈ <span id="indexEstimateTokens"></span> tokens</span>
+                  <a id="indexEstimatePricing" class="settings-value settings-value-mono index-estimate-cost" href="#" target="_blank" rel="noreferrer" title="OpenAI pricing"><span id="indexEstimateCost"></span></a>
+                </div>
+              </div>
+              <details class="settings-disclosure developer-settings">
+                <summary><span class="settings-disclosure-title">Advanced tuning</span><span class="settings-disclosure-meta">chunking, models, candidates</span></summary>
+                <div class="settings-disclosure-body settings-grid">
+                  <label class="field">Chunk size (tokens)<input id="chunkSize" type="number" min="64" max="4000"></label>
+                  <label class="field">Overlap (tokens)<input id="chunkOverlap" type="number" min="0" max="3999"></label>
+                  <label class="field">Embedding model<input id="embeddingModel" type="text"></label>
+                  <label class="field">Dimensions<input id="embeddingDimensions" type="number" min="1" max="4096"></label>
+                  <label class="field">New messages threshold<input id="rebuildThreshold" type="number" min="1" max="10000"></label>
+                  <label class="field">Maximum wait (minutes)<input id="rebuildMaxWait" type="number" min="1" max="10080"></label>
+                  <label class="field">BM25 candidates<input id="bm25Candidates" type="number" min="1" max="500"></label>
+                  <label class="field">Vector candidates<input id="vectorCandidates" type="number" min="1" max="500"></label>
+                  <label class="field">Results<input id="resultLimit" type="number" min="1" max="500"></label>
+                  <label class="field">Cohere model<input id="cohereModel" type="text"></label>
+                  <label class="field">Rerank candidates<input id="rerankCandidates" type="number" min="1" max="500"></label>
+                </div>
+              </details>
+              <div class="settings-item">
+                <div class="settings-item-label"><span class="settings-item-title">Delete index</span><span class="settings-item-sub">Hybrid search stops until the index is rebuilt</span></div>
+                <div class="settings-item-control"><button id="indexDelete" type="button" class="settings-quiet-danger settings-compact">Delete index</button></div>
+              </div>
+            </section>
           </div>
         </section>
+
+        <section data-settings-panel="api" class="settings-panel" hidden>
+          <div class="settings-panel-head">
+            <h4>API keys</h4>
+            <span class="context-help"><button type="button" class="context-help-trigger" aria-label="About API keys" aria-describedby="settingsHelpApi">?</button><span id="settingsHelpApi" class="context-help-box" role="tooltip">Keys are encrypted at rest on this server and never sent back to the browser; only a short preview is shown. Saving or removing a key takes effect immediately.</span></span>
+            <span id="apiVerdict" class="settings-pill settings-verdict"></span>
+          </div>
+          <section class="settings-group provider-card" data-provider="openai">
+            <div class="settings-group-head"><h5>OpenAI</h5><span id="openaiKeyStatus" class="settings-pill"></span></div>
+            <div class="settings-item">
+              <div class="settings-item-label"><span class="settings-item-title"><label for="aiKeyInput">Key</label></span></div>
+              <div class="settings-item-control">
+                <span class="provider-key-view"><span id="openaiKeyPreview" class="settings-value settings-value-mono"></span><button type="button" class="ghost settings-compact" data-key-edit="openai">Replace</button><button type="button" class="settings-quiet-danger settings-compact" id="aiKeyRemoveButton">Remove</button></span>
+                <span class="provider-key-edit" hidden><input id="aiKeyInput" name="bridge-openai-api-key" class="settings-input-mono settings-input-key" type="password" autocomplete="new-password" data-1p-ignore data-lpignore="true" spellcheck="false" placeholder="Paste OpenAI API key"><button type="button" class="primary settings-compact" data-key-save="openai">Save key</button><button type="button" class="ghost settings-compact" data-key-cancel="openai">Cancel</button></span>
+              </div>
+            </div>
+            <div class="settings-item">
+              <div class="settings-item-label"><span class="settings-item-title">Used for</span></div>
+              <div class="settings-item-control"><span class="settings-value-muted">Embeddings · AI rename</span></div>
+            </div>
+          </section>
+          <section class="settings-group provider-card" data-provider="cohere">
+            <div class="settings-group-head"><h5>Cohere</h5><span id="cohereKeyStatus" class="settings-pill"></span></div>
+            <div class="settings-item">
+              <div class="settings-item-label"><span class="settings-item-title"><label for="cohereKeyInput">Key</label></span></div>
+              <div class="settings-item-control">
+                <span class="provider-key-view"><span id="cohereKeyPreview" class="settings-value settings-value-mono"></span><button type="button" class="ghost settings-compact" data-key-edit="cohere">Replace</button><button type="button" class="settings-quiet-danger settings-compact" id="cohereKeyRemoveButton">Remove</button></span>
+                <span class="provider-key-edit" hidden><input id="cohereKeyInput" name="bridge-cohere-api-key" class="settings-input-mono settings-input-key" type="password" autocomplete="new-password" data-1p-ignore data-lpignore="true" spellcheck="false" placeholder="Paste Cohere API key"><button type="button" class="primary settings-compact" data-key-save="cohere">Save key</button><button type="button" class="ghost settings-compact" data-key-cancel="cohere">Cancel</button></span>
+              </div>
+            </div>
+            <div class="settings-item">
+              <div class="settings-item-label"><span class="settings-item-title">Used for</span></div>
+              <div class="settings-item-control"><span class="settings-value-muted">Rerank in Hybrid search</span></div>
+            </div>
+          </section>
+        </section>
+
+        <section data-settings-panel="system" class="settings-panel" hidden>
+          <div class="settings-panel-head">
+            <h4>System</h4>
+            <span class="context-help"><button type="button" class="context-help-trigger" aria-label="About System" aria-describedby="settingsHelpSystem">?</button><span id="settingsHelpSystem" class="context-help-box" role="tooltip">Read-only health of this Bridge install and server-side backups. Updates and restarts of the server stay in the server CLI.</span></span>
+            <span id="bridgeStatusOverall" class="settings-pill settings-verdict">Loading…</span>
+          </div>
+          <p id="bridgeStatusError" class="settings-status" aria-live="polite"></p>
+          <section class="settings-group">
+            <div class="settings-group-head"><h5>Bridge</h5></div>
+            <div class="settings-item">
+              <div class="settings-item-label"><span class="settings-item-title">Version</span><span id="bridgeStatusChecked" class="settings-item-sub"></span></div>
+              <div class="settings-item-control"><span id="bridgeStatusVersion" class="settings-value settings-value-mono">—</span><span id="bridgeStatusUpdate" class="settings-pill">—</span></div>
+            </div>
+            <div class="settings-item">
+              <div class="settings-item-label"><span class="settings-item-title">Public URL</span></div>
+              <div class="settings-item-control"><code id="bridgeStatusUrl" class="settings-value settings-value-mono">—</code></div>
+            </div>
+            <div class="settings-item">
+              <div class="settings-item-label"><span class="settings-item-title">Database schema</span></div>
+              <div class="settings-item-control"><span id="bridgeStatusSchema" class="settings-value settings-value-mono">—</span></div>
+            </div>
+            <div class="settings-item">
+              <div class="settings-item-label"><span class="settings-item-title">Last operation</span></div>
+              <div class="settings-item-control"><span id="bridgeStatusOperation" class="settings-value-muted">—</span></div>
+            </div>
+          </section>
+          <section class="settings-group">
+            <div class="settings-group-head">
+              <h5>Checks</h5>
+              <span class="context-help"><button type="button" class="context-help-trigger" aria-label="About Checks" aria-describedby="settingsHelpChecks">?</button><span id="settingsHelpChecks" class="context-help-box" role="tooltip">Cached diagnostics from the server CLI plus a live application and database check made by this page.</span></span>
+              <span id="bridgeStatusCheckCount" class="settings-group-aside"></span>
+            </div>
+            <div id="bridgeStatusChecks" class="status-check-list"></div>
+          </section>
+          <section class="settings-group">
+            <div class="settings-group-head"><h5>Backup</h5></div>
+            <div class="settings-item">
+              <div class="settings-item-label">
+                <span class="settings-item-title">Markdown archive<span class="context-help"><button type="button" class="context-help-trigger" aria-label="About Markdown archive" aria-describedby="settingsHelpExport">?</button><span id="settingsHelpExport" class="context-help-box" role="tooltip">Writes a full Markdown archive on this VPS, in the same managed location as mcp-bridge export. It includes sensitive sessions, excluded and masked content, exchange audit history and all stored attachments. Nothing is downloaded to the browser.</span></span></span>
+                <span id="databaseExportResult" class="settings-item-sub" aria-live="polite">No export in this browser session</span>
+              </div>
+              <div class="settings-item-control"><button type="button" class="ghost settings-compact" id="databaseExportButton">Export on server</button></div>
+            </div>
+            <details class="settings-disclosure">
+              <summary><span class="settings-disclosure-title">Server commands</span><span class="settings-disclosure-meta">run over SSH</span></summary>
+              <div class="settings-disclosure-body status-command-list">
+                <code>mcp-bridge status</code><code>mcp-bridge doctor</code><code>mcp-bridge logs</code><code>mcp-bridge update</code>
+              </div>
+            </details>
+          </section>
+        </section>
       </div>
-      <div id="settingsActionbar" class="settings-actionbar">
+      <div id="settingsActionbar" class="settings-actionbar" hidden>
+        <span class="settings-actionbar-dot" aria-hidden="true"></span>
+        <span class="settings-actionbar-text">Unsaved changes</span>
+        <button type="button" class="ghost" id="settingsDiscardButton">Discard</button>
         <button type="button" class="primary" id="settingsSaveButton">Save changes</button>
       </div>
       </div>
@@ -1885,6 +2093,7 @@
         manualRenameSessionId: "",
         pendingSessionMove: null,
         toolOutputRestartInFlight: false,
+        settingsDirty: new Set(),
         editingExchangeId: null,
         busy: false,
         layout: localStorage.getItem("mcp-admin:layout") || "pairs",
@@ -2014,7 +2223,11 @@
         "databaseExportButton", "databaseExportResult",
         "statusUpdateDot", "bridgeStatusOverall", "bridgeStatusVersion", "bridgeStatusUpdate",
         "bridgeStatusChecked", "bridgeStatusChecks", "bridgeStatusUrl", "bridgeStatusSchema",
-        "bridgeStatusOperation", "bridgeStatusError"
+        "bridgeStatusOperation", "bridgeStatusError", "bridgeStatusCheckCount",
+        "settingsDiscardButton", "settingsHintTranscript", "settingsHintSearch", "settingsHintApi", "settingsHintSystem",
+        "transcriptVerdict", "searchVerdict", "apiVerdict", "aiModelKeyState", "ragKeyState", "cohereKeyState", "cohereAddKey",
+        "ragGroupSummary", "indexStatePill", "openaiKeyPreview", "cohereKeyPreview",
+        "probeVerifiedCount", "probeSafeSource", "probeSafeValue", "probeSafeApply", "probeRecommendationsMeta", "probeResultsMeta"
       ].map((id) => [id, document.getElementById(id)]));
 
       dom.addGroupButton.addEventListener("click", () => openGroupDialog());
@@ -2217,7 +2430,51 @@
         );
       }
 
+      // one pill shape across the panel; tone is ok | warn | fail | accent | off
+      function setSettingsPill(node, text, tone) {
+        node.textContent = text || "";
+        if (tone) node.dataset.tone = tone; else delete node.dataset.tone;
+        node.hidden = !text;
+      }
+
+      function setSettingsHint(node, text, tone) {
+        node.textContent = text || "";
+        if (tone) node.dataset.tone = tone; else delete node.dataset.tone;
+      }
+
+      function setItemSub(node, text, tone) {
+        node.textContent = text || "";
+        node.className = `settings-item-sub${tone ? ` is-${tone}` : ""}`;
+      }
+
+      function settingsItem(title, control, sub, subTone) {
+        const row = div("settings-item");
+        const label = div("settings-item-label");
+        label.append(spanCls("settings-item-title", title));
+        if (sub) {
+          const subNode = spanCls("settings-item-sub", sub);
+          if (subTone) subNode.classList.add(`is-${subTone}`);
+          label.append(subNode);
+        }
+        const controls = div("settings-item-control");
+        controls.append(...[control].flat().filter(Boolean));
+        row.append(label, controls);
+        return row;
+      }
+
+      function settingsPill(text, tone) {
+        const node = spanCls("settings-pill", "");
+        setSettingsPill(node, text, tone);
+        return node;
+      }
+
       function renderOperationalStatus() {
+        const OVERALL_STATUS = {
+          pass: { verdict: "All checks passing", hint: "Healthy", tone: "ok" },
+          warn: { verdict: "Needs attention", hint: "Attention", tone: "warn" },
+          fail: { verdict: "Failing", hint: "Failing", tone: "fail" },
+        };
+        const CHECK_TONES = { pass: "ok", warn: "warn", waiting: "warn", fail: "fail" };
         const status = state.operationalStatus;
         renderUpdateDots();
         if (!status) return;
@@ -2228,13 +2485,18 @@
         const operation = status.last_operation || {};
         settingsDom.bridgeStatusError.textContent = "";
         settingsDom.bridgeStatusError.classList.remove("is-error");
-        const overall = String(status.overall || "unknown").toLowerCase();
-        settingsDom.bridgeStatusOverall.textContent = OVERALL_STATUS_LABELS[overall] || "Unknown";
-        settingsDom.bridgeStatusOverall.className = `verdict is-${overall}`;
+        const overall = OVERALL_STATUS[String(status.overall || "unknown").toLowerCase()]
+          || { verdict: "Status unknown", hint: "", tone: "off" };
+        setSettingsPill(settingsDom.bridgeStatusOverall, overall.verdict, overall.tone);
+        setSettingsHint(settingsDom.settingsHintSystem, overall.hint, overall.hint ? overall.tone : "");
         settingsDom.bridgeStatusVersion.textContent = version.label || version.current || "—";
-        settingsDom.bridgeStatusUpdate.textContent = update.state === "available"
-          ? `${update.latest || "New version"} available`
-          : update.state === "current" ? "Up to date" : "Unknown";
+        if (update.state === "available") {
+          setSettingsPill(settingsDom.bridgeStatusUpdate, `${update.latest || "New version"} available`, "warn");
+        } else if (update.state === "current") {
+          setSettingsPill(settingsDom.bridgeStatusUpdate, "Up to date", "ok");
+        } else {
+          setSettingsPill(settingsDom.bridgeStatusUpdate, "Update unknown", "off");
+        }
         settingsDom.bridgeStatusChecked.textContent = operationalTime(update.last_checked || status.refreshed_at);
         settingsDom.bridgeStatusUrl.textContent = installation.public_base_url || "Not configured";
         settingsDom.bridgeStatusSchema.textContent = String(version.database_schema ?? "—");
@@ -2252,32 +2514,27 @@
           });
         }
         settingsDom.bridgeStatusChecks.replaceChildren();
+        const passing = checks.filter((check) => statusState(check.state) === "pass").length;
+        settingsDom.bridgeStatusCheckCount.textContent = checks.length ? `${passing} / ${checks.length}` : "";
         if (!checks.length) {
           const empty = document.createElement("p");
-          empty.className = "meta";
+          empty.className = "settings-footnote";
           empty.textContent = "Run mcp-bridge status on the server to populate diagnostics.";
           settingsDom.bridgeStatusChecks.append(empty);
           return;
         }
         for (const check of checks) {
-          const row = document.createElement("article");
-          row.className = "status-check";
-          const indicator = document.createElement("span");
-          indicator.className = `status-state is-${statusState(check.state)}`;
-          indicator.setAttribute("aria-label", check.state || "unknown");
-          const copy = document.createElement("div");
-          copy.className = "status-check-copy";
-          const label = document.createElement("strong");
-          label.textContent = check.label || check.id || "Check";
-          const message = document.createElement("span");
-          message.textContent = check.message || check.state || "unknown";
-          copy.append(label, message);
-          if (check.remediation) {
-            const remediation = document.createElement("small");
-            remediation.textContent = `Next: ${check.remediation}`;
-            copy.append(remediation);
-          }
-          row.append(indicator, copy);
+          const checkState = statusState(check.state);
+          // a passing check needs no explanation; anything else says what and what next
+          const sub = checkState === "pass" ? ""
+            : [check.message, check.remediation ? `Next: ${check.remediation}` : ""].filter(Boolean).join(" · ");
+          const row = settingsItem(
+            check.label || check.id || "Check",
+            settingsPill(checkState === "unknown" ? String(check.state || "unknown") : checkState, CHECK_TONES[checkState] || "off"),
+            sub,
+            checkState === "pass" ? "" : CHECK_TONES[checkState],
+          );
+          row.classList.add("status-check");
           settingsDom.bridgeStatusChecks.append(row);
         }
       }
@@ -2287,8 +2544,6 @@
         const normalized = aliases[value] || value;
         return ["pass", "warn", "waiting", "fail"].includes(normalized) ? normalized : "unknown";
       }
-
-      const OVERALL_STATUS_LABELS = { pass: "Passing", warn: "Needs attention", fail: "Failing" };
 
       // one date format across the panel, in the timezone the admin picked
       function operationalTime(value) {
@@ -2304,12 +2559,42 @@
           if (button) selectSettingsTab(button.dataset.settingsTab);
         });
         settingsDom.settingsSaveButton.addEventListener("click", () => saveActiveSettingsPanel());
+        settingsDom.settingsDiscardButton.addEventListener("click", () => discardActiveSettingsPanel());
         settingsDom.databaseExportButton.addEventListener("click", () => exportDatabaseMarkdown());
         settingsDom.toolOutputRestart.addEventListener("click", () => restartBridgeService());
 
+        // Panels whose fields wait for "Save changes". API keys and System act at once.
+        for (const name of ["general", "transcript", "search"]) {
+          const panel = document.querySelector(`[data-settings-panel="${name}"]`);
+          const markDirty = (event) => {
+            if (event.target.closest("[data-settings-instant]")) return;
+            if (!event.target.matches("input, select, textarea")) return;
+            state.settingsDirty.add(name);
+            renderSettingsDirty();
+          };
+          panel.addEventListener("input", markDirty);
+          panel.addEventListener("change", markDirty);
+        }
+
+        for (const provider of ["openai", "cohere"]) {
+          const card = document.querySelector(`[data-provider="${provider}"]`);
+          card.querySelector("[data-key-edit]").addEventListener("click", () => setProviderKeyEditing(provider, true));
+          card.querySelector("[data-key-cancel]").addEventListener("click", () => setProviderKeyEditing(provider, false));
+          card.querySelector("[data-key-save]").addEventListener("click", () => saveProviderKey(provider));
+          providerKeyInput(provider).addEventListener("keydown", (event) => {
+            if (event.key === "Enter") { event.preventDefault(); saveProviderKey(provider); }
+            if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); setProviderKeyEditing(provider, false); }
+          });
+        }
         dom.aiKeyRemoveButton.addEventListener("click", () => removeProviderKey("openai"));
         settingsDom.cohereKeyRemoveButton.addEventListener("click", () => removeProviderKey("cohere"));
+        settingsDom.cohereAddKey.addEventListener("click", () => {
+          selectSettingsTab("api");
+          setProviderKeyEditing("cohere", true);
+        });
+
         settingsDom.ragEnabled.addEventListener("change", renderRagVisibility);
+        settingsDom.ragGroupList.addEventListener("change", renderRagGroupSummary);
         const searchPanel = document.querySelector('[data-settings-panel="search"]');
         searchPanel.addEventListener("input", () => scheduleIndexEstimate());
         searchPanel.addEventListener("change", () => scheduleIndexEstimate());
@@ -2317,6 +2602,9 @@
         settingsDom.indexCancel.addEventListener("click", () => runIndexAction("cancel"));
         settingsDom.indexDelete.addEventListener("click", () => runIndexAction("delete"));
         settingsDom.probePromptCopy.addEventListener("click", () => copyOutputProbePrompt());
+        settingsDom.probeSafeApply.addEventListener("click", () => {
+          selectTranscriptChunkRecommendation(Number(settingsDom.probeSafeApply.dataset.value));
+        });
         for (const node of [settingsDom.probeHarnessLabel, settingsDom.probeTargetChars, settingsDom.probeContentProfile]) {
           node.addEventListener("input", renderOutputProbePrompt);
           node.addEventListener("change", renderOutputProbePrompt);
@@ -2325,27 +2613,50 @@
 
       function selectSettingsTab(name) {
         for (const button of document.querySelectorAll("[data-settings-tab]")) {
-          button.classList.toggle("is-active", button.dataset.settingsTab === name);
+          const active = button.dataset.settingsTab === name;
+          button.classList.toggle("is-active", active);
+          if (active) button.setAttribute("aria-current", "page"); else button.removeAttribute("aria-current");
         }
         for (const panel of document.querySelectorAll("[data-settings-panel]")) {
           panel.hidden = panel.dataset.settingsPanel !== name;
         }
-        // Database and Status have dedicated/read-only actions, so neither gets the shared save bar
-        settingsDom.settingsActionbar.hidden = ["database", "status"].includes(name);
+        renderSettingsDirty();
       }
 
       function activeSettingsTab() {
         return document.querySelector("[data-settings-tab].is-active")?.dataset.settingsTab || "general";
       }
 
-      async function saveActiveSettingsPanel() {
-        switch (activeSettingsTab()) {
-          case "general": return saveGeneralSettings();
-          case "transcript": return saveDeliverySettings();
-          case "search": return saveSearchSettings();
-          case "api": return saveApiSettings();
-          default: return undefined;
+      // the save bar appears only when the open tab has something to save
+      function renderSettingsDirty() {
+        for (const button of document.querySelectorAll("[data-settings-tab]")) {
+          const dot = button.querySelector(".settings-tab-dirty");
+          if (dot) dot.hidden = !state.settingsDirty.has(button.dataset.settingsTab);
         }
+        settingsDom.settingsActionbar.hidden = !state.settingsDirty.has(activeSettingsTab());
+      }
+
+      async function saveActiveSettingsPanel() {
+        const name = activeSettingsTab();
+        settingsDom.settingsSaveButton.disabled = true;
+        try {
+          switch (name) {
+            case "general": return await saveGeneralSettings();
+            case "transcript": return await saveDeliverySettings();
+            case "search": return await saveSearchSettings();
+            default: return undefined;
+          }
+        } finally {
+          settingsDom.settingsSaveButton.disabled = false;
+          renderSettingsDirty();
+        }
+      }
+
+      function discardActiveSettingsPanel() {
+        state.settingsDirty.delete(activeSettingsTab());
+        fillSettingsForm();
+        scheduleIndexEstimate(0);
+        renderSettingsStatus("Changes discarded.", "");
       }
 
       async function exportDatabaseMarkdown() {
@@ -2377,13 +2688,18 @@
       // one panel, one save: chunk limits first so the result format - which can
       // ask for a restart - is the outcome left on screen
       async function saveDeliverySettings() {
-        await saveTranscriptSettings();
-        if (!settingsDom.toolOutputOptimized.disabled) await saveToolOutputSettings();
+        const mode = document.querySelector('input[name="toolOutputMode"]:checked')?.value;
+        const modeChanged = mode !== (state.settings.tool_output?.configured_mode || "optimized");
+        const saved = await saveTranscriptSettings();
+        // read the mode before saving: the chunk save refills the form from the server
+        if (saved && modeChanged && !settingsDom.toolOutputOptimized.disabled) await saveToolOutputSettings(mode);
       }
 
       async function openAiSettingsDialog() {
-        selectSettingsTab("general");
-        selectSettingsTab(state.operationalStatus?.update?.state === "available" ? "status" : "general");
+        state.settingsDirty.clear();
+        setProviderKeyEditing("openai", false);
+        setProviderKeyEditing("cohere", false);
+        selectSettingsTab(state.operationalStatus?.update?.state === "available" ? "system" : "general");
         dom.aiSettingsStatus.textContent = "Loading settings...";
         dom.aiSettingsStatus.classList.remove("is-error", "is-ok");
         dom.aiSettingsDialog.showModal();
@@ -2398,7 +2714,37 @@
         fillSettingsForm();
         renderSettingsStatus();
         scheduleIndexEstimate(0);
-        if (!document.querySelector('[data-settings-panel="general"]').hidden) dom.aiModelInput.focus();
+      }
+
+      // Saving one tab refills the whole form from the server; tabs that still
+      // hold unsaved edits get them back so switching tabs never loses work.
+      function settingsFieldKey(node) {
+        if (node.id) return `#${node.id}`;
+        return `${node.name || node.type}=${node.value}`;
+      }
+
+      function snapshotDirtySettings() {
+        const snapshot = [];
+        for (const name of state.settingsDirty) {
+          const panel = document.querySelector(`[data-settings-panel="${name}"]`);
+          for (const node of panel.querySelectorAll("input, select, textarea")) {
+            if (node.closest("[data-settings-instant]")) continue;
+            snapshot.push({ name, key: settingsFieldKey(node), value: node.value, checked: node.checked });
+          }
+        }
+        return snapshot;
+      }
+
+      function restoreDirtySettings(snapshot) {
+        for (const item of snapshot) {
+          if (!state.settingsDirty.has(item.name)) continue;
+          const panel = document.querySelector(`[data-settings-panel="${item.name}"]`);
+          const node = [...panel.querySelectorAll("input, select, textarea")]
+            .find((candidate) => settingsFieldKey(candidate) === item.key);
+          if (!node || node.disabled) continue;
+          if (node.type === "checkbox" || node.type === "radio") node.checked = item.checked;
+          else node.value = item.value;
+        }
       }
 
       function fillSettingsForm() {
@@ -2408,9 +2754,8 @@
         const toolOutput = settings.tool_output || {
           active_mode: "optimized", configured_mode: "optimized", restart_required: false,
         };
+        const snapshot = snapshotDirtySettings();
         dom.aiModelInput.value = settings.general.rename_model || "gpt-5.4-nano";
-        dom.aiKeyInput.value = "";
-        settingsDom.cohereKeyInput.value = "";
         settingsDom.transcriptChunkMaxChars.value = transcript.chunk_max_chars || 12000;
         settingsDom.transcriptChunkMaxLines.value = transcript.chunk_max_lines || 180;
         settingsDom.transcriptChunkMaxChars.min = transcript.min_chunk_max_chars || 1000;
@@ -2438,10 +2783,13 @@
         };
         for (const [name, value] of Object.entries(values)) settingsDom[name].value = value;
         renderRagGroups(search.included_group_ids || []);
+        restoreDirtySettings(snapshot);
+        renderRagGroupSummary();
         renderRagVisibility();
         renderOutputProbePrompt();
         renderOutputProbeResults();
         renderSettingsStatus();
+        renderSettingsDirty();
       }
 
       function renderRagGroups(selected) {
@@ -2483,8 +2831,46 @@
         }
       }
 
+      function renderRagGroupSummary() {
+        const groups = state.settings?.groups || [];
+        const sensitive = groups.filter((group) => group.is_sensitive).length;
+        const checked = settingsDom.ragGroupList.querySelectorAll("input:checked").length;
+        const parts = [`${checked} of ${groups.length} groups`];
+        if (sensitive) parts.push(`${sensitive} sensitive kept local`);
+        settingsDom.ragGroupSummary.textContent = groups.length ? parts.join(" · ") : "No groups yet";
+      }
+
       function renderRagVisibility() {
         settingsDom.ragOptions.hidden = !settingsDom.ragEnabled.checked;
+      }
+
+      function providerKeyInput(provider) {
+        return provider === "openai" ? dom.aiKeyInput : settingsDom.cohereKeyInput;
+      }
+
+      // A saved key shows only its preview; the password field exists on screen
+      // only while replacing it, so the browser has nothing to autofill.
+      function setProviderKeyEditing(provider, editing) {
+        const card = document.querySelector(`[data-provider="${provider}"]`);
+        const input = providerKeyInput(provider);
+        input.value = "";
+        card.querySelector(".provider-key-view").hidden = editing;
+        card.querySelector(".provider-key-edit").hidden = !editing;
+        if (editing) input.focus();
+      }
+
+      function renderProviderKey(provider) {
+        const info = state.settings.api[provider];
+        const card = document.querySelector(`[data-provider="${provider}"]`);
+        const preview = provider === "openai" ? settingsDom.openaiKeyPreview : settingsDom.cohereKeyPreview;
+        const status = provider === "openai" ? settingsDom.openaiKeyStatus : settingsDom.cohereKeyStatus;
+        const remove = provider === "openai" ? dom.aiKeyRemoveButton : settingsDom.cohereKeyRemoveButton;
+        setSettingsPill(status, info.configured ? "Configured" : "Not set", info.configured ? "ok" : "off");
+        preview.textContent = info.configured ? (info.preview || "saved") : "Not set";
+        preview.classList.toggle("settings-value-muted", !info.configured);
+        card.querySelector("[data-key-edit]").textContent = info.configured ? "Replace" : "Add key";
+        remove.hidden = !info.configured;
+        remove.disabled = !info.configured;
       }
 
       function renderSettingsStatus(message = "", kind = "") {
@@ -2492,37 +2878,102 @@
         if (!settings) return;
         dom.aiSettingsStatus.textContent = message;
         dom.aiSettingsStatus.className = `settings-status${kind ? ` is-${kind}` : ""}`;
-        settingsDom.openaiKeyStatus.textContent = settings.api.openai.configured
-          ? `Configured: ${settings.api.openai.preview || "saved"}` : "Not configured.";
-        settingsDom.cohereKeyStatus.textContent = settings.api.cohere.configured
-          ? `Configured: ${settings.api.cohere.preview || "saved"}` : "Not configured.";
-        dom.aiKeyRemoveButton.disabled = !settings.api.openai.configured;
-        settingsDom.cohereKeyRemoveButton.disabled = !settings.api.cohere.configured;
+        renderProviderKey("openai");
+        renderProviderKey("cohere");
         renderIndexStatus(settings.index);
+        renderSettingsSummary();
+      }
+
+      // "Do I need to care?" - nav hints and verdict pills come from saved state only
+      function renderSettingsSummary() {
+        const settings = state.settings;
+        if (!settings) return;
+        const openai = settings.api.openai.configured;
+        const cohere = settings.api.cohere.configured;
+
+        setItemSub(settingsDom.aiModelKeyState, openai ? "OpenAI key set" : "Needs an OpenAI key", openai ? "ok" : "warn");
+        setItemSub(settingsDom.ragKeyState, openai ? "OpenAI key set" : "Needs an OpenAI key", openai ? "ok" : "warn");
+        setItemSub(settingsDom.cohereKeyState, cohere ? "Cohere key set" : "Needs a Cohere key", cohere ? "ok" : "");
+        settingsDom.cohereAddKey.hidden = cohere;
+
+        const keyCount = Number(openai) + Number(cohere);
+        setSettingsPill(settingsDom.apiVerdict, `${keyCount} of 2 set`, keyCount === 2 ? "ok" : "off");
+        setSettingsHint(settingsDom.settingsHintApi, `${keyCount} of 2`);
+
+        const toolOutput = settings.tool_output || {};
+        if (toolOutput.restart_required || toolOutput.restart_pending) {
+          setSettingsHint(settingsDom.settingsHintTranscript, "Restart", "warn");
+        } else {
+          setSettingsHint(settingsDom.settingsHintTranscript,
+            toolOutput.active_mode === "maximum_compatibility" ? "Max compat" : "Optimized");
+        }
+        const transcript = settings.transcript || {};
+        const recommendations = transcript.recommendations || [];
+        if (toolOutput.restart_required) {
+          setSettingsPill(settingsDom.transcriptVerdict, "Restart required", "warn");
+        } else if (!recommendations.length) {
+          setSettingsPill(settingsDom.transcriptVerdict, "No verified harness", "off");
+        } else {
+          const weakest = Math.min(...recommendations.map((item) => item.recommended_chunk_chars));
+          const within = (transcript.chunk_max_chars || 0) <= weakest;
+          setSettingsPill(settingsDom.transcriptVerdict,
+            within ? "Within verified limits" : "Above verified limit", within ? "ok" : "warn");
+        }
+
+        const search = searchSummary(settings);
+        setSettingsPill(settingsDom.searchVerdict, search.verdict, search.tone);
+        setSettingsHint(settingsDom.settingsHintSearch, search.hint, search.hintTone);
+      }
+
+      function searchSummary(settings) {
+        const index = settings.index || {};
+        if (!settings.search.enabled) return { verdict: "Hybrid off", tone: "off", hint: "Off" };
+        if (!settings.api.openai.configured) {
+          return { verdict: "OpenAI key needed", tone: "warn", hint: "Needs key", hintTone: "warn" };
+        }
+        if (["queued", "building"].includes(index.status)) {
+          return { verdict: "Building index", tone: "accent", hint: "Building" };
+        }
+        if (index.status === "failed") return { verdict: "Index failed", tone: "fail", hint: "Failed", hintTone: "fail" };
+        if (index.active_generation == null) {
+          return { verdict: "Index not built", tone: "warn", hint: "Not built", hintTone: "warn" };
+        }
+        if (index.needs_rebuild) return { verdict: "Index needs rebuild", tone: "warn", hint: "Rebuild", hintTone: "warn" };
+        return { verdict: "Hybrid ready", tone: "ok", hint: "Ready", hintTone: "ok" };
       }
 
       function renderIndexStatus(index) {
         if (!index) return;
         const building = ["queued", "building"].includes(index.status);
         const ready = index.status === "ready";
-        const progress = index.status === "building"
-          ? ` · ${index.processed_count || 0}/${index.document_count || 0} documents` : "";
+        const count = (value) => Number(value || 0).toLocaleString();
+        let summary;
+        if (index.status === "building") summary = `Building · ${count(index.processed_count)}/${count(index.document_count)} documents`;
+        else if (index.status === "queued") summary = "Queued";
+        else if (index.status === "failed") summary = "Build failed";
+        else if (index.active_generation == null) summary = "No index yet";
+        else summary = `${count(index.chunk_count)} chunks`;
         const dirty = index.dirty_document_count ? ` · ${index.dirty_document_count} pending` : "";
         const paused = index.auto_rebuild_suppressed ? " · automatic rebuild paused" : "";
         settingsDom.indexStatusText.textContent =
-          `${index.status}${progress}${dirty}${paused}${index.last_error ? ` · ${index.last_error}` : ""}`;
-        settingsDom.indexReadyCheck.hidden = !ready;
+          `${summary}${dirty}${paused}${index.last_error ? ` · ${index.last_error}` : ""}`;
+        settingsDom.indexReadyCheck.hidden = !(ready && !index.needs_rebuild);
         settingsDom.indexBuiltAt.hidden = !(ready && index.completed_at);
         settingsDom.indexBuiltAt.textContent = ready && index.completed_at
-          ? `Built ${formatDate(new Date(index.completed_at * 1000).toISOString())}` : "";
+          ? `built ${formatDate(new Date(index.completed_at * 1000).toISOString())}` : "";
         settingsDom.indexRebuild.disabled = building;
         settingsDom.indexRebuild.setAttribute("aria-busy", String(building));
         settingsDom.indexRebuildSpinner.hidden = !building;
         settingsDom.indexRebuildLabel.textContent = building
-          ? "Building…" : index.active_generation == null ? "Build index" : "Rebuild index";
+          ? "Building…" : index.active_generation == null ? "Build index" : "Rebuild";
         settingsDom.indexCancel.hidden = !building;
         settingsDom.indexCancel.disabled = !building;
-        settingsDom.indexDelete.disabled = building;
+        settingsDom.indexDelete.disabled = building || index.active_generation == null;
+        if (building) setSettingsPill(settingsDom.indexStatePill, "Building", "accent");
+        else if (index.status === "failed") setSettingsPill(settingsDom.indexStatePill, "Failed", "fail");
+        else if (index.active_generation == null) setSettingsPill(settingsDom.indexStatePill, "Not built", "warn");
+        else if (index.needs_rebuild) setSettingsPill(settingsDom.indexStatePill, "Needs rebuild", "warn");
+        else setSettingsPill(settingsDom.indexStatePill, "Up to date", "ok");
       }
 
       let indexEstimateTimer = null;
@@ -2565,15 +3016,15 @@
           const estimate = result.estimate;
           const count = (value) => Number(value || 0).toLocaleString();
           const cost = estimate.estimated_cost_usd == null
-            ? `price unavailable for ${estimate.embedding_model}`
-            : `~$${estimate.estimated_cost_usd < 0.01
+            ? "price unavailable"
+            : `$${estimate.estimated_cost_usd < 0.01
               ? estimate.estimated_cost_usd.toFixed(4) : estimate.estimated_cost_usd.toFixed(2)}`;
-          settingsDom.indexEstimateState.textContent = "Based on current settings";
+          settingsDom.indexEstimateState.textContent = "";
           settingsDom.indexEstimateDocuments.textContent = `${count(estimate.document_count)} documents`;
           settingsDom.indexEstimateChunks.textContent = `${count(estimate.chunk_count)} chunks`;
-          settingsDom.indexEstimateTokens.textContent = count(estimate.embedding_token_count);
+          settingsDom.indexEstimateTokens.textContent = compactCount(estimate.embedding_token_count);
           settingsDom.indexEstimateOverlap.textContent = estimate.overlap_token_count
-            ? `${count(estimate.overlap_token_count)} repeated by overlap` : "No overlap overhead";
+            ? `${count(estimate.overlap_token_count)} tokens repeated by overlap` : "no overlap overhead";
           settingsDom.indexEstimateCost.textContent = cost;
           settingsDom.indexEstimateModel.textContent = estimate.embedding_model;
           settingsDom.indexEstimatePricing.href = estimate.pricing_url;
@@ -2586,17 +3037,24 @@
         }
       }
 
+      function compactCount(value) {
+        const number = Number(value || 0);
+        if (number >= 1_000_000) return `${(number / 1_000_000).toFixed(1)}M`;
+        if (number >= 10_000) return `${Math.round(number / 1000)}k`;
+        return number.toLocaleString();
+      }
+
       async function saveGeneralSettings() {
         await saveSettingsRequest("/admin/api/settings/general", {
           rename_model: dom.aiModelInput.value.trim() || "gpt-5.4-nano",
-        }, "General settings saved.");
+        }, "General settings saved.", "general");
       }
 
       async function saveTranscriptSettings() {
-        await saveSettingsRequest("/admin/api/settings/transcript", {
+        return saveSettingsRequest("/admin/api/settings/transcript", {
           chunk_max_chars: Number.parseInt(settingsDom.transcriptChunkMaxChars.value, 10),
           chunk_max_lines: Number.parseInt(settingsDom.transcriptChunkMaxLines.value, 10),
-        }, "Global transcript chunk size saved.");
+        }, "Global transcript chunk size saved.", "transcript");
       }
 
       function toolOutputModeLabel(mode) {
@@ -2612,27 +3070,27 @@
         const configured = toolOutputModeLabel(toolOutput.configured_mode);
         const restartLocked = Boolean(toolOutput.restart_pending || state.toolOutputRestartInFlight);
         settingsDom.toolOutputActiveSummary.textContent = restartLocked
-          ? `Active: ${active}. Restarting to activate ${toolOutputModeLabel(toolOutput.pending_mode || toolOutput.configured_mode)}.`
+          ? `Active: ${active} · restarting into ${toolOutputModeLabel(toolOutput.pending_mode || toolOutput.configured_mode)}`
           : toolOutput.restart_required
-          ? `Active: ${active}. Saved for next start: ${configured}.`
-          : `Active: ${active}.`;
+          ? `Active: ${active} · ${configured} after restart`
+          : `Active: ${active}`;
         settingsDom.toolOutputRestartRequired.hidden = !(toolOutput.restart_required || restartLocked);
         settingsDom.toolOutputRestartMessage.textContent = restartLocked
           ? "Restart in progress. Result format changes are temporarily locked."
-          : "Restart required to activate this mode.";
+          : `Restart Bridge to activate ${configured}.`;
         settingsDom.toolOutputOptimized.disabled = restartLocked;
         settingsDom.toolOutputMaximumCompatibility.disabled = restartLocked;
         settingsDom.toolOutputRestart.disabled = restartLocked || !toolOutput.restart_required;
       }
 
-      async function saveToolOutputSettings() {
-        const selected = document.querySelector('input[name="toolOutputMode"]:checked');
-        if (!selected) { renderSettingsStatus("Choose a large tool result format.", "error"); return; }
+      async function saveToolOutputSettings(mode) {
+        if (!mode) { renderSettingsStatus("Choose a large tool result format.", "error"); return; }
         try {
           const result = await api("/admin/api/settings/tool-output", {
-            method: "PUT", body: JSON.stringify({ mode: selected.value }),
+            method: "PUT", body: JSON.stringify({ mode }),
           });
           state.settings.tool_output = result.tool_output;
+          state.settingsDirty.delete("transcript");
           fillSettingsForm();
           renderSettingsStatus(
             result.tool_output.restart_required
@@ -2738,68 +3196,79 @@
         const transcript = state.settings?.transcript || {};
         const recommendations = transcript.recommendations || [];
         const runs = transcript.runs || [];
+        const chars = (value) => Number(value || 0).toLocaleString();
+
+        setSettingsPill(settingsDom.probeVerifiedCount, `${recommendations.length} verified`, recommendations.length ? "ok" : "off");
         settingsDom.probeRecommendations.replaceChildren();
         if (!recommendations.length) {
-          settingsDom.probeRecommendations.append(spanCls("meta", "No fully verified harness result yet."));
+          settingsDom.probeSafeValue.textContent = "No verified harness yet";
+          settingsDom.probeSafeValue.className = "settings-value-muted";
+          settingsDom.probeSafeSource.textContent = "";
+          settingsDom.probeSafeApply.hidden = true;
+          settingsDom.probeRecommendationsMeta.textContent = "none yet";
+          settingsDom.probeRecommendations.append(spanCls("probe-result-empty", "Run a harness test to get a recommendation."));
         } else {
-          const weakest = Math.min(...recommendations.map((item) => item.recommended_chunk_chars));
-          const weakestCard = document.createElement("article");
-          weakestCard.className = "probe-recommendation";
-          const weakestHead = document.createElement("div");
-          weakestHead.className = "probe-recommendation-head";
-          weakestHead.append(spanCls("", `Weakest verified: ${Number(weakest).toLocaleString()} characters`));
-          const weakestButton = document.createElement("button");
-          weakestButton.type = "button";
-          weakestButton.className = "primary";
-          weakestButton.textContent = "Fill global limit";
-          weakestButton.addEventListener("click", () => selectTranscriptChunkRecommendation(weakest));
-          weakestHead.append(weakestButton);
-          weakestCard.append(weakestHead, spanCls("probe-result-meta", "Minimum safe recommendation across all completed harness profiles."));
-          settingsDom.probeRecommendations.append(weakestCard);
+          const weakest = recommendations.reduce((low, item) => (
+            item.recommended_chunk_chars < low.recommended_chunk_chars ? item : low
+          ));
+          settingsDom.probeSafeValue.textContent = `${chars(weakest.recommended_chunk_chars)} chars`;
+          settingsDom.probeSafeValue.className = "settings-value settings-value-mono";
+          settingsDom.probeSafeSource.textContent = `limited by ${weakest.harness_label}`;
+          const current = Number.parseInt(settingsDom.transcriptChunkMaxChars.value, 10);
+          settingsDom.probeSafeApply.hidden = current === weakest.recommended_chunk_chars;
+          settingsDom.probeSafeApply.dataset.value = String(weakest.recommended_chunk_chars);
+          settingsDom.probeRecommendationsMeta.textContent = `${recommendations.length} harness${recommendations.length === 1 ? "" : "es"}`;
           for (const item of recommendations) {
-            const card = document.createElement("article");
-            card.className = "probe-recommendation";
-            const head = document.createElement("div");
-            head.className = "probe-recommendation-head";
-            head.append(spanCls("", `${item.harness_label} · ${item.content_profile}`));
-            const button = document.createElement("button");
-            button.type = "button";
-            button.className = "ghost";
-            button.textContent = `Fill ${Number(item.recommended_chunk_chars).toLocaleString()}`;
-            button.addEventListener("click", () => selectTranscriptChunkRecommendation(item.recommended_chunk_chars));
-            head.append(button);
-            card.append(head, spanCls("probe-result-meta", `${toolOutputModeLabel(item.tool_output_mode)} · verified ${Number(item.largest_verified_payload_chars).toLocaleString()} payload characters.`));
-            settingsDom.probeRecommendations.append(card);
+            const row = div("probe-recommendation");
+            row.title = `${toolOutputModeLabel(item.tool_output_mode)} · verified ${chars(item.largest_verified_payload_chars)} payload characters`;
+            row.append(
+              spanCls("probe-result-name", `${item.harness_label} · ${item.content_profile}`),
+              spanCls("probe-result-meta", `${chars(item.recommended_chunk_chars)} chars`),
+            );
+            const fill = document.createElement("button");
+            fill.type = "button";
+            fill.className = "ghost settings-compact";
+            fill.textContent = "Use";
+            fill.setAttribute("aria-label", `Use ${chars(item.recommended_chunk_chars)} characters from ${item.harness_label}`);
+            fill.addEventListener("click", () => selectTranscriptChunkRecommendation(item.recommended_chunk_chars));
+            row.append(fill);
+            settingsDom.probeRecommendations.append(row);
           }
         }
 
         settingsDom.probeResults.replaceChildren();
+        const pending = runs.filter((run) => (run.result_class || "pending") === "pending").length;
+        settingsDom.probeResultsMeta.textContent = runs.length
+          ? `${runs.length} run${runs.length === 1 ? "" : "s"}${pending ? ` · ${pending} pending` : ""}` : "none yet";
         if (!runs.length) {
-          settingsDom.probeResults.append(spanCls("meta", "No harness tests recorded yet."));
+          settingsDom.probeResults.append(spanCls("probe-result-empty", "No harness tests recorded yet."));
           return;
         }
         for (const run of runs) {
-          const card = document.createElement("article");
-          card.className = "probe-result";
-          const head = document.createElement("div");
-          head.className = "probe-result-head";
-          head.append(spanCls("", `${run.harness_label} · ${Number(run.payload_char_count).toLocaleString()} chars`));
+          const row = div("probe-result");
           const resultClass = run.result_class || "pending";
-          head.append(spanCls(`probe-result-class ${resultClass}`, resultClass.replaceAll("_", " ")));
           const checkpoints = (run.matched_checkpoints || []).join(", ") || "none reported";
+          row.title = `${run.content_profile} · ${toolOutputModeLabel(run.tool_output_mode)} · checkpoints: ${checkpoints} · run ${run.run_id} · last complete block ${run.last_complete_block_index || "—"}/${run.block_count}`;
           const created = run.created_at ? formatDate(new Date(run.created_at * 1000).toISOString()) : "unknown time";
-          card.append(
-            head,
-            spanCls("probe-result-meta", `${run.content_profile} · ${toolOutputModeLabel(run.tool_output_mode)} · ${created} · checkpoints: ${checkpoints}`),
-            spanCls("probe-result-meta", `Run ${run.run_id} · last complete block: ${run.last_complete_block_index || "—"}/${run.block_count}`),
+          const tone = resultClass === "complete" ? "ok" : resultClass === "pending" ? "warn" : "fail";
+          const pill = settingsPill(resultClass.replaceAll("_", " "), tone);
+          pill.classList.add("probe-result-class", resultClass);
+          row.append(
+            spanCls("probe-result-name", run.harness_label),
+            spanCls("probe-result-meta", `${chars(run.payload_char_count)} chars`),
+            pill,
+            spanCls("probe-result-meta", created),
           );
-          settingsDom.probeResults.append(card);
+          settingsDom.probeResults.append(row);
         }
       }
 
       function selectTranscriptChunkRecommendation(value) {
         settingsDom.transcriptChunkMaxChars.value = value;
-        renderSettingsStatus("Recommendation filled in. Save the global chunk size to apply it.", "ok");
+        state.settingsDirty.add("transcript");
+        selectSettingsTab("transcript");
+        renderSettingsStatus("Recommendation filled in. Save to apply it.", "ok");
+        settingsDom.probeSafeApply.hidden = true;
       }
 
       function searchFormPayload() {
@@ -2825,20 +3294,20 @@
       }
 
       async function saveSearchSettings() {
-        await saveSettingsRequest("/admin/api/settings/search", searchFormPayload(), "Search settings saved.");
+        await saveSettingsRequest("/admin/api/settings/search", searchFormPayload(), "Search settings saved.", "search");
       }
 
-      async function saveApiSettings() {
-        const payload = {};
-        if (dom.aiKeyInput.value.trim()) payload.openai = dom.aiKeyInput.value.trim();
-        if (settingsDom.cohereKeyInput.value.trim()) payload.cohere = settingsDom.cohereKeyInput.value.trim();
-        if (!Object.keys(payload).length) { renderSettingsStatus("Enter a new key to save.", "error"); return; }
-        await saveSettingsRequest("/admin/api/settings/api", payload, "API keys saved.");
-        dom.aiKeyInput.value = "";
-        settingsDom.cohereKeyInput.value = "";
+      async function saveProviderKey(provider) {
+        const value = providerKeyInput(provider).value.trim();
+        if (!value) { renderSettingsStatus("Paste a key to save.", "error"); return; }
+        const saved = await saveSettingsRequest(
+          "/admin/api/settings/api", { [provider]: value },
+          `${provider === "openai" ? "OpenAI" : "Cohere"} key saved.`,
+        );
+        if (saved) setProviderKeyEditing(provider, false);
       }
 
-      async function saveSettingsRequest(path, payload, success) {
+      async function saveSettingsRequest(path, payload, success, panel) {
         try {
           const result = await api(path, { method: "PUT", body: JSON.stringify(payload) });
           state.settings = result.settings;
@@ -2847,18 +3316,22 @@
             configured: openai.configured, api_key_preview: openai.preview,
             model: state.settings.general.rename_model, title_max_chars: 72,
           };
+          if (panel) state.settingsDirty.delete(panel);
           fillSettingsForm();
           renderSettingsStatus(success, "ok");
           renderSessions();
+          return true;
         } catch (error) {
           renderSettingsStatus(error.message, "error");
+          return false;
         }
       }
 
       async function removeProviderKey(provider) {
+        const label = provider === "openai" ? "OpenAI" : "Cohere";
         const confirmed = await window.adminConfirmation.confirm({
           title: "Remove saved API key?",
-          message: `Remove the saved ${provider} API key?`,
+          message: `Remove the saved ${label} API key?`,
           detail: "Features that use this provider will stop working until a new key is saved.",
           confirmLabel: "Remove key",
           tone: "danger",
@@ -2869,7 +3342,7 @@
           state.settings = result.settings;
           await loadSettings();
           fillSettingsForm();
-          renderSettingsStatus(`${provider} key removed.`, "ok");
+          renderSettingsStatus(`${label} key removed.`, "ok");
         } catch (error) {
           renderSettingsStatus(error.message, "error");
         }
@@ -2893,6 +3366,7 @@
           const result = await api(path, options);
           state.settings.index = result.index;
           renderIndexStatus(result.index);
+          renderSettingsSummary();
           renderSettingsStatus(action === "rebuild" ? "Index build started." : `Index ${action} requested.`, "ok");
           if (action === "rebuild") pollIndexStatus();
         } catch (error) {
@@ -2906,6 +3380,7 @@
           const result = await api("/admin/api/search/index");
           state.settings.index = result.index;
           renderIndexStatus(result.index);
+          renderSettingsSummary();
           if (["queued", "building"].includes(result.index.status)) window.setTimeout(pollIndexStatus, 1000);
         } catch (error) {
           renderSettingsStatus(error.message, "error");

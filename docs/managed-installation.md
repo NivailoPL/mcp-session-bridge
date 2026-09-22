@@ -98,7 +98,7 @@ Activation creates an unprivileged `mcp-session-bridge` service account, install
 
 Secrets are written only to the private environment file. Re-running setup preserves the existing Bridge secret so OAuth records and encrypted admin settings remain readable.
 
-Markdown exports created by the CLI or **Settings → Database** remain under the private managed data root. They are not served by Caddy or the Admin API. Copy or inspect them over SSH and remove archives that are no longer needed.
+Markdown exports created by the CLI or **Settings → System → Backup** remain under the private managed data root. They are not served by Caddy or the Admin API. Copy or inspect them over SSH and remove archives that are no longer needed.
 
 ### Managed Codex companion
 
@@ -139,7 +139,7 @@ curl https://bridge.example.com/healthz
 mcp-bridge logs
 ```
 
-Open `https://bridge.example.com/admin/sessions`, sign in, and inspect **Settings → Status**. The page mirrors the cached CLI report and live application/database reachability. It does not install updates or run arbitrary server commands.
+Open `https://bridge.example.com/admin/sessions`, sign in, and inspect **Settings → System**. The page mirrors the cached CLI report and live application/database reachability. It does not install updates or run arbitrary server commands.
 
 The MCP endpoint is:
 

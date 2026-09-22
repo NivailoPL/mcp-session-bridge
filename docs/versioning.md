@@ -10,7 +10,7 @@ For example, `2026.8.2` is the second Bridge release planned for August 2026. Th
 
 ## Development And Stable Releases
 
-A development branch is named `release/YYYY.M.N-beta`. While it is being tested, the package keeps the version of the latest stable release in `[project].version`, and `[tool.mcp-session-bridge.development]` records the target version and the label shown in **Settings → Status**.
+A development branch is named `release/YYYY.M.N-beta`. While it is being tested, the package keeps the version of the latest stable release in `[project].version`, and `[tool.mcp-session-bridge.development]` records the target version and the label shown in **Settings → System**.
 
 On a `release/2026.9.1-beta` branch, for example, the package still reports the
 last stable release while the development block names the version being built:
@@ -24,7 +24,7 @@ target-version = "2026.9.1"
 label = "2026.9.1-beta"
 ```
 
-**Settings → Status** shows `2026.9.1-beta` for that branch; the package itself
+**Settings → System** shows `2026.9.1-beta` for that branch; the package itself
 still answers `2026.8.2` until the release lands.
 
 The beta suffix is a development label, not a stable Git tag. The managed updater continues to consume stable GitHub Releases only.

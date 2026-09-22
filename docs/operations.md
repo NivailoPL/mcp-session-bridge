@@ -49,7 +49,7 @@ Restore the release and database from the most recent completed update:
 mcp-bridge rollback
 ```
 
-The authenticated admin page exposes the same summary under **Settings → Status**. An amber dot on both **Settings** and **Status** means a release is available. Updates remain CLI-only so a browser session cannot perform package, database, service, or rollback operations.
+The authenticated admin page exposes the same summary under **Settings → System**. An amber dot on both **Settings** and **System** means a release is available. Updates remain CLI-only so a browser session cannot perform package, database, service, or rollback operations.
 
 Managed data lives under `/var/lib/mcp-session-bridge`; dated setup and update backups live under `/var/backups/mcp-session-bridge`. Do not edit a version directory under `/opt/mcp-session-bridge/releases` in place.
 
@@ -179,7 +179,7 @@ mcp-bridge export --output /safe/new/archive-directory
 
 The export contains one Markdown file per session, grouped by the current session group, plus stored text files and original PDFs. It also includes sensitive sessions, raw excluded or masked exchanges, and the exchange edit/delete/restore/mask history retained by SQLite. It does not include OAuth records, provider keys, application settings, search indexes, or Graph data.
 
-The authenticated **Settings → Database** button runs this same server-side operation. It reports the path but provides no browser download, file listing, path selector, or archive-reading endpoint. Export directories are not automatically rotated; inspect free space and delete obsolete archives over SSH.
+The authenticated **Settings → System → Backup** button runs this same server-side operation. It reports the path but provides no browser download, file listing, path selector, or archive-reading endpoint. Export directories are not automatically rotated; inspect free space and delete obsolete archives over SSH.
 
 ## Codex App Server
 

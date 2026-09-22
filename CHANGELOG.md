@@ -8,7 +8,15 @@ This project follows a lightweight changelog format inspired by Keep a Changelog
 
 ### Changed
 
+- Rebuilt the admin **Settings** dialog around one layout for every tab: a fixed-height window, a state hint beside each tab, one verdict pill per tab, grouped rows, and explanations moved behind the same `?` used next to Mask and Exclude. Rarely needed controls (harness tests, probe results, advanced search tuning, server commands) are folded away.
+- Merged **Settings → Status** and **Settings → Database** into **Settings → System**.
+- **Settings → API keys** shows only a saved key's preview; the key field appears only while adding or replacing a key and is marked `autocomplete="new-password"`, so browsers no longer autofill the admin password into it.
+- The save bar appears only when the open tab has unsaved changes, offers **Discard**, and saving one tab keeps unsaved edits in the others.
 - Removed the `upload_session_image` and `upload_group_image` MCP tools. Users upload images through the admin panel; models can still view session and group images with `view_session_image`. Existing images and admin preview/download remain available.
+
+### Fixed
+
+- Switching the large tool result format and saving in the same step no longer reverts the choice: saving the chunk limits used to refill the form before the format was read.
 
 ### Housekeeping
 

@@ -920,6 +920,42 @@ def test_admin_database_export_button_sends_only_a_trigger_and_renders_vps_path(
     assert rendered["statuses"][-1]["kind"] == "ok"
 
 
+@requires_node
+def test_mcp_settings_save_keeps_the_chosen_result_format() -> None:
+    """Saving chunk limits refills the form; the format choice must survive it."""
+    source = slice_source(
+        "async function saveDeliverySettings()", "async function openAiSettingsDialog()"
+    )
+
+    def save(chosen: str, configured: str) -> list[str]:
+        return run_js(
+            """
+            const radios = { optimized: { value: "optimized", checked: false },
+                             maximum_compatibility: { value: "maximum_compatibility", checked: false } };
+            radios[input.chosen].checked = true;
+            const document = { querySelector: () => Object.values(radios).find((radio) => radio.checked) };
+            const state = { settings: { tool_output: { configured_mode: input.configured } } };
+            const settingsDom = { toolOutputOptimized: { disabled: false } };
+            const saved = [];
+            async function saveTranscriptSettings() {
+              // the real save refills every field from the server
+              for (const radio of Object.values(radios)) radio.checked = radio.value === input.configured;
+              return true;
+            }
+            async function saveToolOutputSettings(mode) { saved.push(mode); }
+            """
+            + source
+            + """
+            (async () => { await saveDeliverySettings(); emit(saved); })();
+            """,
+            payload={"chosen": chosen, "configured": configured},
+            dom=False,
+        )
+
+    assert save("maximum_compatibility", "optimized") == ["maximum_compatibility"]
+    assert save("optimized", "optimized") == []
+
+
 def test_admin_can_configure_ai_rename_and_update_session_title(load_main, monkeypatch) -> None:
     main = load_main(graph_experimental=True)
     main.store.create_session("s1", "Chaotic long title")
@@ -2384,6 +2420,8 @@ FEATURE_CONTROLS = {
     "search index": ["indexRebuild", "indexReadyCheck", "indexBuiltAt", "indexCancel", "indexDelete", "indexEstimate", "indexEstimateDocuments", "indexEstimateTokens", "indexEstimateCost"],
     "bridge status": ["settingsUpdateDot", "statusUpdateDot", "bridgeStatusChecks"],
     "database export": ["databaseExportButton", "databaseExportResult"],
+    "settings save bar": ["settingsActionbar", "settingsSaveButton", "settingsDiscardButton"],
+    "api keys": ["aiKeyInput", "aiKeyRemoveButton", "cohereKeyInput", "cohereKeyRemoveButton", "openaiKeyPreview", "cohereKeyPreview"],
 }
 
 
@@ -2418,9 +2456,13 @@ def test_admin_page_does_not_ship_retired_controls(admin_client) -> None:
     for dialog in ("searchDialog", "aiSettingsDialog", "fileWorkspaceDialog"):
         assert page.count(f'<dialog id="{dialog}"') == 1
 
-    for tab in ("general", "search", "api", "transcript", "database", "status"):
+    for tab in ("general", "search", "api", "transcript", "system"):
         assert f'data-settings-tab="{tab}"' in page
         assert f'data-settings-panel="{tab}"' in page
+
+    # Status and Database were merged into System.
+    for retired_tab in ("database", "status"):
+        assert f'data-settings-tab="{retired_tab}"' not in page
 
 
 @requires_node
