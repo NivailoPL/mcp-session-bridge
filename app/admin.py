@@ -2191,24 +2191,65 @@ def _secret_preview(value: str) -> str:
     return f"{value[:3]}...{value[-4:]}"
 
 
+def _rename_prompt(max_words: int) -> str:
+    return (
+        "You name conversation sessions for a sidebar list. Read the first user message and write a title "
+        "that tells the reader what the conversation is about.\n"
+        f"Hard limits: at most {max_words} words and at most {SESSION_TITLE_MAX_CHARS} characters. "
+        "Count the words before answering.\n"
+        "Condense the meaning instead of shortening a sentence: keep the specific subject, drop filler. "
+        "Do not start with words that only say it is a conversation, such as \"Session\", \"Conversation about\", "
+        "\"Question about\", \"Sesja\", \"Rozmowa o\" or \"Pytanie o\". "
+        "The title must be a complete phrase and must not end with a conjunction or preposition.\n"
+        "Write in the language of the user message.\n"
+        "Examples (limit 5 words): "
+        "\"Brainstorming session about AI tools and how our team could use them\" becomes "
+        "\"AI tools for the team\"; "
+        "\"Sesja brainstormingu o AI i jego zastosowaniach w firmie\" becomes \"Zastosowania AI w firmie\".\n"
+        "Return JSON only with one key: title. No markdown, no quotes around the title, no trailing ellipsis, "
+        "no bracket noise."
+    )
+
+
 def _suggest_session_title(
     api_key: str, model: str, first_user_message: str, max_words: int = AI_RENAME_DEFAULT_MAX_WORDS
 ) -> str:
-    prompt = (
-        "Rename this conversation session from the first user message only. "
-        f"Return JSON only with one key: title. The title must be at most {max_words} words "
-        f"and never more than {SESSION_TITLE_MAX_CHARS} characters, "
-        "clear, specific, and in the same language as the user message when possible. "
-        "Do not add markdown, quotes around the whole response, trailing ellipses, or bracket noise."
-    )
+    messages = [
+        {"role": "system", "content": _rename_prompt(max_words)},
+        {"role": "user", "content": first_user_message[:4000]},
+    ]
+    content = _request_ai_title(api_key, model, messages)
+    title = _parse_ai_title(content)
+    if title and not _title_fits(title, max_words):
+        # One corrective round: a model asked to condense its own answer keeps the
+        # meaning, where cutting words off the end does not.
+        messages += [
+            {"role": "assistant", "content": content},
+            {
+                "role": "user",
+                "content": (
+                    f"That title has {len(title.split())} words and {len(title)} characters. "
+                    f"Rewrite it in at most {max_words} words and {SESSION_TITLE_MAX_CHARS} characters, "
+                    "keeping the meaning. Return JSON only with one key: title."
+                ),
+            },
+        ]
+        retried = _parse_ai_title(_request_ai_title(api_key, model, messages))
+        if retried:
+            title = retried
+    title = _fit_title(title, max_words)
+    if not title:
+        raise RuntimeError("AI rename response did not include a title.")
+    return title
+
+
+def _request_ai_title(api_key: str, model: str, messages: list[dict[str, str]]) -> str:
     payload = {
         "model": model,
-        "messages": [
-            {"role": "system", "content": prompt},
-            {"role": "user", "content": first_user_message[:4000]},
-        ],
+        "messages": messages,
         "temperature": 0.2,
-        "max_completion_tokens": 80,
+        # reasoning models spend part of this budget before answering
+        "max_completion_tokens": 400,
         "response_format": {"type": "json_object"},
     }
     request = urllib.request.Request(
@@ -2230,17 +2271,20 @@ def _suggest_session_title(
         raise RuntimeError(f"AI rename request failed: {exc}") from exc
 
     try:
-        content = data["choices"][0]["message"]["content"]
+        return str(data["choices"][0]["message"]["content"] or "")
     except (KeyError, IndexError, TypeError) as exc:
         raise RuntimeError("AI rename response did not include message content.") from exc
 
-    title = _title_from_ai_content(content, max_words)
-    if not title:
-        raise RuntimeError("AI rename response did not include a title.")
-    return title
+
+# Words a title must not end on once it has been cut to fit (Polish and English).
+TITLE_DANGLING_WORDS = frozenset({
+    "a", "ale", "albo", "ani", "bo", "czy", "dla", "do", "i", "jak", "lub", "na", "nad", "o", "od", "oraz",
+    "po", "pod", "przez", "przy", "u", "w", "we", "z", "za", "ze", "że",
+    "an", "and", "at", "by", "for", "from", "in", "of", "on", "or", "the", "to", "vs", "with",
+})
 
 
-def _title_from_ai_content(content: str, max_words: int = AI_RENAME_DEFAULT_MAX_WORDS) -> str:
+def _parse_ai_title(content: str) -> str:
     raw = content.strip()
     try:
         parsed = json.loads(raw)
@@ -2249,14 +2293,27 @@ def _title_from_ai_content(content: str, max_words: int = AI_RENAME_DEFAULT_MAX_
     except json.JSONDecodeError:
         pass
     title = " ".join(raw.strip().strip(chr(34) + chr(39)).split())
-    title = title.rstrip(" .,-;:...")
-    # the model is asked for both limits; enforce them in case it overshoots
-    words = title.split()
-    if len(words) > max_words:
-        title = " ".join(words[:max_words]).rstrip(" .,-;:...")
-    if len(title) > SESSION_TITLE_MAX_CHARS:
-        title = title[:SESSION_TITLE_MAX_CHARS].rsplit(" ", 1)[0].rstrip(" .,-;:...")
-    return title
+    return title.rstrip(" .,-;:...")
+
+
+def _title_fits(title: str, max_words: int) -> bool:
+    return len(title.split()) <= max_words and len(title) <= SESSION_TITLE_MAX_CHARS
+
+
+def _fit_title(title: str, max_words: int) -> str:
+    """Last resort when the model overshoots twice: cut on word boundaries."""
+    if _title_fits(title, max_words):
+        return title
+    words = title.split()[:max_words]
+    while len(" ".join(words)) > SESSION_TITLE_MAX_CHARS and len(words) > 1:
+        words.pop()
+    while len(words) > 1 and words[-1].lower().strip(" .,-;:") in TITLE_DANGLING_WORDS:
+        words.pop()
+    return " ".join(words).rstrip(" .,-;:...")[:SESSION_TITLE_MAX_CHARS]
+
+
+def _title_from_ai_content(content: str, max_words: int = AI_RENAME_DEFAULT_MAX_WORDS) -> str:
+    return _fit_title(_parse_ai_title(content), max_words)
 
 
 def _exchange_payload(exchange: ExchangeRecord, timezone_name: str | None = None) -> dict[str, Any]:

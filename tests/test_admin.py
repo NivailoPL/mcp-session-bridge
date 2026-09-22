@@ -962,12 +962,66 @@ def test_ai_rename_title_respects_word_and_character_limits() -> None:
     assert _title_from_ai_content('{"title": "Plan wdrożenia nowego panelu ustawień w adminie"}', 4) == (
         "Plan wdrożenia nowego panelu"
     )
-    # trailing punctuation left by the word cut is dropped
+    # a cut never leaves a dangling conjunction or preposition
+    assert _title_from_ai_content('{"title": "Sesja brainstormingu o AI i jego zastosowaniach"}', 5) == (
+        "Sesja brainstormingu o AI"
+    )
     assert _title_from_ai_content('{"title": "Ewaluacja LLM: metryki, koszty i ryzyka"}', 2) == "Ewaluacja LLM"
     long_words = " ".join(["konfiguracyjny"] * 10)
     title = _title_from_ai_content(json.dumps({"title": long_words}), 10)
     assert len(title) <= 72
     assert title.split() == ["konfiguracyjny"] * len(title.split())
+
+
+def test_ai_rename_asks_the_model_to_condense_an_overlong_title(monkeypatch) -> None:
+    import app.admin as admin_module
+
+    calls = []
+
+    def fake_request(api_key, model, messages):
+        calls.append([dict(message) for message in messages])
+        replies = [
+            '{"title": "Sesja brainstormingu o AI i jego zastosowaniach w naszej firmie"}',
+            '{"title": "Zastosowania AI w firmie"}',
+        ]
+        return replies[len(calls) - 1]
+
+    monkeypatch.setattr(admin_module, "_request_ai_title", fake_request)
+    title = admin_module._suggest_session_title("sk-test", "gpt-5.4-mini", "Porozmawiajmy o AI w firmie", 5)
+
+    assert title == "Zastosowania AI w firmie"
+    assert len(calls) == 2
+    system_prompt = calls[0][0]["content"]
+    assert "at most 5 words and at most 72 characters" in system_prompt
+    assert "must not end with a conjunction or preposition" in system_prompt
+    feedback = calls[1][-1]["content"]
+    assert "has 10 words" in feedback
+    assert "at most 5 words" in feedback
+
+
+def test_ai_rename_accepts_a_fitting_title_without_a_second_request(monkeypatch) -> None:
+    import app.admin as admin_module
+
+    calls = []
+
+    def fake_request(api_key, model, messages):
+        calls.append(messages)
+        return '{"title": "Zastosowania AI w firmie"}'
+
+    monkeypatch.setattr(admin_module, "_request_ai_title", fake_request)
+    assert admin_module._suggest_session_title("sk-test", "gpt-5.4-mini", "x", 6) == "Zastosowania AI w firmie"
+    assert len(calls) == 1
+
+
+def test_ai_rename_cuts_cleanly_when_the_model_overshoots_twice(monkeypatch) -> None:
+    import app.admin as admin_module
+
+    monkeypatch.setattr(
+        admin_module,
+        "_request_ai_title",
+        lambda api_key, model, messages: '{"title": "Sesja brainstormingu o AI i jego zastosowaniach"}',
+    )
+    assert admin_module._suggest_session_title("sk-test", "gpt-5.4-nano", "x", 5) == "Sesja brainstormingu o AI"
 
 
 def test_admin_can_configure_ai_rename_and_update_session_title(load_main, monkeypatch) -> None:

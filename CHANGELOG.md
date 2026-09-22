@@ -12,7 +12,7 @@ This project follows a lightweight changelog format inspired by Keep a Changelog
 - Merged **Settings → Status** and **Settings → Database** into **Settings → System**.
 - **Settings → API keys** shows only a saved key's preview; the key field appears only while adding or replacing a key and is marked `autocomplete="new-password"`, so browsers no longer autofill the admin password into it.
 - The save bar appears only when the open tab has unsaved changes, offers **Discard**, and saving one tab keeps unsaved edits in the others.
-- Added a **Max words** slider (2–10, default 6) for AI rename in **Settings → General**. The model is asked for at most that many words and never more than 72 characters, and both limits are enforced on its reply.
+- Added a **Max words** slider (2–10, default 6) for AI rename in **Settings → General**. The model is asked to condense the topic into at most that many words and 72 characters; an overlong reply gets one request to condense it, and only then is it cut on a word boundary without a dangling conjunction or preposition.
 - Removed the `upload_session_image` and `upload_group_image` MCP tools. Users upload images through the admin panel; models can still view session and group images with `view_session_image`. Existing images and admin preview/download remain available.
 
 ### Fixed
