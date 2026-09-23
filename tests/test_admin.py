@@ -2602,3 +2602,112 @@ def test_session_export_produces_nothing_for_an_unrevealed_sensitive_thread() ->
 
     ordinary = build(is_sensitive=False, revealed=False)
     assert "SECRET-PAYLOAD" in ordinary
+
+
+API_401_HARNESS = """
+const demo = { enabled: false };
+const state = { csrfToken: "csrf" };
+let redirects = 0;
+function redirectToLogin() { redirects += 1; }
+function hasUnsavedWork() { return input.unsaved; }
+globalThis.fetch = async () => ({ ok: false, status: 401, json: async () => ({ ok: false, error: "login required" }) });
+"""
+
+
+@requires_node
+@pytest.mark.parametrize(
+    ("unsaved", "expected_redirects"),
+    [(False, 1), (True, 0)],
+    ids=["idle-admin-goes-to-login", "draft-stays-on-screen"],
+)
+def test_api_sends_an_expired_login_to_sign_in_unless_a_draft_would_be_lost(
+    unsaved: bool, expected_redirects: int
+) -> None:
+    source = slice_source("async function api(path, options = {})", "async function enableDemo()")
+    result = run_js(
+        API_401_HARNESS
+        + source
+        + """
+        api("/admin/api/sessions").then(
+          () => emit({ threw: false, redirects }),
+          (error) => emit({ threw: true, status: error.status, redirects }),
+        );
+        """,
+        payload={"unsaved": unsaved},
+        dom=False,
+    )
+
+    assert result == {"threw": True, "status": 401, "redirects": expected_redirects}
+
+
+TAB_RETURN_HARNESS = """
+const demo = { enabled: false };
+const state = {
+  csrfToken: "csrf",
+  busy: false,
+  selectedSessionId: "s1",
+  selectedSession: { session_id: "s1", updated_at: 100 },
+  sessions: [{ session_id: "s1", updated_at: 100 }],
+};
+let lastTabReturnCheck = input.lastCheckAgoMs === null ? 0 : Date.now() - input.lastCheckAgoMs;
+let tabReturnCheckInFlight = false;
+const TAB_RETURN_MIN_INTERVAL_MS = 5000;
+const calls = { api: 0, loads: [], renders: 0 };
+async function api() { calls.api += 1; return { sessions: input.sessions }; }
+function hasUnsavedWork() { return input.unsaved; }
+function renderSessions() { calls.renders += 1; }
+function renderGroups() {}
+async function loadSession(sessionId, options) { calls.loads.push({ sessionId, options }); }
+"""
+
+
+def _run_tab_return(*, updated_at: int, unsaved: bool = False, last_check_ago_ms: int | None = None) -> dict:
+    source = slice_source("async function checkOnTabReturn()", "      init();")
+    return run_js(
+        TAB_RETURN_HARNESS
+        + source
+        + """
+        checkOnTabReturn().then(() => emit({ ...calls, sessions: state.sessions }));
+        """,
+        payload={
+            "sessions": [{"session_id": "s1", "updated_at": updated_at}],
+            "unsaved": unsaved,
+            "lastCheckAgoMs": last_check_ago_ms,
+        },
+        dom=False,
+    )
+
+
+@requires_node
+def test_returning_to_the_tab_reloads_a_conversation_that_changed_meanwhile() -> None:
+    result = _run_tab_return(updated_at=200)
+
+    assert result["api"] == 1
+    assert result["loads"] == [{"sessionId": "s1", "options": {"quiet": True}}]
+    assert result["sessions"] == [{"session_id": "s1", "updated_at": 200}]
+
+
+@requires_node
+def test_returning_to_the_tab_leaves_an_unchanged_conversation_alone() -> None:
+    result = _run_tab_return(updated_at=100)
+
+    assert result["api"] == 1
+    assert result["loads"] == []
+
+
+@requires_node
+def test_returning_to_the_tab_never_reloads_over_unsaved_edits() -> None:
+    result = _run_tab_return(updated_at=200, unsaved=True)
+
+    assert result["api"] == 1, "the login is still re-validated"
+    assert result["loads"] == []
+    assert result["renders"] == 0
+    assert result["sessions"] == [{"session_id": "s1", "updated_at": 100}]
+
+
+@requires_node
+def test_rapid_tab_switches_are_throttled() -> None:
+    result = _run_tab_return(updated_at=200, last_check_ago_ms=1000)
+
+    assert result["api"] == 0
+    assert result["loads"] == []

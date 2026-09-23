@@ -2388,6 +2388,62 @@
       // offline demo store (declared before init so api() can reference it)
       const demo = { enabled: false, sessions: [], groups: [], store: {}, files: [], nextFileId: 1000 };
 
+      // ---------- Login expiry and tab-return refresh ----------
+      const ADMIN_LOGIN_URL = "/admin/login?next=/admin/sessions";
+      const TAB_RETURN_MIN_INTERVAL_MS = 5000;
+      let redirectingToLogin = false;
+      let lastTabReturnCheck = Date.now();
+      let tabReturnCheckInFlight = false;
+
+      function redirectToLogin() {
+        if (redirectingToLogin) return;
+        redirectingToLogin = true;
+        window.location.assign(ADMIN_LOGIN_URL);
+      }
+
+      // True while the admin has typed something that a reload or redirect would discard.
+      function hasUnsavedWork() {
+        return Boolean(
+          state.editingExchangeId
+          || state.settingsDirty.size
+          || isFileDraftDirty()
+          || state.manualRenameSessionId
+          || state.pendingSessionMove
+          || dom.groupDialog.open
+        );
+      }
+
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible") checkOnTabReturn();
+      });
+      window.addEventListener("focus", checkOnTabReturn);
+
+      // Coming back to the tab re-validates the login (api() redirects on 401) and picks up
+      // exchanges saved from other harnesses while the tab sat in the background.
+      async function checkOnTabReturn() {
+        if (demo.enabled || !state.csrfToken || tabReturnCheckInFlight) return;
+        const now = Date.now();
+        if (now - lastTabReturnCheck < TAB_RETURN_MIN_INTERVAL_MS) return;
+        lastTabReturnCheck = now;
+        tabReturnCheckInFlight = true;
+        try {
+          const payload = await api("/admin/api/sessions");
+          if (state.busy || hasUnsavedWork()) return;
+          state.sessions = payload.sessions || [];
+          renderSessions();
+          renderGroups();
+          const listed = state.sessions.find((session) => session.session_id === state.selectedSessionId);
+          if (listed && state.selectedSession && listed.updated_at !== state.selectedSession.updated_at) {
+            await loadSession(state.selectedSessionId, { quiet: true });
+          }
+        } catch (error) {
+          // A background check stays silent; the next explicit action reports real failures.
+          console.warn("tab return check failed:", error && error.message);
+        } finally {
+          tabReturnCheckInFlight = false;
+        }
+      }
+
       init();
 
       async function init() {
@@ -2403,7 +2459,7 @@
           await refreshAll();
         } catch (error) {
           if (error.status === 401) {
-            window.location.assign("/admin/login?next=/admin/sessions");
+            redirectToLogin();
             return;
           }
           // No live backend → fall back to an offline demo dataset so the UI is reviewable.
@@ -3170,7 +3226,7 @@
               credentials: "same-origin", cache: "no-store",
             });
             if (response.status === 401) {
-              window.location.assign("/admin/login?next=/admin/sessions");
+              redirectToLogin();
               return;
             }
             if (response.ok) {
@@ -3602,9 +3658,11 @@
         renderGroups();
       }
 
-      async function loadSession(sessionId) {
+      // quiet: background refresh of the open session - no busy state, and the reader keeps
+      // their place in the transcript.
+      async function loadSession(sessionId, { quiet = false } = {}) {
         const loadGeneration = ++state.sessionLoadGeneration;
-        invalidateFileOpen();
+        if (!quiet) invalidateFileOpen();
         if (!sessionId) {
           state.selectedSessionId = "";
           state.selectedSession = null;
@@ -3616,10 +3674,13 @@
         }
         state.selectedSessionId = sessionId;
         renderSessions();
-        setBusy(true);
+        if (!quiet) setBusy(true);
+        const scrollContainer = transcriptScrollContainer();
+        const scrollTop = scrollContainer.scrollTop;
         try {
           const payload = await api(`/admin/api/sessions/${encodeURIComponent(sessionId)}`);
           if (loadGeneration !== state.sessionLoadGeneration) return;
+          if (quiet && (state.busy || hasUnsavedWork())) return;
           state.selectedSession = payload.session;
           state.exchanges = payload.exchanges || [];
           state.files = payload.files || { session: [], group: [] };
@@ -3632,8 +3693,9 @@
           renderSessionGroupSelect();
           renderFiles();
           renderExchanges();
+          if (quiet) scrollContainer.scrollTop = scrollTop;
         } finally {
-          if (loadGeneration === state.sessionLoadGeneration) setBusy(false);
+          if (!quiet && loadGeneration === state.sessionLoadGeneration) setBusy(false);
         }
       }
 
@@ -4648,7 +4710,9 @@
             setFileEditorStatus("This file changed after you opened it. Your draft is still here. Reload the latest file or copy your draft before trying again.", "error");
           } else if (error.status === 404) {
             setFileEditorStatus("This file can no longer be found. Your draft is still here. Copy it before leaving the editor.", "error");
-          } else if (error.status === 401 || error.status === 403) {
+          } else if (error.status === 401) {
+            setFileEditorStatus("Your admin session expired. Your draft is still here. Copy it, then sign in again.", "error");
+          } else if (error.status === 403) {
             setFileEditorStatus("You are not authorized to save this file. Your draft is still here.", "error");
           } else {
             setFileEditorStatus(`Save failed: ${error.message}. Your draft is still here.`, "error");
@@ -6054,6 +6118,14 @@
         const response = await fetch(path, { ...options, headers, credentials: "same-origin", cache: "no-store" });
         let payload = null;
         try { payload = await response.json(); } catch (_) { payload = null; }
+        // An expired login sends the admin straight to sign-in, unless that would throw away
+        // unsaved edits; then the caller's error path keeps the draft on screen.
+        if (response.status === 401 && !hasUnsavedWork()) {
+          redirectToLogin();
+          const error = new Error("Admin session expired.");
+          error.status = 401;
+          throw error;
+        }
         if (!response.ok || (payload && payload.ok === false)) {
           const error = new Error((payload && payload.error) || `HTTP ${response.status}`);
           error.status = response.status;
