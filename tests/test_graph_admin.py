@@ -16,6 +16,7 @@ def test_graph_page_and_assets_require_admin_login(admin_client, load_main) -> N
     anonymous = TestClient(main.app, base_url="http://127.0.0.1:8787")
 
     for path in (
+        "/admin/lab",
         "/admin/graph",
         "/admin/assets/graph-viewer.css",
         "/admin/assets/graph-data.css",
@@ -30,20 +31,22 @@ def test_graph_page_and_assets_require_admin_login(admin_client, load_main) -> N
         assert response.headers["location"].startswith("/admin/login")
 
     client, _ = admin_client(main)
-    page = client.get("/admin/graph")
+    page = client.get("/admin/lab")
     assert page.status_code == 200
     assert page.headers["cache-control"] == "no-store"
     assert '<a class="workspace-brand" href="/admin/sessions" aria-label="MCP Session Bridge Sessions">' in page.text
     assert '<a class="brand" href="/admin/sessions"' not in page.text
     assert 'class="workspace-nav sb-nav" role="tablist"' in page.text
-    assert 'href="/admin/graph" aria-current="page" aria-selected="true"' in page.text
-    assert "CONTEXTS" in page.text
+    assert 'href="/admin/lab" aria-current="page" aria-selected="true"' in page.text
+    assert 'data-label="LAB">LAB</a>' in page.text
+    assert "CONTEXTS" not in page.text
     assert "Map" in page.text
     assert "Config" in page.text
     sessions = client.get("/admin/sessions")
     assert sessions.status_code == 200
-    assert 'href="/admin/graph"' in sessions.text
-    assert "GRAPH <small>WIP</small>" not in sessions.text
+    assert 'href="/admin/lab"' in sessions.text
+    assert "CONTEXTS" not in sessions.text
+    assert "WIP" not in sessions.text
     assert client.get("/admin/assets/graph-viewer.css").status_code == 200
     css = client.get("/admin/assets/pearl-gradient-nav.css")
     assert css.status_code == 200
@@ -68,17 +71,21 @@ def test_graph_release_gate_defaults_closed_and_serves_wip_page(admin_client, lo
     assert main.settings.graph_experimental is False
     sessions = client.get("/admin/sessions")
     assert sessions.status_code == 200
-    assert 'href="/admin/graph"' not in sessions.text
-    assert 'aria-disabled="true" aria-selected="false" data-label="GRAPH">GRAPH <small>WIP</small></span>' in sessions.text
+    assert 'href="/admin/lab"' in sessions.text
+    assert 'data-label="LAB">LAB</a>' in sessions.text
+    assert "CONTEXTS" not in sessions.text
+    assert "WIP" not in sessions.text
 
-    page = client.get("/admin/graph")
+    page = client.get("/admin/lab")
     assert page.status_code == 200
     assert page.headers["cache-control"] == "no-store"
-    assert "Graph is a work in progress" in page.text
-    assert "not supported in this release" in page.text
+    assert "A place for experiments" in page.text
+    assert "Graph is currently unavailable" in page.text
+    assert 'href="/admin/lab" aria-current="page"' in page.text
     assert "/admin/assets/graph-viewer.js" not in page.text
     assert 'id="codexOpenButton"' not in page.text
     assert 'href="/admin/sessions"' in page.text
+    assert client.get("/admin/graph").status_code == 200
 
 
 def test_graph_release_gate_blocks_workspace_mutations_and_subscription_actions(admin_client, load_main) -> None:
@@ -266,8 +273,8 @@ def test_sessions_view_exposes_workspace_navigation_contract() -> None:
     assert 'class="brand-lockup"' not in viewer
     assert 'class="workspace-nav sb-nav" role="tablist"' in viewer
     assert 'href="/admin/sessions" aria-current="page" aria-selected="true"' in viewer
-    assert 'href="/admin/graph" aria-selected="false"' in viewer
-    assert 'aria-disabled="true" aria-selected="false"' in viewer
+    assert 'href="/admin/lab" aria-selected="false"' in viewer
+    assert 'data-label="LAB">LAB</a>' in viewer
 
 
 def test_sessions_and_graph_share_workspace_header_contract() -> None:
@@ -283,7 +290,7 @@ def test_sessions_and_graph_share_workspace_header_contract() -> None:
         assert '<a class="workspace-brand"' in header
         assert '<nav class="workspace-nav sb-nav" role="tablist"' in header
         assert 'data-label="SESSIONS">SESSIONS</a>' in header
-        assert 'data-label="GRAPH">GRAPH</a>' in header
+        assert 'data-label="LAB">LAB</a>' in header
 
     workspace_rule = shared_css[shared_css.index(".workspace-bar {") : shared_css.index(".workspace-brand {")]
     assert "--workspace-bar-height: 4.15rem;" in shared_css

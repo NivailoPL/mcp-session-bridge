@@ -280,6 +280,11 @@ async def admin_graph_page(request: Request) -> Response:
     return await admin.graph_page(request)
 
 
+@mcp.custom_route("/admin/lab", methods=["GET"])
+async def admin_lab_page(request: Request) -> Response:
+    return await admin.graph_page(request)
+
+
 @mcp.custom_route("/admin/login", methods=["GET"])
 async def admin_login_get(request: Request) -> Response:
     return await admin.login_get(request)

@@ -137,8 +137,6 @@ BRAND_ASSET_MEDIA_TYPES = {
     ".svg": "image/svg+xml",
     ".webmanifest": "application/manifest+json",
 }
-GRAPH_NAV_LINK = '<a class="sb-nav__tab" role="tab" href="/admin/graph" aria-selected="false" tabindex="-1" data-label="GRAPH">GRAPH</a>'
-GRAPH_NAV_WIP = '<span class="sb-nav__tab" role="tab" aria-disabled="true" aria-selected="false" data-label="GRAPH">GRAPH <small>WIP</small></span>'
 logger = logging.getLogger(__name__)
 
 
@@ -179,7 +177,7 @@ class AdminHandlers:
             body = self.html_path.read_text(encoding="utf-8")
         except OSError:
             return HTMLResponse("Admin viewer is not installed.", status_code=500, headers=self._no_store_headers())
-        return HTMLResponse(self._render_workspace_navigation(body), headers=self._admin_headers())
+        return HTMLResponse(body, headers=self._admin_headers())
 
     async def graph_page(self, request: Request) -> Response:
         _, error = self._require_admin(request)
@@ -195,11 +193,6 @@ class AdminHandlers:
         except OSError:
             return HTMLResponse("Graph workspace is not installed.", status_code=500, headers=self._no_store_headers())
         return HTMLResponse(body, headers=self._admin_headers())
-
-    def _render_workspace_navigation(self, body: str) -> str:
-        if self.settings.graph_experimental:
-            return body
-        return body.replace(GRAPH_NAV_LINK, GRAPH_NAV_WIP)
 
     async def graph_asset(self, request: Request) -> Response:
         _, error = self._require_admin(request)

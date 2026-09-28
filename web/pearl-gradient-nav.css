@@ -195,6 +195,16 @@
   box-shadow: none;
 }
 
+.sb-nav__tab[data-label="LAB"],
+.workspace-nav.sb-nav .sb-nav__tab[data-label="LAB"] {
+  --sb-nav-grad-top: #eafffa;
+  --sb-nav-grad-pearl: #b6f3e8;
+  --sb-nav-grad-mid: #69d9c7;
+  --sb-nav-grad-bottom: #35a99c;
+  --sb-nav-glow: rgba(84, 218, 192, .45);
+  --sb-nav-hover: #96e9da;
+}
+
 @media (max-width: 760px) {
   .sb-nav {
     --sb-nav-size: 15px;
