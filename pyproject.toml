@@ -29,5 +29,5 @@ testpaths = ["tests"]
 pythonpath = ["."]
 
 [tool.mcp-session-bridge.development]
-target-version = "2026.9.1"
-label = "2026.9.1-beta"
+target-version = "2026.10.1"
+label = "2026.10.1-beta"
