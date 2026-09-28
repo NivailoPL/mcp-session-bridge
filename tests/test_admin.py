@@ -72,7 +72,7 @@ def test_admin_viewer_group_ui_contract() -> None:
     assert 'id="groupDeleteButton"' in viewer
     assert 'icon_key: "all_sessions"' in viewer
     assert 'node.dataset.count = String(conversationCount);' in viewer
-    assert 'spanCls("group-file-identity")' in viewer
+    assert 'id="fileScopeGroupMark"' in viewer
     assert 'setStatus(`Selected ${sessionId}.`, "ok");' not in viewer
     assert 'spanCls("file-meta", "No files")' not in viewer
 

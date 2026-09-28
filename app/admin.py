@@ -52,6 +52,7 @@ from app.image_files import (
     ImageWorkerBusyError,
     decode_image_base64,
     run_image_worker,
+    thumbnail_image_isolated,
     validate_image_isolated,
 )
 from app.output_probe import (
@@ -112,6 +113,7 @@ AI_RENAME_MIN_MAX_WORDS = 2
 AI_RENAME_MAX_MAX_WORDS = 10
 ADMIN_FILE_UPLOAD_MAX_BODY_BYTES = ((MAX_ADMIN_PDF_BYTES + 2) // 3 * 4) + 16_384
 ADMIN_FILE_EDIT_MAX_BODY_BYTES = (MAX_SESSION_FILE_BYTES * 6) + 16_384
+THUMBNAIL_CACHE_ENTRIES = 64
 CODEX_CHAT_MAX_BODY_BYTES = MAX_CHAT_MESSAGE_CHARS * 4 + 1_024
 CodexAppServerErrorTypes = (
     CodexUnavailableError,
@@ -165,6 +167,7 @@ class AdminHandlers:
         self.restart_requester = restart_requester
         self.codex = codex_client
         self.graph_runtime = graph_runtime
+        self._thumbnail_cache: dict[tuple[int, str], bytes] = {}
 
     async def index(self, request: Request) -> Response:
         return RedirectResponse("/admin/sessions", status_code=303)
@@ -1111,7 +1114,7 @@ class AdminHandlers:
         ]
         session_payload = _session_payload(session)
         session_payload["token_count"] = sum(exchange["total_token_count"] for exchange in exchange_payloads)
-        files = self.store.list_session_files(
+        files = self.store.list_admin_session_files(
             session_id=session.session_id,
             group_id=session.group_id,
         )
@@ -1124,6 +1127,7 @@ class AdminHandlers:
                     "session": [file for file in files if file["scope_type"] == "session"],
                     "group": [file for file in files if file["scope_type"] == "group"],
                 },
+                "file_labels": self.store.list_file_labels(session.group_id),
                 "exchanges": exchange_payloads,
             },
             headers=self._no_store_headers(),
@@ -1227,6 +1231,152 @@ class AdminHandlers:
                 "Content-Disposition": f"{disposition}; filename*=UTF-8''{encoded_filename}",
                 "X-Content-Type-Options": "nosniff",
             },
+        )
+
+    async def api_file_thumbnail(self, request: Request) -> Response:
+        _, error = self._require_admin(request)
+        if error:
+            return error
+        file_id, path_error = _path_file_id(request)
+        if path_error:
+            return path_error
+        binary_record = await asyncio.to_thread(self.store.get_session_file_binary, file_id)
+        if binary_record is None:
+            return self._json_error(f"Unknown file_id: {file_id}", status_code=404)
+        _, content_kind, _, binary_content = binary_record
+        if content_kind != "image" or binary_content is None:
+            return self._json_error("Thumbnails are available only for images.", status_code=400)
+        cache_key = (file_id, hashlib.sha256(binary_content).hexdigest())
+        thumbnail = self._thumbnail_cache.get(cache_key)
+        if thumbnail is None:
+            try:
+                thumbnail = await run_image_worker(thumbnail_image_isolated, binary_content)
+            except ImageWorkerBusyError as exc:
+                return JSONResponse(
+                    {"ok": False, "error": str(exc)},
+                    status_code=503,
+                    headers={**self._no_store_headers(), "Retry-After": "2"},
+                )
+            except ValueError as exc:
+                return self._json_error(str(exc), status_code=422)
+            self._thumbnail_cache[cache_key] = thumbnail
+            while len(self._thumbnail_cache) > THUMBNAIL_CACHE_ENTRIES:
+                self._thumbnail_cache.pop(next(iter(self._thumbnail_cache)))
+        return Response(
+            thumbnail,
+            media_type="image/jpeg",
+            headers={
+                # Image files cannot be edited and file ids are never reused.
+                "Cache-Control": "private, max-age=31536000, immutable",
+                "X-Content-Type-Options": "nosniff",
+            },
+        )
+
+    async def api_create_file_label(self, request: Request) -> Response:
+        _, error = self._require_admin_mutation(request)
+        if error:
+            return error
+        selected, selection_error = self._selected_session(request)
+        if selection_error:
+            return selection_error
+        payload, parse_error = await _json_body(request)
+        if parse_error:
+            return parse_error
+        if set(payload) != {"name", "color"}:
+            return self._json_error("A label needs exactly name and color.", status_code=400)
+        try:
+            label = self.store.create_file_label(selected.group_id, payload["name"], payload["color"])
+        except ValueError as exc:
+            return self._value_error(exc)
+        return JSONResponse({"ok": True, "label": label}, headers=self._no_store_headers())
+
+    async def api_update_file_label(self, request: Request) -> Response:
+        _, error = self._require_admin_mutation(request)
+        if error:
+            return error
+        selected, selection_error = self._selected_session(request)
+        if selection_error:
+            return selection_error
+        label_id, path_error = _path_label_id(request)
+        if path_error:
+            return path_error
+        payload, parse_error = await _json_body(request)
+        if parse_error:
+            return parse_error
+        if not payload or not set(payload) <= {"name", "color"}:
+            return self._json_error("Change the label's name, color, or both.", status_code=400)
+        try:
+            label = self.store.update_file_label(
+                label_id,
+                group_id=selected.group_id,
+                name=payload.get("name"),
+                color=payload.get("color"),
+            )
+        except ValueError as exc:
+            return self._value_error(exc)
+        return JSONResponse({"ok": True, "label": label}, headers=self._no_store_headers())
+
+    async def api_delete_file_label(self, request: Request) -> Response:
+        _, error = self._require_admin_mutation(request)
+        if error:
+            return error
+        selected, selection_error = self._selected_session(request)
+        if selection_error:
+            return selection_error
+        label_id, path_error = _path_label_id(request)
+        if path_error:
+            return path_error
+        try:
+            label = self.store.delete_file_label(label_id, group_id=selected.group_id)
+        except ValueError as exc:
+            return self._value_error(exc)
+        return JSONResponse({"ok": True, "label": label}, headers=self._no_store_headers())
+
+    async def api_assign_file_label(self, request: Request) -> Response:
+        _, error = self._require_admin_mutation(request)
+        if error:
+            return error
+        selected, selection_error = self._selected_session(request)
+        if selection_error:
+            return selection_error
+        label_id, path_error = _path_label_id(request)
+        if path_error:
+            return path_error
+        payload, parse_error = await _json_body(request)
+        if parse_error:
+            return parse_error
+        file_ids = payload.get("file_ids")
+        assigned = payload.get("assigned")
+        if (
+            set(payload) != {"file_ids", "assigned"}
+            or not isinstance(assigned, bool)
+            or not isinstance(file_ids, list)
+            or not all(isinstance(item, int) and not isinstance(item, bool) for item in file_ids)
+        ):
+            return self._json_error(
+                "Send file_ids as a list of integers and assigned as true or false.",
+                status_code=400,
+            )
+        try:
+            labels = self.store.set_file_label_assignment(
+                label_id,
+                file_ids,
+                assigned=assigned,
+                session_id=selected.session_id,
+            )
+        except SessionFileConflictError as exc:
+            return self._json_error(str(exc), status_code=409)
+        except ValueError as exc:
+            return self._value_error(exc)
+        return JSONResponse(
+            {
+                "ok": True,
+                "files": [
+                    {"file_id": file_id, "label_ids": label_ids}
+                    for file_id, label_ids in labels.items()
+                ],
+            },
+            headers=self._no_store_headers(),
         )
 
     async def pdfjs_asset(self, request: Request) -> Response:
@@ -2399,6 +2549,13 @@ def _path_file_id(request: Request) -> tuple[int, JSONResponse | None]:
         return int(request.path_params["file_id"]), None
     except (KeyError, TypeError, ValueError):
         return 0, AdminHandlers._json_error("Invalid file_id.", status_code=400)
+
+
+def _path_label_id(request: Request) -> tuple[int, JSONResponse | None]:
+    try:
+        return int(request.path_params["label_id"]), None
+    except (KeyError, TypeError, ValueError):
+        return 0, AdminHandlers._json_error("Invalid label_id.", status_code=400)
 
 
 def _admin_upload_mime_type(filename: str) -> str | None:

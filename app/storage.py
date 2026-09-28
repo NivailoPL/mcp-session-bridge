@@ -106,6 +106,10 @@ SESSION_FILE_MANIFEST_COLUMNS = """
     extraction_status, extracted_text_bytes
 """
 SESSION_FILE_RECORD_COLUMNS = f"{SESSION_FILE_MANIFEST_COLUMNS}, content"
+FILE_LABEL_COLORS = ("yellow", "purple", "pink", "sky", "lime", "orange")
+MAX_FILE_LABELS_PER_GROUP = 24
+MAX_FILE_LABEL_NAME_CHARS = 40
+FILE_PREVIEW_CHARS = 600
 
 
 class SessionFileConflictError(ValueError):
@@ -477,6 +481,32 @@ class Store:
 
                 CREATE INDEX IF NOT EXISTS idx_session_files_scope
                     ON session_files(scope_type, session_id, group_id, created_at);
+
+                -- Admin-only file labels. They belong to a session group, are never
+                -- shown to models, and older Bridge versions simply ignore them.
+                CREATE TABLE IF NOT EXISTS file_labels (
+                    label_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    group_id TEXT NOT NULL,
+                    name TEXT NOT NULL,
+                    color TEXT NOT NULL,
+                    created_at INTEGER NOT NULL,
+                    updated_at INTEGER NOT NULL
+                );
+
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_file_labels_group_name
+                    ON file_labels(group_id, name COLLATE NOCASE);
+
+                CREATE TABLE IF NOT EXISTS session_file_labels (
+                    file_id INTEGER NOT NULL,
+                    label_id INTEGER NOT NULL,
+                    created_at INTEGER NOT NULL,
+                    PRIMARY KEY(file_id, label_id),
+                    FOREIGN KEY(file_id) REFERENCES session_files(file_id) ON DELETE CASCADE,
+                    FOREIGN KEY(label_id) REFERENCES file_labels(label_id) ON DELETE CASCADE
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_session_file_labels_label
+                    ON session_file_labels(label_id);
 
                 CREATE TABLE IF NOT EXISTS exchange_admin_events (
                     event_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -2206,6 +2236,8 @@ class Store:
                 "UPDATE session_files SET group_id = ? WHERE scope_type = 'group' AND group_id = ?",
                 (resolved_destination, resolved_group_id),
             )
+            # The group's labels go with it; the files and sessions move on unlabeled.
+            conn.execute("DELETE FROM file_labels WHERE group_id = ?", (resolved_group_id,))
             conn.execute(
                 """
                 UPDATE session_groups
@@ -2810,6 +2842,8 @@ class Store:
                 """,
                 (resolved_scope_type, target_session_id, target_group_id, file_id),
             )
+            # Labels are a personal sorting aid; a moved file starts clean.
+            conn.execute("DELETE FROM session_file_labels WHERE file_id = ?", (file_id,))
             updated = conn.execute(
                 f"SELECT {SESSION_FILE_RECORD_COLUMNS} FROM session_files WHERE file_id = ?",
                 (file_id,),
@@ -2839,6 +2873,195 @@ class Store:
             )
             conn.execute("DELETE FROM session_files WHERE file_id = ?", (file_id,))
         return _session_file_from_row(row)
+
+    def list_admin_session_files(self, *, session_id: str, group_id: str) -> list[dict[str, Any]]:
+        """File manifests for the admin browser: a short text preview and label ids.
+
+        Models never receive this shape; MCP tools keep using list_session_files.
+        """
+        with self._lock, self._connect() as conn:
+            rows = conn.execute(
+                f"""SELECT {SESSION_FILE_MANIFEST_COLUMNS},
+                    CASE WHEN content_kind = 'text' THEN substr(content, 1, ?) END AS preview,
+                    (SELECT client_name FROM clients WHERE clients.client_id = session_files.created_by)
+                        AS created_by_name
+                FROM session_files
+                WHERE (scope_type = 'session' AND session_id = ?)
+                   OR (scope_type = 'group' AND group_id = ?)
+                ORDER BY created_at DESC, file_id DESC
+                """,
+                (FILE_PREVIEW_CHARS, session_id, group_id),
+            ).fetchall()
+            label_ids = self._label_ids_for_files(conn, [row["file_id"] for row in rows], group_id)
+        manifests = []
+        for row in rows:
+            manifest = _session_file_manifest_from_row(row)
+            manifest["preview"] = row["preview"]
+            manifest["created_by_name"] = row["created_by_name"]
+            manifest["label_ids"] = label_ids.get(row["file_id"], [])
+            manifests.append(manifest)
+        return manifests
+
+    def list_file_labels(self, group_id: str) -> list[dict[str, Any]]:
+        with self._lock, self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT label_id, group_id, name, color, created_at, updated_at
+                FROM file_labels
+                WHERE group_id = ?
+                ORDER BY name COLLATE NOCASE, label_id
+                """,
+                (group_id.strip(),),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def create_file_label(self, group_id: str, name: str, color: str) -> dict[str, Any]:
+        resolved_name = _validate_file_label_name(name)
+        resolved_color = _validate_file_label_color(color)
+        now = int(time.time())
+        with self._lock, self._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            self._require_active_group(conn, group_id)
+            count = conn.execute(
+                "SELECT COUNT(*) FROM file_labels WHERE group_id = ?", (group_id,)
+            ).fetchone()[0]
+            if count >= MAX_FILE_LABELS_PER_GROUP:
+                raise ValueError(f"A group can have at most {MAX_FILE_LABELS_PER_GROUP} labels")
+            try:
+                cursor = conn.execute(
+                    """
+                    INSERT INTO file_labels(group_id, name, color, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (group_id, resolved_name, resolved_color, now, now),
+                )
+            except sqlite3.IntegrityError as exc:
+                raise ValueError(f"A label named {resolved_name!r} already exists") from exc
+            row = conn.execute(
+                "SELECT label_id, group_id, name, color, created_at, updated_at FROM file_labels WHERE label_id = ?",
+                (cursor.lastrowid,),
+            ).fetchone()
+        return dict(row)
+
+    def update_file_label(
+        self,
+        label_id: int,
+        *,
+        group_id: str,
+        name: str | None = None,
+        color: str | None = None,
+    ) -> dict[str, Any]:
+        if name is None and color is None:
+            raise ValueError("Provide a new name or color")
+        now = int(time.time())
+        with self._lock, self._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            row = self._require_group_label(conn, label_id, group_id)
+            resolved_name = _validate_file_label_name(name) if name is not None else row["name"]
+            resolved_color = _validate_file_label_color(color) if color is not None else row["color"]
+            try:
+                conn.execute(
+                    "UPDATE file_labels SET name = ?, color = ?, updated_at = ? WHERE label_id = ?",
+                    (resolved_name, resolved_color, now, label_id),
+                )
+            except sqlite3.IntegrityError as exc:
+                raise ValueError(f"A label named {resolved_name!r} already exists") from exc
+            updated = conn.execute(
+                "SELECT label_id, group_id, name, color, created_at, updated_at FROM file_labels WHERE label_id = ?",
+                (label_id,),
+            ).fetchone()
+        return dict(updated)
+
+    def delete_file_label(self, label_id: int, *, group_id: str) -> dict[str, Any]:
+        with self._lock, self._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            row = self._require_group_label(conn, label_id, group_id)
+            # Assignments go with the label (ON DELETE CASCADE); files are untouched.
+            conn.execute("DELETE FROM file_labels WHERE label_id = ?", (label_id,))
+        return dict(row)
+
+    def set_file_label_assignment(
+        self,
+        label_id: int,
+        file_ids: list[int],
+        *,
+        assigned: bool,
+        session_id: str,
+    ) -> dict[int, list[int]]:
+        """Add or remove one label on files visible to a session; returns each file's labels."""
+        resolved_ids = sorted({int(file_id) for file_id in file_ids})
+        if not resolved_ids:
+            raise ValueError("Choose at least one file")
+        if len(resolved_ids) > 500:
+            raise ValueError("Label at most 500 files at once")
+        now = int(time.time())
+        with self._lock, self._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            session = conn.execute(
+                "SELECT group_id FROM sessions WHERE session_id = ?", (session_id,)
+            ).fetchone()
+            if session is None:
+                raise ValueError(f"Unknown session_id: {session_id}")
+            group_id = session["group_id"]
+            self._require_group_label(conn, label_id, group_id)
+            for file_id in resolved_ids:
+                row = conn.execute(
+                    f"SELECT {SESSION_FILE_MANIFEST_COLUMNS} FROM session_files WHERE file_id = ?",
+                    (file_id,),
+                ).fetchone()
+                if row is None:
+                    raise ValueError(f"Unknown file_id: {file_id}")
+                _require_file_visible_to_session(conn, row, session_id=session_id, group_id=group_id)
+                if assigned:
+                    conn.execute(
+                        "INSERT OR IGNORE INTO session_file_labels(file_id, label_id, created_at) VALUES (?, ?, ?)",
+                        (file_id, label_id, now),
+                    )
+                else:
+                    conn.execute(
+                        "DELETE FROM session_file_labels WHERE file_id = ? AND label_id = ?",
+                        (file_id, label_id),
+                    )
+            label_ids = self._label_ids_for_files(conn, resolved_ids, group_id)
+        return {file_id: label_ids.get(file_id, []) for file_id in resolved_ids}
+
+    @staticmethod
+    def _require_group_label(conn: sqlite3.Connection, label_id: int, group_id: str) -> sqlite3.Row:
+        row = conn.execute(
+            """
+            SELECT label_id, group_id, name, color, created_at, updated_at
+            FROM file_labels
+            WHERE label_id = ? AND group_id = ?
+            """,
+            (label_id, group_id),
+        ).fetchone()
+        if row is None:
+            raise ValueError(f"Unknown label_id: {label_id}")
+        return row
+
+    @staticmethod
+    def _label_ids_for_files(
+        conn: sqlite3.Connection,
+        file_ids: list[int],
+        group_id: str,
+    ) -> dict[int, list[int]]:
+        if not file_ids:
+            return {}
+        placeholders = ", ".join("?" for _ in file_ids)
+        rows = conn.execute(
+            f"""
+            SELECT assignment.file_id, assignment.label_id
+            FROM session_file_labels AS assignment
+            JOIN file_labels AS label ON label.label_id = assignment.label_id
+            WHERE assignment.file_id IN ({placeholders}) AND label.group_id = ?
+            ORDER BY label.name COLLATE NOCASE, label.label_id
+            """,
+            (*file_ids, group_id),
+        ).fetchall()
+        result: dict[int, list[int]] = {}
+        for row in rows:
+            result.setdefault(row["file_id"], []).append(row["label_id"])
+        return result
 
     def get_session(self, session_id: str) -> SessionRecord | None:
         with self._lock, self._connect() as conn:
@@ -2873,6 +3096,18 @@ class Store:
                 "UPDATE sessions SET group_id = ?, updated_at = ? WHERE session_id = ?",
                 (resolved_group_id, now, session_id),
             )
+            if row["group_id"] != resolved_group_id:
+                # Labels belong to the old group, so the session's own files lose them.
+                conn.execute(
+                    """
+                    DELETE FROM session_file_labels
+                    WHERE file_id IN (
+                        SELECT file_id FROM session_files
+                        WHERE scope_type = 'session' AND session_id = ?
+                    )
+                    """,
+                    (session_id,),
+                )
             updated = conn.execute("SELECT * FROM sessions WHERE session_id = ?", (session_id,)).fetchone()
         return _session_from_row(updated)
 
@@ -3507,6 +3742,22 @@ def _validate_group_icon_key(value: str) -> str:
 def _slugify(value: str) -> str:
     slug = re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")[:48]
     return slug or "group"
+
+
+def _validate_file_label_name(value: str) -> str:
+    name = " ".join(str(value or "").split())
+    if not name:
+        raise ValueError("Label name must not be empty")
+    if len(name) > MAX_FILE_LABEL_NAME_CHARS:
+        raise ValueError(f"Label name must be {MAX_FILE_LABEL_NAME_CHARS} characters or fewer")
+    return name
+
+
+def _validate_file_label_color(value: str) -> str:
+    color = str(value or "").strip().lower()
+    if color not in FILE_LABEL_COLORS:
+        raise ValueError(f"Label color must be one of: {', '.join(FILE_LABEL_COLORS)}")
+    return color
 
 
 def _validate_file_name(value: str) -> str:

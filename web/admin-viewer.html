@@ -558,22 +558,40 @@
     .meta .mono { font-size: var(--t-meta); color: var(--faint-ink); }
     .top-actions { display: flex; flex-wrap: wrap; gap: .5rem; justify-content: flex-start; align-items: center; }
     .content-wrap { position: relative; display: flex; align-items: flex-start; width: 100%; max-width: 84rem; }
+    .side-rail {
+      position: sticky; top: 50%; transform: translateY(-50%); z-index: 4; display: flex; flex-direction: column;
+      align-items: center; gap: .9rem; margin: 0 .55rem 0 1rem;
+    }
     .turn-nav {
-      position: sticky; top: 50%; transform: translateY(-50%); z-index: 4; display: none; flex-direction: column; gap: .35rem;
-      padding: .35rem; margin: 0 .55rem 0 1rem; border: 1px solid var(--stroke-soft);
+      display: none; flex-direction: column; gap: .35rem;
+      padding: .35rem; border: 1px solid var(--stroke-soft);
       border-radius: var(--r-card); background: #10131a;
     }
     .turn-nav.show { display: flex; }
     .turn-nav button { width: var(--h-tile); min-height: var(--h-tile); padding: 0; border-radius: var(--r-ctrl); }
     .turn-nav svg { width: 15px; height: 15px; }
-    .turn-nav-divider { width: 100%; height: 1px; margin: .1rem 0; background: var(--stroke-soft); }
-    .file-workspace-launcher { position: relative; }
-    .file-workspace-count {
-      position: absolute; top: -.35rem; right: -.35rem; display: grid; place-items: center;
-      min-width: 1.15rem; height: 1.15rem; padding: 0 .25rem; border-radius: var(--r-pill);
-      border: 1px solid #10131a; background: var(--accent); color: #fff;
-      font-size: var(--t-label); font-weight: 800; font-variant-numeric: tabular-nums;
+    /* Files is a destination, not scrolling: its own tinted card, apart from the arrows. */
+    .file-dock {
+      position: relative; display: flex; flex-direction: column; align-items: center; gap: .45rem;
+      width: 3.4rem; min-height: 0; padding: .65rem 0 .5rem; border: 1px solid rgba(122, 125, 240, .5);
+      border-radius: var(--r-card); background: #15182c; color: #c7c9fb; box-shadow: 0 0 0 4px rgba(99, 102, 241, .08);
     }
+    .file-dock:hover { background: #1a1e36; border-color: var(--accent-2); }
+    .file-dock > svg { width: 18px; height: 18px; }
+    .file-dock-mix { display: flex; width: 2rem; height: 4px; border-radius: var(--r-pill); overflow: hidden; background: rgba(255, 255, 255, .08); }
+    .file-dock-mix span { height: 100%; background: var(--ft); }
+    .file-dock-count { font-family: "Geist Mono", ui-monospace, monospace; font-size: var(--t-label); font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; }
+    .file-dock-tip {
+      position: absolute; left: calc(100% + .75rem); top: 0; z-index: 6; display: grid; gap: .35rem; width: 12.5rem; padding: .65rem .75rem;
+      border: 1px solid rgba(255, 255, 255, .12); border-radius: 10px; background: #161a24; box-shadow: var(--shadow-pop);
+      color: var(--text-2); font-size: var(--t-meta); font-weight: 500; text-align: left; letter-spacing: 0;
+      opacity: 0; pointer-events: none; transition: opacity .12s ease;
+    }
+    .file-dock:hover .file-dock-tip, .file-dock:focus-visible .file-dock-tip { opacity: 1; }
+    .file-dock-tip b { color: var(--text); font-size: var(--t-ctrl); }
+    .file-dock-tip kbd { margin-left: .35rem; color: var(--faint-ink); font-family: "Geist Mono", ui-monospace, monospace; font-size: var(--t-label); }
+    .file-dock-tip span { display: flex; justify-content: space-between; gap: .75rem; }
+    .file-dock-tip span > span:last-child { font-family: "Geist Mono", ui-monospace, monospace; }
     .content { display: grid; gap: 1rem; width: 100%; min-width: 0; max-width: 80rem; padding: 1.4rem 1.5rem 3rem .4rem; }
 
     .status {
@@ -609,25 +627,45 @@
     .demo-banner.show { display: flex; }
     .demo-banner b { color: #fff; font-weight: 600; }
 
-    /* ---------- file workspace ---------- */
-    #fileWorkspaceDialog {
-      width: min(72rem, calc(100vw - 2rem)); height: min(48rem, calc(100vh - 2rem));
-      max-width: none; max-height: none;
+    /* ---------- file browser + viewer ----------
+       Two layers: the browser (full-window dialog for finding and managing files) and the
+       viewer (a second dialog stacked on top of it). Type = square tile, label = round
+       pill with a dot, author = round monogram: three shapes, never confused. */
+    [hidden] { display: none !important; }
+    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+    .fb-list.is-grid > .fb-empty, .fb-list.is-grid > .fb-drop-hint { grid-column: 1 / -1; }
+    .ft-text { --ft: #b4b7fa; --ft-bg: rgba(99, 102, 241, .16); --ft-bd: rgba(122, 125, 240, .42); }
+    .ft-data { --ft: #5eead4; --ft-bg: rgba(45, 212, 191, .12); --ft-bd: rgba(45, 212, 191, .38); }
+    .ft-pdf { --ft: #fda4af; --ft-bg: rgba(251, 113, 133, .13); --ft-bd: rgba(251, 113, 133, .4); }
+    .ft-image { --ft: #7dd3fc; --ft-bg: rgba(56, 189, 248, .12); --ft-bd: rgba(56, 189, 248, .38); }
+    .ft-web { --ft: #fdba74; --ft-bg: rgba(251, 146, 60, .12); --ft-bd: rgba(251, 146, 60, .38); }
+    .ft-tile {
+      width: 36px; height: 36px; flex: 0 0 auto; box-sizing: border-box; display: grid; place-items: center;
+      border-radius: 9px; background: var(--ft-bg); border: 1px solid var(--ft-bd); color: var(--ft);
     }
-    #fileWorkspaceDialog[open] { display: grid; grid-template-rows: auto minmax(0, 1fr); }
-    .file-workspace-grid { display: grid; grid-template-columns: minmax(18rem, 23rem) minmax(0, 1fr); min-height: 0; }
-    .file-workspace-list, .file-workspace-detail { min-width: 0; min-height: 0; overflow: auto; padding: 1rem; }
-    .file-workspace-list { display: grid; align-content: start; gap: 1rem; border-right: 1px solid var(--stroke-soft); }
-    .file-workspace-detail { display: grid; align-content: start; gap: .85rem; }
-    .file-workspace-detail-head { display: flex; align-items: flex-start; justify-content: space-between; gap: .75rem; }
-    .file-workspace-detail-head h4 { margin: 0; overflow-wrap: anywhere; }
-    .file-detail-actions { display: flex; align-items: center; gap: .45rem; flex-wrap: wrap; }
-    .file-delete-button { color: var(--danger); border-color: rgba(251, 113, 133, .35); }
-    .file-delete-button:hover { background: var(--danger-soft); border-color: var(--danger); color: #fff; }
+    .ft-tile svg { width: 18px; height: 18px; }
+    .ft-badge {
+      display: inline-block; padding: 1px 6px; border-radius: 5px; background: var(--ft-bg); color: var(--ft);
+      font-family: "Geist Mono", ui-monospace, monospace; font-size: 10.5px; font-weight: 600; letter-spacing: .05em; line-height: 1.5;
+    }
+    .lb-pill {
+      display: inline-flex; align-items: center; gap: 6px; max-width: 100%; min-height: 24px; padding: 0 9px; box-sizing: border-box;
+      border: 1px solid rgba(255, 255, 255, .1); border-radius: var(--r-pill); color: var(--text-2);
+      font-size: var(--t-meta); font-weight: 600; line-height: 1.2;
+    }
+    .lb-pill::before { content: ""; width: 7px; height: 7px; flex: 0 0 auto; border-radius: var(--r-pill); background: var(--lb, var(--muted)); }
+    .lb-pill button { min-height: 0; width: 16px; height: 16px; padding: 0; margin-right: -4px; border: 0; background: transparent; color: var(--faint-ink); font-size: 14px; line-height: 1; }
+    .lb-pill button:hover { color: var(--text); background: transparent; }
+
+    .file-workspace-placeholder {
+      display: grid; place-items: center; min-height: 15rem; padding: 2rem; text-align: center;
+      border: 1px dashed var(--stroke); border-radius: var(--r-card); color: var(--muted);
+    }
     .file-editor-pane, .file-decision-pane { display: grid; gap: .75rem; }
     .file-editor-pane textarea {
-      min-height: min(56vh, 32rem); resize: vertical; tab-size: 2;
-      font-family: "Geist Mono", ui-monospace, monospace; font-size: var(--t-ctrl); line-height: 1.55;
+      min-height: min(62vh, 44rem); resize: vertical; tab-size: 2;
+      font-family: "Geist Mono", ui-monospace, monospace; font-size: var(--t-ctrl); line-height: 1.65;
+      padding: 1rem 1.15rem; border-color: rgba(122, 125, 240, .4); background: #0b0d12;
     }
     .file-editor-status { min-height: 1.25rem; margin: 0; color: var(--faint-ink); font-size: var(--t-meta); }
     .file-editor-status.is-error { color: var(--danger); }
@@ -637,65 +675,297 @@
       background: rgba(255, 255, 255, .025);
     }
     .file-decision-pane.is-danger { border-color: rgba(251, 113, 133, .34); background: var(--danger-soft); }
-    .file-decision-pane h5 { margin: 0; font-size: var(--t-title); }
+    .file-decision-pane h5 { margin: 0; font-size: var(--t-title); overflow-wrap: anywhere; }
     .file-decision-pane p { margin: 0; color: var(--muted); line-height: 1.55; }
     .file-decision-actions { display: flex; gap: .5rem; flex-wrap: wrap; }
     .file-decision-actions .danger { margin-left: auto; }
-    [hidden] { display: none !important; }
-    .file-workspace-back { display: none; }
-    .file-workspace-placeholder {
-      display: grid; place-items: center; min-height: 15rem; padding: 2rem; text-align: center;
-      border: 1px dashed var(--stroke); border-radius: var(--r-card); color: var(--muted);
+
+    /* browser */
+    #fileWorkspaceDialog {
+      --fb-cols: 16px 36px minmax(0, 1fr) 12rem 7.5rem 4.5rem 6.5rem 3.6rem;
+      width: calc(100vw - 2rem); height: calc(100vh - 2rem); max-width: 100rem; max-height: none;
+      border-radius: 16px; background: #0b0d12; overflow: hidden;
     }
-    .file-bucket { display: grid; gap: .45rem; min-width: 0; }
-    .file-bucket-title { display: flex; align-items: center; gap: .45rem; min-height: var(--h-micro); font-size: var(--t-label); text-transform: uppercase; letter-spacing: .14em; color: var(--faint-ink); }
-    .group-file-identity {
-      width: 1.55rem; height: 1.55rem; display: inline-grid; place-items: center; flex: 0 0 auto;
-      border-radius: var(--r-ctrl); color: var(--g, var(--accent-ink));
-      background: color-mix(in oklab, var(--g, var(--accent)) 13%, transparent);
-      border: 1px solid color-mix(in oklab, var(--g, var(--accent)) 38%, transparent);
+    #fileWorkspaceDialog[open] { display: grid; grid-template-rows: auto minmax(0, 1fr); grid-template-columns: minmax(0, 1fr); }
+    .fb-head {
+      display: flex; align-items: center; flex-wrap: wrap; gap: .75rem 1rem; min-height: 64px; box-sizing: border-box;
+      padding: .55rem 1rem .55rem 1.25rem; border-bottom: 1px solid rgba(255, 255, 255, .07); background: #0e1117;
     }
-    .group-file-identity svg { width: 14px; height: 14px; }
-    .file-list { display: grid; gap: .4rem; }
-    .file-drop-zone {
-      display: grid; gap: .4rem; padding: .7rem; border: 1px dashed var(--stroke);
-      border-radius: var(--r-ctrl); background: rgba(255, 255, 255, .025); color: var(--muted);
-      font-size: var(--t-meta); transition: border-color .16s ease, background .16s ease, box-shadow .16s ease;
+    .fb-title { display: flex; align-items: center; gap: .55rem; margin: 0; font-size: var(--t-title); font-weight: 700; letter-spacing: -.01em; }
+    .fb-title svg { width: 18px; height: 18px; color: var(--accent-ink); }
+    .fb-scope { display: flex; min-width: 0; gap: 4px; padding: 4px; border: 1px solid rgba(255, 255, 255, .07); border-radius: 11px; background: rgba(255, 255, 255, .025); }
+    .fb-scope-tab { gap: .5rem; min-height: 34px; white-space: nowrap; padding: 0 .85rem; border-color: transparent; background: transparent; color: var(--muted); font-weight: 700; }
+    .fb-scope-tab:hover { background: rgba(255, 255, 255, .04); border-color: transparent; }
+    .fb-scope-tab[aria-selected="true"] { background: #1a1e2a; border-color: rgba(255, 255, 255, .1); color: #fff; }
+    .fb-scope-tab svg { width: 15px; height: 15px; }
+    .fb-scope-tab.is-drop-target { border: 1.5px dashed rgba(122, 125, 240, .6); color: #c7c9fb; }
+    .fb-scope-tab.is-drop-hover { border-style: solid; border-color: var(--accent-2); background: var(--accent-soft); color: #fff; }
+    .fb-count {
+      min-width: 20px; height: 18px; padding: 0 6px; box-sizing: border-box; display: inline-grid; place-items: center;
+      border-radius: var(--r-pill); background: rgba(255, 255, 255, .07); color: var(--muted);
+      font-family: "Geist Mono", ui-monospace, monospace; font-size: var(--t-label); font-weight: 500;
     }
-    .file-drop-zone:focus-within, .file-drop-zone.is-drop-target {
-      border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 2px rgba(122, 125, 240, .12);
+    .fb-scope-tab[aria-selected="true"] .fb-count { background: var(--accent); color: #fff; }
+    .fb-group-mark {
+      width: 16px; height: 16px; display: inline-grid; place-items: center; border-radius: 5px; color: var(--g, var(--accent-ink));
+      background: color-mix(in oklab, var(--g, var(--accent)) 20%, transparent);
+      border: 1px solid color-mix(in oklab, var(--g, var(--accent)) 50%, transparent);
     }
-    .file-drop-zone.is-pending { opacity: .65; pointer-events: none; }
-    .file-drop-zone input[type="file"] { max-width: 100%; color: var(--text); font: inherit; }
-    .file-drop-zone input[type="file"]::file-selector-button {
-      margin-right: .55rem; padding: .42rem .62rem; border: 1px solid var(--stroke);
-      border-radius: var(--r-ctrl); background: rgba(255, 255, 255, .06); color: var(--text); cursor: pointer;
+    .fb-group-mark svg { width: 11px; height: 11px; }
+    .fb-spacer { flex: 1 1 0; }
+    .fb-search {
+      display: flex; align-items: center; gap: .5rem; width: min(18rem, 100%); height: 34px; padding: 0 .75rem; box-sizing: border-box;
+      border: 1px solid rgba(255, 255, 255, .08); border-radius: var(--r-ctrl); background: rgba(255, 255, 255, .03); color: var(--faint-ink);
     }
-    .file-operation-status { min-height: 1.1rem; margin: 0; color: var(--faint-ink); font-size: var(--t-meta); }
-    .file-operation-status.is-error { color: var(--danger); }
-    .file-operation-status.is-ok { color: var(--ok); }
-    .file-list-empty { margin: 0; padding: .65rem .75rem; border: 1px dashed var(--stroke-soft); border-radius: var(--r-ctrl); color: var(--faint-ink); font-size: var(--t-ctrl); }
-    .file-row-card { display: flex; align-items: stretch; gap: .4rem; min-width: 0; }
-    .file-row-card[draggable="true"] { cursor: grab; }
-    .file-row-card.is-dragging { opacity: .46; }
-    .file-button {
-      min-width: 0; flex: 1; min-height: 3.25rem; justify-content: flex-start; text-align: left;
-      padding: .65rem .75rem; border-radius: var(--r-ctrl); background: rgba(0, 0, 0, .18);
+    .fb-search:focus-within { border-color: rgba(122, 125, 240, .5); }
+    .fb-search svg { width: 15px; height: 15px; flex: 0 0 auto; }
+    .fb-search input { flex: 1; min-width: 0; min-height: 0; height: 30px; padding: 0; border: 0; outline: 0; background: transparent; font-size: var(--t-ctrl); }
+    .fb-help { width: 34px; min-height: 34px; padding: 0; border-radius: var(--r-pill); color: var(--text-2); font-weight: 800; }
+    .fb-icon-button { width: 34px; min-height: 34px; padding: 0; }
+    .fb-icon-button svg, .fb-upload svg { width: 15px; height: 15px; }
+    .fb-body { display: grid; grid-template-columns: 16rem minmax(0, 1fr); min-height: 0; }
+    .fb-side {
+      display: flex; flex-direction: column; gap: 1.35rem; min-height: 0; overflow: auto; padding: 1.1rem .85rem;
+      border-right: 1px solid rgba(255, 255, 255, .06); background: #0d1016;
     }
-    .file-move-button { flex: 0 0 auto; align-self: stretch; padding: .45rem .55rem; font-size: var(--t-label); }
-    .file-button.is-active { border-color: var(--accent); background: var(--accent-soft); }
-    .file-row { display: flex; align-items: center; gap: .6rem; width: 100%; min-width: 0; }
-    .file-icon { width: 2rem; height: 2rem; border-radius: var(--r-ctrl); display: grid; place-items: center; flex: 0 0 auto; color: var(--accent-ink); background: var(--accent-soft); border: 1px solid rgba(99, 102, 241, .22); }
-    .file-icon svg { width: 16px; height: 16px; }
-    .file-main { display: grid; gap: .12rem; min-width: 0; flex: 1; }
-    .file-title-line { display: flex; align-items: center; gap: .4rem; min-width: 0; }
-    .file-name { min-width: 0; flex: 1; font-weight: 600; font-size: var(--t-body); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .file-format-badge {
-      flex: 0 0 auto; padding: .13rem .35rem; border: 1px solid rgba(122, 125, 240, .35);
-      border-radius: var(--r-xs); background: var(--accent-soft); color: var(--accent-ink);
-      font-family: "Geist Mono", ui-monospace, monospace; font-size: var(--t-label); font-weight: 800; letter-spacing: .04em;
+    .fb-side-section { display: grid; gap: 2px; }
+    .fb-side-title {
+      display: flex; align-items: center; min-height: 24px; padding: 0 .25rem .3rem .6rem;
+      font-size: var(--t-label); font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--faint-ink);
     }
-    .file-meta { font-size: var(--t-label); color: var(--faint-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .fb-side-title span { flex: 1; }
+    .fb-side-title button { width: 24px; min-height: 24px; padding: 0; border-color: transparent; background: transparent; color: var(--muted); }
+    .fb-side-title button svg { width: 14px; height: 14px; }
+    .fb-nav { display: grid; gap: 2px; }
+    .fb-nav-row { display: flex; align-items: center; gap: 2px; min-width: 0; border-radius: var(--r-ctrl); }
+    .fb-nav-item {
+      flex: 1; min-width: 0; justify-content: flex-start; gap: .6rem; min-height: 34px; padding: 0 .6rem;
+      border-color: transparent; background: transparent; color: var(--text-2); font-weight: 600; text-align: left;
+    }
+    .fb-nav-item:hover { background: rgba(255, 255, 255, .04); border-color: transparent; }
+    .fb-nav-item.is-active { border-color: rgba(122, 125, 240, .35); background: var(--accent-soft); color: var(--text); }
+    .fb-nav-name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+    .fb-nav-count { font-family: "Geist Mono", ui-monospace, monospace; font-size: var(--t-label); font-weight: 500; color: var(--faint-ink); }
+    .fb-swatch { width: 14px; height: 14px; flex: 0 0 auto; box-sizing: border-box; border-radius: 4px; background: var(--ft-bg); border: 1.5px solid var(--ft); }
+    .fb-dot { width: 8px; height: 8px; flex: 0 0 auto; border-radius: var(--r-pill); background: var(--lb); }
+    .fb-nav-edit { width: 26px; min-height: 26px; padding: 0; border-color: transparent; background: transparent; color: var(--faint-ink); opacity: 0; }
+    .fb-nav-row:hover .fb-nav-edit, .fb-nav-edit:focus-visible { opacity: 1; }
+    .fb-nav-edit svg { width: 13px; height: 13px; }
+    .fb-nav-row.is-drop-target .fb-nav-item { outline: 1.5px dashed rgba(255, 255, 255, .16); outline-offset: -1px; }
+    .fb-nav-row.is-drop-hover .fb-nav-item {
+      outline: 1.5px solid var(--lb); background: color-mix(in oklab, var(--lb) 16%, transparent); color: #fff;
+      box-shadow: 0 0 0 4px color-mix(in oklab, var(--lb) 12%, transparent);
+    }
+    .fb-label-form { display: grid; gap: .55rem; margin-top: .35rem; padding: .65rem; border: 1px solid var(--stroke); border-radius: var(--r-ctrl); background: rgba(255, 255, 255, .03); }
+    .fb-label-form input { min-height: 32px; font-size: var(--t-ctrl); }
+    .fb-color-row { display: flex; flex-wrap: wrap; gap: .4rem; }
+    .fb-color { width: 22px; min-height: 22px; height: 22px; padding: 0; border-radius: var(--r-pill); border: 2px solid transparent; background: var(--lb); }
+    .fb-color:hover { background: var(--lb); border-color: rgba(255, 255, 255, .45); }
+    .fb-color[aria-pressed="true"] { border-color: #fff; box-shadow: 0 0 0 2px rgba(0, 0, 0, .6) inset; }
+    .fb-form-actions { display: flex; gap: .4rem; flex-wrap: wrap; }
+    .fb-form-actions button { min-height: 28px; padding: 0 .65rem; font-size: var(--t-meta); }
+    .fb-form-actions .danger { margin-left: auto; }
+    .fb-form-error { margin: 0; color: var(--danger); font-size: var(--t-meta); }
+    .fb-side-note {
+      display: flex; gap: .5rem; margin: .45rem 0 0; padding: .6rem; border-radius: var(--r-ctrl);
+      background: rgba(255, 255, 255, .025); color: var(--faint-ink); font-size: var(--t-meta); line-height: 1.45;
+    }
+    .fb-side-note svg { width: 14px; height: 14px; flex: 0 0 auto; margin-top: 2px; }
+    .fb-side-link { justify-content: flex-start; gap: .5rem; margin-top: auto; border-color: transparent; background: transparent; color: var(--muted); font-size: var(--t-meta); }
+    .fb-side-link .fb-q { display: inline-grid; place-items: center; width: 18px; height: 18px; border: 1px solid var(--stroke-strong); border-radius: var(--r-pill); font-size: var(--t-label); font-weight: 800; }
+    .fb-main { position: relative; display: grid; grid-template-rows: auto auto minmax(0, 1fr); min-width: 0; min-height: 0; }
+    .fb-main.is-grid { grid-template-rows: auto minmax(0, 1fr); }
+    .fb-main.is-grid .fb-list-head { display: none; }
+    .fb-toolbar { display: flex; align-items: flex-end; flex-wrap: wrap; gap: .75rem 1rem; padding: 1.25rem 1.6rem .9rem; }
+    .fb-toolbar-text { display: grid; gap: .25rem; flex: 1; min-width: 12rem; }
+    .fb-view-title { margin: 0; font-size: var(--t-display); font-weight: 700; letter-spacing: -.015em; overflow-wrap: anywhere; }
+    .fb-view-sub { margin: 0; color: var(--muted); font-size: var(--t-ctrl); }
+    .fb-sort { display: flex; align-items: center; gap: .5rem; color: var(--muted); font-size: var(--t-meta); }
+    .fb-sort select { width: auto; min-height: 30px; padding: 0 .5rem; font-size: var(--t-meta); font-weight: 600; }
+    .fb-layout { display: flex; gap: 2px; padding: 3px; border: 1px solid rgba(255, 255, 255, .07); border-radius: var(--r-ctrl); }
+    .fb-layout button { width: 30px; min-height: 26px; padding: 0; border-color: transparent; background: transparent; color: var(--faint-ink); }
+    .fb-layout button[aria-pressed="true"] { background: rgba(255, 255, 255, .09); color: var(--text); }
+    .fb-layout svg { width: 14px; height: 14px; }
+    .fb-list-head {
+      display: grid; grid-template-columns: var(--fb-cols); align-items: center; gap: 1rem; margin: 0 1rem; padding: 0 1rem; height: 34px;
+      border-bottom: 1px solid rgba(255, 255, 255, .06); font-size: var(--t-label); font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--faint-ink);
+    }
+    .fb-list-head .fb-col-size { text-align: right; }
+    .fb-scroll { min-height: 0; overflow: auto; padding: .35rem 1rem 7rem; }
+    .fb-list { display: grid; gap: 2px; }
+    .fb-row {
+      display: grid; grid-template-columns: var(--fb-cols); align-items: center; gap: 1rem; padding: .6rem 1rem;
+      border: 1px solid transparent; border-radius: 10px;
+    }
+    .fb-row:hover { background: rgba(255, 255, 255, .025); }
+    .fb-row.is-selected, .fb-card.is-selected { border-color: rgba(122, 125, 240, .4); background: rgba(99, 102, 241, .09); }
+    .fb-row.is-dragging, .fb-card.is-dragging { opacity: .45; }
+    .fb-row[draggable="true"], .fb-card[draggable="true"] { cursor: grab; }
+    .fb-check { width: 16px; height: 16px; min-height: 0; margin: 0; padding: 0; accent-color: var(--accent); cursor: pointer; }
+    .fb-name-cell { display: grid; gap: .3rem; min-width: 0; }
+    .fb-name {
+      justify-content: flex-start; min-height: 0; padding: 0; border: 0; background: transparent; color: var(--text);
+      font-size: var(--t-body); font-weight: 600; line-height: 1.35; text-align: left; overflow-wrap: anywhere; letter-spacing: 0; cursor: pointer;
+    }
+    .fb-name:hover { background: transparent; color: #fff; text-decoration: underline; text-decoration-color: rgba(255, 255, 255, .25); text-underline-offset: 3px; }
+    .fb-name:active { transform: none; }
+    .fb-name > span { display: inline; }
+    .fb-ext { color: var(--faint-ink); font-weight: 500; }
+    .fb-sub { display: flex; align-items: center; flex-wrap: wrap; gap: .5rem; font-size: var(--t-meta); color: var(--faint-ink); }
+    .fb-labels { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
+    .fb-who { display: flex; align-items: center; gap: .5rem; min-width: 0; color: var(--text-2); font-size: var(--t-ctrl); }
+    .fb-who-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .fb-mono {
+      width: 22px; height: 22px; flex: 0 0 auto; display: inline-grid; place-items: center; border-radius: var(--r-pill);
+      background: color-mix(in oklab, var(--m) 20%, transparent); color: var(--m);
+      font-family: "Geist Mono", ui-monospace, monospace; font-size: 10px; font-weight: 600;
+    }
+    .fb-size { text-align: right; font-family: "Geist Mono", ui-monospace, monospace; font-size: var(--t-meta); color: var(--muted); }
+    .fb-date { font-size: var(--t-ctrl); color: var(--muted); }
+    .fb-open { min-height: 30px; padding: 0 .7rem; font-size: var(--t-meta); font-weight: 700; }
+    .fb-empty { padding: 3rem 1rem; text-align: center; color: var(--faint-ink); font-size: var(--t-body); }
+    .fb-drop-hint {
+      display: flex; align-items: center; justify-content: center; gap: .6rem; margin-top: .75rem; padding: 1.1rem;
+      border: 1.5px dashed rgba(255, 255, 255, .09); border-radius: var(--r-card); color: var(--faint-ink); font-size: var(--t-ctrl); text-align: center;
+    }
+    .fb-drop-hint svg { width: 16px; height: 16px; flex: 0 0 auto; }
+    .fb-drop-hint strong { color: var(--text-2); }
+    .fb-list.is-grid { grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr)); gap: 1rem; padding-top: .35rem; }
+    .fb-card { position: relative; display: flex; flex-direction: column; min-width: 0; border: 1px solid rgba(255, 255, 255, .08); border-radius: var(--r-card); background: #10131a; overflow: hidden; }
+    .fb-card:hover { border-color: rgba(255, 255, 255, .16); }
+    .fb-card-preview {
+      position: relative; display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start; width: 100%; height: 12.25rem; min-height: 0; padding: 0; overflow: hidden;
+      border: 0; border-bottom: 1px solid rgba(255, 255, 255, .06); border-radius: 0; background: #0c0f15; text-align: left; cursor: pointer;
+    }
+    .fb-card-preview:hover { background: #0c0f15; }
+    .fb-card-preview:active { transform: none; }
+    .fb-card-preview > .ft-badge { position: absolute; left: 10px; top: 10px; z-index: 2; background: rgba(11, 13, 18, .9); box-shadow: 0 0 0 1px var(--ft-bd); }
+    .fb-card-check { position: absolute; right: 10px; top: 10px; z-index: 3; display: grid; place-items: center; width: 26px; height: 26px; border-radius: 7px; background: rgba(11, 13, 18, .85); }
+    .fb-card-body { display: grid; gap: .4rem; padding: .75rem .85rem .85rem; }
+    .fb-card-body .fb-name { font-size: var(--t-ctrl); }
+    .fb-card-meta { display: flex; align-items: center; gap: .4rem; flex-wrap: wrap; font-size: var(--t-meta); color: var(--faint-ink); }
+    .fb-card-meta .fb-spacer { flex: 1; }
+    .fb-card-meta .fb-dot { width: 7px; height: 7px; }
+    .pv-doc { padding: 2.2rem 1rem 0; color: #9da3b6; font-size: 11px; line-height: 1.5; overflow-wrap: anywhere; }
+    .pv-doc h1, .pv-doc h2, .pv-doc h3, .pv-doc h4 { margin: 0 0 .35rem; color: #fff; font-size: 13px; line-height: 1.3; }
+    .pv-doc p, .pv-doc ul, .pv-doc ol, .pv-doc pre, .pv-doc blockquote, .pv-doc table { margin: 0 0 .35rem; }
+    .pv-doc ul, .pv-doc ol { padding-left: 1rem; }
+    .pv-doc pre, .pv-doc code { font-size: 10.5px; }
+    .pv-code { margin: 0; padding: 2.2rem 1rem 0; color: #9da3b6; font-family: "Geist Mono", ui-monospace, monospace; font-size: 11px; line-height: 1.55; white-space: pre; overflow: hidden; }
+    .pv-table { width: calc(100% - 1.5rem); margin: 2.2rem .75rem 0; border-collapse: collapse; table-layout: fixed; color: #9da3b6; font-size: 10.5px; }
+    .pv-table th { color: var(--ft); font-family: "Geist Mono", ui-monospace, monospace; font-weight: 600; text-align: left; }
+    .pv-table th, .pv-table td { padding: 6px; border-bottom: 1px solid rgba(255, 255, 255, .06); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .pv-image { display: block; width: 100%; flex: 1 1 auto; min-height: 0; object-fit: cover; }
+    .pv-pdf { display: grid; justify-items: center; align-content: start; flex: 1 1 auto; padding-top: 1.1rem; box-sizing: border-box; background: #1a1d26; }
+    .pv-pdf canvas { display: block; background: #fff; border-radius: 2px; box-shadow: 0 10px 24px -8px rgba(0, 0, 0, .8); }
+    .pv-corner { position: absolute; right: 10px; bottom: 10px; z-index: 2; padding: 2px 7px; border-radius: 6px; background: rgba(11, 13, 18, .85); color: var(--text); font-family: "Geist Mono", ui-monospace, monospace; font-size: 10.5px; }
+    .pv-fade { position: absolute; left: 0; right: 0; bottom: 0; height: 3rem; background: linear-gradient(rgba(12, 15, 21, 0), #0c0f15); pointer-events: none; }
+    .pv-placeholder { display: grid; place-items: center; flex: 1 1 auto; color: var(--ft); }
+    .pv-placeholder svg { width: 34px; height: 34px; opacity: .7; }
+    .fb-selection {
+      position: absolute; left: 50%; bottom: 1.5rem; z-index: 5; transform: translateX(-50%); display: flex; align-items: center; gap: 6px;
+      max-width: calc(100% - 2rem); padding: 6px 6px 6px 1rem; overflow-x: auto; border: 1px solid rgba(255, 255, 255, .12);
+      border-radius: var(--r-card); background: #161a24; box-shadow: 0 20px 48px -20px rgba(0, 0, 0, .8); white-space: nowrap;
+    }
+    .fb-selection-count { margin-right: .5rem; font-size: var(--t-ctrl); font-weight: 700; }
+    .fb-selection button { gap: .4rem; }
+    .fb-selection svg { width: 14px; height: 14px; }
+    .fb-toast {
+      position: absolute; right: 1.5rem; bottom: 1.5rem; z-index: 8; display: flex; gap: .75rem; width: min(25rem, calc(100% - 3rem));
+      box-sizing: border-box; padding: .85rem .85rem .85rem 1rem; border: 1px solid rgba(52, 211, 153, .3); border-radius: var(--r-card);
+      background: #11161a; box-shadow: 0 20px 48px -20px rgba(0, 0, 0, .8);
+    }
+    .fb-toast::before { content: ""; width: 8px; height: 8px; margin-top: 6px; flex: 0 0 auto; border-radius: var(--r-pill); background: var(--ok); }
+    .fb-toast.is-error { border-color: rgba(251, 113, 133, .35); background: #1a1115; }
+    .fb-toast.is-error::before { background: var(--danger); }
+    .fb-toast.is-pending::before { background: var(--accent-2); }
+    .fb-toast-text { display: grid; gap: .25rem; flex: 1; min-width: 0; }
+    .fb-toast-title { font-size: var(--t-ctrl); font-weight: 700; overflow-wrap: anywhere; }
+    .fb-toast-body { color: var(--muted); font-size: var(--t-meta); line-height: 1.45; overflow-wrap: anywhere; }
+    .fb-toast-actions { display: flex; align-items: flex-start; gap: .3rem; }
+    .fb-toast-actions button { min-height: 28px; padding: 0 .6rem; font-size: var(--t-meta); }
+    .fb-popover {
+      position: absolute; z-index: 9; width: 16rem; max-height: 20rem; overflow: auto; padding: .35rem;
+      border: 1px solid rgba(255, 255, 255, .12); border-radius: var(--r-card); background: #161a24; box-shadow: var(--shadow-pop);
+    }
+    .fb-popover-title { padding: .4rem .55rem .3rem; color: var(--faint-ink); font-size: var(--t-label); font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+    .fb-popover button { width: 100%; justify-content: flex-start; gap: .6rem; min-height: 32px; padding: 0 .55rem; border-color: transparent; background: transparent; font-weight: 600; text-align: left; }
+    .fb-popover button:hover { background: rgba(255, 255, 255, .05); }
+    .fb-popover .fb-nav-name { flex: 1; }
+    .fb-popover-state { width: 16px; height: 16px; flex: 0 0 auto; display: grid; place-items: center; border: 1.5px solid var(--stroke-strong); border-radius: 4px; color: #fff; font-size: 11px; line-height: 1; }
+    .fb-popover-state.is-on { background: var(--accent); border-color: var(--accent); }
+    .fb-popover-state.is-mixed { background: rgba(99, 102, 241, .35); border-color: var(--accent); }
+    .fb-popover-empty { margin: 0; padding: .55rem; color: var(--muted); font-size: var(--t-meta); line-height: 1.45; }
+    .fb-drop {
+      position: absolute; inset: 0; z-index: 10; display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 1.25rem;
+      padding: 2.25rem; background: rgba(4, 5, 9, .8); backdrop-filter: blur(4px);
+    }
+    .fb-drop-head { display: grid; justify-items: center; gap: .35rem; text-align: center; }
+    .fb-drop-head h4 { margin: 0; font-size: var(--t-display); font-weight: 700; letter-spacing: -.015em; }
+    .fb-drop-head p { margin: 0; color: var(--muted); }
+    .fb-drop-targets { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.25rem; min-height: 0; }
+    .fb-drop-target {
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .75rem; padding: 1.5rem; text-align: center;
+      border: 2px dashed rgba(255, 255, 255, .14); border-radius: 20px; background: rgba(255, 255, 255, .02); color: var(--muted);
+      transition: border-color .12s ease, background .12s ease, box-shadow .12s ease;
+    }
+    .fb-drop-target svg { width: 40px; height: 40px; }
+    .fb-drop-target strong { font-size: var(--t-display); color: var(--text-2); }
+    .fb-drop-target.is-drop-hover { border-style: solid; border-color: var(--accent-2); background: rgba(99, 102, 241, .14); color: #c7c9fb; box-shadow: 0 0 0 6px rgba(99, 102, 241, .12); }
+    .fb-drop-target.is-drop-hover strong { color: #fff; }
+    .fb-drop-target * { pointer-events: none; }
+
+    /* viewer: a second layer over the browser */
+    #fileViewerDialog {
+      width: calc(100vw - 5rem); height: calc(100vh - 3rem); max-width: 110rem; max-height: none;
+      border-color: rgba(255, 255, 255, .12); border-radius: 16px; background: #0f1219; overflow: hidden;
+      box-shadow: 0 40px 90px -30px rgba(0, 0, 0, .9);
+    }
+    #fileViewerDialog[open] { display: grid; grid-template-rows: auto minmax(0, 1fr); grid-template-columns: minmax(0, 1fr); }
+    #fileViewerDialog::backdrop { background: rgba(4, 5, 9, .62); backdrop-filter: blur(3px); }
+    .fv-head { display: flex; align-items: center; flex-wrap: wrap; gap: .75rem; padding: .8rem 1.1rem .8rem 1rem; border-bottom: 1px solid rgba(255, 255, 255, .07); }
+    .fv-back { gap: .35rem; border-color: transparent; background: transparent; color: var(--text-2); }
+    .fv-back svg { width: 15px; height: 15px; }
+    .fv-divider { width: 1px; height: 24px; background: rgba(255, 255, 255, .08); }
+    .fv-title { display: grid; gap: 3px; flex: 1; min-width: 12rem; }
+    .fv-title h3 { margin: 0; font-size: var(--t-title); font-weight: 700; line-height: 1.3; overflow-wrap: anywhere; }
+    .fv-meta { display: flex; align-items: center; flex-wrap: wrap; gap: .5rem; color: var(--muted); font-size: var(--t-meta); }
+    .fv-mode { display: flex; gap: 2px; padding: 3px; border: 1px solid rgba(255, 255, 255, .08); border-radius: 9px; background: rgba(255, 255, 255, .025); }
+    .fv-mode button { min-height: 28px; padding: 0 .85rem; border-color: transparent; background: transparent; color: var(--muted); }
+    .fv-mode button[aria-pressed="true"] { background: #1f2433; border-color: rgba(255, 255, 255, .1); color: #fff; }
+    .fv-tools { display: flex; align-items: center; gap: 4px; }
+    .fv-icon { width: 32px; min-height: 32px; padding: 0; }
+    .fv-icon svg { width: 15px; height: 15px; }
+    .fv-body { display: grid; grid-template-columns: minmax(0, 1fr) 19.5rem; min-height: 0; }
+    .fv-main { display: grid; align-content: start; gap: 1rem; min-width: 0; min-height: 0; overflow: auto; padding: 1.5rem 1.75rem 3rem; outline: 0; }
+    .fv-main .file-preview, .fv-main .raw, .fv-main .pdf-preview { max-height: none; overflow: visible; }
+    .fv-main .file-preview.markdown-body { width: min(100%, 48rem); margin: 0 auto; padding: .5rem 0 0; border: 0; background: transparent; font-size: 15px; line-height: 1.7; }
+    .fv-main .file-preview:not(.markdown-body) { text-align: center; }
+    .fv-main .file-preview img { margin: 0 auto; border-radius: var(--r-ctrl); }
+    .fv-rail { display: flex; flex-direction: column; gap: 1.4rem; min-height: 0; overflow: auto; padding: 1.4rem 1.25rem; border-left: 1px solid rgba(255, 255, 255, .07); background: #0d1016; }
+    .fv-section { display: grid; gap: .6rem; position: relative; }
+    .fv-section-title { font-size: var(--t-label); font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--faint-ink); }
+    .fv-details { display: grid; grid-template-columns: 5.5rem minmax(0, 1fr); gap: .55rem .75rem; margin: 0; font-size: var(--t-ctrl); }
+    .fv-details dt { color: var(--faint-ink); }
+    .fv-details dd { display: flex; align-items: center; gap: .45rem; min-width: 0; margin: 0; overflow-wrap: anywhere; }
+    .fv-details .mono { font-family: "Geist Mono", ui-monospace, monospace; font-size: var(--t-meta); }
+    .fv-labels { display: flex; flex-wrap: wrap; gap: 6px; }
+    .fv-add-label { min-height: 26px; padding: 0 .65rem; border-style: dashed; border-color: rgba(255, 255, 255, .16); border-radius: var(--r-pill); background: transparent; color: var(--muted); font-size: var(--t-meta); }
+    .fv-note { display: flex; gap: .6rem; margin: 0; padding: .75rem; border-radius: 10px; background: rgba(255, 255, 255, .03); color: var(--muted); font-size: var(--t-meta); line-height: 1.5; }
+    .fv-note svg { width: 16px; height: 16px; flex: 0 0 auto; margin-top: 1px; }
+    .fv-actions { display: grid; gap: .5rem; margin-top: auto; }
+    .fv-actions button { justify-content: flex-start; gap: .5rem; }
+    .fv-actions svg { width: 14px; height: 14px; }
+    .fv-move-note { margin: -.15rem 0 .3rem; color: var(--faint-ink); font-size: var(--t-meta); line-height: 1.45; }
+    .fv-rail .fb-popover { left: 0; top: 100%; margin-top: .35rem; }
+
+    .upload-info-body { display: grid; gap: 1rem; padding: .6rem 1.25rem 1.25rem; font-size: var(--t-body); line-height: 1.6; color: #d4d7e2; }
+    .upload-info-body h4 { margin: 0 0 .15rem; color: #fff; font-size: var(--t-body); }
+    .upload-info-body p { margin: 0; }
+    .upload-info-note { display: flex; gap: .6rem; padding: .75rem .9rem; border-radius: 10px; background: rgba(255, 255, 255, .035); color: var(--text-2); font-size: var(--t-ctrl); line-height: 1.5; }
+    .upload-info-foot { display: flex; align-items: center; gap: .75rem; padding: .85rem 1.25rem; border-top: 1px solid var(--stroke-soft); color: var(--faint-ink); font-size: var(--t-meta); }
+    .upload-info-foot span { flex: 1; }
+    .upload-info-foot .mono { font-family: "Geist Mono", ui-monospace, monospace; color: var(--muted); }
 
     /* ---------- exchange card (flat) ---------- */
     .exchange {
@@ -1309,7 +1579,20 @@
       .session-list { max-height: 19rem; }
       .topbar { flex-direction: column; align-items: stretch; }
       .top-actions { justify-content: flex-start; }
-      #fileWorkspaceDialog { width: calc(100vw - 1rem); height: calc(100vh - 1rem); }
+      #fileWorkspaceDialog, #fileViewerDialog { width: calc(100vw - 1rem); height: calc(100vh - 1rem); }
+      #fileWorkspaceDialog { --fb-cols: 16px 36px minmax(0, 1fr) 3.6rem; }
+      .fb-col-labels, .fb-col-who, .fb-col-size, .fb-col-date { display: none; }
+      .fb-body { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); }
+      .fb-side { flex-direction: row; gap: .5rem; overflow-x: auto; padding: .6rem .75rem; border-right: 0; border-bottom: 1px solid rgba(255, 255, 255, .06); }
+      .fb-side-section { display: flex; gap: 2px; flex: 0 0 auto; }
+      .fb-nav { display: flex; }
+      .fb-nav-item, .fb-nav-name { flex: 0 0 auto; white-space: nowrap; }
+      .fb-scope { max-width: 100%; overflow-x: auto; }
+      .fb-side-title, .fb-side-note, .fb-side-link, .fb-nav-edit, .fb-label-form { display: none !important; }
+      .fv-body { grid-template-columns: 1fr; grid-template-rows: auto auto; overflow: auto; }
+      .fv-main { overflow: visible; }
+      .fv-rail { border-left: 0; border-top: 1px solid rgba(255, 255, 255, .07); overflow: visible; }
+      .fb-drop-targets { grid-template-columns: 1fr; }
       .settings-dialog, .search-dialog { width: calc(100vw - 1rem); height: calc(100vh - 1rem); max-height: none; }
       .exchange-grid, .field-grid { grid-template-columns: 1fr; }
       .turn + .turn { border-left: 0; border-top: 1px solid var(--stroke-soft); }
@@ -1321,11 +1604,11 @@
       .context-visibility-controls { flex-wrap: wrap; }
       .excluded-turn-actions { width: 100%; margin-left: 0; justify-content: flex-end; }
       .ex-actions .context-help-box { right: 0; left: auto; }
-      .file-workspace-grid { display: block; }
-      .file-workspace-grid:not(.show-detail) .file-workspace-detail { display: none; }
-      .file-workspace-grid.show-detail .file-workspace-list { display: none; }
-      .file-workspace-back { display: inline-flex; }
-      .file-workspace-list, .file-workspace-detail { height: 100%; border-right: 0; }
+      .fb-search { width: 100%; order: 5; }
+      .fb-head .fb-spacer { display: none; }
+      .fb-toolbar { padding: 1rem; }
+      .fb-scroll { padding: .35rem .5rem 7rem; }
+      .fv-main { padding: 1rem; }
       .dialog-actions { gap: .25rem; }
       .settings-shell { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); }
       .settings-tabs { display: flex; gap: .25rem; overflow-x: auto; padding: .6rem .75rem; border-right: 0; border-bottom: 1px solid var(--stroke-soft); }
@@ -1443,17 +1726,20 @@
 
       <div id="threadSensitiveContent" class="thread-sensitive-content">
       <div id="threadSensitiveBody" class="content-wrap">
+        <div class="side-rail">
         <nav id="turnNav" class="turn-nav" aria-label="Transcript navigation">
           <button id="scrollTopButton" type="button" class="ghost" title="Scroll to top"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"></path><path d="M6 5h12"></path></svg></button>
           <button id="scrollPrevButton" type="button" class="ghost" title="Previous turn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"></path></svg></button>
           <button id="scrollNextButton" type="button" class="ghost" title="Next turn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"></path></svg></button>
           <button id="scrollBottomButton" type="button" class="ghost" title="Scroll to bottom"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"></path><path d="M6 19h12"></path></svg></button>
-          <span class="turn-nav-divider" aria-hidden="true"></span>
-          <button id="fileWorkspaceOpen" type="button" class="ghost file-workspace-launcher" title="Open files" aria-label="Open files" aria-haspopup="dialog" aria-controls="fileWorkspaceDialog">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H10l2 2h6.5A2.5 2.5 0 0 1 21 9.5v7A2.5 2.5 0 0 1 18.5 19h-13A2.5 2.5 0 0 1 3 16.5z"></path></svg>
-            <span id="fileWorkspaceCount" class="file-workspace-count" aria-hidden="true">0</span>
-          </button>
         </nav>
+        <button id="fileWorkspaceOpen" type="button" class="file-dock" aria-label="Open files" aria-haspopup="dialog" aria-controls="fileWorkspaceDialog" aria-keyshortcuts="F" hidden>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H10l2 2h6.5A2.5 2.5 0 0 1 21 9.5v7A2.5 2.5 0 0 1 18.5 19h-13A2.5 2.5 0 0 1 3 16.5z"></path></svg>
+          <span id="fileDockMix" class="file-dock-mix" aria-hidden="true"></span>
+          <span id="fileWorkspaceCount" class="file-dock-count" aria-hidden="true">0</span>
+          <span id="fileDockTip" class="file-dock-tip" aria-hidden="true"></span>
+        </button>
+        </div>
         <section class="content">
           <p id="demoBanner" class="demo-banner"></p>
           <p id="status" class="status" role="status"></p>
@@ -1536,60 +1822,194 @@
   </dialog>
 
   <dialog id="fileWorkspaceDialog" aria-labelledby="fileWorkspaceHeading">
-    <div class="dialog-head">
-      <div class="dialog-title">
-        <h3 id="fileWorkspaceHeading">Files</h3>
-        <div id="fileWorkspaceSummary" class="meta">0 files</div>
-      </div>
-      <div class="dialog-actions">
-        <button type="button" class="ghost icon-only" id="fileCopyButton" title="Copy content" aria-label="Copy content" disabled>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+    <header class="fb-head">
+      <h3 id="fileWorkspaceHeading" class="fb-title">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg>
+        Files
+      </h3>
+      <div class="fb-scope" role="tablist" aria-label="Which files">
+        <button type="button" role="tab" id="fileScopeSession" class="fb-scope-tab" data-scope="session" aria-selected="false" aria-controls="fileWorkspaceListPane">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"></path></svg>
+          <span>This session</span>
+          <span id="fileScopeSessionCount" class="fb-count">0</span>
         </button>
-        <button type="button" class="ghost icon-only" id="fileDownloadButton" title="Download file" aria-label="Download file" disabled>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"></path><path d="m7 10 5 5 5-5"></path><path d="M5 21h14"></path></svg>
+        <button type="button" role="tab" id="fileScopeGroup" class="fb-scope-tab" data-scope="group" aria-selected="false" aria-controls="fileWorkspaceListPane">
+          <span id="fileScopeGroupMark" class="fb-group-mark" aria-hidden="true"></span>
+          <span id="fileScopeGroupName">Group</span>
+          <span id="fileScopeGroupCount" class="fb-count">0</span>
         </button>
-        <button type="button" class="ghost" id="fileWorkspaceClose">Close</button>
       </div>
-    </div>
-    <div id="fileWorkspaceGrid" class="file-workspace-grid">
-      <section id="fileWorkspaceListPane" class="file-workspace-list" aria-label="Available files">
-        <section class="file-bucket" aria-labelledby="sessionFilesHeading">
-          <div id="sessionFilesHeading" class="file-bucket-title">Session files</div>
-          <label class="file-drop-zone" data-scope="session">
-            <span>Upload one text file, PDF, JPG or PNG here, or drop it from your computer.</span>
-            <input id="sessionFileInput" type="file" accept=".md,.markdown,.txt,.json,.yaml,.yml,.csv,.tsv,.pdf,.jpg,.jpeg,.png" aria-describedby="sessionFileStatus">
-          </label>
-          <p id="sessionFileStatus" class="file-operation-status" aria-live="polite"></p>
-          <div id="sessionFileList" class="file-list"></div>
+      <span class="fb-spacer"></span>
+      <label class="fb-search">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+        <input id="fileSearchInput" type="search" placeholder="Search file names" aria-label="Search file names" autocomplete="off">
+      </label>
+      <button type="button" id="fileUploadInfoButton" class="ghost fb-help" title="What can I upload here?" aria-label="What can I upload here?" aria-haspopup="dialog">?</button>
+      <button type="button" id="fileUploadButton" class="primary fb-upload">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4"></path><path d="m6 10 6-6 6 6"></path><path d="M4 20h16"></path></svg>
+        Upload
+      </button>
+      <input id="sessionFileInput" type="file" multiple accept=".md,.markdown,.txt,.json,.yaml,.yml,.csv,.tsv,.pdf,.jpg,.jpeg,.png" hidden>
+      <input id="groupFileInput" type="file" multiple accept=".md,.markdown,.txt,.json,.yaml,.yml,.csv,.tsv,.pdf,.jpg,.jpeg,.png" hidden>
+      <button type="button" id="fileWorkspaceClose" class="ghost fb-icon-button" title="Close files" aria-label="Close files">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg>
+      </button>
+    </header>
+    <div class="fb-body">
+      <aside class="fb-side" aria-label="Filter files">
+        <section class="fb-side-section" aria-labelledby="fileBrowseTitle">
+          <div id="fileBrowseTitle" class="fb-side-title"><span>Browse</span></div>
+          <div id="fileBrowseNav" class="fb-nav"></div>
         </section>
-        <section class="file-bucket" aria-labelledby="groupFilesHeading">
-          <div id="groupFilesHeading" class="file-bucket-title">Group files</div>
-          <label class="file-drop-zone" data-scope="group">
-            <span>Upload one shared text file, PDF, JPG or PNG here, or drop it from your computer.</span>
-            <input id="groupFileInput" type="file" accept=".md,.markdown,.txt,.json,.yaml,.yml,.csv,.tsv,.pdf,.jpg,.jpeg,.png" aria-describedby="groupFileStatus">
-          </label>
-          <p id="groupFileStatus" class="file-operation-status" aria-live="polite"></p>
-          <div id="groupFileList" class="file-list"></div>
+        <section class="fb-side-section" aria-labelledby="fileTypeTitle">
+          <div id="fileTypeTitle" class="fb-side-title"><span>Type</span></div>
+          <div id="fileTypeNav" class="fb-nav"></div>
         </section>
-      </section>
-      <section id="fileWorkspaceDetailPane" class="file-workspace-detail" aria-live="polite" tabindex="-1">
-        <div class="file-workspace-detail-head">
-          <div class="dialog-title">
-            <button type="button" class="ghost file-workspace-back" id="fileWorkspaceBack">Back to files</button>
-            <h4 id="fileWorkspaceTitle">Select a file</h4>
+        <section class="fb-side-section" aria-labelledby="fileLabelTitle">
+          <div id="fileLabelTitle" class="fb-side-title">
+            <span>Labels</span>
+            <button type="button" id="fileLabelAdd" title="New label" aria-label="New label">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+            </button>
           </div>
-          <div class="file-detail-actions">
-            <button type="button" class="ghost" id="fileEditButton" disabled>Edit</button>
-            <button type="button" class="ghost file-delete-button" id="fileDeleteButton" disabled aria-label="Delete selected file">
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"></path><path d="M8 6V4h8v2"></path><path d="M19 6l-1 14H6L5 6"></path><path d="M10 11v5M14 11v5"></path></svg>
-              Delete
+          <div id="fileLabelNav" class="fb-nav"></div>
+          <form id="fileLabelForm" class="fb-label-form" hidden>
+            <label class="sr-only" for="fileLabelName">Label name</label>
+            <input id="fileLabelName" type="text" maxlength="40" placeholder="Label name" autocomplete="off" required>
+            <div id="fileLabelColors" class="fb-color-row" role="group" aria-label="Label color"></div>
+            <p id="fileLabelFormError" class="fb-form-error" aria-live="polite" hidden></p>
+            <div class="fb-form-actions">
+              <button type="submit" class="primary" id="fileLabelSave">Save</button>
+              <button type="button" class="ghost" id="fileLabelCancel">Cancel</button>
+              <button type="button" class="danger" id="fileLabelDelete" hidden>Delete</button>
+            </div>
+          </form>
+          <p class="fb-side-note">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"></rect><path d="M8 11V8a4 4 0 0 1 8 0v3"></path></svg>
+            <span id="fileLabelNote">Labels belong to this group and are only visible to you.</span>
+          </p>
+        </section>
+        <button type="button" id="fileUploadInfoLink" class="fb-side-link" aria-haspopup="dialog"><span class="fb-q" aria-hidden="true">?</span>What can I upload here?</button>
+      </aside>
+      <section id="fileWorkspaceListPane" class="fb-main" aria-labelledby="fileViewTitle">
+        <div class="fb-toolbar">
+          <div class="fb-toolbar-text">
+            <h4 id="fileViewTitle" class="fb-view-title">Files</h4>
+            <p id="fileViewSubtitle" class="fb-view-sub"></p>
+          </div>
+          <label class="fb-sort">Sort
+            <select id="fileSortSelect">
+              <option value="newest">Newest first</option>
+              <option value="oldest">Oldest first</option>
+              <option value="name">Name</option>
+              <option value="type">Type</option>
+              <option value="size">Size</option>
+            </select>
+          </label>
+          <div class="fb-layout" role="group" aria-label="Layout">
+            <button type="button" id="fileLayoutList" aria-pressed="true" title="List" aria-label="List">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"></path></svg>
+            </button>
+            <button type="button" id="fileLayoutGrid" aria-pressed="false" title="Grid with previews" aria-label="Grid with previews">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"></rect><rect x="14" y="3" width="7" height="7" rx="1"></rect><rect x="3" y="14" width="7" height="7" rx="1"></rect><rect x="14" y="14" width="7" height="7" rx="1"></rect></svg>
             </button>
           </div>
         </div>
-        <div id="fileWorkspaceMeta" class="meta"></div>
-        <div id="fileWorkspaceContent" class="file-workspace-placeholder">Choose a session or group file to preview it here.</div>
+        <div class="fb-list-head" aria-hidden="true">
+          <span></span><span></span><span>Name</span><span class="fb-col-labels">Labels</span><span class="fb-col-who">Added by</span><span class="fb-col-size">Size</span><span class="fb-col-date">Added</span><span></span>
+        </div>
+        <div id="fileListScroll" class="fb-scroll">
+          <div id="fileList" class="fb-list"></div>
+        </div>
+        <div id="fileSelectionBar" class="fb-selection" role="toolbar" aria-label="Selected files" hidden>
+          <span id="fileSelectionCount" class="fb-selection-count">0 selected</span>
+          <button type="button" id="fileSelectionLabel" aria-haspopup="menu">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12V4h8l10 10-8 8z"></path><circle cx="7.5" cy="7.5" r="1.2"></circle></svg>
+            Label
+          </button>
+          <button type="button" id="fileSelectionMove">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg>
+            <span id="fileSelectionMoveText">Move to group</span>
+          </button>
+          <button type="button" id="fileSelectionDelete" class="danger">Delete</button>
+          <button type="button" id="fileSelectionClear" class="ghost fb-icon-button" title="Clear selection" aria-label="Clear selection">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg>
+          </button>
+        </div>
+        <div id="fileLabelMenu" class="fb-popover" role="menu" aria-label="Labels for selected files" hidden></div>
+        <div id="fileToast" class="fb-toast" role="status" aria-live="polite" hidden>
+          <div class="fb-toast-text">
+            <span id="fileToastTitle" class="fb-toast-title"></span>
+            <span id="fileToastBody" class="fb-toast-body"></span>
+          </div>
+          <div class="fb-toast-actions">
+            <button type="button" id="fileToastAction" class="ghost" hidden>Undo</button>
+            <button type="button" id="fileToastClose" class="ghost fb-icon-button" title="Dismiss" aria-label="Dismiss">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg>
+            </button>
+          </div>
+        </div>
+      </section>
+    </div>
+    <div id="fileDropOverlay" class="fb-drop" hidden>
+      <div class="fb-drop-head">
+        <h4>Drop files where they belong</h4>
+        <p>Text and Markdown, data files, PDF, JPG and PNG. Anything else is skipped and listed afterwards.</p>
+      </div>
+      <div class="fb-drop-targets">
+        <div class="fb-drop-target" data-scope="session">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"></path></svg>
+          <strong>This session</strong>
+          <span id="fileDropSessionText">Only this conversation</span>
+        </div>
+        <div class="fb-drop-target" data-scope="group">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg>
+          <strong id="fileDropGroupName">Group</strong>
+          <span>Shared with every session in this group</span>
+        </div>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog id="fileViewerDialog" aria-labelledby="fileWorkspaceTitle">
+    <header class="fv-head">
+      <button type="button" class="fv-back" id="fileWorkspaceBack">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 6-6 6 6 6"></path></svg>
+        All files
+      </button>
+      <span class="fv-divider" aria-hidden="true"></span>
+      <span id="fileViewerTile" class="ft-tile ft-text" aria-hidden="true"></span>
+      <div class="fv-title">
+        <h3 id="fileWorkspaceTitle">File</h3>
+        <div id="fileWorkspaceMeta" class="fv-meta"></div>
+      </div>
+      <div class="fv-mode" role="group" aria-label="Mode">
+        <button type="button" id="filePreviewModeButton" aria-pressed="true">Preview</button>
+        <button type="button" id="fileEditButton" aria-pressed="false" disabled>Edit</button>
+      </div>
+      <div class="fv-tools">
+        <button type="button" class="ghost fv-icon" id="filePrevButton" title="Previous file" aria-label="Previous file">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 6-6 6 6 6"></path></svg>
+        </button>
+        <button type="button" class="ghost fv-icon" id="fileNextButton" title="Next file" aria-label="Next file">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"></path></svg>
+        </button>
+        <button type="button" class="ghost fv-icon" id="fileCopyButton" title="Copy content" aria-label="Copy content" disabled>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+        </button>
+        <button type="button" class="ghost fv-icon" id="fileDownloadButton" title="Download file" aria-label="Download file" disabled>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"></path><path d="m7 10 5 5 5-5"></path><path d="M5 21h14"></path></svg>
+        </button>
+        <button type="button" class="ghost fv-icon" id="fileViewerClose" title="Close viewer" aria-label="Close viewer">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg>
+        </button>
+      </div>
+    </header>
+    <div class="fv-body">
+      <section id="fileWorkspaceDetailPane" class="fv-main" aria-live="polite" tabindex="-1">
+        <div id="fileWorkspaceContent" class="file-workspace-placeholder">Choose a file to preview it here.</div>
         <section id="fileEditorPane" class="file-editor-pane" aria-labelledby="fileEditorHeading" hidden>
-          <h5 id="fileEditorHeading">Edit file</h5>
+          <h5 id="fileEditorHeading" class="fv-section-title">Edit file</h5>
           <textarea id="fileEditor" aria-describedby="fileEditorStatus" spellcheck="false"></textarea>
           <p id="fileEditorStatus" class="file-editor-status" aria-live="polite"></p>
           <div class="file-decision-actions">
@@ -1616,6 +2036,62 @@
           </div>
         </section>
       </section>
+      <aside class="fv-rail" aria-label="File details">
+        <section class="fv-section" aria-labelledby="fileDetailsTitle">
+          <h4 id="fileDetailsTitle" class="fv-section-title">Details</h4>
+          <dl id="fileDetailList" class="fv-details"></dl>
+        </section>
+        <section class="fv-section" aria-labelledby="fileDetailLabelsTitle">
+          <h4 id="fileDetailLabelsTitle" class="fv-section-title">Labels</h4>
+          <div id="fileDetailLabels" class="fv-labels"></div>
+          <div id="fileDetailLabelMenu" class="fb-popover" role="menu" aria-label="Labels for this file" hidden></div>
+        </section>
+        <p class="fv-note">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+          <span id="fileDetailAccess">Models in this session can list and download this file. Labels stay private to you.</span>
+        </p>
+        <div class="fv-actions">
+          <button type="button" id="fileMoveButton">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg>
+            <span id="fileMoveButtonText">Move to group files</span>
+          </button>
+          <p id="fileMoveNote" class="fv-move-note">Moving removes this file's labels.</p>
+          <button type="button" class="danger" id="fileDeleteButton" aria-label="Delete selected file" disabled>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"></path><path d="M8 6V4h8v2"></path><path d="M19 6l-1 14H6L5 6"></path><path d="M10 11v5M14 11v5"></path></svg>
+            Delete file…
+          </button>
+        </div>
+      </aside>
+    </div>
+  </dialog>
+
+  <dialog id="fileUploadInfoDialog" aria-labelledby="fileUploadInfoHeading">
+    <div class="dialog-head">
+      <div class="dialog-title">
+        <h3 id="fileUploadInfoHeading">What can I upload here?</h3>
+        <div class="meta">The same rules apply to session files and group files.</div>
+      </div>
+      <div class="dialog-actions">
+        <button type="button" class="ghost" id="fileUploadInfoClose">Close</button>
+      </div>
+    </div>
+    <div class="upload-info-body">
+      <div>
+        <h4>You can upload</h4>
+        <p>Text and Markdown (.md, .txt) and data files (.json, .yaml, .csv, .tsv) up to 1 MB. PDFs up to 20 MB. JPG and PNG images up to 10 MB.</p>
+      </div>
+      <div>
+        <h4>Models can save</h4>
+        <p>Any text file up to 1 MB, HTML included, and PDFs up to 10 MB. Models can look at your images but can't save new ones.</p>
+      </div>
+      <div>
+        <h4>Not accepted</h4>
+        <p>Word, Excel, GIF, SVG and archives. Save them as Markdown or PDF first.</p>
+      </div>
+      <p class="upload-info-note">Scanned PDFs upload fine, but models only get their text when the PDF has a text layer.</p>
+    </div>
+    <div class="upload-info-foot">
+      <span>Applies to Bridge <span id="fileUploadInfoVersion" class="mono">this version</span> · rules last reviewed 28 Sep 2026</span>
     </div>
   </dialog>
 
@@ -2086,6 +2562,19 @@
         fileDeleteTarget: null,
         fileOperationPending: false,
         fileOpenGeneration: 0,
+        fileLabels: [],
+        fileScope: "session",
+        fileFilter: { who: "all", kind: "", label: 0 },
+        fileQuery: "",
+        fileSort: "newest",
+        fileLayout: localStorage.getItem("mcp-admin:file-layout") === "grid" ? "grid" : "list",
+        fileSelection: new Set(),
+        fileBrowserSessionId: "",
+        fileLabelEdit: null,
+        fileLabelDeleteArmed: false,
+        fileToastTimer: 0,
+        fileToastAction: null,
+        fileViewerTargetId: null,
         pdfDocument: null,
         pdfLoadingTask: null,
         pdfAbortController: null,
@@ -2153,20 +2642,79 @@
         fileGuardPane: document.getElementById("fileGuardPane"),
         fileGuardSave: document.getElementById("fileGuardSave"),
         fileSaveButton: document.getElementById("fileSaveButton"),
+        fileBrowseNav: document.getElementById("fileBrowseNav"),
+        fileDetailAccess: document.getElementById("fileDetailAccess"),
+        fileDetailLabelMenu: document.getElementById("fileDetailLabelMenu"),
+        fileDetailLabels: document.getElementById("fileDetailLabels"),
+        fileDetailList: document.getElementById("fileDetailList"),
+        fileDockMix: document.getElementById("fileDockMix"),
+        fileDockTip: document.getElementById("fileDockTip"),
+        fileDropGroupName: document.getElementById("fileDropGroupName"),
+        fileDropOverlay: document.getElementById("fileDropOverlay"),
+        fileDropSessionText: document.getElementById("fileDropSessionText"),
+        fileLabelAdd: document.getElementById("fileLabelAdd"),
+        fileLabelCancel: document.getElementById("fileLabelCancel"),
+        fileLabelColors: document.getElementById("fileLabelColors"),
+        fileLabelDelete: document.getElementById("fileLabelDelete"),
+        fileLabelForm: document.getElementById("fileLabelForm"),
+        fileLabelFormError: document.getElementById("fileLabelFormError"),
+        fileLabelMenu: document.getElementById("fileLabelMenu"),
+        fileLabelName: document.getElementById("fileLabelName"),
+        fileLabelNav: document.getElementById("fileLabelNav"),
+        fileLabelNote: document.getElementById("fileLabelNote"),
+        fileLayoutGrid: document.getElementById("fileLayoutGrid"),
+        fileLayoutList: document.getElementById("fileLayoutList"),
+        fileList: document.getElementById("fileList"),
+        fileListScroll: document.getElementById("fileListScroll"),
+        fileMoveButton: document.getElementById("fileMoveButton"),
+        fileMoveButtonText: document.getElementById("fileMoveButtonText"),
+        fileMoveNote: document.getElementById("fileMoveNote"),
+        fileNextButton: document.getElementById("fileNextButton"),
+        filePrevButton: document.getElementById("filePrevButton"),
+        filePreviewModeButton: document.getElementById("filePreviewModeButton"),
+        fileScopeGroup: document.getElementById("fileScopeGroup"),
+        fileScopeGroupCount: document.getElementById("fileScopeGroupCount"),
+        fileScopeGroupMark: document.getElementById("fileScopeGroupMark"),
+        fileScopeGroupName: document.getElementById("fileScopeGroupName"),
+        fileScopeSession: document.getElementById("fileScopeSession"),
+        fileScopeSessionCount: document.getElementById("fileScopeSessionCount"),
+        fileSearchInput: document.getElementById("fileSearchInput"),
+        fileSelectionBar: document.getElementById("fileSelectionBar"),
+        fileSelectionClear: document.getElementById("fileSelectionClear"),
+        fileSelectionCount: document.getElementById("fileSelectionCount"),
+        fileSelectionDelete: document.getElementById("fileSelectionDelete"),
+        fileSelectionLabel: document.getElementById("fileSelectionLabel"),
+        fileSelectionMove: document.getElementById("fileSelectionMove"),
+        fileSelectionMoveText: document.getElementById("fileSelectionMoveText"),
+        fileSortSelect: document.getElementById("fileSortSelect"),
+        fileToast: document.getElementById("fileToast"),
+        fileToastAction: document.getElementById("fileToastAction"),
+        fileToastBody: document.getElementById("fileToastBody"),
+        fileToastClose: document.getElementById("fileToastClose"),
+        fileToastTitle: document.getElementById("fileToastTitle"),
+        fileTypeNav: document.getElementById("fileTypeNav"),
+        fileUploadButton: document.getElementById("fileUploadButton"),
+        fileUploadInfoButton: document.getElementById("fileUploadInfoButton"),
+        fileUploadInfoClose: document.getElementById("fileUploadInfoClose"),
+        fileUploadInfoDialog: document.getElementById("fileUploadInfoDialog"),
+        fileUploadInfoLink: document.getElementById("fileUploadInfoLink"),
+        fileUploadInfoVersion: document.getElementById("fileUploadInfoVersion"),
+        fileViewSubtitle: document.getElementById("fileViewSubtitle"),
+        fileViewTitle: document.getElementById("fileViewTitle"),
+        fileViewerClose: document.getElementById("fileViewerClose"),
+        fileViewerDialog: document.getElementById("fileViewerDialog"),
+        fileViewerTile: document.getElementById("fileViewerTile"),
         fileWorkspaceBack: document.getElementById("fileWorkspaceBack"),
         fileWorkspaceClose: document.getElementById("fileWorkspaceClose"),
         fileWorkspaceContent: document.getElementById("fileWorkspaceContent"),
         fileWorkspaceCount: document.getElementById("fileWorkspaceCount"),
         fileWorkspaceDetailPane: document.getElementById("fileWorkspaceDetailPane"),
+        fileWorkspaceListPane: document.getElementById("fileWorkspaceListPane"),
         fileWorkspaceDialog: document.getElementById("fileWorkspaceDialog"),
-        fileWorkspaceGrid: document.getElementById("fileWorkspaceGrid"),
         fileWorkspaceMeta: document.getElementById("fileWorkspaceMeta"),
         fileWorkspaceOpen: document.getElementById("fileWorkspaceOpen"),
-        fileWorkspaceSummary: document.getElementById("fileWorkspaceSummary"),
         fileWorkspaceTitle: document.getElementById("fileWorkspaceTitle"),
-        groupFileList: document.getElementById("groupFileList"),
         groupFileInput: document.getElementById("groupFileInput"),
-        groupFileStatus: document.getElementById("groupFileStatus"),
         groupCancelButton: document.getElementById("groupCancelButton"),
         groupColorInput: document.getElementById("groupColorInput"),
         groupDialog: document.getElementById("groupDialog"),
@@ -2191,9 +2739,7 @@
         scrollTopButton: document.getElementById("scrollTopButton"),
         searchOpenButton: document.getElementById("searchOpenButton"),
         sessionGroupSelect: document.getElementById("sessionGroupSelect"),
-        sessionFileList: document.getElementById("sessionFileList"),
         sessionFileInput: document.getElementById("sessionFileInput"),
-        sessionFileStatus: document.getElementById("sessionFileStatus"),
         sessionList: document.getElementById("sessionList"),
         sessionMoveBack: document.getElementById("sessionMoveBack"),
         sessionMoveCancel: document.getElementById("sessionMoveCancel"),
@@ -2264,6 +2810,8 @@
       bindDialogBackdropClose(dom.groupDialog, dom.groupDialogClose);
       bindDialogBackdropClose(dom.sessionMoveDialog, dom.sessionMoveCancel);
       bindDialogBackdropClose(dom.fileWorkspaceDialog, dom.fileWorkspaceClose);
+      bindDialogBackdropClose(dom.fileViewerDialog, dom.fileViewerClose);
+      bindDialogBackdropClose(dom.fileUploadInfoDialog, dom.fileUploadInfoClose);
       bindDialogBackdropClose(dom.aiSettingsDialog, dom.aiSettingsClose);
       bindDialogBackdropClose(settingsDom.searchDialog, settingsDom.searchClose);
       dom.groupCancelButton.addEventListener("click", () => dom.groupDialog.close());
@@ -2285,28 +2833,149 @@
         if (group) deleteGroup(group);
       });
       dom.fileWorkspaceOpen.addEventListener("click", () => openFileWorkspace());
-      dom.fileWorkspaceClose.addEventListener("click", () => runFileContinuation("close", () => dom.fileWorkspaceDialog.close(), dom.fileWorkspaceClose));
-      dom.fileWorkspaceBack.addEventListener("click", () => runFileContinuation("back", () => {
-        invalidateFileOpen();
-        clearPdfPreview();
-        showFileListPane();
-      }, dom.fileWorkspaceBack));
+      dom.fileWorkspaceClose.addEventListener("click", () => dom.fileWorkspaceDialog.close());
       dom.fileWorkspaceDialog.addEventListener("cancel", (event) => {
         if (state.fileOperationPending) {
           event.preventDefault();
           return;
         }
-        if (!isFileDraftDirty()) return;
-        event.preventDefault();
-        runFileContinuation("close", () => dom.fileWorkspaceDialog.close(), dom.fileWorkspaceClose);
+        if (!dom.fileLabelMenu.hidden || !dom.fileDropOverlay.hidden || !dom.fileLabelForm.hidden) {
+          event.preventDefault();
+          closeFilePopovers();
+          hideFileDropOverlay();
+          if (!dom.fileLabelForm.hidden) closeFileLabelForm();
+        }
       });
       dom.fileWorkspaceDialog.addEventListener("close", () => {
-        invalidateFileOpen();
-        setBusy(false);
-        dom.fileWorkspaceGrid.classList.remove("show-detail");
-        resetFilePreview();
+        if (dom.fileViewerDialog.open) closeFileViewer();
+        hideFileDropOverlay();
+        closeFilePopovers();
+        hideFileToast();
+        clearFileDropHighlights();
         dom.fileWorkspaceOpen.focus();
       });
+      dom.fileViewerDialog.addEventListener("cancel", (event) => {
+        if (state.fileOperationPending) {
+          event.preventDefault();
+          return;
+        }
+        if (!dom.fileDetailLabelMenu.hidden) {
+          event.preventDefault();
+          closeFilePopovers();
+          return;
+        }
+        if (!isFileDraftDirty()) return;
+        event.preventDefault();
+        runFileContinuation("close", () => closeFileViewer(), dom.fileViewerClose);
+      });
+      dom.fileViewerDialog.addEventListener("close", () => {
+        const returnId = state.selectedFileId;
+        invalidateFileOpen();
+        setBusy(false);
+        closeFilePopovers();
+        resetFilePreview();
+        if (!dom.fileWorkspaceDialog.open) return;
+        renderFiles();
+        const target = dom.fileList.querySelector(`[data-focus-key="fb-name:${returnId}"], [data-focus-key="card-name:${returnId}"]`);
+        (target || dom.fileSearchInput).focus();
+      });
+      dom.fileWorkspaceBack.addEventListener("click", () => runFileContinuation("back", () => closeFileViewer(), dom.fileWorkspaceBack));
+      dom.fileViewerClose.addEventListener("click", () => runFileContinuation("close", () => closeFileViewer(), dom.fileViewerClose));
+      dom.filePrevButton.addEventListener("click", () => stepFileViewer(-1));
+      dom.fileNextButton.addEventListener("click", () => stepFileViewer(1));
+      dom.filePreviewModeButton.addEventListener("click", () => {
+        if (state.fileViewMode === "edit") runFileContinuation("back", () => discardFileDraftAndPreview(), dom.filePreviewModeButton);
+      });
+      dom.fileMoveButton.addEventListener("click", () => {
+        if (!state.selectedFile) return;
+        const target = state.selectedFile.scope_type === "group" ? "session" : "group";
+        const fileId = String(state.selectedFile.file_id);
+        runFileContinuation("move", () => moveFiles([fileId], target), dom.fileMoveButton);
+      });
+      for (const tab of [dom.fileScopeSession, dom.fileScopeGroup]) {
+        tab.addEventListener("click", () => setFileScope(tab.dataset.scope));
+        tab.addEventListener("keydown", (event) => {
+          if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+          event.preventDefault();
+          const other = tab === dom.fileScopeSession ? dom.fileScopeGroup : dom.fileScopeSession;
+          setFileScope(other.dataset.scope);
+          other.focus();
+        });
+      }
+      dom.fileSearchInput.addEventListener("input", () => {
+        state.fileQuery = dom.fileSearchInput.value;
+        renderFileBrowser();
+      });
+      dom.fileSortSelect.addEventListener("change", () => {
+        state.fileSort = dom.fileSortSelect.value;
+        renderFileList();
+      });
+      for (const [control, layout] of [[dom.fileLayoutList, "list"], [dom.fileLayoutGrid, "grid"]]) {
+        control.addEventListener("click", () => {
+          state.fileLayout = layout;
+          localStorage.setItem("mcp-admin:file-layout", layout);
+          renderFileToolbar();
+          renderFileList();
+        });
+      }
+      dom.fileUploadButton.addEventListener("click", () => {
+        (state.fileScope === "group" ? dom.groupFileInput : dom.sessionFileInput).click();
+      });
+      for (const [input, scope] of [[dom.sessionFileInput, "session"], [dom.groupFileInput, "group"]]) {
+        input.addEventListener("change", async () => {
+          const files = Array.from(input.files || []);
+          input.value = "";
+          await uploadFiles(scope, files);
+        });
+      }
+      dom.fileSelectionLabel.addEventListener("click", () => toggleFileLabelMenu(dom.fileLabelMenu, [...state.fileSelection], dom.fileSelectionLabel));
+      dom.fileSelectionMove.addEventListener("click", () => {
+        const target = state.fileScope === "group" ? "session" : "group";
+        runFileContinuation("move", () => moveFiles([...state.fileSelection], target), dom.fileSelectionMove);
+      });
+      dom.fileSelectionDelete.addEventListener("click", () => deleteSelectedFiles());
+      dom.fileSelectionClear.addEventListener("click", () => {
+        state.fileSelection.clear();
+        closeFilePopovers();
+        renderFileList();
+        renderFileSelectionBar();
+      });
+      dom.fileToastClose.addEventListener("click", () => hideFileToast());
+      dom.fileToastAction.addEventListener("click", () => {
+        const action = state.fileToastAction;
+        hideFileToast();
+        if (action?.run) action.run();
+      });
+      dom.fileLabelAdd.addEventListener("click", () => openFileLabelForm());
+      dom.fileLabelCancel.addEventListener("click", () => closeFileLabelForm());
+      dom.fileLabelDelete.addEventListener("click", () => deleteFileLabel());
+      dom.fileLabelForm.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        await saveFileLabelForm();
+      });
+      for (const control of [dom.fileUploadInfoButton, dom.fileUploadInfoLink]) {
+        control.addEventListener("click", () => openFileUploadInfo());
+      }
+      dom.fileUploadInfoClose.addEventListener("click", () => dom.fileUploadInfoDialog.close());
+      document.addEventListener("click", (event) => {
+        for (const menu of [dom.fileLabelMenu, dom.fileDetailLabelMenu]) {
+          if (menu.hidden || menu.contains(event.target)) continue;
+          if (event.target.closest && event.target.closest("#fileSelectionLabel, .fv-add-label")) continue;
+          menu.hidden = true;
+        }
+      });
+      document.addEventListener("keydown", (event) => {
+        if (event.key !== "f" && event.key !== "F") return;
+        if (event.metaKey || event.ctrlKey || event.altKey || event.defaultPrevented) return;
+        const target = event.target;
+        if (target && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName || ""))) return;
+        if (document.querySelector("dialog[open]") || !state.selectedSession) return;
+        event.preventDefault();
+        openFileWorkspace();
+      });
+      bindFileBrowserDrops();
+      window.addEventListener("dragend", clearFileDropHighlights);
+      window.addEventListener("drop", clearFileDropHighlights);
       dom.fileEditButton.addEventListener("click", () => beginFileEdit());
       dom.fileEditor.addEventListener("input", () => {
         state.fileDraft = dom.fileEditor.value;
@@ -2334,11 +3003,6 @@
         }
       });
       dom.fileDownloadButton.addEventListener("click", () => downloadOpenFile());
-      dom.sessionFileInput.addEventListener("change", () => uploadSelectedFiles("session", dom.sessionFileInput));
-      dom.groupFileInput.addEventListener("change", () => uploadSelectedFiles("group", dom.groupFileInput));
-      for (const zone of document.querySelectorAll(".file-drop-zone")) bindFileDropZone(zone);
-      window.addEventListener("dragend", clearFileDropHighlights);
-      window.addEventListener("drop", clearFileDropHighlights);
       dom.groupForm.addEventListener("submit", async (event) => {
         event.preventDefault();
         await saveGroupForm();
@@ -2385,7 +3049,7 @@
       populateTimezoneSelect();
 
       // offline demo store (declared before init so api() can reference it)
-      const demo = { enabled: false, sessions: [], groups: [], store: {}, files: [], nextFileId: 1000 };
+      const demo = { enabled: false, sessions: [], groups: [], store: {}, files: [], nextFileId: 1000, fileLabels: [], nextLabelId: 1 };
 
       // ---------- Login expiry and tab-return refresh ----------
       const ADMIN_LOGIN_URL = "/admin/login?next=/admin/sessions";
@@ -3683,6 +4347,7 @@
           state.selectedSession = payload.session;
           state.exchanges = payload.exchanges || [];
           state.files = payload.files || { session: [], group: [] };
+          state.fileLabels = payload.file_labels || [];
           if (payload.display_timezone) {
             state.displayTimezone = payload.display_timezone;
             populateTimezoneSelect();
@@ -3863,95 +4528,687 @@
         return node;
       }
 
+      // ---------- files: a browser (list or grid) and a viewer stacked on top of it ----------
+      const FILE_KINDS = {
+        text: { name: "Text & Markdown", icon: '<path d="M6 3h8l4 4v14H6z"></path><path d="M9 11h6M9 15h6M9 19h4"></path>' },
+        data: { name: "Data", icon: '<rect x="4" y="4" width="16" height="16" rx="2"></rect><path d="M4 10h16M4 15h16M10 4v16"></path>' },
+        pdf: { name: "PDF", icon: '<path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H11v16H5.5A1.5 1.5 0 0 1 4 18.5z"></path><path d="M20 5.5A1.5 1.5 0 0 0 18.5 4H13v16h5.5a1.5 1.5 0 0 0 1.5-1.5z"></path>' },
+        image: { name: "Images", icon: '<rect x="3" y="5" width="18" height="14" rx="2"></rect><circle cx="9" cy="10" r="1.6"></circle><path d="m21 16-5-5-8 8"></path>' },
+        web: { name: "HTML & code", icon: '<path d="m8 8-4 4 4 4M16 8l4 4-4 4M13.5 5l-3 14"></path>' },
+      };
+      const FILE_KIND_ORDER = ["text", "data", "pdf", "image", "web"];
+      const DATA_FILE_EXTENSIONS = new Set(["json", "yaml", "yml", "csv", "tsv"]);
+      const FILE_LABEL_COLORS = { yellow: "#facc15", purple: "#c084fc", pink: "#f472b6", sky: "#38bdf8", lime: "#a3e635", orange: "#fb923c" };
+      const FILE_FORMAT_NAMES = {
+        md: "Markdown", markdown: "Markdown", txt: "Plain text", json: "JSON", yaml: "YAML", yml: "YAML",
+        csv: "CSV table", tsv: "TSV table", html: "HTML, shown as source", htm: "HTML, shown as source",
+      };
+      const pdfThumbnailCache = new Map();
+      let pdfThumbnailQueue = Promise.resolve();
+      let fileThumbnailObserver = null;
+      let fileDragDepth = 0;
+      let draggedFileIds = [];
+
+      function fileExtension(file) {
+        const name = String(file?.filename || "");
+        const dot = name.lastIndexOf(".");
+        return dot > 0 ? name.slice(dot + 1).toLowerCase() : "";
+      }
+
+      function fileKind(file) {
+        if (file?.content_kind === "image") return "image";
+        if (file?.content_kind === "pdf") return "pdf";
+        const extension = fileExtension(file);
+        if (DATA_FILE_EXTENSIONS.has(extension)) return "data";
+        if (!extension || extension === "md" || extension === "markdown" || extension === "txt") return "text";
+        return "web";
+      }
+
+      function fileKindSvg(kind) {
+        return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${FILE_KINDS[kind].icon}</svg>`;
+      }
+
+      function fileTile(file) {
+        const kind = fileKind(file);
+        const tile = spanCls(`ft-tile ft-${kind}`);
+        tile.setAttribute("aria-hidden", "true");
+        tile.innerHTML = fileKindSvg(kind);
+        return tile;
+      }
+
+      function fileBadge(file) {
+        return spanCls(`ft-badge ft-${fileKind(file)}`, fileFormatLabel(file));
+      }
+
+      function fileDisplayName(file) {
+        return file?.filename || `file-${file?.file_id}`;
+      }
+
+      // Full names always: the name wraps instead of being cut, and the extension is quieter.
+      function fileNameNode(file) {
+        const name = fileDisplayName(file);
+        const dot = name.lastIndexOf(".");
+        const node = document.createElement("span");
+        if (dot > 0) node.append(document.createTextNode(name.slice(0, dot)), spanCls("fb-ext", name.slice(dot)));
+        else node.append(document.createTextNode(name));
+        return node;
+      }
+
+      function fileFormatName(file) {
+        const kind = fileKind(file);
+        if (kind === "pdf") {
+          const pages = Number(file.page_count) || 0;
+          const pageText = pages ? `${pages} page${pages === 1 ? "" : "s"}` : "PDF";
+          return file.extraction_status === "no_text" ? `${pageText} · no text layer` : `${pageText} · text extracted`;
+        }
+        if (kind === "image") return `${fileFormatLabel(file)} image`;
+        return FILE_FORMAT_NAMES[fileExtension(file)] || (kind === "web" ? "Text, shown as source" : "Plain text");
+      }
+
+      function fileAuthor(file) {
+        const raw = String(file?.created_by || "").trim();
+        if (raw && state.userDisplayName && raw === state.userDisplayName) {
+          return { name: "You", mono: raw.slice(0, 1).toUpperCase() || "Y", color: "#a5a8f6", isYou: true };
+        }
+        const identity = modelIdentity(file?.created_by_name || raw || "Model");
+        return { name: identity.label, mono: identity.mono, color: identity.color, isYou: false };
+      }
+
+      function fileAuthorNode(file, className = "fb-who") {
+        const author = fileAuthor(file);
+        const node = div(className);
+        const mono = spanCls("fb-mono", author.mono);
+        mono.style.setProperty("--m", author.color);
+        mono.setAttribute("aria-hidden", "true");
+        node.append(mono, spanCls("fb-who-name", author.name));
+        return node;
+      }
+
+      function fileShortDate(value) {
+        if (!value) return "";
+        const date = new Date(Number(value) * 1000);
+        const zone = state.displayTimezone;
+        const dayKey = (item) => {
+          try { return new Intl.DateTimeFormat("en-CA", { timeZone: zone }).format(item); } catch (_) { return item.toDateString(); }
+        };
+        const now = new Date();
+        const yesterday = new Date(now.getTime() - 86_400_000);
+        let time = "";
+        try { time = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: zone }).format(date); } catch (_) { time = ""; }
+        if (dayKey(date) === dayKey(now)) return `Today ${time}`.trim();
+        if (dayKey(date) === dayKey(yesterday)) return "Yesterday";
+        try {
+          const sameYear = new Intl.DateTimeFormat("en-US", { year: "numeric", timeZone: zone }).format(date)
+            === new Intl.DateTimeFormat("en-US", { year: "numeric", timeZone: zone }).format(now);
+          return new Intl.DateTimeFormat("en-US", sameYear
+            ? { month: "short", day: "numeric", timeZone: zone }
+            : { month: "short", day: "numeric", year: "numeric", timeZone: zone }).format(date);
+        } catch (_) {
+          return date.toLocaleDateString();
+        }
+      }
+
+      function currentFileGroup() {
+        return state.groups.find((item) => item.group_id === state.selectedSession?.group_id)
+          || state.selectedSession?.group
+          || null;
+      }
+
+      function fileGroupName() {
+        const group = currentFileGroup();
+        return group?.name || state.selectedSession?.group_id || "Group";
+      }
+
+      function fileScopeName(scope) {
+        return scope === "group" ? `Group · ${fileGroupName()}` : "this session";
+      }
+
+      function fileLabelById(labelId) {
+        return state.fileLabels.find((label) => Number(label.label_id) === Number(labelId)) || null;
+      }
+
+      function fileLabelPill(label, onRemove) {
+        const pill = spanCls("lb-pill", label.name);
+        pill.style.setProperty("--lb", FILE_LABEL_COLORS[label.color] || "#8e93a8");
+        if (onRemove) {
+          const remove = document.createElement("button");
+          remove.type = "button";
+          remove.textContent = "×";
+          remove.title = `Remove ${label.name}`;
+          remove.setAttribute("aria-label", `Remove label ${label.name}`);
+          remove.addEventListener("click", onRemove);
+          pill.append(remove);
+        }
+        return pill;
+      }
+
+      function fileLabelsOf(file) {
+        return (file?.label_ids || []).map(fileLabelById).filter(Boolean);
+      }
+
+      function scopeFiles(scope = state.fileScope) {
+        return (scope === "group" ? state.files.group : state.files.session) || [];
+      }
+
+      function fileMatchesFilter(file, filter = state.fileFilter) {
+        if (filter.who === "you" && !fileAuthor(file).isYou) return false;
+        if (filter.who === "models" && fileAuthor(file).isYou) return false;
+        if (filter.kind && fileKind(file) !== filter.kind) return false;
+        if (filter.label && !(file.label_ids || []).includes(filter.label)) return false;
+        return true;
+      }
+
+      function visibleFiles() {
+        const query = state.fileQuery.trim().toLowerCase();
+        const files = scopeFiles().filter((file) => (
+          fileMatchesFilter(file) && (!query || fileDisplayName(file).toLowerCase().includes(query))
+        ));
+        const byName = (left, right) => fileDisplayName(left).localeCompare(fileDisplayName(right), undefined, { sensitivity: "base", numeric: true });
+        if (state.fileSort === "oldest") return files.reverse();
+        if (state.fileSort === "name") return files.sort(byName);
+        if (state.fileSort === "type") {
+          return files.sort((left, right) => (
+            FILE_KIND_ORDER.indexOf(fileKind(left)) - FILE_KIND_ORDER.indexOf(fileKind(right)) || byName(left, right)
+          ));
+        }
+        if (state.fileSort === "size") return files.sort((left, right) => Number(right.size_bytes || 0) - Number(left.size_bytes || 0));
+        return files;
+      }
+
       function renderFiles() {
         const sessionFiles = state.files.session || [];
         const groupFiles = state.files.group || [];
+        const visibleFileIds = new Set([...sessionFiles, ...groupFiles].map((file) => String(file.file_id)));
+        if (state.selectedFileId !== null && !visibleFileIds.has(String(state.selectedFileId)) && !isFileDraftDirty()) {
+          if (dom.fileViewerDialog.open) dom.fileViewerDialog.close();
+          else resetFilePreview();
+        }
+        for (const fileId of [...state.fileSelection]) {
+          if (!visibleFileIds.has(fileId)) state.fileSelection.delete(fileId);
+        }
+        renderFileDock(sessionFiles, groupFiles);
+        if (dom.fileWorkspaceDialog.open) renderFileBrowser();
+      }
+
+      function renderFileDock(sessionFiles, groupFiles) {
         const count = sessionFiles.length + groupFiles.length;
-        const group = state.groups.find((item) => item.group_id === state.selectedSession?.group_id)
-          || state.selectedSession?.group
-          || null;
-        const visibleFileIds = [...sessionFiles, ...groupFiles].map((file) => String(file.file_id));
-        if (state.selectedFileId !== null && !visibleFileIds.includes(String(state.selectedFileId))) resetFilePreview();
+        dom.fileWorkspaceOpen.hidden = !state.selectedSession;
         dom.fileWorkspaceCount.textContent = String(count);
-        dom.fileWorkspaceOpen.setAttribute("aria-label", `Open files, ${count} total`);
-        dom.fileWorkspaceSummary.textContent = `${count} total · ${sessionFiles.length} session · ${groupFiles.length} group`;
-        renderFileList(dom.sessionFileList, sessionFiles);
-        renderFileList(dom.groupFileList, groupFiles);
-        renderGroupFileHeading(group);
+        dom.fileWorkspaceOpen.setAttribute(
+          "aria-label",
+          `Open files: ${sessionFiles.length} in this session, ${groupFiles.length} in the group`,
+        );
+        const kindCounts = new Map();
+        for (const file of [...sessionFiles, ...groupFiles]) kindCounts.set(fileKind(file), (kindCounts.get(fileKind(file)) || 0) + 1);
+        dom.fileDockMix.replaceChildren(...FILE_KIND_ORDER.filter((kind) => kindCounts.get(kind)).map((kind) => {
+          const segment = spanCls(`ft-${kind}`);
+          segment.style.width = `${(kindCounts.get(kind) / count) * 100}%`;
+          return segment;
+        }));
+        const row = (label, value) => {
+          const node = document.createElement("span");
+          node.append(spanCls("", label), spanCls("", String(value)));
+          return node;
+        };
+        const title = document.createElement("b");
+        title.append(document.createTextNode("Files"));
+        const key = document.createElement("kbd");
+        key.textContent = "F";
+        title.append(key);
+        dom.fileDockTip.replaceChildren(
+          title,
+          row("This session", sessionFiles.length),
+          row(`Group · ${fileGroupName()}`, groupFiles.length),
+        );
       }
 
-      function renderGroupFileHeading(group) {
-        const heading = document.getElementById("groupFilesHeading");
-        heading.replaceChildren();
-        if (group) {
-          const identity = spanCls("group-file-identity");
-          identity.style.setProperty("--g", group.color || "#8b93a7");
-          identity.innerHTML = iconSvg(group.icon_key || "folder");
-          identity.title = group.name || group.group_id;
-          heading.append(identity, document.createTextNode(`Group files · ${group.name || group.group_id}`));
-        } else {
-          heading.textContent = "Group files";
+      function renderFileBrowser() {
+        const sessionCount = (state.files.session || []).length;
+        const groupCount = (state.files.group || []).length;
+        const group = currentFileGroup();
+        for (const tab of [dom.fileScopeSession, dom.fileScopeGroup]) {
+          tab.setAttribute("aria-selected", tab.dataset.scope === state.fileScope ? "true" : "false");
+          tab.tabIndex = tab.dataset.scope === state.fileScope ? 0 : -1;
+        }
+        dom.fileScopeSessionCount.textContent = String(sessionCount);
+        dom.fileScopeGroupCount.textContent = String(groupCount);
+        dom.fileScopeGroupName.textContent = `Group · ${fileGroupName()}`;
+        dom.fileScopeGroupMark.style.setProperty("--g", group?.color || "#8b93a7");
+        dom.fileScopeGroupMark.innerHTML = iconSvg(group?.icon_key || "folder");
+        dom.fileDropGroupName.textContent = `Group · ${fileGroupName()}`;
+        dom.fileLabelNote.textContent = `Labels belong to ${fileGroupName()} and are only visible to you.`;
+        renderFileSidebar();
+        renderFileToolbar();
+        renderFileList();
+        renderFileSelectionBar();
+      }
+
+      function fileNavItem({ name, count, active, onClick, leading, focusKey }) {
+        const item = button("", onClick, "fb-nav-item");
+        item.classList.toggle("is-active", Boolean(active));
+        item.setAttribute("aria-pressed", active ? "true" : "false");
+        if (focusKey) item.dataset.focusKey = focusKey;
+        if (leading) item.append(leading);
+        item.append(spanCls("fb-nav-name", name), spanCls("fb-nav-count", String(count)));
+        return item;
+      }
+
+      function renderFileSidebar() {
+        const inScope = scopeFiles();
+        const filter = state.fileFilter;
+        const noFilter = filter.who === "all" && !filter.kind && !filter.label;
+        const setFilter = (patch) => {
+          state.fileFilter = { ...state.fileFilter, ...patch };
+          renderFileBrowser();
+        };
+        dom.fileBrowseNav.replaceChildren(...[
+          { key: "all", name: "All files" },
+          { key: "you", name: "Added by you" },
+          { key: "models", name: "Added by models" },
+        ].map((entry) => fileNavItem({
+          name: entry.name,
+          count: inScope.filter((file) => fileMatchesFilter(file, { who: entry.key, kind: "", label: 0 })).length,
+          active: entry.key === "all" ? noFilter : filter.who === entry.key,
+          focusKey: `who:${entry.key}`,
+          onClick: () => setFilter(entry.key === "all" ? { who: "all", kind: "", label: 0 } : { who: filter.who === entry.key ? "all" : entry.key }),
+        })));
+
+        dom.fileTypeNav.replaceChildren(...FILE_KIND_ORDER.map((kind) => {
+          const count = inScope.filter((file) => fileKind(file) === kind).length;
+          if (!count && filter.kind !== kind) return null;
+          const swatch = spanCls(`fb-swatch ft-${kind}`);
+          swatch.setAttribute("aria-hidden", "true");
+          return fileNavItem({
+            name: FILE_KINDS[kind].name,
+            count,
+            active: filter.kind === kind,
+            leading: swatch,
+            focusKey: `kind:${kind}`,
+            onClick: () => setFilter({ kind: filter.kind === kind ? "" : kind }),
+          });
+        }).filter(Boolean));
+        if (!dom.fileTypeNav.children.length) dom.fileTypeNav.append(spanCls("fb-side-note", "No files yet."));
+
+        dom.fileLabelNav.replaceChildren(...state.fileLabels.map((label) => {
+          const row = div("fb-nav-row");
+          row.dataset.labelId = String(label.label_id);
+          row.style.setProperty("--lb", FILE_LABEL_COLORS[label.color] || "#8e93a8");
+          const dot = spanCls("fb-dot");
+          dot.setAttribute("aria-hidden", "true");
+          const item = fileNavItem({
+            name: label.name,
+            count: inScope.filter((file) => (file.label_ids || []).includes(label.label_id)).length,
+            active: filter.label === label.label_id,
+            leading: dot,
+            focusKey: `label:${label.label_id}`,
+            onClick: () => setFilter({ label: filter.label === label.label_id ? 0 : label.label_id }),
+          });
+          const edit = button("", () => openFileLabelForm(label), "fb-nav-edit");
+          edit.title = `Edit ${label.name}`;
+          edit.setAttribute("aria-label", `Edit label ${label.name}`);
+          edit.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"></path></svg>';
+          row.append(item, edit);
+          bindFileLabelDropTarget(row, label);
+          return row;
+        }));
+        if (!state.fileLabels.length && dom.fileLabelForm.hidden) {
+          dom.fileLabelNav.append(spanCls("fb-side-note", "No labels yet. Use + to add one."));
         }
       }
 
-      function renderFileList(list, files) {
-        list.replaceChildren();
+      function renderFileToolbar() {
+        const filter = state.fileFilter;
+        const parts = [];
+        if (filter.label) parts.push(fileLabelById(filter.label)?.name || "Label");
+        if (filter.kind) parts.push(FILE_KINDS[filter.kind].name);
+        if (filter.who === "you") parts.push("Added by you");
+        if (filter.who === "models") parts.push("Added by models");
+        const base = state.fileScope === "group" ? "Group files" : "Session files";
+        dom.fileViewTitle.textContent = parts.length ? `${base} · ${parts.join(" · ")}` : base;
+        dom.fileViewSubtitle.textContent = state.fileScope === "group"
+          ? `${fileGroupName()} · shared context for every session in this group`
+          : `${state.selectedSession?.title || "This session"} · only this conversation`;
+        const grid = state.fileLayout === "grid";
+        dom.fileLayoutList.setAttribute("aria-pressed", grid ? "false" : "true");
+        dom.fileLayoutGrid.setAttribute("aria-pressed", grid ? "true" : "false");
+        dom.fileSortSelect.value = state.fileSort;
+      }
+
+      function renderFileList() {
+        const focusKey = document.activeElement?.dataset?.focusKey || "";
+        const files = visibleFiles();
+        const grid = state.fileLayout === "grid";
+        dom.fileList.classList.toggle("is-grid", grid);
+        dom.fileWorkspaceListPane.classList.toggle("is-grid", grid);
+        if (fileThumbnailObserver) fileThumbnailObserver.disconnect();
+        dom.fileList.replaceChildren(...files.map((file) => (grid ? fileCard(file) : fileRow(file))));
         if (!files.length) {
-          list.append(spanCls("file-list-empty", "No files in this bucket."));
-          return;
+          const empty = scopeFiles().length
+            ? "No files match these filters."
+            : state.fileScope === "group"
+              ? "No group files yet. Upload one, or drop it here, to share it with every session in the group."
+              : "No files in this session yet. Upload one, or drop it here.";
+          dom.fileList.append(div("fb-empty", empty));
         }
-        for (const file of files) list.append(fileRowCard(file));
+        if (!state.fileSelection.size) {
+          const hint = div("fb-drop-hint");
+          hint.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4"></path><path d="m6 10 6-6 6 6"></path><path d="M4 20h16"></path></svg>';
+          const text = document.createElement("span");
+          const target = document.createElement("strong");
+          target.textContent = state.fileScope === "group" ? `Group · ${fileGroupName()}` : "this session";
+          text.append(
+            document.createTextNode("Drop files from your computer to add them to "),
+            target,
+            document.createTextNode(". Drag a file onto a label to tag it, or onto the other tab to move it."),
+          );
+          hint.append(text);
+          dom.fileList.append(hint);
+        }
+        if (focusKey) {
+          const next = dom.fileWorkspaceDialog.querySelector(`[data-focus-key="${CSS.escape(focusKey)}"]`);
+          if (next) next.focus();
+        }
       }
 
-      function fileRowCard(file) {
-        const card = div("file-row-card");
-        card.draggable = true;
-        card.dataset.fileId = String(file.file_id);
-        card.dataset.scope = file.scope_type;
-        card.addEventListener("dragstart", (event) => startFileDrag(event, file, card));
-        card.addEventListener("dragend", () => {
-          card.classList.remove("is-dragging");
-          clearFileDropHighlights();
+      function fileSelectionCheckbox(file) {
+        const fileId = String(file.file_id);
+        const check = document.createElement("input");
+        check.type = "checkbox";
+        check.className = "fb-check";
+        check.checked = state.fileSelection.has(fileId);
+        check.dataset.focusKey = `check:${fileId}`;
+        check.setAttribute("aria-label", `Select ${fileDisplayName(file)}`);
+        check.addEventListener("change", () => {
+          if (check.checked) state.fileSelection.add(fileId);
+          else state.fileSelection.delete(fileId);
+          closeFilePopovers();
+          renderFileList();
+          renderFileSelectionBar();
         });
+        return check;
+      }
 
+      function fileOpenButton(file, className, content) {
         const node = document.createElement("button");
         node.type = "button";
-        node.className = "file-button";
-        node.dataset.fileId = String(file.file_id);
-        node.classList.toggle("is-active", String(state.selectedFileId) === String(file.file_id));
-        node.title = file.filename || `file ${file.file_id}`;
-        node.addEventListener("click", () => runFileContinuation("select", () => openFile(file.file_id), node));
+        node.className = className;
+        node.dataset.focusKey = `${className.split(" ")[0]}:${file.file_id}`;
+        if (content) node.append(content);
+        node.addEventListener("click", () => openFile(file.file_id));
+        return node;
+      }
 
-        const row = div("file-row");
-        const icon = div("file-icon");
-        icon.innerHTML = iconSvg("book");
-        const main = div("file-main");
-        const titleLine = div("file-title-line");
-        titleLine.append(
-          spanCls("file-name", file.filename || `file-${file.file_id}`),
-          spanCls("file-format-badge", fileFormatLabel(file))
-        );
-        main.append(
-          titleLine,
-          spanCls("file-meta", `${formatBytes(file.size_bytes)} · ${file.mime_type || "text/plain"} · ${file.created_by || "unknown"} · ${formatUnixDate(file.created_at)}`)
-        );
-        row.append(icon, main);
-        node.append(row);
+      function bindFileDragSource(node, file) {
+        node.draggable = true;
+        node.addEventListener("dragstart", (event) => startFileDrag(event, file, node));
+        node.addEventListener("dragend", () => endFileDrag(node));
+      }
 
-        const targetScope = file.scope_type === "group" ? "session" : "group";
-        const moveButton = document.createElement("button");
-        moveButton.type = "button";
-        moveButton.className = "ghost file-move-button";
-        moveButton.dataset.fileAction = "move";
-        moveButton.title = `Move to ${scopeLabel(targetScope)} files`;
-        moveButton.setAttribute("aria-label", `Move ${file.filename || `file ${file.file_id}`} to ${scopeLabel(targetScope)} files`);
-        moveButton.textContent = `Move to ${scopeLabel(targetScope)}`;
-        moveButton.addEventListener("click", () => {
-          const fileId = file.file_id;
-          runFileContinuation("move", () => moveFile(fileId, targetScope, moveButton), moveButton);
-        });
-        card.append(node, moveButton);
+      function fileRow(file) {
+        const fileId = String(file.file_id);
+        const row = div("fb-row");
+        row.dataset.fileId = fileId;
+        row.classList.toggle("is-selected", state.fileSelection.has(fileId));
+        bindFileDragSource(row, file);
+
+        const nameCell = div("fb-name-cell");
+        const name = fileOpenButton(file, "fb-name", fileNameNode(file));
+        name.title = `Open ${fileDisplayName(file)}`;
+        const sub = div("fb-sub");
+        sub.append(fileBadge(file), spanCls("", fileFormatName(file)));
+        nameCell.append(name, sub);
+
+        const labels = div("fb-labels fb-col-labels");
+        labels.append(...fileLabelsOf(file).map((label) => fileLabelPill(label)));
+        const open = fileOpenButton(file, "fb-open ghost");
+        open.textContent = "Open";
+        open.setAttribute("aria-label", `Open ${fileDisplayName(file)}`);
+
+        row.append(
+          fileSelectionCheckbox(file),
+          fileTile(file),
+          nameCell,
+          labels,
+          fileAuthorNode(file, "fb-who fb-col-who"),
+          spanCls("fb-size fb-col-size", formatBytes(file.size_bytes)),
+          spanCls("fb-date fb-col-date", fileShortDate(file.created_at)),
+          open,
+        );
+        return row;
+      }
+
+      function fileCard(file) {
+        const fileId = String(file.file_id);
+        const card = div(`fb-card ft-${fileKind(file)}`);
+        card.dataset.fileId = fileId;
+        card.classList.toggle("is-selected", state.fileSelection.has(fileId));
+        bindFileDragSource(card, file);
+
+        const preview = fileOpenButton(file, "fb-card-preview");
+        preview.setAttribute("aria-label", `Open ${fileDisplayName(file)}`);
+        preview.append(fileBadge(file), ...filePreviewNodes(file));
+
+        const check = div("fb-card-check");
+        check.append(fileSelectionCheckbox(file));
+
+        const body = div("fb-card-body");
+        const name = fileOpenButton(file, "fb-name", fileNameNode(file));
+        name.dataset.focusKey = `card-name:${fileId}`;
+        const meta = div("fb-card-meta");
+        meta.append(spanCls("", fileAuthor(file).name), spanCls("", "·"), spanCls("", fileShortDate(file.created_at)), spanCls("fb-spacer"));
+        for (const label of fileLabelsOf(file)) {
+          const dot = spanCls("fb-dot");
+          dot.style.setProperty("--lb", FILE_LABEL_COLORS[label.color] || "#8e93a8");
+          dot.title = label.name;
+          meta.append(dot);
+        }
+        body.append(name, meta);
+        card.append(preview, check, body);
         return card;
+      }
+
+      function filePreviewPlaceholder(file) {
+        const node = div("pv-placeholder");
+        node.innerHTML = fileKindSvg(fileKind(file));
+        return node;
+      }
+
+      function filePreviewNodes(file) {
+        const kind = fileKind(file);
+        if (kind === "image") {
+          if (demo.enabled) return [filePreviewPlaceholder(file)];
+          const image = document.createElement("img");
+          image.className = "pv-image";
+          image.alt = "";
+          image.loading = "lazy";
+          image.decoding = "async";
+          image.addEventListener("error", () => image.replaceWith(filePreviewPlaceholder(file)));
+          image.src = `/admin/api/files/${encodeURIComponent(file.file_id)}/thumbnail?v=${encodeURIComponent(file.sha256 || "")}`;
+          return [image];
+        }
+        if (kind === "pdf") {
+          const holder = div("pv-pdf");
+          holder.append(filePreviewPlaceholder(file));
+          const pages = Number(file.page_count) || 0;
+          const nodes = [holder];
+          if (pages) nodes.push(spanCls("pv-corner", `${pages} p.`));
+          if (!demo.enabled) queuePdfThumbnail(holder, file);
+          return nodes;
+        }
+        const text = String(file.preview || "");
+        if (!text.trim()) return [filePreviewPlaceholder(file)];
+        const extension = fileExtension(file);
+        if (extension === "md" || extension === "markdown") {
+          const doc = div("pv-doc");
+          doc.innerHTML = renderMarkdown(text);
+          return [doc, div("pv-fade")];
+        }
+        if (extension === "csv" || extension === "tsv") {
+          const delimiter = extension === "tsv" ? "\t" : ",";
+          const rows = text.split(/\r?\n/).filter((line) => line.trim()).slice(0, 7);
+          if (rows.length) {
+            const table = document.createElement("table");
+            table.className = "pv-table";
+            rows.forEach((line, index) => {
+              const tr = document.createElement("tr");
+              for (const cell of line.split(delimiter).slice(0, 4)) {
+                const td = document.createElement(index === 0 ? "th" : "td");
+                td.textContent = cell.replace(/^"|"$/g, "").trim();
+                tr.append(td);
+              }
+              table.append(tr);
+            });
+            return [table, div("pv-fade")];
+          }
+        }
+        const code = document.createElement("pre");
+        code.className = "pv-code";
+        code.textContent = text.split(/\r?\n/).slice(0, 16).join("\n");
+        return [code, div("pv-fade")];
+      }
+
+      // PDF covers render in the browser with the pdf.js the viewer already ships, one at a
+      // time, only for cards that scroll into view, and are cached per file version.
+      function queuePdfThumbnail(holder, file) {
+        const key = `${file.file_id}:${file.sha256 || ""}`;
+        const cached = pdfThumbnailCache.get(key);
+        if (typeof cached === "string") {
+          if (cached) holder.replaceChildren(pdfThumbnailImage(cached));
+          return;
+        }
+        holder.dataset.thumbnailKey = key;
+        holder.dataset.fileId = String(file.file_id);
+        if (!("IntersectionObserver" in window)) {
+          renderPdfThumbnail(holder);
+          return;
+        }
+        if (!fileThumbnailObserver) {
+          fileThumbnailObserver = new IntersectionObserver((entries) => {
+            for (const entry of entries) {
+              if (!entry.isIntersecting) continue;
+              fileThumbnailObserver.unobserve(entry.target);
+              renderPdfThumbnail(entry.target);
+            }
+          }, { root: dom.fileListScroll, rootMargin: "240px" });
+        }
+        fileThumbnailObserver.observe(holder);
+      }
+
+      function renderPdfThumbnail(holder) {
+        const key = holder.dataset.thumbnailKey;
+        let job = pdfThumbnailCache.get(key);
+        if (typeof job === "string") job = Promise.resolve(job);
+        if (!job) {
+          const fileId = holder.dataset.fileId;
+          job = pdfThumbnailQueue
+            .then(() => (dom.fileWorkspaceDialog.open ? buildPdfThumbnail(fileId) : Promise.reject(new Error("closed"))))
+            .then((url) => {
+              pdfThumbnailCache.set(key, url);
+              return url;
+            }, (error) => {
+              pdfThumbnailCache.delete(key);
+              throw error;
+            });
+          pdfThumbnailQueue = job.catch(() => {});
+          pdfThumbnailCache.set(key, job);
+        }
+        job.then((url) => {
+          if (url && holder.isConnected) holder.replaceChildren(pdfThumbnailImage(url));
+        }).catch(() => {});
+      }
+
+      async function buildPdfThumbnail(fileId) {
+        const [pdfjs, response] = await Promise.all([
+          loadPdfJs(),
+          fetch(`/admin/api/files/${encodeURIComponent(fileId)}/raw`, {
+            credentials: "same-origin",
+            headers: { accept: "application/pdf" },
+          }),
+        ]);
+        if (!response.ok) throw new Error(`PDF download failed (${response.status})`);
+        const loadingTask = pdfjs.getDocument({ data: new Uint8Array(await response.arrayBuffer()) });
+        try {
+          const documentHandle = await loadingTask.promise;
+          const page = await documentHandle.getPage(1);
+          const base = page.getViewport({ scale: 1 });
+          const viewport = page.getViewport({ scale: 320 / base.width });
+          const canvas = document.createElement("canvas");
+          canvas.width = Math.ceil(viewport.width);
+          canvas.height = Math.ceil(viewport.height);
+          await page.render({ canvasContext: canvas.getContext("2d"), viewport }).promise;
+          return canvas.toDataURL("image/jpeg", 0.82);
+        } finally {
+          await loadingTask.destroy().catch(() => {});
+        }
+      }
+
+      function pdfThumbnailImage(url) {
+        const image = document.createElement("img");
+        image.alt = "";
+        image.src = url;
+        image.style.width = "62%";
+        image.style.height = "auto";
+        image.style.background = "#fff";
+        image.style.borderRadius = "2px";
+        image.style.boxShadow = "0 10px 24px -8px rgba(0, 0, 0, .8)";
+        return image;
+      }
+
+      function renderFileSelectionBar() {
+        const count = state.fileSelection.size;
+        dom.fileSelectionBar.hidden = count === 0;
+        if (!count) {
+          dom.fileLabelMenu.hidden = true;
+          return;
+        }
+        dom.fileSelectionCount.textContent = `${count} selected`;
+        dom.fileSelectionMoveText.textContent = state.fileScope === "group" ? "Move to this session" : "Move to group";
+        for (const control of [dom.fileSelectionLabel, dom.fileSelectionMove, dom.fileSelectionDelete]) {
+          control.disabled = state.fileOperationPending;
+        }
+      }
+
+      function sortFileManifests(files) {
+        return [...files].sort((left, right) => (
+          Number(right.created_at || 0) - Number(left.created_at || 0)
+          || Number(right.file_id || 0) - Number(left.file_id || 0)
+        ));
+      }
+
+      // Mutation responses carry the bare manifest; keep the browser-only fields (labels,
+      // preview, author name) unless the caller replaces them.
+      function applyFileManifest(file) {
+        const fileId = String(file.file_id);
+        const previous = findVisibleFile(fileId) || {};
+        const merged = {
+          label_ids: [],
+          preview: null,
+          created_by_name: null,
+          ...previous,
+          ...file,
+        };
+        const next = {
+          session: (state.files.session || []).filter((item) => String(item.file_id) !== fileId),
+          group: (state.files.group || []).filter((item) => String(item.file_id) !== fileId),
+        };
+        next[merged.scope_type === "group" ? "group" : "session"].push(merged);
+        state.files = {
+          session: sortFileManifests(next.session),
+          group: sortFileManifests(next.group),
+        };
+        if (state.selectedFile && String(state.selectedFile.file_id) === fileId) {
+          state.selectedFile = { ...state.selectedFile, ...merged };
+        }
+        return merged;
+      }
+
+      function removeFileManifest(fileId) {
+        const resolvedId = String(fileId);
+        state.files = {
+          session: (state.files.session || []).filter((item) => String(item.file_id) !== resolvedId),
+          group: (state.files.group || []).filter((item) => String(item.file_id) !== resolvedId),
+        };
+        state.fileSelection.delete(resolvedId);
       }
 
       function fileFormatLabel(file) {
@@ -3971,104 +5228,284 @@
           .find((file) => String(file.file_id) === String(fileId)) || null;
       }
 
-      function sortFileManifests(files) {
-        return [...files].sort((left, right) => (
-          Number(right.created_at || 0) - Number(left.created_at || 0)
-          || Number(right.file_id || 0) - Number(left.file_id || 0)
-        ));
-      }
-
-      function applyFileManifest(file) {
-        const fileId = String(file.file_id);
-        const next = {
-          session: (state.files.session || []).filter((item) => String(item.file_id) !== fileId),
-          group: (state.files.group || []).filter((item) => String(item.file_id) !== fileId),
-        };
-        const bucket = file.scope_type === "group" ? "group" : "session";
-        next[bucket].push(file);
-        state.files = {
-          session: sortFileManifests(next.session),
-          group: sortFileManifests(next.group),
-        };
-        if (state.selectedFile && String(state.selectedFile.file_id) === fileId) {
-          state.selectedFile = { ...state.selectedFile, ...file };
-        }
-      }
-
-      function removeFileManifest(fileId) {
-        const resolvedId = String(fileId);
-        state.files = {
-          session: (state.files.session || []).filter((item) => String(item.file_id) !== resolvedId),
-          group: (state.files.group || []).filter((item) => String(item.file_id) !== resolvedId),
-        };
-      }
-
       function invalidateFileOpen() {
         state.fileOpenGeneration += 1;
       }
 
-      async function uploadSelectedFiles(targetScope, input) {
-        const files = Array.from(input.files || []);
-        try {
-          await uploadFiles(targetScope, files, input);
-        } finally {
-          input.value = "";
-        }
+      function fileSessionPath(suffix = "") {
+        return `/admin/api/sessions/${encodeURIComponent(state.selectedSessionId)}${suffix}`;
       }
 
-      async function uploadFiles(targetScope, files, focusTarget) {
-        if (state.fileOperationPending || state.fileViewMode === "guard") return;
-        const operationSessionId = state.selectedSessionId;
-        clearFileDropHighlights();
-        setFileOperationStatus(targetScope, "Checking file...", "");
-        state.fileOperationPending = true;
-        setFileOperationPending(true);
-        try {
-          const prepared = await prepareUpload(files);
-          const payload = await api(`/admin/api/sessions/${encodeURIComponent(operationSessionId)}/files`, {
-            method: "POST",
-            body: JSON.stringify({
-              scope_type: targetScope,
-              filename: prepared.file.name,
-              content_base64: bytesToBase64(prepared.bytes),
-            }),
+      // ---------- toast, pending state, popovers ----------
+      function showFileToast(title, body = "", tone = "ok", action = null) {
+        window.clearTimeout(state.fileToastTimer);
+        state.fileToastAction = action;
+        dom.fileToast.hidden = false;
+        dom.fileToast.classList.toggle("is-error", tone === "error");
+        dom.fileToast.classList.toggle("is-pending", tone === "pending");
+        dom.fileToastTitle.textContent = title;
+        dom.fileToastBody.textContent = body;
+        dom.fileToastBody.hidden = !body;
+        dom.fileToastAction.hidden = !action;
+        if (action) dom.fileToastAction.textContent = action.label;
+        if (tone === "ok" && !action) {
+          state.fileToastTimer = window.setTimeout(hideFileToast, 5000);
+        } else if (tone === "ok") {
+          state.fileToastTimer = window.setTimeout(hideFileToast, 12000);
+        }
+        if (!dom.fileWorkspaceDialog.open) setStatus(body ? `${title} ${body}` : title, tone === "error" ? "error" : "ok");
+      }
+
+      function hideFileToast() {
+        window.clearTimeout(state.fileToastTimer);
+        state.fileToastAction = null;
+        dom.fileToast.hidden = true;
+      }
+
+      function setFileOperationPending(pending) {
+        state.fileOperationPending = pending;
+        dom.fileWorkspaceListPane.setAttribute("aria-busy", pending ? "true" : "false");
+        renderFileWorkspaceMode();
+        if (dom.fileWorkspaceDialog.open) renderFileSelectionBar();
+      }
+
+      function closeFilePopovers() {
+        dom.fileLabelMenu.hidden = true;
+        dom.fileDetailLabelMenu.hidden = true;
+      }
+
+      function fileLabelMenuItems(menu, fileIds) {
+        const files = fileIds.map(findVisibleFile).filter(Boolean);
+        const title = div("fb-popover-title", files.length === 1 ? "Labels" : `Labels for ${files.length} files`);
+        menu.replaceChildren(title);
+        if (!state.fileLabels.length) {
+          const empty = document.createElement("p");
+          empty.className = "fb-popover-empty";
+          empty.textContent = "No labels yet. Add one with + in the Labels section of the file browser.";
+          menu.append(empty);
+          return;
+        }
+        for (const label of state.fileLabels) {
+          const withLabel = files.filter((file) => (file.label_ids || []).includes(label.label_id)).length;
+          const allHave = files.length > 0 && withLabel === files.length;
+          const stateMark = spanCls(`fb-popover-state${allHave ? " is-on" : withLabel ? " is-mixed" : ""}`, allHave ? "✓" : withLabel ? "–" : "");
+          stateMark.setAttribute("aria-hidden", "true");
+          const dot = spanCls("fb-dot");
+          dot.style.setProperty("--lb", FILE_LABEL_COLORS[label.color] || "#8e93a8");
+          const item = button("", async () => {
+            await setFileLabel(label, files.map((file) => file.file_id), !allHave);
+            if (!menu.hidden) fileLabelMenuItems(menu, fileIds);
           });
-          if (state.selectedSessionId !== operationSessionId) return;
-          applyFileManifest(payload.file);
-          renderFiles();
-          setFileOperationStatus(targetScope, `${prepared.file.name} uploaded.`, "ok");
-        } catch (error) {
-          setFileOperationStatus(targetScope, error.message, "error");
-          restoreFileOperationFocus(focusTarget);
-        } finally {
-          state.fileOperationPending = false;
-          setFileOperationPending(false);
-          clearFileDropHighlights();
+          item.setAttribute("role", "menuitemcheckbox");
+          item.setAttribute("aria-checked", allHave ? "true" : withLabel ? "mixed" : "false");
+          item.append(stateMark, dot, spanCls("fb-nav-name", label.name));
+          menu.append(item);
         }
       }
 
-      async function prepareUpload(files) {
-        if (files.length !== 1) throw new Error("Choose or drop exactly one file.");
-        const file = files[0];
+      function toggleFileLabelMenu(menu, fileIds, anchor) {
+        const opening = menu.hidden;
+        closeFilePopovers();
+        if (!opening) return;
+        fileLabelMenuItems(menu, fileIds);
+        menu.hidden = false;
+        if (menu === dom.fileLabelMenu) {
+          const pane = dom.fileWorkspaceListPane.getBoundingClientRect();
+          const box = anchor.getBoundingClientRect();
+          menu.style.left = `${Math.max(8, Math.min(box.left - pane.left, pane.width - 272))}px`;
+          menu.style.bottom = `${pane.bottom - box.top + 8}px`;
+        }
+        window.requestAnimationFrame(() => menu.querySelector("button")?.focus());
+      }
+
+      // ---------- labels ----------
+      async function setFileLabel(label, fileIds, assigned) {
+        if (state.fileOperationPending || !fileIds.length) return false;
+        const operationSessionId = state.selectedSessionId;
+        try {
+          const payload = await api(fileSessionPath(`/file-labels/${encodeURIComponent(label.label_id)}/files`), {
+            method: "POST",
+            body: JSON.stringify({ file_ids: fileIds.map(Number), assigned }),
+          });
+          if (state.selectedSessionId !== operationSessionId) return false;
+          for (const item of payload.files || []) {
+            const file = findVisibleFile(item.file_id);
+            if (file) applyFileManifest({ ...file, label_ids: item.label_ids || [] });
+          }
+          renderFiles();
+          if (dom.fileViewerDialog.open) renderFileViewerLabels();
+          const count = fileIds.length;
+          showFileToast(
+            assigned
+              ? `Added “${label.name}” to ${count} file${count === 1 ? "" : "s"}.`
+              : `Removed “${label.name}” from ${count} file${count === 1 ? "" : "s"}.`,
+          );
+          return true;
+        } catch (error) {
+          showFileToast("Could not change labels", error.message, "error");
+          return false;
+        }
+      }
+
+      function openFileLabelForm(label = null) {
+        const used = new Set(state.fileLabels.map((item) => item.color));
+        const nextColor = Object.keys(FILE_LABEL_COLORS).find((color) => !used.has(color)) || "yellow";
+        state.fileLabelEdit = label ? { ...label } : { label_id: null, name: "", color: nextColor };
+        state.fileLabelDeleteArmed = false;
+        dom.fileLabelForm.hidden = false;
+        dom.fileLabelName.value = state.fileLabelEdit.name;
+        dom.fileLabelDelete.hidden = !label;
+        dom.fileLabelDelete.textContent = "Delete";
+        dom.fileLabelFormError.hidden = true;
+        renderFileLabelColors();
+        renderFileSidebar();
+        window.requestAnimationFrame(() => dom.fileLabelName.focus());
+      }
+
+      function closeFileLabelForm() {
+        state.fileLabelEdit = null;
+        dom.fileLabelForm.hidden = true;
+        renderFileSidebar();
+      }
+
+      function renderFileLabelColors() {
+        dom.fileLabelColors.replaceChildren(...Object.entries(FILE_LABEL_COLORS).map(([color, hex]) => {
+          const swatch = button("", () => {
+            state.fileLabelEdit.color = color;
+            renderFileLabelColors();
+          }, "fb-color");
+          swatch.style.setProperty("--lb", hex);
+          swatch.title = color;
+          swatch.setAttribute("aria-label", color);
+          swatch.setAttribute("aria-pressed", state.fileLabelEdit?.color === color ? "true" : "false");
+          return swatch;
+        }));
+      }
+
+      async function saveFileLabelForm() {
+        const edit = state.fileLabelEdit;
+        if (!edit) return;
+        const name = dom.fileLabelName.value.trim();
+        if (!name) {
+          dom.fileLabelFormError.textContent = "Give the label a name.";
+          dom.fileLabelFormError.hidden = false;
+          return;
+        }
+        try {
+          const payload = edit.label_id
+            ? await api(fileSessionPath(`/file-labels/${encodeURIComponent(edit.label_id)}`), {
+              method: "PATCH",
+              body: JSON.stringify({ name, color: edit.color }),
+            })
+            : await api(fileSessionPath("/file-labels"), {
+              method: "POST",
+              body: JSON.stringify({ name, color: edit.color }),
+            });
+          const saved = payload.label;
+          state.fileLabels = [...state.fileLabels.filter((label) => label.label_id !== saved.label_id), saved]
+            .sort((left, right) => left.name.localeCompare(right.name, undefined, { sensitivity: "base" }));
+          closeFileLabelForm();
+          renderFiles();
+          showFileToast(edit.label_id ? `Label “${saved.name}” saved.` : `Label “${saved.name}” created.`, "Drag files onto it, or select files and choose Label.");
+        } catch (error) {
+          dom.fileLabelFormError.textContent = error.message;
+          dom.fileLabelFormError.hidden = false;
+        }
+      }
+
+      async function deleteFileLabel() {
+        const edit = state.fileLabelEdit;
+        if (!edit?.label_id) return;
+        if (!state.fileLabelDeleteArmed) {
+          state.fileLabelDeleteArmed = true;
+          dom.fileLabelDelete.textContent = "Delete label?";
+          return;
+        }
+        try {
+          await api(fileSessionPath(`/file-labels/${encodeURIComponent(edit.label_id)}`), { method: "DELETE" });
+          state.fileLabels = state.fileLabels.filter((label) => label.label_id !== edit.label_id);
+          for (const file of [...(state.files.session || []), ...(state.files.group || [])]) {
+            if ((file.label_ids || []).includes(edit.label_id)) {
+              applyFileManifest({ ...file, label_ids: file.label_ids.filter((id) => id !== edit.label_id) });
+            }
+          }
+          if (state.fileFilter.label === edit.label_id) state.fileFilter = { ...state.fileFilter, label: 0 };
+          closeFileLabelForm();
+          renderFiles();
+          showFileToast(`Label “${edit.name}” deleted.`, "The files themselves were not touched.");
+        } catch (error) {
+          dom.fileLabelFormError.textContent = error.message;
+          dom.fileLabelFormError.hidden = false;
+        }
+      }
+
+      // ---------- upload, move, delete ----------
+      async function uploadFiles(targetScope, files) {
+        const list = Array.from(files || []);
+        if (!list.length || state.fileOperationPending || state.fileViewMode === "guard") return;
+        const operationSessionId = state.selectedSessionId;
+        const uploaded = [];
+        const skipped = [];
+        setFileOperationPending(true);
+        showFileToast(`Uploading ${list.length} file${list.length === 1 ? "" : "s"}…`, "", "pending");
+        try {
+          for (const file of list) {
+            try {
+              const prepared = await prepareUpload(file);
+              const payload = await api(`/admin/api/sessions/${encodeURIComponent(operationSessionId)}/files`, {
+                method: "POST",
+                body: JSON.stringify({
+                  scope_type: targetScope,
+                  filename: prepared.file.name,
+                  content_base64: bytesToBase64(prepared.bytes),
+                }),
+              });
+              if (state.selectedSessionId !== operationSessionId) return;
+              applyFileManifest({ ...payload.file, preview: prepared.preview, label_ids: [] });
+              uploaded.push(prepared.file.name);
+            } catch (error) {
+              skipped.push(`${file.name}: ${error.message}`);
+              if (error.status === 401) break;
+            }
+          }
+        } finally {
+          setFileOperationPending(false);
+        }
+        if (uploaded.length) state.fileScope = targetScope;
+        renderFiles();
+        const where = targetScope === "group" ? `Group · ${fileGroupName()}` : "this session";
+        if (!uploaded.length) {
+          showFileToast("Nothing was uploaded", skipped.join(" · "), "error");
+        } else {
+          showFileToast(
+            uploaded.length === 1 ? `${uploaded[0]} uploaded to ${where}.` : `${uploaded.length} files uploaded to ${where}.`,
+            skipped.length ? `Skipped: ${skipped.join(" · ")}` : "",
+            skipped.length ? "error" : "ok",
+          );
+        }
+      }
+
+      async function prepareUpload(file) {
         const lowerName = String(file.name || "").toLowerCase();
         const extension = lowerName.includes(".") ? lowerName.slice(lowerName.lastIndexOf(".")) : "";
         if (!ALLOWED_FILE_EXTENSIONS.has(extension)) {
-          throw new Error("Unsupported format. Use JPG, PNG, PDF, MD, TXT, JSON, YAML, CSV, or TSV.");
+          throw new Error("Not accepted here. Use Markdown, text, JSON, YAML, CSV, TSV, PDF, JPG or PNG.");
         }
         if (IMAGE_FILE_EXTENSIONS.has(extension) && file.size > MAX_IMAGE_BYTES) throw new Error("Image is larger than 10 MB.");
+        if (extension === ".pdf" && file.size > MAX_PDF_BYTES) throw new Error("PDF is larger than 20 MB.");
         const bytes = new Uint8Array(await file.arrayBuffer());
         if (bytes.byteLength === 0) throw new Error("File is empty.");
         if (IMAGE_FILE_EXTENSIONS.has(extension)) {
           if (demo.enabled) throw new Error("Image uploads are unavailable in offline demo mode.");
           if (bytes.byteLength > MAX_IMAGE_BYTES) throw new Error("Image is larger than 10 MB.");
-          return { file, bytes };
+          return { file, bytes, preview: null };
         }
         if (extension === ".pdf") {
           if (demo.enabled) throw new Error("PDF uploads are unavailable in offline demo mode.");
           if (bytes.byteLength > MAX_PDF_BYTES) throw new Error("PDF is larger than 20 MB.");
           const header = new TextDecoder("ascii").decode(bytes.slice(0, 8));
           if (!header.startsWith("%PDF-")) throw new Error("File does not look like a valid PDF.");
-          return { file, bytes };
+          return { file, bytes, preview: null };
         }
         if (bytes.byteLength > MAX_FILE_BYTES) throw new Error("Text file is larger than 1 MB.");
         let normalized = bytes;
@@ -4076,12 +5513,13 @@
           normalized = bytes.slice(3);
         }
         if (normalized.byteLength === 0) throw new Error("File is empty.");
+        let text = "";
         try {
-          new TextDecoder("utf-8", { fatal: true }).decode(normalized);
+          text = new TextDecoder("utf-8", { fatal: true }).decode(normalized);
         } catch (_) {
           throw new Error("File must contain valid UTF-8 text.");
         }
-        return { file, bytes: normalized };
+        return { file, bytes: normalized, preview: text.slice(0, 600) };
       }
 
       function bytesToBase64(bytes) {
@@ -4093,80 +5531,161 @@
         return window.btoa(binary);
       }
 
-      async function moveFile(fileId, targetScope, focusTarget) {
+      // Moving is a real move (no copies) and drops the file's labels; the toast says which
+      // labels went and offers Undo, which moves the files back and restores them.
+      async function moveFiles(fileIds, targetScope, { undo = null } = {}) {
         if (state.fileOperationPending || state.fileViewMode === "guard") return;
-        const file = findVisibleFile(fileId);
-        if (!file) {
-          setFileOperationStatus(targetScope, "File is no longer visible. Refresh and try again.", "error");
-          if (focusTarget && typeof focusTarget.focus === "function") focusTarget.focus();
-          return;
-        }
-        const sourceScope = file.scope_type;
-        if (sourceScope === targetScope) {
-          setFileOperationStatus(targetScope, `Already in ${scopeLabel(targetScope)} files.`, "ok");
-          clearFileDropHighlights();
+        const files = fileIds.map(findVisibleFile).filter(Boolean).filter((file) => file.scope_type !== targetScope);
+        const where = targetScope === "group" ? `Group · ${fileGroupName()}` : "this session";
+        if (!files.length) {
+          showFileToast(`Already in ${where}.`);
           return;
         }
         const operationSessionId = state.selectedSessionId;
-        const movingSelectedFile = state.selectedFile && String(state.selectedFile.file_id) === String(fileId);
-        setFileOperationStatus(targetScope, `Moving ${file.filename}...`, "");
+        const sourceScope = files[0].scope_type;
+        const removedLabels = new Map(files.map((file) => [String(file.file_id), [...(file.label_ids || [])]]));
+        const moved = [];
+        let failure = null;
+        setFileOperationPending(true);
+        showFileToast(`Moving ${files.length} file${files.length === 1 ? "" : "s"}…`, "", "pending");
         try {
-          state.fileOperationPending = true;
-          setFileOperationPending(true);
-          const payload = await api(`/admin/api/sessions/${encodeURIComponent(operationSessionId)}/files/${encodeURIComponent(fileId)}`, {
-            method: "PATCH",
-            body: JSON.stringify({ scope_type: targetScope }),
-          });
-          if (state.selectedSessionId !== operationSessionId) return;
-          applyFileManifest(payload.file);
-          renderFiles();
-          if (movingSelectedFile) {
-            state.selectedFileId = payload.file.file_id;
-            applyOpenedFile(state.selectedFile);
+          for (const file of files) {
+            try {
+              const payload = await api(`/admin/api/sessions/${encodeURIComponent(operationSessionId)}/files/${encodeURIComponent(file.file_id)}`, {
+                method: "PATCH",
+                body: JSON.stringify({ scope_type: targetScope }),
+              });
+              if (state.selectedSessionId !== operationSessionId) return;
+              applyFileManifest({ ...payload.file, label_ids: [] });
+              moved.push(String(file.file_id));
+            } catch (error) {
+              failure = error;
+              break;
+            }
           }
-          setFileOperationStatus(targetScope, `${file.filename} moved to ${scopeLabel(targetScope)} files.`, "ok");
-        } catch (error) {
-          setFileOperationStatus(sourceScope, error.message, "error");
-          restoreFileOperationFocus(focusTarget);
         } finally {
-          state.fileOperationPending = false;
           setFileOperationPending(false);
-          clearFileDropHighlights();
         }
-      }
-
-      function setFileOperationStatus(scope, message, tone) {
-        const node = scope === "group" ? dom.groupFileStatus : dom.sessionFileStatus;
-        node.textContent = message || "";
-        node.classList.toggle("is-error", tone === "error");
-        node.classList.toggle("is-ok", tone === "ok");
-      }
-
-      function restoreFileOperationFocus(focusTarget) {
-        if (!focusTarget || typeof focusTarget.focus !== "function") return;
-        window.requestAnimationFrame(() => focusTarget.focus());
-      }
-
-      function setFileOperationPending(pending) {
-        for (const zone of document.querySelectorAll(".file-drop-zone")) {
-          zone.classList.toggle("is-pending", pending);
-          zone.setAttribute("aria-busy", pending ? "true" : "false");
+        for (const fileId of moved) state.fileSelection.delete(fileId);
+        renderFiles();
+        if (dom.fileViewerDialog.open && moved.includes(String(state.selectedFileId))) {
+          applyOpenedFile({ ...state.selectedFile, ...findVisibleFile(state.selectedFileId) });
         }
-        renderFileWorkspaceMode();
+        if (undo) {
+          await restoreFileLabels(undo);
+          showFileToast(failure ? "Undo only partly worked" : "Move undone.", failure ? failure.message : "", failure ? "error" : "ok");
+          return;
+        }
+        const droppedNames = [...new Set(moved.flatMap((fileId) => removedLabels.get(fileId) || []))]
+          .map((labelId) => fileLabelById(labelId)?.name)
+          .filter(Boolean);
+        const title = moved.length === 1
+          ? `Moved ${fileDisplayName(files[0])} to ${where}.`
+          : `Moved ${moved.length} files to ${where}.`;
+        const notes = [];
+        if (droppedNames.length) notes.push(`Labels removed: ${droppedNames.join(", ")}.`);
+        if (failure) notes.push(`${files.length - moved.length} not moved: ${failure.message}`);
+        showFileToast(
+          moved.length ? title : "Nothing was moved",
+          notes.join(" "),
+          failure ? "error" : "ok",
+          moved.length ? {
+            label: "Undo",
+            run: () => moveFiles(moved, sourceScope, { undo: new Map(moved.map((fileId) => [fileId, removedLabels.get(fileId) || []])) }),
+          } : null,
+        );
       }
 
-      function startFileDrag(event, file, card) {
+      async function restoreFileLabels(labelsByFile) {
+        const byLabel = new Map();
+        for (const [fileId, labelIds] of labelsByFile) {
+          for (const labelId of labelIds) {
+            if (!byLabel.has(labelId)) byLabel.set(labelId, []);
+            byLabel.get(labelId).push(Number(fileId));
+          }
+        }
+        for (const [labelId, fileIds] of byLabel) {
+          const label = fileLabelById(labelId);
+          if (!label) continue;
+          try {
+            const payload = await api(fileSessionPath(`/file-labels/${encodeURIComponent(labelId)}/files`), {
+              method: "POST",
+              body: JSON.stringify({ file_ids: fileIds, assigned: true }),
+            });
+            for (const item of payload.files || []) {
+              const file = findVisibleFile(item.file_id);
+              if (file) applyFileManifest({ ...file, label_ids: item.label_ids || [] });
+            }
+          } catch (_) {
+            // A label deleted meanwhile simply stays gone.
+          }
+        }
+        renderFiles();
+        if (dom.fileViewerDialog.open) renderFileViewerLabels();
+      }
+
+      async function deleteSelectedFiles() {
+        const files = [...state.fileSelection].map(findVisibleFile).filter(Boolean);
+        if (!files.length || state.fileOperationPending) return;
+        const confirmed = await window.adminConfirmation.confirm({
+          title: files.length === 1 ? `Delete ${fileDisplayName(files[0])}?` : `Delete ${files.length} files?`,
+          message: "This is permanent and there is no recovery.",
+          detail: "Models may still have references in conversation context and may no longer find or download these files.",
+          confirmLabel: "Delete permanently",
+          tone: "danger",
+        });
+        if (!confirmed) return;
+        const operationSessionId = state.selectedSessionId;
+        let deleted = 0;
+        let failure = null;
+        setFileOperationPending(true);
+        try {
+          for (const file of files) {
+            try {
+              await api(`/admin/api/sessions/${encodeURIComponent(operationSessionId)}/files/${encodeURIComponent(file.file_id)}`, { method: "DELETE" });
+              if (state.selectedSessionId !== operationSessionId) return;
+              removeFileManifest(file.file_id);
+              deleted += 1;
+            } catch (error) {
+              failure = error;
+              break;
+            }
+          }
+        } finally {
+          setFileOperationPending(false);
+        }
+        renderFiles();
+        showFileToast(
+          `${deleted} file${deleted === 1 ? "" : "s"} permanently deleted.`,
+          failure ? `Stopped: ${failure.message}` : "",
+          failure ? "error" : "ok",
+        );
+      }
+
+      // ---------- drag and drop ----------
+      function startFileDrag(event, file, node) {
         if (!event.dataTransfer || state.fileOperationPending || state.fileViewMode === "guard") {
           event.preventDefault();
           return;
         }
-        event.dataTransfer.effectAllowed = "move";
+        const fileId = String(file.file_id);
+        draggedFileIds = state.fileSelection.has(fileId) ? [...state.fileSelection] : [fileId];
+        event.dataTransfer.effectAllowed = "copyMove";
         event.dataTransfer.setData(INTERNAL_FILE_DRAG_TYPE, JSON.stringify({
-          file_id: file.file_id,
-          scope_type: file.scope_type,
+          file_ids: draggedFileIds,
           session_id: state.selectedSessionId,
         }));
-        card.classList.add("is-dragging");
+        event.dataTransfer.setData("text/plain", draggedFileIds.length === 1 ? fileDisplayName(file) : `${draggedFileIds.length} files`);
+        node.classList.add("is-dragging");
+        const otherTab = state.fileScope === "group" ? dom.fileScopeSession : dom.fileScopeGroup;
+        otherTab.classList.add("is-drop-target");
+        for (const row of dom.fileLabelNav.querySelectorAll(".fb-nav-row")) row.classList.add("is-drop-target");
+      }
+
+      function endFileDrag(node) {
+        if (node) node.classList.remove("is-dragging");
+        draggedFileIds = [];
+        clearFileDropHighlights();
       }
 
       function fileDragKind(dataTransfer) {
@@ -4176,93 +5695,165 @@
         return "";
       }
 
-      function bindFileDropZone(zone) {
-        const targetScope = zone.dataset.scope;
-        zone.addEventListener("dragenter", (event) => updateFileDropTarget(event, zone));
-        zone.addEventListener("dragover", (event) => updateFileDropTarget(event, zone));
-        zone.addEventListener("dragleave", (event) => {
-          if (!zone.contains(event.relatedTarget)) zone.classList.remove("is-drop-target");
-        });
-        zone.addEventListener("drop", async (event) => {
-          const kind = fileDragKind(event.dataTransfer);
-          clearFileDropHighlights();
-          if (!kind) return;
+      function readDraggedFileIds(event) {
+        try {
+          const payload = JSON.parse(event.dataTransfer.getData(INTERNAL_FILE_DRAG_TYPE));
+          if (!payload || payload.session_id !== state.selectedSessionId || !Array.isArray(payload.file_ids)) return [];
+          return payload.file_ids.map(String);
+        } catch (_) {
+          return [];
+        }
+      }
+
+      function bindInternalDropTarget(node, onDrop) {
+        node.addEventListener("dragover", (event) => {
+          if (fileDragKind(event.dataTransfer) !== "internal" || state.fileOperationPending) return;
           event.preventDefault();
-          if (kind === "files") {
-            await uploadFiles(targetScope, Array.from(event.dataTransfer.files || []), zone.querySelector('input[type="file"]'));
-            return;
-          }
-          let payload = null;
-          try {
-            payload = JSON.parse(event.dataTransfer.getData(INTERNAL_FILE_DRAG_TYPE));
-          } catch (_) {
-            setFileOperationStatus(targetScope, "Could not read the dragged file.", "error");
-            restoreFileOperationFocus(zone.querySelector('input[type="file"]'));
-            return;
-          }
-          if (!payload || !payload.file_id || payload.session_id !== state.selectedSessionId) {
-            setFileOperationStatus(targetScope, "That dragged file does not belong to this session.", "error");
-            restoreFileOperationFocus(zone.querySelector('input[type="file"]'));
-            return;
-          }
-          const focusTarget = zone.querySelector('input[type="file"]');
-          runFileContinuation("move", () => moveFile(payload.file_id, targetScope, focusTarget), focusTarget);
+          event.dataTransfer.dropEffect = "move";
+          node.classList.add("is-drop-hover");
+        });
+        node.addEventListener("dragleave", (event) => {
+          if (!node.contains(event.relatedTarget)) node.classList.remove("is-drop-hover");
+        });
+        node.addEventListener("drop", (event) => {
+          if (fileDragKind(event.dataTransfer) !== "internal") return;
+          event.preventDefault();
+          event.stopPropagation();
+          const fileIds = readDraggedFileIds(event);
+          clearFileDropHighlights();
+          if (fileIds.length) onDrop(fileIds);
         });
       }
 
-      function updateFileDropTarget(event, zone) {
-        const kind = fileDragKind(event.dataTransfer);
-        if (!kind || state.fileOperationPending || state.fileViewMode === "guard") return;
-        event.preventDefault();
-        event.dataTransfer.dropEffect = kind === "internal" ? "move" : "copy";
-        clearFileDropHighlights();
-        zone.classList.add("is-drop-target");
+      function bindFileLabelDropTarget(row, label) {
+        bindInternalDropTarget(row, (fileIds) => setFileLabel(label, fileIds, true));
       }
 
       function clearFileDropHighlights() {
-        for (const zone of document.querySelectorAll(".file-drop-zone.is-drop-target")) zone.classList.remove("is-drop-target");
+        for (const node of document.querySelectorAll(".is-drop-target, .is-drop-hover")) {
+          node.classList.remove("is-drop-target", "is-drop-hover");
+        }
       }
 
+      function showFileDropOverlay() {
+        if (state.fileOperationPending || state.fileViewMode === "guard" || dom.fileViewerDialog.open) return;
+        dom.fileDropSessionText.textContent = `${state.selectedSession?.title || "This session"} · only this conversation`;
+        dom.fileDropOverlay.hidden = false;
+      }
+
+      function hideFileDropOverlay() {
+        fileDragDepth = 0;
+        dom.fileDropOverlay.hidden = true;
+        for (const target of dom.fileDropOverlay.querySelectorAll(".fb-drop-target")) target.classList.remove("is-drop-hover");
+      }
+
+      function bindFileBrowserDrops() {
+        const dialog = dom.fileWorkspaceDialog;
+        dialog.addEventListener("dragenter", (event) => {
+          if (fileDragKind(event.dataTransfer) !== "files") return;
+          event.preventDefault();
+          fileDragDepth += 1;
+          showFileDropOverlay();
+        });
+        dialog.addEventListener("dragleave", (event) => {
+          if (fileDragKind(event.dataTransfer) !== "files") return;
+          fileDragDepth = Math.max(0, fileDragDepth - 1);
+          if (!fileDragDepth) hideFileDropOverlay();
+        });
+        dialog.addEventListener("dragover", (event) => {
+          if (fileDragKind(event.dataTransfer) !== "files") return;
+          event.preventDefault();
+          const target = event.target.closest ? event.target.closest(".fb-drop-target") : null;
+          for (const node of dom.fileDropOverlay.querySelectorAll(".fb-drop-target")) node.classList.toggle("is-drop-hover", node === target);
+          event.dataTransfer.dropEffect = target ? "copy" : "none";
+        });
+        dialog.addEventListener("drop", (event) => {
+          if (fileDragKind(event.dataTransfer) !== "files") return;
+          event.preventDefault();
+          const target = event.target.closest ? event.target.closest(".fb-drop-target") : null;
+          const files = Array.from(event.dataTransfer.files || []);
+          hideFileDropOverlay();
+          if (target && files.length) uploadFiles(target.dataset.scope, files);
+        });
+        for (const tab of [dom.fileScopeSession, dom.fileScopeGroup]) {
+          bindInternalDropTarget(tab, (fileIds) => runFileContinuation("move", () => moveFiles(fileIds, tab.dataset.scope), tab));
+        }
+      }
+
+      // ---------- opening the browser and the viewer ----------
       function openFileWorkspace() {
         if (!state.selectedSession || dom.fileWorkspaceDialog.open) return;
-        renderFiles();
-        showFileListPane();
+        if (state.fileBrowserSessionId !== state.selectedSessionId) {
+          state.fileBrowserSessionId = state.selectedSessionId;
+          state.fileScope = (state.files.session || []).length || !(state.files.group || []).length ? "session" : "group";
+          state.fileFilter = { who: "all", kind: "", label: 0 };
+          state.fileQuery = "";
+          state.fileSelection.clear();
+          dom.fileSearchInput.value = "";
+        }
+        hideFileToast();
+        closeFilePopovers();
+        dom.fileLabelForm.hidden = true;
+        state.fileLabelEdit = null;
         dom.fileWorkspaceDialog.showModal();
+        renderFiles();
         window.requestAnimationFrame(() => {
-          const firstFile = dom.fileWorkspaceDialog.querySelector(".file-button");
-          (firstFile || dom.fileWorkspaceClose).focus();
+          const first = dom.fileList.querySelector(".fb-name");
+          (first || dom.fileSearchInput).focus();
         });
       }
 
-      function showFileListPane() {
-        state.fileViewMode = "preview";
-        renderFileWorkspaceMode();
-        dom.fileWorkspaceGrid.classList.remove("show-detail");
-        const selected = dom.fileWorkspaceDialog.querySelector(".file-button.is-active");
-        if (selected) selected.focus();
+      function setFileScope(scope) {
+        if (state.fileScope === scope) return;
+        state.fileScope = scope;
+        state.fileSelection.clear();
+        state.fileFilter = { who: "all", kind: "", label: 0 };
+        closeFilePopovers();
+        renderFileBrowser();
+      }
+
+      function closeFileViewer() {
+        state.fileViewerTargetId = null;
+        invalidateFileOpen();
+        clearPdfPreview();
+        if (dom.fileViewerDialog.open) dom.fileViewerDialog.close();
+      }
+
+      function stepFileViewer(direction) {
+        const files = visibleFiles();
+        const currentId = state.fileViewerTargetId ?? state.selectedFileId;
+        const index = files.findIndex((file) => String(file.file_id) === String(currentId));
+        const next = files[index + direction];
+        if (!next) return;
+        runFileContinuation("select", () => openFile(next.file_id), direction < 0 ? dom.filePrevButton : dom.fileNextButton);
       }
 
       async function openFile(fileId) {
         if (state.fileOperationPending || state.fileViewMode === "guard") return;
         const operationSessionId = state.selectedSessionId;
         const openGeneration = ++state.fileOpenGeneration;
+        const manifest = findVisibleFile(fileId);
+        state.fileViewerTargetId = fileId;
+        closeFilePopovers();
+        if (!dom.fileViewerDialog.open) dom.fileViewerDialog.showModal();
+        if (manifest) renderFileViewerChrome(manifest);
+        dom.fileWorkspaceContent.className = "file-workspace-placeholder";
+        dom.fileWorkspaceContent.replaceChildren(document.createTextNode("Loading file…"));
         setBusy(true);
         try {
           const payload = await api(`/admin/api/files/${encodeURIComponent(fileId)}`);
           if (
             openGeneration !== state.fileOpenGeneration
             || state.selectedSessionId !== operationSessionId
-            || !dom.fileWorkspaceDialog.open
+            || !dom.fileViewerDialog.open
           ) return;
-          applyOpenedFile(payload.file);
-          dom.fileWorkspaceGrid.classList.add("show-detail");
-          if (window.matchMedia("(max-width: 520px)").matches) dom.fileWorkspaceBack.focus();
-          else dom.fileWorkspaceDetailPane.focus();
+          applyOpenedFile({ ...(manifest || {}), ...payload.file });
+          dom.fileWorkspaceDetailPane.focus();
         } catch (error) {
           if (
             openGeneration !== state.fileOpenGeneration
             || state.selectedSessionId !== operationSessionId
-            || !dom.fileWorkspaceDialog.open
+            || !dom.fileViewerDialog.open
           ) return;
           showFilePreviewError(error.message);
           setStatus(error.message, "error");
@@ -4280,33 +5871,64 @@
         state.fileViewMode = "preview";
         state.pendingFileContinuation = null;
         state.fileDeleteTarget = null;
-        dom.fileWorkspaceTitle.textContent = file.filename || `file-${file.file_id}`;
-        dom.fileWorkspaceMeta.replaceChildren(
-          spanCls("mono", `#${file.file_id}`),
-          dotSep(),
-          spanCls("", file.scope_type === "group" ? `group ${file.group_id}` : `session ${file.session_id}`),
-          dotSep(),
-          spanCls("", formatBytes(file.size_bytes)),
-          dotSep(),
-          spanCls("", file.mime_type || "text/plain"),
-          dotSep(),
-          spanCls("", formatUnixDate(file.created_at)),
-          ...(file.content_kind === "pdf" ? [
-            dotSep(),
-            spanCls("", `${file.page_count || 0} page${Number(file.page_count) === 1 ? "" : "s"}`),
-          ] : [])
-        );
+        renderFileViewerChrome(file);
         renderFilePreview(file);
         renderFileWorkspaceMode();
-        for (const button of dom.fileWorkspaceDialog.querySelectorAll(".file-button")) {
-          button.classList.toggle("is-active", button.dataset.fileId === String(file.file_id));
-        }
       }
 
-      function dotSep() {
-        const node = document.createElement("span");
-        node.className = "sep";
-        return node;
+      function renderFileViewerChrome(file) {
+        const kind = fileKind(file);
+        dom.fileViewerTile.className = `ft-tile ft-${kind}`;
+        dom.fileViewerTile.innerHTML = fileKindSvg(kind);
+        dom.fileWorkspaceTitle.replaceChildren(fileNameNode(file));
+        const files = visibleFiles();
+        const index = files.findIndex((item) => String(item.file_id) === String(file.file_id));
+        dom.fileWorkspaceMeta.replaceChildren(
+          fileBadge(file),
+          spanCls("", file.scope_type === "group" ? `Group · ${fileGroupName()}` : "This session"),
+          ...(index >= 0 ? [spanCls("", "·"), spanCls("", `${index + 1} of ${files.length}`)] : []),
+        );
+        dom.filePrevButton.disabled = index <= 0;
+        dom.fileNextButton.disabled = index < 0 || index >= files.length - 1;
+
+        const author = fileAuthor(file);
+        const details = [
+          ["Type", fileFormatName(file)],
+          ["Size", formatBytes(file.size_bytes)],
+          ["Added by", fileAuthorNode(file, "fb-who"), author.isYou ? "" : " via MCP"],
+          ["Added", formatUnixDate(file.created_at)],
+          ["Lives in", file.scope_type === "group" ? `Group · ${fileGroupName()}` : "This session only"],
+          ["File ID", spanCls("mono", String(file.file_id))],
+        ];
+        dom.fileDetailList.replaceChildren(...details.flatMap(([term, value, suffix]) => {
+          const dt = document.createElement("dt");
+          dt.textContent = term;
+          const dd = document.createElement("dd");
+          dd.append(typeof value === "string" ? document.createTextNode(value) : value);
+          if (suffix) dd.append(document.createTextNode(suffix));
+          return [dt, dd];
+        }));
+        const who = file.scope_type === "group" ? "Models in every session of this group" : "Models in this session";
+        let access = `${who} can list and download this file.`;
+        if (kind === "image") access = `${who} can look at this image.`;
+        if (kind === "pdf" && file.extraction_status === "no_text") access = `${who} can see this PDF but not read it: it has no text layer.`;
+        dom.fileDetailAccess.textContent = `${access} Labels stay private to you.`;
+        dom.fileMoveButtonText.textContent = file.scope_type === "group" ? "Move to this session" : "Move to group files";
+        renderFileViewerLabels();
+      }
+
+      function renderFileViewerLabels() {
+        const file = state.selectedFile || findVisibleFile(state.selectedFileId);
+        if (!file) {
+          dom.fileDetailLabels.replaceChildren();
+          return;
+        }
+        const current = findVisibleFile(file.file_id) || file;
+        const pills = fileLabelsOf(current).map((label) => fileLabelPill(label, () => setFileLabel(label, [current.file_id], false)));
+        const add = button("+ Add label", () => toggleFileLabelMenu(dom.fileDetailLabelMenu, [String(current.file_id)], add), "fv-add-label");
+        add.setAttribute("aria-haspopup", "menu");
+        dom.fileDetailLabels.replaceChildren(...pills, add);
+        dom.fileMoveNote.hidden = !fileLabelsOf(current).length;
       }
 
       function renderFilePreview(file) {
@@ -4418,7 +6040,7 @@
             || !state.selectedFile
             || String(state.selectedFile.file_id) !== String(file.file_id)
           ) {
-            await documentHandle.destroy();
+            await destroyPdfDocument(documentHandle);
             return;
           }
           state.pdfDocument = documentHandle;
@@ -4509,6 +6131,14 @@
         }
       }
 
+      // pdf.js 6 dropped PDFDocumentProxy.destroy(); the loading task owns the cleanup now.
+      function destroyPdfDocument(documentHandle) {
+        const cleanup = typeof documentHandle?.destroy === "function"
+          ? documentHandle.destroy()
+          : documentHandle?.loadingTask?.destroy?.();
+        return Promise.resolve(cleanup).catch(() => {});
+      }
+
       function clearPdfPreview() {
         if (state.pdfAbortController) {
           state.pdfAbortController.abort();
@@ -4523,7 +6153,7 @@
           state.pdfRenderTask = null;
         }
         if (state.pdfDocument) {
-          void state.pdfDocument.destroy().catch(() => {});
+          void destroyPdfDocument(state.pdfDocument);
           state.pdfDocument = null;
         }
         state.pdfPageNumber = 1;
@@ -4539,10 +6169,12 @@
         dom.fileEditButton.disabled = true;
         dom.fileDeleteButton.disabled = true;
         dom.fileDeleteButton.setAttribute("aria-label", "Delete selected file");
-        dom.fileWorkspaceTitle.textContent = "Select a file";
+        dom.fileWorkspaceTitle.textContent = "File";
         dom.fileWorkspaceMeta.replaceChildren();
+        dom.fileDetailList.replaceChildren();
+        dom.fileDetailLabels.replaceChildren();
         dom.fileWorkspaceContent.className = "file-workspace-placeholder";
-        dom.fileWorkspaceContent.replaceChildren(document.createTextNode("Choose a session or group file to preview it here."));
+        dom.fileWorkspaceContent.replaceChildren(document.createTextNode("Choose a file to preview it here."));
         delete dom.fileWorkspaceContent.dataset.content;
         delete dom.fileWorkspaceContent.dataset.filename;
         delete dom.fileWorkspaceContent.dataset.mimeType;
@@ -4553,7 +6185,6 @@
         resetFilePreview();
         dom.fileWorkspaceTitle.textContent = "Could not open file";
         dom.fileWorkspaceContent.replaceChildren(document.createTextNode(String(message || "Unknown error")));
-        dom.fileWorkspaceGrid.classList.add("show-detail");
       }
 
       function isEditableTextFile(file) {
@@ -4585,22 +6216,25 @@
         dom.fileEditorPane.hidden = mode !== "edit";
         dom.fileGuardPane.hidden = mode !== "guard";
         dom.fileDeletePane.hidden = mode !== "delete";
-        dom.fileEditButton.hidden = mode !== "preview";
-        dom.fileDeleteButton.hidden = mode !== "preview";
+        dom.filePreviewModeButton.setAttribute("aria-pressed", mode === "edit" ? "false" : "true");
+        dom.fileEditButton.setAttribute("aria-pressed", mode === "edit" ? "true" : "false");
         const pending = state.fileOperationPending;
         const interactionsLocked = pending || mode === "guard";
         dom.sessionFileInput.disabled = interactionsLocked;
         dom.groupFileInput.disabled = interactionsLocked;
+        dom.fileUploadButton.disabled = interactionsLocked;
         dom.fileWorkspaceBack.disabled = interactionsLocked;
+        dom.fileViewerClose.disabled = interactionsLocked;
         dom.fileWorkspaceClose.disabled = interactionsLocked;
-        for (const button of dom.fileWorkspaceDialog.querySelectorAll(".file-button")) button.disabled = interactionsLocked;
-        for (const button of dom.fileWorkspaceDialog.querySelectorAll('[data-file-action="move"]')) button.disabled = interactionsLocked;
+        dom.filePreviewModeButton.disabled = pending || mode === "guard" || mode === "delete";
+        dom.fileMoveButton.disabled = pending || !state.selectedFile || mode !== "preview";
         dom.fileCopyButton.disabled = pending || !state.selectedFile || mode === "delete"
           || isImageFile(state.selectedFile)
           || (isPdfFile(state.selectedFile) && !state.selectedFile.text_available);
         dom.fileDownloadButton.disabled = pending || !state.selectedFile || mode === "delete";
-        dom.fileEditButton.disabled = pending || !state.selectedFile || !isEditableTextFile(state.selectedFile);
-        dom.fileDeleteButton.disabled = pending || !state.selectedFile;
+        dom.fileEditButton.disabled = pending || !state.selectedFile || !isEditableTextFile(state.selectedFile)
+          || mode === "guard" || mode === "delete";
+        dom.fileDeleteButton.disabled = pending || !state.selectedFile || mode !== "preview";
         dom.fileSaveButton.disabled = pending;
         dom.fileGuardSave.disabled = pending;
         dom.fileGuardDiscard.disabled = pending;
@@ -4696,7 +6330,7 @@
             body: JSON.stringify({ content: draft, expected_sha256: state.fileOpenedSha256 }),
           });
           if (state.selectedSessionId !== operationSessionId) return false;
-          applyFileManifest(payload.file);
+          applyFileManifest({ ...payload.file, preview: draft.slice(0, 600) });
           renderFiles();
           applyOpenedFile({ ...state.selectedFile, ...payload.file, content: draft });
           setStatus(`${payload.file.filename || "File"} saved.`, "ok");
@@ -4754,16 +6388,33 @@
           });
           if (state.selectedSessionId !== operationSessionId) return;
           removeFileManifest(file.file_id);
-          resetFilePreview();
+          state.fileViewMode = "preview";
+          closeFileViewer();
           renderFiles();
-          showFileListPane();
-          setStatus(`${file.filename || "File"} permanently deleted.`, "ok");
+          showFileToast(`${file.filename || "File"} permanently deleted.`);
         } catch (error) {
           setFileDeleteStatus(`Delete failed: ${error.message}. The file has not been removed; try again or cancel.`, "error");
           window.requestAnimationFrame(() => dom.fileDeleteConfirm.focus());
         } finally {
           state.fileOperationPending = false;
           setFileOperationPending(false);
+        }
+      }
+
+      async function openFileUploadInfo() {
+        if (dom.fileUploadInfoDialog.open) return;
+        dom.fileUploadInfoDialog.showModal();
+        const known = state.operationalStatus?.version?.current;
+        if (known) {
+          dom.fileUploadInfoVersion.textContent = known;
+          return;
+        }
+        try {
+          const payload = await api("/admin/api/status");
+          const version = payload.status?.version?.current;
+          if (version) dom.fileUploadInfoVersion.textContent = version;
+        } catch (_) {
+          // The rules still read fine without a version number.
         }
       }
 
@@ -6432,6 +8083,47 @@
           return Promise.resolve({ ok: true, file: demoFileManifest(demoFile) });
         }
 
+        const demoLabelAssign = path.match(/^\/admin\/api\/sessions\/(.+)\/file-labels\/(\d+)\/files$/);
+        if (demoLabelAssign && method === "POST") {
+          const sessionId = decodeURIComponent(demoLabelAssign[1]);
+          const labelId = Number(demoLabelAssign[2]);
+          const visible = demoFilesForSession(sessionId);
+          const files = body.file_ids.map((id) => visible.find((file) => Number(file.file_id) === Number(id)));
+          if (files.some((file) => !file)) return Promise.reject(Object.assign(new Error("File not found"), { status: 409 }));
+          for (const file of files) {
+            const labels = new Set(file.label_ids || []);
+            if (body.assigned) labels.add(labelId);
+            else labels.delete(labelId);
+            file.label_ids = [...labels];
+          }
+          return Promise.resolve({ ok: true, files: files.map((file) => ({ file_id: file.file_id, label_ids: file.label_ids })) });
+        }
+        const demoLabels = path.match(/^\/admin\/api\/sessions\/(.+)\/file-labels(?:\/(\d+))?$/);
+        if (demoLabels) {
+          const entry = demo.store[decodeURIComponent(demoLabels[1])];
+          if (!entry) return Promise.reject(Object.assign(new Error("Unknown session"), { status: 404 }));
+          const groupId = entry.session.group_id;
+          if (method === "POST" && !demoLabels[2]) {
+            if (demo.fileLabels.some((label) => label.group_id === groupId && label.name.toLowerCase() === String(body.name).trim().toLowerCase())) {
+              return Promise.reject(Object.assign(new Error("A label with this name already exists"), { status: 400 }));
+            }
+            const label = { label_id: demo.nextLabelId++, group_id: groupId, name: String(body.name).trim(), color: body.color };
+            demo.fileLabels.push(label);
+            return Promise.resolve({ ok: true, label });
+          }
+          const label = demo.fileLabels.find((item) => item.label_id === Number(demoLabels[2]) && item.group_id === groupId);
+          if (!label) return Promise.reject(Object.assign(new Error("Unknown label"), { status: 404 }));
+          if (method === "PATCH") {
+            Object.assign(label, { name: body.name ?? label.name, color: body.color ?? label.color });
+            return Promise.resolve({ ok: true, label });
+          }
+          if (method === "DELETE") {
+            demo.fileLabels = demo.fileLabels.filter((item) => item !== label);
+            for (const file of demo.files) file.label_ids = (file.label_ids || []).filter((id) => id !== label.label_id);
+            return Promise.resolve({ ok: true, label });
+          }
+        }
+
         const demoFileMutation = path.match(/^\/admin\/api\/sessions\/(.+)\/files\/(\d+)$/);
         if (demoFileMutation && method === "PATCH") {
           const sessionId = decodeURIComponent(demoFileMutation[1]);
@@ -6468,7 +8160,8 @@
             session: visibleFiles.filter((file) => file.scope_type === "session").map(demoFileManifest),
             group: visibleFiles.filter((file) => file.scope_type === "group").map(demoFileManifest),
           };
-          return Promise.resolve({ ok: true, session: entry.session, exchanges: entry.exchanges, files: entry.files });
+          const fileLabels = demo.fileLabels.filter((label) => label.group_id === entry.session.group_id);
+          return Promise.resolve({ ok: true, session: entry.session, exchanges: entry.exchanges, files: entry.files, file_labels: fileLabels });
         }
         if (single && method === "PATCH") {
           const entry = demo.store[decodeURIComponent(single[1])];
@@ -6532,10 +8225,16 @@
 
       function demoFileManifest(file) {
         const { content, ...manifest } = file;
-        return { ...manifest };
+        return {
+          ...manifest,
+          label_ids: [...(file.label_ids || [])],
+          preview: typeof content === "string" ? content.slice(0, 600) : null,
+          created_by_name: null,
+        };
       }
 
       function moveDemoFile(entry, demoFile, targetScope) {
+        demoFile.label_ids = [];
         if (targetScope === "group") {
           demoFile.scope_type = "group";
           demoFile.session_id = null;
