@@ -35,6 +35,8 @@ Files may be explicitly uploaded through the admin UI or saved with `upload_sess
 
 PDFs use the separate `upload_session_pdf` and `upload_group_pdf` tools with base64 content. `download_session_file` returns their extracted text, not the original bytes. OCR is not supported, so a PDF with `text_available: false` cannot contribute readable context or RAG results.
 
+Users upload static JPEG/PNG images manually in the admin panel (up to 10 MB and 40 megapixels). Images are read-only through MCP. Use `view_session_image(session_id, file_id)` for an image listed in the manifest. It returns native MCP image content plus metadata for session and current-group images. `download_session_file` returns only image metadata and points to the view tool. Images have `text_available: false`; there is no OCR or visual RAG indexing. The MCP client must forward image results to a vision-capable model. If the client does not support these results, say so rather than claiming to have viewed the image.
+
 ## Response Storage
 
 `save_exchange` should receive the full latest user message and the full assistant response exactly as the model is about to show it. This is what allows future models to continue from the transcript without reconstructing missing context.

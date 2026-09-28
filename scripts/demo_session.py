@@ -29,7 +29,7 @@ def main() -> int:
     store = Store(output_dir / "demo.sqlite3")
     stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
     session_id = _available_session_id(store, f"demo-{stamp}")
-    session = store.create_session(session_id, "Demo multi-model session", "manual-context")
+    session = store.create_session(session_id, "Demo multi-model session")
     print(f"Created session: {session.session_id}")
 
     exchanges = [

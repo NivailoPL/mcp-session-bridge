@@ -6,7 +6,7 @@ from app.storage import GRAPH_FAILURE_RECOVERY_SETTING, Store
 
 
 def _session_with_exchange(store: Store, session_id: str, *, created_at: int) -> int:
-    store.create_session(session_id, session_id, "manual-context")
+    store.create_session(session_id, session_id)
     exchange = store.save_exchange(session_id, "model", f"user {session_id}", f"assistant {session_id}")
     with store._connect() as connection:
         connection.execute(

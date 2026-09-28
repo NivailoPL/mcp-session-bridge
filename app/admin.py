@@ -47,6 +47,13 @@ from app.pdf_files import (
     extract_pdf_text_isolated,
     run_pdf_worker,
 )
+from app.image_files import (
+    IMAGE_EXTENSIONS,
+    ImageWorkerBusyError,
+    decode_image_base64,
+    run_image_worker,
+    validate_image_isolated,
+)
 from app.output_probe import (
     MAX_PROBE_TARGET_CHARS,
     MAX_TRANSCRIPT_CHUNK_CHARS,
@@ -63,11 +70,12 @@ from app.output_probe import (
     validate_transcript_chunk_limits,
 )
 from app.security import token_urlsafe, verify_password
-from app.settings import Settings
+from app.settings import ROOT, Settings
 from app.conversation_export import ExportInProgressError, export_database_to_markdown
 from app.storage import (
     MAX_SESSION_FILE_BYTES,
     ExchangeRecord,
+    ImageStorageQuotaError,
     PdfStorageQuotaError,
     SessionFileConflictError,
     SessionFileRecord,
@@ -98,6 +106,10 @@ AI_RENAME_MODEL_SETTING = "ai_rename.model"
 AI_RENAME_DEFAULT_MODEL = "gpt-5.4-nano"
 AI_RENAME_ENDPOINT = "https://api.openai.com/v1/chat/completions"
 SESSION_TITLE_MAX_CHARS = 72
+AI_RENAME_MAX_WORDS_SETTING = "ai_rename.max_words"
+AI_RENAME_DEFAULT_MAX_WORDS = 6
+AI_RENAME_MIN_MAX_WORDS = 2
+AI_RENAME_MAX_MAX_WORDS = 10
 ADMIN_FILE_UPLOAD_MAX_BODY_BYTES = ((MAX_ADMIN_PDF_BYTES + 2) // 3 * 4) + 16_384
 ADMIN_FILE_EDIT_MAX_BODY_BYTES = (MAX_SESSION_FILE_BYTES * 6) + 16_384
 CODEX_CHAT_MAX_BODY_BYTES = MAX_CHAT_MESSAGE_CHARS * 4 + 1_024
@@ -117,6 +129,7 @@ ADMIN_FILE_EXTENSIONS = {
     ".csv": "text/csv",
     ".tsv": "text/tab-separated-values",
     ".pdf": "application/pdf",
+    **IMAGE_EXTENSIONS,
 }
 BRAND_ASSET_MEDIA_TYPES = {
     ".json": "application/json",
@@ -124,8 +137,6 @@ BRAND_ASSET_MEDIA_TYPES = {
     ".svg": "image/svg+xml",
     ".webmanifest": "application/manifest+json",
 }
-GRAPH_NAV_LINK = '<a class="sb-nav__tab" role="tab" href="/admin/graph" aria-selected="false" tabindex="-1" data-label="GRAPH">GRAPH</a>'
-GRAPH_NAV_WIP = '<span class="sb-nav__tab" role="tab" aria-disabled="true" aria-selected="false" data-label="GRAPH">GRAPH <small>WIP</small></span>'
 logger = logging.getLogger(__name__)
 
 
@@ -147,8 +158,8 @@ class AdminHandlers:
         self.graph_html_path = html_path.parent / "graph-viewer.html"
         self.graph_wip_html_path = html_path.parent / "graph-wip.html"
         self.graph_asset_dir = html_path.parent
-        self.brand_dir = html_path.parent / "brand"
-        self.pdfjs_dir = html_path.parent / "vendor" / "pdfjs"
+        self.brand_dir = ROOT / "brand"
+        self.pdfjs_dir = ROOT / "vendor" / "pdfjs"
         self.search = SearchService(store)
         self.active_tool_output_mode = active_tool_output_mode
         self.restart_requester = restart_requester
@@ -166,7 +177,7 @@ class AdminHandlers:
             body = self.html_path.read_text(encoding="utf-8")
         except OSError:
             return HTMLResponse("Admin viewer is not installed.", status_code=500, headers=self._no_store_headers())
-        return HTMLResponse(self._render_workspace_navigation(body), headers=self._admin_headers())
+        return HTMLResponse(body, headers=self._admin_headers())
 
     async def graph_page(self, request: Request) -> Response:
         _, error = self._require_admin(request)
@@ -182,11 +193,6 @@ class AdminHandlers:
         except OSError:
             return HTMLResponse("Graph workspace is not installed.", status_code=500, headers=self._no_store_headers())
         return HTMLResponse(body, headers=self._admin_headers())
-
-    def _render_workspace_navigation(self, body: str) -> str:
-        if self.settings.graph_experimental:
-            return body
-        return body.replace(GRAPH_NAV_LINK, GRAPH_NAV_WIP)
 
     async def graph_asset(self, request: Request) -> Response:
         _, error = self._require_admin(request)
@@ -669,8 +675,19 @@ class AdminHandlers:
         model = str(payload.get("rename_model", "")).strip() or AI_RENAME_DEFAULT_MODEL
         if len(model) > 96:
             return self._json_error("rename_model must be 96 characters or fewer.", status_code=400)
+        max_words = payload.get("rename_max_words", self._rename_max_words())
+        if (
+            isinstance(max_words, bool)
+            or not isinstance(max_words, int)
+            or not AI_RENAME_MIN_MAX_WORDS <= max_words <= AI_RENAME_MAX_MAX_WORDS
+        ):
+            return self._json_error(
+                f"rename_max_words must be a whole number from {AI_RENAME_MIN_MAX_WORDS} to {AI_RENAME_MAX_MAX_WORDS}.",
+                status_code=400,
+            )
         self.store.set_app_setting(RENAME_MODEL_SETTING, model)
         self.store.set_app_setting(AI_RENAME_MODEL_SETTING, model)
+        self.store.set_app_setting(AI_RENAME_MAX_WORDS_SETTING, str(max_words))
         return JSONResponse({"ok": True, "settings": await asyncio.to_thread(self._settings_payload)},
                             headers=self._no_store_headers())
 
@@ -1158,7 +1175,9 @@ class AdminHandlers:
         first_user_message = exchanges[0].user_message
         model = self.store.get_app_setting(AI_RENAME_MODEL_SETTING) or AI_RENAME_DEFAULT_MODEL
         try:
-            title = await asyncio.to_thread(_suggest_session_title, api_key, model, first_user_message)
+            title = await asyncio.to_thread(
+                _suggest_session_title, api_key, model, first_user_message, self._rename_max_words()
+            )
             session = self.store.set_session_title(session.session_id, title)
         except ValueError as exc:
             return self._value_error(exc)
@@ -1195,14 +1214,14 @@ class AdminHandlers:
         binary_record = await asyncio.to_thread(self.store.get_session_file_binary, file_id)
         if binary_record is None:
             return self._json_error(f"Unknown file_id: {file_id}", status_code=404)
-        filename, content_kind, binary_content = binary_record
-        if content_kind != "pdf" or binary_content is None:
-            return self._json_error("Raw binary content is available only for PDF files.", status_code=400)
+        filename, content_kind, mime_type, binary_content = binary_record
+        if content_kind not in {"pdf", "image"} or binary_content is None:
+            return self._json_error("Raw binary content is available only for PDF and image files.", status_code=400)
         disposition = "attachment" if request.query_params.get("download") == "1" else "inline"
         encoded_filename = urllib.parse.quote(filename, safe="")
         return Response(
             binary_content,
-            media_type="application/pdf",
+            media_type=mime_type,
             headers={
                 **self._no_store_headers(),
                 "Content-Disposition": f"{disposition}; filename*=UTF-8''{encoded_filename}",
@@ -1292,7 +1311,12 @@ class AdminHandlers:
         if not isinstance(encoded, str):
             return self._json_error("content_base64 must be a string.", status_code=400)
         try:
-            if mime_type == "application/pdf":
+            if mime_type in IMAGE_EXTENSIONS.values():
+                saved = await run_image_worker(
+                    self._ingest_admin_image, selected.session_id, scope_type,
+                    filename, encoded, admin_session["username"],
+                )
+            elif mime_type == "application/pdf":
                 saved = await run_pdf_worker(
                     self._ingest_admin_pdf,
                     selected.session_id,
@@ -1331,19 +1355,28 @@ class AdminHandlers:
                         mime_type=mime_type,
                         created_by=admin_session["username"],
                     )
-        except PdfWorkerBusyError as exc:
+        except (PdfWorkerBusyError, ImageWorkerBusyError) as exc:
             return JSONResponse(
                 {"ok": False, "error": str(exc)},
                 status_code=503,
                 headers={**self._no_store_headers(), "Retry-After": "2"},
             )
-        except PdfStorageQuotaError as exc:
+        except (PdfStorageQuotaError, ImageStorageQuotaError) as exc:
             return self._json_error(str(exc), status_code=507)
         except ValueError as exc:
             return self._value_error(exc)
         return JSONResponse(
             {"ok": True, "file": session_file_payload(saved)},
             headers=self._no_store_headers(),
+        )
+
+    def _ingest_admin_image(
+        self, session_id: str, scope_type: str, filename: str, encoded: str, created_by: str,
+    ) -> SessionFileRecord:
+        image = validate_image_isolated(filename, decode_image_base64(encoded))
+        return self.store.save_image(
+            filename, image, session_id=session_id,
+            for_session_group=scope_type == "group", created_by=created_by,
         )
 
     def _ingest_admin_pdf(
@@ -1641,6 +1674,13 @@ class AdminHandlers:
             self.store.set_app_setting(DISPLAY_TIMEZONE_SETTING_KEY, DEFAULT_DISPLAY_TIMEZONE_NAME)
             return DEFAULT_DISPLAY_TIMEZONE_NAME
 
+    def _rename_max_words(self) -> int:
+        try:
+            value = int(self.store.get_app_setting(AI_RENAME_MAX_WORDS_SETTING) or AI_RENAME_DEFAULT_MAX_WORDS)
+        except ValueError:
+            return AI_RENAME_DEFAULT_MAX_WORDS
+        return min(max(value, AI_RENAME_MIN_MAX_WORDS), AI_RENAME_MAX_MAX_WORDS)
+
     def _ai_settings_payload(self) -> dict[str, Any]:
         api_key = self._read_ai_api_key()
         model = self.store.get_app_setting(AI_RENAME_MODEL_SETTING) or AI_RENAME_DEFAULT_MODEL
@@ -1753,7 +1793,11 @@ class AdminHandlers:
         output_probe_runs = self.store.list_output_probe_runs(limit=50)
         tool_output = self._tool_output_settings_payload()
         return {
-            "general": {"rename_model": rename_model},
+            "general": {
+                "rename_model": rename_model,
+                "rename_max_words": self._rename_max_words(),
+                "rename_max_words_range": [AI_RENAME_MIN_MAX_WORDS, AI_RENAME_MAX_MAX_WORDS],
+            },
             "api": {
                 "openai": {"configured": bool(openai_key), "preview": _secret_preview(openai_key) if openai_key else ""},
                 "cohere": {"configured": bool(cohere_key), "preview": _secret_preview(cohere_key) if cohere_key else ""},
@@ -2105,8 +2149,6 @@ def _session_payload(session: SessionRecord) -> dict[str, Any]:
         "session_id": session.session_id,
         "title": session.title,
         "group_id": session.group_id,
-        "context_pack_id": session.context_pack_id,
-        "context_pack_version": session.context_pack_version,
         "title_is_auto": session.title_is_auto,
         "created_at": session.created_at,
         "created_at_iso": format_timestamp_iso(session.created_at),
@@ -2142,21 +2184,65 @@ def _secret_preview(value: str) -> str:
     return f"{value[:3]}...{value[-4:]}"
 
 
-def _suggest_session_title(api_key: str, model: str, first_user_message: str) -> str:
-    prompt = (
-        "Rename this conversation session from the first user message only. "
-        f"Return JSON only with one key: title. The title must be at most {SESSION_TITLE_MAX_CHARS} characters, "
-        "clear, specific, and in the same language as the user message when possible. "
-        "Do not add markdown, quotes around the whole response, trailing ellipses, or bracket noise."
+def _rename_prompt(max_words: int) -> str:
+    return (
+        "You name conversation sessions for a sidebar list. Read the first user message and write a title "
+        "that tells the reader what the conversation is about.\n"
+        f"Hard limits: at most {max_words} words and at most {SESSION_TITLE_MAX_CHARS} characters. "
+        "Count the words before answering.\n"
+        "Condense the meaning instead of shortening a sentence: keep the specific subject, drop filler. "
+        "Do not start with words that only say it is a conversation, such as \"Session\", \"Conversation about\", "
+        "\"Question about\", \"Sesja\", \"Rozmowa o\" or \"Pytanie o\". "
+        "The title must be a complete phrase and must not end with a conjunction or preposition.\n"
+        "Write in the language of the user message.\n"
+        "Examples (limit 5 words): "
+        "\"Brainstorming session about AI tools and how our team could use them\" becomes "
+        "\"AI tools for the team\"; "
+        "\"Sesja brainstormingu o AI i jego zastosowaniach w firmie\" becomes \"Zastosowania AI w firmie\".\n"
+        "Return JSON only with one key: title. No markdown, no quotes around the title, no trailing ellipsis, "
+        "no bracket noise."
     )
+
+
+def _suggest_session_title(
+    api_key: str, model: str, first_user_message: str, max_words: int = AI_RENAME_DEFAULT_MAX_WORDS
+) -> str:
+    messages = [
+        {"role": "system", "content": _rename_prompt(max_words)},
+        {"role": "user", "content": first_user_message[:4000]},
+    ]
+    content = _request_ai_title(api_key, model, messages)
+    title = _parse_ai_title(content)
+    if title and not _title_fits(title, max_words):
+        # One corrective round: a model asked to condense its own answer keeps the
+        # meaning, where cutting words off the end does not.
+        messages += [
+            {"role": "assistant", "content": content},
+            {
+                "role": "user",
+                "content": (
+                    f"That title has {len(title.split())} words and {len(title)} characters. "
+                    f"Rewrite it in at most {max_words} words and {SESSION_TITLE_MAX_CHARS} characters, "
+                    "keeping the meaning. Return JSON only with one key: title."
+                ),
+            },
+        ]
+        retried = _parse_ai_title(_request_ai_title(api_key, model, messages))
+        if retried:
+            title = retried
+    title = _fit_title(title, max_words)
+    if not title:
+        raise RuntimeError("AI rename response did not include a title.")
+    return title
+
+
+def _request_ai_title(api_key: str, model: str, messages: list[dict[str, str]]) -> str:
     payload = {
         "model": model,
-        "messages": [
-            {"role": "system", "content": prompt},
-            {"role": "user", "content": first_user_message[:4000]},
-        ],
+        "messages": messages,
         "temperature": 0.2,
-        "max_completion_tokens": 80,
+        # reasoning models spend part of this budget before answering
+        "max_completion_tokens": 400,
         "response_format": {"type": "json_object"},
     }
     request = urllib.request.Request(
@@ -2178,17 +2264,20 @@ def _suggest_session_title(api_key: str, model: str, first_user_message: str) ->
         raise RuntimeError(f"AI rename request failed: {exc}") from exc
 
     try:
-        content = data["choices"][0]["message"]["content"]
+        return str(data["choices"][0]["message"]["content"] or "")
     except (KeyError, IndexError, TypeError) as exc:
         raise RuntimeError("AI rename response did not include message content.") from exc
 
-    title = _title_from_ai_content(content)
-    if not title:
-        raise RuntimeError("AI rename response did not include a title.")
-    return title
+
+# Words a title must not end on once it has been cut to fit (Polish and English).
+TITLE_DANGLING_WORDS = frozenset({
+    "a", "ale", "albo", "ani", "bo", "czy", "dla", "do", "i", "jak", "lub", "na", "nad", "o", "od", "oraz",
+    "po", "pod", "przez", "przy", "u", "w", "we", "z", "za", "ze", "że",
+    "an", "and", "at", "by", "for", "from", "in", "of", "on", "or", "the", "to", "vs", "with",
+})
 
 
-def _title_from_ai_content(content: str) -> str:
+def _parse_ai_title(content: str) -> str:
     raw = content.strip()
     try:
         parsed = json.loads(raw)
@@ -2197,10 +2286,27 @@ def _title_from_ai_content(content: str) -> str:
     except json.JSONDecodeError:
         pass
     title = " ".join(raw.strip().strip(chr(34) + chr(39)).split())
-    title = title.rstrip(" .,-;:...")
-    if len(title) > SESSION_TITLE_MAX_CHARS:
-        title = title[:SESSION_TITLE_MAX_CHARS].rsplit(" ", 1)[0].rstrip(" .,-;:...")
-    return title
+    return title.rstrip(" .,-;:...")
+
+
+def _title_fits(title: str, max_words: int) -> bool:
+    return len(title.split()) <= max_words and len(title) <= SESSION_TITLE_MAX_CHARS
+
+
+def _fit_title(title: str, max_words: int) -> str:
+    """Last resort when the model overshoots twice: cut on word boundaries."""
+    if _title_fits(title, max_words):
+        return title
+    words = title.split()[:max_words]
+    while len(" ".join(words)) > SESSION_TITLE_MAX_CHARS and len(words) > 1:
+        words.pop()
+    while len(words) > 1 and words[-1].lower().strip(" .,-;:") in TITLE_DANGLING_WORDS:
+        words.pop()
+    return " ".join(words).rstrip(" .,-;:...")[:SESSION_TITLE_MAX_CHARS]
+
+
+def _title_from_ai_content(content: str, max_words: int = AI_RENAME_DEFAULT_MAX_WORDS) -> str:
+    return _fit_title(_parse_ai_title(content), max_words)
 
 
 def _exchange_payload(exchange: ExchangeRecord, timezone_name: str | None = None) -> dict[str, Any]:

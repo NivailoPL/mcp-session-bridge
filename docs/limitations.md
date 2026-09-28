@@ -1,6 +1,6 @@
 # Limitations
 
-MCP Session Bridge v0.1 is intentionally small and conservative.
+MCP Session Bridge is intentionally small and conservative.
 
 ## Explicit File Context Only
 
@@ -14,7 +14,11 @@ The bridge preserves the original PDF and extracts an existing text layer for MC
 
 PDF limits are 20 MB through the admin UI, 10 MB through MCP, 500 pages, and 5 MB of extracted UTF-8 text. Durable PDF storage has a 1 GB global default quota, configurable with `BRIDGE_PDF_STORAGE_MAX_BYTES`.
 
-The offline admin demo remains text-only and rejects PDF uploads explicitly.
+Image attachments support static JPEG and PNG, up to 10 MB and 40 megapixels through manual upload in the admin panel. Image access through MCP is read-only via `view_session_image`. Original bytes (including EXIF) are retained in SQLite, without resizing, conversion or OCR. The separate global image quota defaults to 1 GB (`BRIDGE_IMAGE_STORAGE_MAX_BYTES`, a positive byte count). The admin panel offers a simple attachment preview and original download; images are not embedded into transcript messages. Image uploads are unavailable in the offline demo.
+
+Native image results require an MCP client that forwards them to a vision model. Compatibility is separate from ordinary text-tool support; ChatGPT, Claude, Grok, Codex and Claude Code image workflows remain subject to manual testing. Bridge does not expose image upload tools to models. Bridge does not import images from arbitrary URLs.
+
+The offline viewer in `tools/` shows transcripts only. Its export carries sessions and turns, so no uploaded file is visible there, PDF or otherwise.
 
 ## SQLite Storage
 
@@ -39,9 +43,9 @@ Harness capacity is empirical and can change without notice. The output-probe to
 
 `get_last_speaker` lets a model skip re-fetching transcript chunks when it saved the last turn and is still in the same chat window. This is a best-effort optimization keyed on the self-declared `model_name`: the bridge cannot verify a model's real identity or whether it runs in the same window, so a wrong `model_name` or a fresh window can produce a misleading skip. When in doubt, fetch the chunks. `save_exchange` is still required on every turn.
 
-## No Docker In v0.1
+## No Docker
 
-Docker documentation and images are not part of v0.1. Use local `uv`, Uvicorn, and the deployment templates.
+Docker documentation and images are out of scope. Use the managed installer, or local `uv`, Uvicorn, and the deployment templates.
 
 ## Client Differences
 

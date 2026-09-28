@@ -45,7 +45,7 @@ def test_gitignore_blocks_runtime_data_secrets_and_backups() -> None:
     if Path(".git").exists():
         ignored_examples = (
             ".env.production",
-            "data/context-packs/private.md",
+            "data/exports/private.md",
             "data/bridge.sqlite3-wal",
             "backups/bridge.sqlite3",
             "secrets/provider-token.txt",

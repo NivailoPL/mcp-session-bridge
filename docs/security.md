@@ -27,6 +27,38 @@ git status --short --ignored
 
 Never use `git add -f` for a runtime data or secret path. Keep production backups outside the repository and restrict the runtime data directory to the service account.
 
+## Installation Signing Key
+
+`BRIDGE_SECRET_KEY` must be randomly generated, contain at least 32 characters,
+and must not be the placeholder from `.env.example`. The application rejects an
+invalid key before opening the database. Length validation cannot prove that a
+manually chosen key is unpredictable; use the generator rather than a phrase.
+
+For a new installation, `scripts/set_owner_password.py` replaces an empty or
+example key with a random 48-byte URL-safe secret. It preserves an existing valid
+key when changing the owner password, and retains other environment settings.
+The managed installer generates a key for a fresh configuration but refuses to
+adopt an existing configuration with an invalid key.
+
+**Existing installations:** this validation can prevent startup after an update
+if the old key is a placeholder or shorter than 32 characters. Check the key
+locally without copying it into logs or support messages before updating.
+The password script refuses automatic replacement of an empty/example key when
+the configured database already exists. An invalid custom key is also rejected.
+
+Recover such an installation during planned maintenance: restrict public access,
+keep a private backup of the database and configuration, and prepare to re-enter
+the provider API keys from their original source (or migrate their ciphertext
+with the old key in a controlled offline process). Generate a fresh random secret,
+update the authoritative service configuration, restart, re-enter provider keys,
+and reconnect OAuth clients. Verify login and provider functionality before
+restoring public access. Do not publish the backup or either secret.
+
+Changing this key invalidates admin cookies and existing OAuth tokens and makes
+previously encrypted provider keys unreadable with the new key. Changing only
+the owner password does not rotate it. No automatic database re-encryption or
+live key rotation is performed by the setup tools.
+
 ## OAuth And Tokens
 
 - OAuth authorization codes and bearer tokens are stored as hashes.

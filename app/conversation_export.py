@@ -19,7 +19,7 @@ from urllib.parse import quote
 from app.storage import SCHEMA_VERSION
 
 
-EXPORT_FORMAT_VERSION = 1
+EXPORT_FORMAT_VERSION = 2
 EXPORT_LOCK_FILENAME = ".markdown-export.lock"
 _EXPORT_LOCK = Lock()
 _UNSAFE_COMPONENT = re.compile(r'[\\/:*?"<>|\x00-\x1f\x7f]')
@@ -330,14 +330,14 @@ def _write_attachment(
     size = 0
     try:
         with destination.open("xb") as target:
-            if file_row["content_kind"] == "pdf":
+            if file_row["content_kind"] in {"pdf", "image"}:
                 try:
                     blob = connection.blobopen(
                         "session_files", "binary_content", file_row["file_id"], readonly=True
                     )
                 except sqlite3.Error as exc:
                     raise RuntimeError(
-                        f"PDF file {file_row['file_id']} has no readable original content."
+                        f"Binary file {file_row['file_id']} has no readable original content."
                     ) from exc
                 with blob:
                     while block := blob.read(1024 * 1024):
@@ -396,8 +396,6 @@ def _render_session_markdown(
         f"- **Current group ID:** {_inline(session['group_id'])}",
         f"- **Current group name:** {_inline(group['name'] if group else 'Orphaned')}",
         f"- **Sensitive group:** {'yes' if group and group['is_sensitive'] else 'no'}",
-        f"- **Context pack:** {_inline(session['context_pack_id'])}",
-        f"- **Context pack version:** {_inline(session['context_pack_version'])}",
         f"- **Title generated automatically:** {'yes' if session['title_is_auto'] else 'no'}",
         f"- **Created at:** {_inline(_iso(session['created_at']))}",
         f"- **Updated at:** {_inline(_iso(session['updated_at']))}",

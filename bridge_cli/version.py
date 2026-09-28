@@ -8,7 +8,7 @@ from pathlib import Path
 try:
     BRIDGE_VERSION = version("mcp-session-bridge")
 except PackageNotFoundError:
-    BRIDGE_VERSION = "2026.8.2"
+    BRIDGE_VERSION = "2026.9.1"
 
 
 def _development_label(project_file: Path) -> str | None:

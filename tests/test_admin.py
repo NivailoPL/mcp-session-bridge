@@ -61,7 +61,7 @@ def test_admin_login_uses_dark_branding_and_inline_lockup(load_main) -> None:
 
 
 def test_admin_viewer_group_ui_contract() -> None:
-    viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
+    viewer = Path("web/admin-viewer.html").read_text(encoding="utf-8")
 
     icon_match = re.search(r"const GROUP_ICONS = (\[[\s\S]*?\]);", viewer)
     assert icon_match is not None
@@ -75,6 +75,31 @@ def test_admin_viewer_group_ui_contract() -> None:
     assert 'spanCls("group-file-identity")' in viewer
     assert 'setStatus(`Selected ${sessionId}.`, "ok");' not in viewer
     assert 'spanCls("file-meta", "No files")' not in viewer
+
+
+def test_admin_viewer_transcript_owns_vertical_scroll() -> None:
+    viewer = Path("web/admin-viewer.html").read_text(encoding="utf-8")
+
+    main_css = viewer[viewer.index(".main {"):viewer.index(".session-title-redacted")]
+    transcript_css = viewer[
+        viewer.index(".thread-sensitive-content {"):
+        viewer.index(".sensitive-curtain {")
+    ]
+    topbar_css = viewer[viewer.index(".topbar {"):viewer.index(".topbar-title {")]
+    scroll_helpers = viewer[
+        viewer.index("function scrollTranscript"):
+        viewer.index("function renderMeta")
+    ]
+
+    assert "height: calc(100vh - var(--workspace-bar-height));" in main_css
+    assert "min-height: 0;" in main_css
+    assert "overflow: hidden;" in main_css
+    assert "min-height: 0;" in transcript_css
+    assert "overflow: auto;" in transcript_css
+    assert "top: 0;" in topbar_css
+    assert "dom.threadSensitiveContent" in scroll_helpers
+    assert "window.scrollY" not in scroll_helpers
+    assert "window.scrollTo" not in scroll_helpers
 
 
 def test_admin_brand_assets_require_login_and_serve_png(load_main) -> None:
@@ -105,7 +130,7 @@ def test_admin_brand_assets_require_login_and_serve_png(load_main) -> None:
 
 @requires_node
 def test_admin_viewer_covered_row_keeps_the_row_contract() -> None:
-    viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
+    viewer = Path("web/admin-viewer.html").read_text(encoding="utf-8")
 
     # a covered row is redacted in place: same grid, same height, nothing laid over it
     assert "sensitive-compact-content" not in viewer
@@ -127,7 +152,7 @@ def test_admin_viewer_covered_row_keeps_the_row_contract() -> None:
 @pytest.mark.skipif(shutil.which("node") is None, reason="Node.js is required for the browser renderer smoke test")
 @requires_node
 def test_admin_viewer_session_date_groups_use_display_timezone() -> None:
-    viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
+    viewer = Path("web/admin-viewer.html").read_text(encoding="utf-8")
     date_helpers = viewer[
         viewer.index("const SESSION_DATE_GROUPS"):
         viewer.index("function sessionCompactTitle")
@@ -186,7 +211,7 @@ process.stdout.write(JSON.stringify({
 @pytest.mark.skipif(shutil.which("node") is None, reason="Node.js is required for the browser renderer smoke test")
 @requires_node
 def test_admin_viewer_session_list_stamps_use_display_timezone() -> None:
-    viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
+    viewer = Path("web/admin-viewer.html").read_text(encoding="utf-8")
     helpers = viewer[
         viewer.index("function sessionCompactTitle"):
         viewer.index("function sessionGroupChip")
@@ -217,7 +242,7 @@ process.stdout.write(JSON.stringify({
 @pytest.mark.skipif(shutil.which("node") is None, reason="Node.js is required for the browser renderer smoke test")
 @requires_node
 def test_admin_viewer_session_list_rendering() -> None:
-    viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
+    viewer = Path("web/admin-viewer.html").read_text(encoding="utf-8")
     date_helpers = viewer[
         viewer.index("const SESSION_DATE_GROUPS"):
         viewer.index("function sessionCompactTitle")
@@ -457,7 +482,7 @@ process.stdout.write(JSON.stringify({
 
 
 def test_admin_viewer_sensitive_group_privacy_contract() -> None:
-    viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
+    viewer = Path("web/admin-viewer.html").read_text(encoding="utf-8")
 
     assert 'id="groupSensitiveButton"' in viewer
     assert 'aria-pressed="false"' in viewer
@@ -552,7 +577,7 @@ def test_deployment_includes_narrow_restart_helper() -> None:
 
 @requires_node
 def test_admin_viewer_context_visibility_controls_contract() -> None:
-    viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
+    viewer = Path("web/admin-viewer.html").read_text(encoding="utf-8")
 
     assert '"Exclude"' in viewer
     assert '"Include"' in viewer
@@ -594,7 +619,7 @@ def test_admin_viewer_context_visibility_controls_contract() -> None:
 @pytest.mark.skipif(shutil.which("node") is None, reason="Node.js is required for the browser renderer smoke test")
 @requires_node
 def test_admin_viewer_excluded_turn_rendering_hides_message_content() -> None:
-    viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
+    viewer = Path("web/admin-viewer.html").read_text(encoding="utf-8")
     render_group = viewer[viewer.index("function renderExGroup"):viewer.index("function renderMsg")]
     context_controls = viewer[viewer.index("const CONTEXT_ACTION_ICONS"):viewer.index("function renderExActions")]
     render_exchange = viewer[viewer.index("function renderExchange(exchange)"):viewer.index("function renderTurn")]
@@ -666,7 +691,7 @@ process.stdout.write(JSON.stringify({
 @pytest.mark.skipif(shutil.which("node") is None, reason="Node.js is required for the browser renderer smoke test")
 @requires_node
 def test_admin_viewer_markdown_hides_excluded_message_content() -> None:
-    viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
+    viewer = Path("web/admin-viewer.html").read_text(encoding="utf-8")
     renderer = viewer[viewer.index("function buildMarkdown()"):viewer.index("function buildSessionExportHtml")]
     state = """
 const state = {
@@ -698,7 +723,7 @@ const state = {
 @pytest.mark.skipif(shutil.which("node") is None, reason="Node.js is required for the browser renderer smoke test")
 @requires_node
 def test_admin_viewer_markdown_table_rendering() -> None:
-    viewer = Path("admin-viewer.html").read_text(encoding="utf-8")
+    viewer = Path("web/admin-viewer.html").read_text(encoding="utf-8")
     renderer = viewer[viewer.index("function renderMarkdown"):viewer.index("function svgNode")]
     markdown = "\n".join(
         [
@@ -734,7 +759,7 @@ def test_admin_viewer_markdown_table_rendering() -> None:
 
 def test_admin_api_requires_login_and_csrf_for_mutations(load_main) -> None:
     main = load_main(graph_experimental=True)
-    session = main.store.create_session("s1", "Admin test", "manual-context")
+    session = main.store.create_session("s1", "Admin test")
     exchange = main.store.save_exchange("s1", "Claude", "Message.", "Answer to correct.")
 
     client = TestClient(main.app, base_url="http://127.0.0.1:8787")
@@ -812,7 +837,7 @@ def test_admin_database_export_requires_csrf_and_keeps_files_on_server(
     load_main, tmp_path: Path
 ) -> None:
     main = load_main(graph_experimental=True)
-    main.store.create_session("export-me", "Export me", "manual-context")
+    main.store.create_session("export-me", "Export me")
     client = TestClient(main.app, base_url="http://127.0.0.1:8787")
 
     assert client.post("/admin/api/database/export").status_code == 401
@@ -895,9 +920,113 @@ def test_admin_database_export_button_sends_only_a_trigger_and_renders_vps_path(
     assert rendered["statuses"][-1]["kind"] == "ok"
 
 
+@requires_node
+def test_mcp_settings_save_keeps_the_chosen_result_format() -> None:
+    """Saving chunk limits refills the form; the format choice must survive it."""
+    source = slice_source(
+        "async function saveDeliverySettings()", "async function openAiSettingsDialog()"
+    )
+
+    def save(chosen: str, configured: str) -> list[str]:
+        return run_js(
+            """
+            const radios = { optimized: { value: "optimized", checked: false },
+                             maximum_compatibility: { value: "maximum_compatibility", checked: false } };
+            radios[input.chosen].checked = true;
+            const document = { querySelector: () => Object.values(radios).find((radio) => radio.checked) };
+            const state = { settings: { tool_output: { configured_mode: input.configured } } };
+            const settingsDom = { toolOutputOptimized: { disabled: false } };
+            const saved = [];
+            async function saveTranscriptSettings() {
+              // the real save refills every field from the server
+              for (const radio of Object.values(radios)) radio.checked = radio.value === input.configured;
+              return true;
+            }
+            async function saveToolOutputSettings(mode) { saved.push(mode); }
+            """
+            + source
+            + """
+            (async () => { await saveDeliverySettings(); emit(saved); })();
+            """,
+            payload={"chosen": chosen, "configured": configured},
+            dom=False,
+        )
+
+    assert save("maximum_compatibility", "optimized") == ["maximum_compatibility"]
+    assert save("optimized", "optimized") == []
+
+
+def test_ai_rename_title_respects_word_and_character_limits() -> None:
+    from app.admin import _title_from_ai_content
+
+    assert _title_from_ai_content('{"title": "Plan wdrożenia nowego panelu ustawień w adminie"}', 4) == (
+        "Plan wdrożenia nowego panelu"
+    )
+    # a cut never leaves a dangling conjunction or preposition
+    assert _title_from_ai_content('{"title": "Sesja brainstormingu o AI i jego zastosowaniach"}', 5) == (
+        "Sesja brainstormingu o AI"
+    )
+    assert _title_from_ai_content('{"title": "Ewaluacja LLM: metryki, koszty i ryzyka"}', 2) == "Ewaluacja LLM"
+    long_words = " ".join(["konfiguracyjny"] * 10)
+    title = _title_from_ai_content(json.dumps({"title": long_words}), 10)
+    assert len(title) <= 72
+    assert title.split() == ["konfiguracyjny"] * len(title.split())
+
+
+def test_ai_rename_asks_the_model_to_condense_an_overlong_title(monkeypatch) -> None:
+    import app.admin as admin_module
+
+    calls = []
+
+    def fake_request(api_key, model, messages):
+        calls.append([dict(message) for message in messages])
+        replies = [
+            '{"title": "Sesja brainstormingu o AI i jego zastosowaniach w naszej firmie"}',
+            '{"title": "Zastosowania AI w firmie"}',
+        ]
+        return replies[len(calls) - 1]
+
+    monkeypatch.setattr(admin_module, "_request_ai_title", fake_request)
+    title = admin_module._suggest_session_title("sk-test", "gpt-5.4-mini", "Porozmawiajmy o AI w firmie", 5)
+
+    assert title == "Zastosowania AI w firmie"
+    assert len(calls) == 2
+    system_prompt = calls[0][0]["content"]
+    assert "at most 5 words and at most 72 characters" in system_prompt
+    assert "must not end with a conjunction or preposition" in system_prompt
+    feedback = calls[1][-1]["content"]
+    assert "has 10 words" in feedback
+    assert "at most 5 words" in feedback
+
+
+def test_ai_rename_accepts_a_fitting_title_without_a_second_request(monkeypatch) -> None:
+    import app.admin as admin_module
+
+    calls = []
+
+    def fake_request(api_key, model, messages):
+        calls.append(messages)
+        return '{"title": "Zastosowania AI w firmie"}'
+
+    monkeypatch.setattr(admin_module, "_request_ai_title", fake_request)
+    assert admin_module._suggest_session_title("sk-test", "gpt-5.4-mini", "x", 6) == "Zastosowania AI w firmie"
+    assert len(calls) == 1
+
+
+def test_ai_rename_cuts_cleanly_when_the_model_overshoots_twice(monkeypatch) -> None:
+    import app.admin as admin_module
+
+    monkeypatch.setattr(
+        admin_module,
+        "_request_ai_title",
+        lambda api_key, model, messages: '{"title": "Sesja brainstormingu o AI i jego zastosowaniach"}',
+    )
+    assert admin_module._suggest_session_title("sk-test", "gpt-5.4-nano", "x", 5) == "Sesja brainstormingu o AI"
+
+
 def test_admin_can_configure_ai_rename_and_update_session_title(load_main, monkeypatch) -> None:
     main = load_main(graph_experimental=True)
-    main.store.create_session("s1", "Chaotic long title", "manual-context")
+    main.store.create_session("s1", "Chaotic long title")
     main.store.save_exchange("s1", "Claude", "Pierwsza wiadomość użytkownika o ewaluacji LLM.", "OK")
     client = TestClient(main.app, base_url="http://127.0.0.1:8787")
 
@@ -933,10 +1062,11 @@ def test_admin_can_configure_ai_rename_and_update_session_title(load_main, monke
 
     captured = {}
 
-    def fake_suggest(api_key: str, model: str, first_user_message: str) -> str:
+    def fake_suggest(api_key: str, model: str, first_user_message: str, max_words: int) -> str:
         captured["api_key"] = api_key
         captured["model"] = model
         captured["first_user_message"] = first_user_message
+        captured["max_words"] = max_words
         return "Ewaluacja LLM"
 
     monkeypatch.setattr(admin_module, "_suggest_session_title", fake_suggest)
@@ -952,7 +1082,35 @@ def test_admin_can_configure_ai_rename_and_update_session_title(load_main, monke
         "api_key": "sk-test-secret",
         "model": "gpt-5.4-nano",
         "first_user_message": "Pierwsza wiadomość użytkownika o ewaluacji LLM.",
+        "max_words": 6,
     }
+
+    general = client.get("/admin/api/settings").json()["settings"]["general"]
+    assert general["rename_max_words"] == 6
+    assert general["rename_max_words_range"] == [2, 10]
+    for invalid in (1, 11, "5", 4.5, True):
+        rejected = client.put(
+            "/admin/api/settings/general",
+            json={"rename_model": "gpt-5.4-nano", "rename_max_words": invalid},
+            headers={"x-csrf-token": csrf_token},
+        )
+        assert rejected.status_code == 400, invalid
+    shorter = client.put(
+        "/admin/api/settings/general",
+        json={"rename_model": "gpt-5.4-nano", "rename_max_words": 3},
+        headers={"x-csrf-token": csrf_token},
+    )
+    assert shorter.status_code == 200
+    assert shorter.json()["settings"]["general"]["rename_max_words"] == 3
+    # a save that omits the word limit keeps the current one
+    model_only = client.put(
+        "/admin/api/settings/general",
+        json={"rename_model": "gpt-5.4-nano"},
+        headers={"x-csrf-token": csrf_token},
+    )
+    assert model_only.json()["settings"]["general"]["rename_max_words"] == 3
+    client.post("/admin/api/sessions/s1/rename/ai", headers={"x-csrf-token": csrf_token})
+    assert captured["max_words"] == 3
 
     manual = client.patch(
         "/admin/api/sessions/s1",
@@ -1019,7 +1177,7 @@ def test_admin_can_update_display_timezone(load_main) -> None:
 
 def test_admin_can_manage_session_groups_and_move_sessions(load_main) -> None:
     main = load_main(graph_experimental=True)
-    main.store.create_session("s1", "Admin group test", "manual-context")
+    main.store.create_session("s1", "Admin group test")
     client = TestClient(main.app, base_url="http://127.0.0.1:8787")
 
     client.post(
@@ -1146,7 +1304,7 @@ def test_admin_sensitive_group_prunes_and_blocks_external_rag_scope(load_main, m
 def test_admin_can_view_session_and_group_files(load_main) -> None:
     main = load_main(graph_experimental=True)
     main.store.create_session_group("Tests", "#22c55e", "science")
-    main.store.create_session("s1", "File admin test", "manual-context", group_id="tests")
+    main.store.create_session("s1", "File admin test", group_id="tests")
     session_file = main.store.save_session_file("s1", "plan.md", "# Plan")
     group_file = main.store.save_group_file("tests", "shared.md", "Shared context")
     client = TestClient(main.app, base_url="http://127.0.0.1:8787")
@@ -1310,7 +1468,7 @@ def _encoded_file(content: bytes, *, filename: str = "notes.md", scope_type: str
 
 def test_admin_file_mutations_require_login_and_csrf(admin_client, load_main) -> None:
     main = load_main(graph_experimental=True)
-    main.store.create_session("s1", "File mutations", "manual-context")
+    main.store.create_session("s1", "File mutations")
     saved = main.store.save_session_file("s1", "existing.md", "old")
     anonymous = TestClient(main.app, base_url="http://127.0.0.1:8787")
     calls = [
@@ -1330,7 +1488,7 @@ def test_admin_file_mutations_require_login_and_csrf(admin_client, load_main) ->
 def test_admin_uploads_bounded_utf8_files_to_selected_session_or_group(admin_client, load_main) -> None:
     main = load_main(graph_experimental=True)
     main.store.create_session_group("Tests", "#22c55e", "science")
-    main.store.create_session("s1", "File mutations", "manual-context", group_id="tests")
+    main.store.create_session("s1", "File mutations", group_id="tests")
     client, csrf = admin_client(main)
     headers = {"x-csrf-token": csrf}
 
@@ -1393,7 +1551,7 @@ def test_admin_uploads_bounded_utf8_files_to_selected_session_or_group(admin_cli
 
 def test_admin_uploads_previews_and_downloads_original_pdf(admin_client, load_main) -> None:
     main = load_main(graph_experimental=True)
-    main.store.create_session("s1", "PDF admin", "manual-context")
+    main.store.create_session("s1", "PDF admin")
     client, csrf = admin_client(main)
     raw = make_pdf("Admin PDF text")
 
@@ -1435,7 +1593,7 @@ def test_admin_uploads_previews_and_downloads_original_pdf(admin_client, load_ma
 
 def test_admin_pdf_raw_requires_login_and_pdf_cannot_be_edited(admin_client, load_main) -> None:
     main = load_main(graph_experimental=True)
-    main.store.create_session("s1", "PDF admin", "manual-context")
+    main.store.create_session("s1", "PDF admin")
     client, csrf = admin_client(main)
     uploaded = client.post(
         "/admin/api/sessions/s1/files",
@@ -1453,7 +1611,7 @@ def test_admin_pdf_raw_requires_login_and_pdf_cannot_be_edited(admin_client, loa
     assert text_raw.status_code == 400
     assert text_raw.json() == {
         "ok": False,
-        "error": "Raw binary content is available only for PDF files.",
+        "error": "Raw binary content is available only for PDF and image files.",
     }
     edited = client.patch(
         f"/admin/api/sessions/s1/files/{uploaded['file_id']}",
@@ -1478,7 +1636,7 @@ def test_admin_group_upload_uses_session_current_group_atomically(admin_client, 
     main = load_main(graph_experimental=True)
     main.store.create_session_group("First", "#22c55e", "science")
     main.store.create_session_group("Second", "#3b82f6", "ideas")
-    main.store.create_session("s1", "File mutations", "manual-context", group_id="first")
+    main.store.create_session("s1", "File mutations", group_id="first")
     client, csrf = admin_client(main)
     original_selected_session = main.admin._selected_session
 
@@ -1504,8 +1662,8 @@ def test_admin_edits_moves_and_deletes_only_visible_files(admin_client, load_mai
     main = load_main(graph_experimental=True)
     main.store.create_session_group("Tests", "#22c55e", "science")
     main.store.create_session_group("Other", "#ef4444", "camera")
-    main.store.create_session("s1", "File mutations", "manual-context", group_id="tests")
-    main.store.create_session("s2", "Other session", "manual-context", group_id="other")
+    main.store.create_session("s1", "File mutations", group_id="tests")
+    main.store.create_session("s2", "Other session", group_id="other")
     saved = main.store.save_session_file("s1", "notes.md", "old")
     unrelated = main.store.save_session_file("s2", "private.md", "untouched")
     client, csrf = admin_client(main)
@@ -1568,8 +1726,8 @@ def test_admin_file_mutations_conflict_if_file_moves_after_visibility_check(admi
     main = load_main(graph_experimental=True)
     main.store.create_session_group("First", "#22c55e", "science")
     main.store.create_session_group("Second", "#ef4444", "camera")
-    main.store.create_session("s1", "First", "manual-context", group_id="first")
-    main.store.create_session("s2", "Second", "manual-context", group_id="second")
+    main.store.create_session("s1", "First", group_id="first")
+    main.store.create_session("s2", "Second", group_id="second")
     edit_file = main.store.save_session_file("s1", "edit.md", "Original")
     move_file = main.store.save_session_file("s1", "move.md", "Original")
     delete_file = main.store.save_session_file("s1", "delete.md", "Original")
@@ -1612,7 +1770,7 @@ def test_admin_file_mutations_conflict_if_file_moves_after_visibility_check(admi
 
 def test_admin_rejects_oversized_or_malformed_patch_lengths_without_mutation(admin_client, load_main) -> None:
     main = load_main(graph_experimental=True)
-    main.store.create_session("s1", "File mutations", "manual-context")
+    main.store.create_session("s1", "File mutations")
     saved = main.store.save_session_file("s1", "notes.md", "Original")
     client, csrf = admin_client(main)
     headers = {"x-csrf-token": csrf, "content-type": "application/json"}
@@ -1648,8 +1806,8 @@ def test_admin_rejects_oversized_or_malformed_patch_lengths_without_mutation(adm
 def test_admin_file_workspace_stays_consistent_with_mcp_reads(admin_client, load_main) -> None:
     main = load_main(graph_experimental=True)
     main.store.create_session_group("Ideas", "#22c55e", "science")
-    main.store.create_session("s1", "Owner session", "manual-context", group_id="ideas")
-    main.store.create_session("s2", "Peer session", "manual-context", group_id="ideas")
+    main.store.create_session("s1", "Owner session", group_id="ideas")
+    main.store.create_session("s2", "Peer session", group_id="ideas")
     client, csrf = admin_client(main)
     headers = {"x-csrf-token": csrf}
 
@@ -1841,7 +1999,7 @@ def test_restart_helper_terminates_and_reaps_timed_out_systemctl(load_main, monk
 
 def test_admin_search_settings_keys_and_basic_search_api(load_main) -> None:
     main = load_main(graph_experimental=True)
-    main.store.create_session("search-session", "Searchable session", "manual-context")
+    main.store.create_session("search-session", "Searchable session")
     main.store.save_exchange(
         "search-session", "Codex", "The admin search contains a kumquat marker.", "Confirmed."
     )
@@ -2216,11 +2374,11 @@ def test_admin_page_serves_every_asset_it_references(admin_client) -> None:
 
 
 def test_admin_workspaces_share_styled_confirmation_contract() -> None:
-    sessions = Path("admin-viewer.html").read_text(encoding="utf-8")
-    graph = Path("graph-viewer.html").read_text(encoding="utf-8")
-    graph_script = Path("graph-viewer.js").read_text(encoding="utf-8")
-    confirmation_script = Path("admin-confirmation.js").read_text(encoding="utf-8")
-    confirmation_css = Path("admin-confirmation.css").read_text(encoding="utf-8")
+    sessions = Path("web/admin-viewer.html").read_text(encoding="utf-8")
+    graph = Path("web/graph-viewer.html").read_text(encoding="utf-8")
+    graph_script = Path("web/graph-viewer.js").read_text(encoding="utf-8")
+    confirmation_script = Path("web/admin-confirmation.js").read_text(encoding="utf-8")
+    confirmation_css = Path("web/admin-confirmation.css").read_text(encoding="utf-8")
 
     for page in (sessions, graph):
         assert page.count('href="/admin/assets/admin-confirmation.css"') == 1
@@ -2241,7 +2399,7 @@ def test_admin_workspaces_share_styled_confirmation_contract() -> None:
 
 @requires_node
 def test_styled_confirmation_dialog_resolves_actions_and_restores_focus() -> None:
-    source = Path("admin-confirmation.js").read_text(encoding="utf-8")
+    source = Path("web/admin-confirmation.js").read_text(encoding="utf-8")
     harness = r"""
 const elementsById = {};
 class Element {
@@ -2350,7 +2508,7 @@ FEATURE_CONTROLS = {
     "file editing": ["fileEditButton", "fileEditor", "fileDeletePane", "fileDeleteWarning", "fileGuardPane", "fileGuardSave", "fileGuardDiscard", "fileGuardKeepEditing"],
     "file upload": ["groupFileInput", "sessionFileInput"],
     "session export": ["exportHtmlButton"],
-    "general settings": ["identity", "timezoneSelect"],
+    "general settings": ["identity", "timezoneSelect", "aiModelInput", "aiRenameMaxWords"],
     "transcript settings": ["transcriptChunkMaxChars", "transcriptChunkMaxLines"],
     "tool output compatibility": ["toolOutputMaximumCompatibility", "toolOutputOptimized", "toolOutputRestart", "toolOutputRestartMessage", "toolOutputRestartRequired"],
     "output probe": ["probeHarnessLabel", "probeTargetChars", "probeContentProfile", "probePromptCopy", "probeResults"],
@@ -2359,6 +2517,8 @@ FEATURE_CONTROLS = {
     "search index": ["indexRebuild", "indexReadyCheck", "indexBuiltAt", "indexCancel", "indexDelete", "indexEstimate", "indexEstimateDocuments", "indexEstimateTokens", "indexEstimateCost"],
     "bridge status": ["settingsUpdateDot", "statusUpdateDot", "bridgeStatusChecks"],
     "database export": ["databaseExportButton", "databaseExportResult"],
+    "settings save bar": ["settingsActionbar", "settingsSaveButton", "settingsDiscardButton"],
+    "api keys": ["aiKeyInput", "aiKeyRemoveButton", "cohereKeyInput", "cohereKeyRemoveButton", "openaiKeyPreview", "cohereKeyPreview"],
 }
 
 
@@ -2393,9 +2553,13 @@ def test_admin_page_does_not_ship_retired_controls(admin_client) -> None:
     for dialog in ("searchDialog", "aiSettingsDialog", "fileWorkspaceDialog"):
         assert page.count(f'<dialog id="{dialog}"') == 1
 
-    for tab in ("general", "search", "api", "transcript", "database", "status"):
+    for tab in ("general", "search", "api", "transcript", "system"):
         assert f'data-settings-tab="{tab}"' in page
         assert f'data-settings-panel="{tab}"' in page
+
+    # Status and Database were merged into System.
+    for retired_tab in ("database", "status"):
+        assert f'data-settings-tab="{retired_tab}"' not in page
 
 
 @requires_node
@@ -2438,3 +2602,112 @@ def test_session_export_produces_nothing_for_an_unrevealed_sensitive_thread() ->
 
     ordinary = build(is_sensitive=False, revealed=False)
     assert "SECRET-PAYLOAD" in ordinary
+
+
+API_401_HARNESS = """
+const demo = { enabled: false };
+const state = { csrfToken: "csrf" };
+let redirects = 0;
+function redirectToLogin() { redirects += 1; }
+function hasUnsavedWork() { return input.unsaved; }
+globalThis.fetch = async () => ({ ok: false, status: 401, json: async () => ({ ok: false, error: "login required" }) });
+"""
+
+
+@requires_node
+@pytest.mark.parametrize(
+    ("unsaved", "expected_redirects"),
+    [(False, 1), (True, 0)],
+    ids=["idle-admin-goes-to-login", "draft-stays-on-screen"],
+)
+def test_api_sends_an_expired_login_to_sign_in_unless_a_draft_would_be_lost(
+    unsaved: bool, expected_redirects: int
+) -> None:
+    source = slice_source("async function api(path, options = {})", "async function enableDemo()")
+    result = run_js(
+        API_401_HARNESS
+        + source
+        + """
+        api("/admin/api/sessions").then(
+          () => emit({ threw: false, redirects }),
+          (error) => emit({ threw: true, status: error.status, redirects }),
+        );
+        """,
+        payload={"unsaved": unsaved},
+        dom=False,
+    )
+
+    assert result == {"threw": True, "status": 401, "redirects": expected_redirects}
+
+
+TAB_RETURN_HARNESS = """
+const demo = { enabled: false };
+const state = {
+  csrfToken: "csrf",
+  busy: false,
+  selectedSessionId: "s1",
+  selectedSession: { session_id: "s1", updated_at: 100 },
+  sessions: [{ session_id: "s1", updated_at: 100 }],
+};
+let lastTabReturnCheck = input.lastCheckAgoMs === null ? 0 : Date.now() - input.lastCheckAgoMs;
+let tabReturnCheckInFlight = false;
+const TAB_RETURN_MIN_INTERVAL_MS = 5000;
+const calls = { api: 0, loads: [], renders: 0 };
+async function api() { calls.api += 1; return { sessions: input.sessions }; }
+function hasUnsavedWork() { return input.unsaved; }
+function renderSessions() { calls.renders += 1; }
+function renderGroups() {}
+async function loadSession(sessionId, options) { calls.loads.push({ sessionId, options }); }
+"""
+
+
+def _run_tab_return(*, updated_at: int, unsaved: bool = False, last_check_ago_ms: int | None = None) -> dict:
+    source = slice_source("async function checkOnTabReturn()", "      init();")
+    return run_js(
+        TAB_RETURN_HARNESS
+        + source
+        + """
+        checkOnTabReturn().then(() => emit({ ...calls, sessions: state.sessions }));
+        """,
+        payload={
+            "sessions": [{"session_id": "s1", "updated_at": updated_at}],
+            "unsaved": unsaved,
+            "lastCheckAgoMs": last_check_ago_ms,
+        },
+        dom=False,
+    )
+
+
+@requires_node
+def test_returning_to_the_tab_reloads_a_conversation_that_changed_meanwhile() -> None:
+    result = _run_tab_return(updated_at=200)
+
+    assert result["api"] == 1
+    assert result["loads"] == [{"sessionId": "s1", "options": {"quiet": True}}]
+    assert result["sessions"] == [{"session_id": "s1", "updated_at": 200}]
+
+
+@requires_node
+def test_returning_to_the_tab_leaves_an_unchanged_conversation_alone() -> None:
+    result = _run_tab_return(updated_at=100)
+
+    assert result["api"] == 1
+    assert result["loads"] == []
+
+
+@requires_node
+def test_returning_to_the_tab_never_reloads_over_unsaved_edits() -> None:
+    result = _run_tab_return(updated_at=200, unsaved=True)
+
+    assert result["api"] == 1, "the login is still re-validated"
+    assert result["loads"] == []
+    assert result["renders"] == 0
+    assert result["sessions"] == [{"session_id": "s1", "updated_at": 100}]
+
+
+@requires_node
+def test_rapid_tab_switches_are_throttled() -> None:
+    result = _run_tab_return(updated_at=200, last_check_ago_ms=1000)
+
+    assert result["api"] == 0
+    assert result["loads"] == []

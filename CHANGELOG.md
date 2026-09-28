@@ -6,6 +6,69 @@ This project follows a lightweight changelog format inspired by Keep a Changelog
 
 ## [Unreleased]
 
+## [2026.9.1] - 2026-09-28
+
+### Highlights
+
+- Added JPEG and PNG attachments to sessions through the Admin workspace, with read-only image access for connected models.
+- Rebuilt Admin Settings into a consistent workspace and improved AI session renaming with a configurable word limit.
+- Introduced Lab as the home for experiments, with Graph available there when its release gate is enabled.
+- Hardened installation signing keys and improved recovery from expired Admin logins.
+- Retired the unused context-packs feature while keeping the database schema compatible with existing installations.
+
+### New Features
+
+- Added Admin upload, preview, and storage for JPEG and PNG session images, plus `view_session_image` for model access.
+- Added the Lab navigation and `/admin/lab` entry point; the old `/admin/graph` address remains available.
+
+### Quality of Life
+
+- Reorganized Settings into a consistent dialog with clearer status, grouped controls, contextual help, and per-tab unsaved changes.
+- Added a 2–10 word limit for AI session titles and a condensation retry before trimming long replies.
+- Redirected expired Admin sessions to sign-in and refreshed session state when the tab becomes active again.
+- Kept the transcript header visible while scrolling long conversations.
+
+### Reliability and Operations
+
+- Updated the managed-installation, client-setup, command, and backup documentation; moved served frontend assets to `web/` and offline audit tools to `tools/`.
+- Fixed saving the large tool-result format together with chunk limits.
+
+### Security
+
+- Reject unsafe installation signing keys before initialization or activation, while preserving existing valid keys without automatic rotation.
+- Limited MCP image access to viewing images uploaded through Admin; removed model-facing image upload tools.
+
+### Retired
+
+- Removed the unused context-packs code and settings. Retained its database columns so schema version 2 and rollback remain compatible.
+
+### Included commits
+
+- [`41c2a35`](https://github.com/NivailoPL/mcp-session-bridge/commit/41c2a35a0dbd9b06611379864b9d03286ff65a13) Update development version metadata for 2026.9.1
+- [`f384b65`](https://github.com/NivailoPL/mcp-session-bridge/commit/f384b653d5c600dd1cf8a2a998ec2ed58fa26795) fix(admin): keep transcript header visible (U1)
+- [`7aed5f8`](https://github.com/NivailoPL/mcp-session-bridge/commit/7aed5f83b4e8e1ba97b5f63c1b1f10de72bf2140) Rewrite README around the Bridge value proposition
+- [`a489179`](https://github.com/NivailoPL/mcp-session-bridge/commit/a4891797f3d52314a48f2df5b4ae759b5f89652f) refactor(layout): move served frontend into web/
+- [`70f3b14`](https://github.com/NivailoPL/mcp-session-bridge/commit/70f3b149ed1cbedc873158a4ac44ad88126401ff) docs: drop the in-repo plan archive
+- [`320ecbe`](https://github.com/NivailoPL/mcp-session-bridge/commit/320ecbea962b352925a9e81174774fb5883d44f0) docs: make the managed installation the documented entry point
+- [`74af4b8`](https://github.com/NivailoPL/mcp-session-bridge/commit/74af4b8afc463c970bf32214f76159199f995be3) refactor(layout): collect the offline audit tooling in tools/
+- [`cbff3c0`](https://github.com/NivailoPL/mcp-session-bridge/commit/cbff3c09e69520d28ba92ba2c9c709f6e0b6e67b) docs(changelog): record the layout cleanup under Unreleased
+- [`3e2257e`](https://github.com/NivailoPL/mcp-session-bridge/commit/3e2257e0357807a9e675b116dce90b949604a52e) docs(brand): rewrite the brand package guide in English
+- [`10f413c`](https://github.com/NivailoPL/mcp-session-bridge/commit/10f413c91a3239ea4484f02022355b323f6cac17) docs: correct three claims that no longer matched the code
+- [`a8c27ab`](https://github.com/NivailoPL/mcp-session-bridge/commit/a8c27ab768bc4d9050a2b6c38e33f57bc7de9595) docs(changelog): note the documentation corrections
+- [`2f3d102`](https://github.com/NivailoPL/mcp-session-bridge/commit/2f3d1023aab70006a94a07055a500d6001d938fe) refactor: remove the retired context-packs feature
+- [`1ca94dd`](https://github.com/NivailoPL/mcp-session-bridge/commit/1ca94dd798b6eac1f38ac667d4208de552f72ca2) docs: document the CLI families that had no coverage
+- [`eab66ac`](https://github.com/NivailoPL/mcp-session-bridge/commit/eab66ac178ed49801c2e46e62cc4b189aa1b0bf0) docs: document save_probe and read_probe
+- [`ba7bb8b`](https://github.com/NivailoPL/mcp-session-bridge/commit/ba7bb8b02ea9b104a75dd98dc062c77a36f8a685) feat: support JPEG and PNG session attachments
+- [`6b06a3a`](https://github.com/NivailoPL/mcp-session-bridge/commit/6b06a3a9ebf17060824da29f132b0f25a2309722) fix(security): reject unsafe installation signing keys
+- [`539eaa1`](https://github.com/NivailoPL/mcp-session-bridge/commit/539eaa18cbd406c44689d7e1b6339005bd97f3ea) fix: make image attachments read-only through MCP
+- [`b444966`](https://github.com/NivailoPL/mcp-session-bridge/commit/b444966c554883bc3f1f6356fe2902a6dd9650ae) feat(admin): rebuild Settings around one consistent layout (NIV-10)
+- [`7e31df8`](https://github.com/NivailoPL/mcp-session-bridge/commit/7e31df807099a99350ba3ed1363375f6b7f9082d) feat(admin): add a Max words limit for AI rename titles
+- [`40e5cf7`](https://github.com/NivailoPL/mcp-session-bridge/commit/40e5cf7f987aeb5c8cdd2162a47d77a010155b9f) fix(admin): make AI rename condense titles instead of cutting them
+- [`a95c852`](https://github.com/NivailoPL/mcp-session-bridge/commit/a95c852f41619a10963a95b42856d4a5f826ce24) feat(admin): send expired logins to sign-in and refresh on tab return (NIV-19)
+- [`e52be03`](https://github.com/NivailoPL/mcp-session-bridge/commit/e52be030a2104e26c1415b474f96b23a5ef1be4f) feat(admin): make Lab the experimental workspace (NIV-12)
+
+[2026.9.1]: https://github.com/NivailoPL/mcp-session-bridge/compare/v2026.8.2...v2026.9.1
+
 ## [2026.8.2] - 2026-08-28
 
 ### Highlights

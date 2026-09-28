@@ -12,7 +12,7 @@ from secrets import token_urlsafe
 from typing import Any, Callable
 from urllib.parse import urlparse
 
-from app.security import password_hash
+from app.security import password_hash, validate_secret_key
 from bridge_cli.caddy import has_site
 from bridge_cli.config import read_env_file, update_env_file
 from bridge_cli.files import atomic_write_json, atomic_write_text, read_json
@@ -168,7 +168,6 @@ class ManagedInstaller:
                 "BRIDGE_PUBLIC_BASE_URL": f"https://{normalized}",
                 "BRIDGE_RESOURCE_PATH": "/mcp",
                 "BRIDGE_DB_PATH": str(self.layout.db_path),
-                "BRIDGE_CONTEXT_PACKS_DIR": str(self.layout.context_packs_dir),
                 "BRIDGE_SECRET_KEY": existing.get("BRIDGE_SECRET_KEY") or token_urlsafe(48),
                 "BRIDGE_TRANSPORT_ALLOWED_HOSTS": f"127.0.0.1:8787,localhost:8787,{normalized}",
                 "BRIDGE_RESTART_REQUEST_FILE": str(self.layout._path("run/mcp-session-bridge/restart-request")),
@@ -211,6 +210,7 @@ class ManagedInstaller:
         missing = sorted(required - values.keys())
         if missing:
             raise RuntimeError("Setup sections are incomplete: " + ", ".join(missing))
+        validate_secret_key(values["BRIDGE_SECRET_KEY"])
         if not self.layout.db_path.exists():
             raise RuntimeError("Database is not staged. Choose the Database setup step first.")
         if self._staged_release() is None:
@@ -236,8 +236,9 @@ class ManagedInstaller:
         installation = read_json(self.layout.installation_file) or {}
         if not self.layout.pending_service_unit.exists() or self._staged_release() is None:
             raise RuntimeError("Managed service is not prepared. Complete the setup steps first.")
-        release_dir = self.stage_release()
         values = read_env_file(self.layout.pending_env_file)
+        validate_secret_key(values.get("BRIDGE_SECRET_KEY", ""))
+        release_dir = self.stage_release()
         domain = url_hostname(values.get("BRIDGE_PUBLIC_BASE_URL", ""))
         dns_ready = _dns_resolves(domain)
         if installation.get("mode") == "managed":
@@ -313,7 +314,7 @@ class ManagedInstaller:
                         self.layout.db_path,
                         Path(f"{self.layout.db_path}-wal"),
                         Path(f"{self.layout.db_path}-shm"),
-                        self.layout.context_packs_dir,
+                        self.layout.legacy_context_packs_dir,
                         self.layout.pending_root,
                         self.layout.installation_file,
                         self.layout.status_file,
@@ -374,7 +375,6 @@ class ManagedInstaller:
             (self.layout.releases_root, 0o755),
             (self.layout.etc_root, 0o750),
             (self.layout.data_root, 0o1770),
-            (self.layout.context_packs_dir, 0o750),
             (self.layout.export_root, 0o3770),
             (self.layout.state_root, 0o2750),
             (self.layout.pending_root, 0o700),
@@ -496,14 +496,16 @@ class ManagedInstaller:
         if not self.layout.pending_env_file.exists():
             source = self.layout.env_file if self.layout.env_file.exists() else legacy_env
             if source is not None and source.exists():
+                validate_secret_key(read_env_file(source).get("BRIDGE_SECRET_KEY", ""))
                 shutil.copy2(source, self.layout.pending_env_file)
         existing = read_env_file(self.layout.pending_env_file)
         if not existing:
             return
+        if "BRIDGE_SECRET_KEY" in existing:
+            validate_secret_key(existing["BRIDGE_SECRET_KEY"])
         updates = {
             "BRIDGE_RESOURCE_PATH": "/mcp",
             "BRIDGE_DB_PATH": str(self.layout.db_path),
-            "BRIDGE_CONTEXT_PACKS_DIR": str(self.layout.context_packs_dir),
             "BRIDGE_SECRET_KEY": existing.get("BRIDGE_SECRET_KEY") or token_urlsafe(48),
             "BRIDGE_RESTART_REQUEST_FILE": str(self.layout._path("run/mcp-session-bridge/restart-request")),
             "BRIDGE_OPERATIONAL_STATUS_FILE": str(self.layout.status_file),
@@ -649,10 +651,6 @@ exec {current}/.venv/bin/python -m bridge_cli "$@"
                     "chown", "root:mcp-session-bridge", str(readable_state)
                 )
                 readable_state.chmod(0o640)
-        self.runner.run(
-            "chown", "-R", "mcp-session-bridge:mcp-session-bridge",
-            str(self.layout.context_packs_dir),
-        )
         text = (
             self.layout.caddyfile.read_text(encoding="utf-8")
             if self.layout.caddyfile.exists() else ""

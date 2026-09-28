@@ -22,8 +22,6 @@ def test_export_writes_complete_audit_archive_and_original_files(tmp_path: Path)
     store.create_session(
         "session-001",
         "Project: Alpha",
-        "manual-context",
-        context_pack_version="7",
         group_id=group.group_id,
     )
     exchange = store.save_exchange(
@@ -89,7 +87,7 @@ def test_export_keeps_empty_groups_and_puts_missing_groups_in_orphan_folder(
     db_path = tmp_path / "bridge.sqlite3"
     store = Store(db_path)
     store.create_session_group("Empty", "#123456", "folder", "empty")
-    store.create_session("orphan-session", "Orphan", "manual-context")
+    store.create_session("orphan-session", "Orphan")
     with sqlite3.connect(db_path) as connection:
         connection.execute("PRAGMA foreign_keys=OFF")
         connection.execute(
@@ -125,7 +123,7 @@ def test_export_checksum_failure_leaves_no_final_or_staging_artifact(
 ) -> None:
     db_path = tmp_path / "bridge.sqlite3"
     store = Store(db_path)
-    store.create_session("session-001", "Session", "manual-context")
+    store.create_session("session-001", "Session")
     file = store.save_session_file("session-001", "notes.md", "actual")
     with sqlite3.connect(db_path) as connection:
         connection.execute(
@@ -188,7 +186,7 @@ def test_export_loads_text_attachment_content_only_when_writing_each_file(
 ) -> None:
     db_path = tmp_path / "bridge.sqlite3"
     store = Store(db_path)
-    store.create_session("session-001", "Session", "manual-context")
+    store.create_session("session-001", "Session")
     store.save_session_file("session-001", "notes.md", "content")
     observed_keys: list[set[str]] = []
     original_write_attachment = conversation_export._write_attachment
@@ -223,7 +221,7 @@ def test_export_disambiguates_transcript_and_attachment_name_collision(
     db_path = tmp_path / "bridge.sqlite3"
     store = Store(db_path)
     store.create_session(
-        "session-001", "file-1--unsafe_", "manual-context"
+        "session-001", "file-1--unsafe_"
     )
     store.save_session_file("session-001", "unsafe?.md", "attachment")
 
@@ -253,12 +251,12 @@ def test_export_reads_one_snapshot_even_if_live_database_changes(
 ) -> None:
     db_path = tmp_path / "bridge.sqlite3"
     store = Store(db_path)
-    store.create_session("before-snapshot", "Before", "manual-context")
+    store.create_session("before-snapshot", "Before")
     original_snapshot = conversation_export._snapshot_database
 
     def snapshot_then_write(source: Path, destination: Path) -> None:
         original_snapshot(source, destination)
-        store.create_session("after-snapshot", "After", "manual-context")
+        store.create_session("after-snapshot", "After")
 
     monkeypatch.setattr(conversation_export, "_snapshot_database", snapshot_then_write)
 
@@ -275,7 +273,7 @@ def test_export_artifact_permissions_are_private(tmp_path: Path) -> None:
         pytest.skip("POSIX permission bits are not available on Windows")
     db_path = tmp_path / "bridge.sqlite3"
     store = Store(db_path)
-    store.create_session("session-001", "Session", "manual-context")
+    store.create_session("session-001", "Session")
     store.save_session_file("session-001", "notes.md", "private")
 
     result = export_database_to_markdown(db_path, export_root=tmp_path / "exports")

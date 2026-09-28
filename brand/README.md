@@ -1,65 +1,79 @@
-# MCP Session Bridge — paczka marki (5D)
+# MCP Session Bridge — Brand Package (5D)
 
-Wersja: Przęsło v3 · kafel indygo · Instrument Sans
-Data: 2026-08-08
+Version: Span v3 · indigo tile · Instrument Sans
+Date: 2026-08-08
 
-## Znak
+## The Mark
 
-Most o dziewięciu pionach stojących na jednej linii (pomost) z dwoma pylonami,
-które nieznacznie wystają poniżej pomostu. Skrajne belki są najniższe — most
-zaczyna się płasko przy brzegu. Geometria: viewBox `10 16 100 47`.
+A bridge of nine verticals standing on a single line (the deck) with two pylons
+that extend slightly below it. The outermost beams are the shortest — the bridge
+begins flat at the bank. Geometry: viewBox `10 16 100 47`.
 
-**Nie wolno:** dodawać łuku/liny, obracać, pochylać, zmieniać rytmu belek,
-rozciągać niejednorodnie, nakładać cieni ani gradientów na sam znak.
+**Never:** add an arch or cable, rotate, skew, change the rhythm of the beams,
+scale non-uniformly, or apply shadows or gradients to the mark itself.
 
-**Pole ochronne:** minimum wysokość pylonu (35 j. = 0,74 wysokości znaku) z każdej strony.
-**Minimalna wielkość:** kafel 16 px, sam znak 20 px szerokości.
+**Clear space:** at least one pylon height (35 units = 0.74 of the mark's height)
+on every side.
+**Minimum size:** 16 px for the tile, 20 px wide for the bare mark.
 
-## Kolory
+## Colors
 
-| Nazwa    | Hex     | Zastosowanie |
-|----------|---------|--------------|
-| Noc      | #0A0B0F | tło aplikacji |
-| Panel    | #15161D | karty, panele |
-| Indygo   | #6C5CF2 | kolor marki, kafel, akcenty |
-| Głębia   | #4A42C4 | indygo na jasnym tle, hover |
-| Lawenda  | #B3A9FF | pylony, akcent na ciemnym |
-| Lawenda 2| #C9C2FF | pylony wewnątrz kafla indygo |
-| Mgła     | #ECEDF2 | tekst podstawowy, znak w kaflu |
+| Name      | Hex     | Use |
+|-----------|---------|-----|
+| Night     | #0A0B0F | application background |
+| Panel     | #15161D | cards, panels |
+| Indigo    | #6C5CF2 | brand color, tile, accents |
+| Deep      | #4A42C4 | indigo on light backgrounds, hover |
+| Lavender  | #B3A9FF | pylons, accent on dark |
+| Lavender 2| #C9C2FF | pylons inside the indigo tile |
+| Mist      | #ECEDF2 | body text, the mark inside the tile |
 
-Piktogramy grup pozostają wielobarwne — znak zawsze trzyma indygo i nie konkuruje z żadną grupą.
+Group pictograms stay multicolored — the mark always holds indigo and never
+competes with a group.
 
-## Typografia
+## Typography
 
-- **Instrument Sans** — wordmark, nagłówki, interfejs. Wordmark: 600, letter-spacing −0.6 do −0.7.
-- **IBM Plex Mono** — „MCP", identyfikatory sesji, timestampy, etykiety wersalikowe (500, tracking 2).
+- **Instrument Sans** — wordmark, headings, interface. Wordmark: 600,
+  letter-spacing −0.6 to −0.7.
+- **IBM Plex Mono** — "MCP", session identifiers, timestamps, uppercase labels
+  (500, tracking 2).
 
 Google Fonts:
+
 ```
 https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap
 ```
 
-## Zawartość paczki
+## What Is In The Package
 
 ### brand/svg/
-- `mark-indigo`, `mark-mist`, `mark-deep` — sam znak (indygo / jasny / na jasnym tle)
-- `mark-mono-black`, `mark-mono-white` — jednokolorowe, do druku i nadruków
-- `tile-indigo`, `tile-deep`, `tile-night`, `tile-mist` — kafel 128×128, promień 32 (25%)
-- `lockup-horizontal-dark|light` — znak + wordmark bez kafla
-- `lockup-horizontal-tile-dark|light` — kafel + wordmark (wersja aplikacyjna)
-- `lockup-vertical-dark|light` — układ pionowy
+- `mark-indigo`, `mark-mist`, `mark-deep` — the bare mark (indigo / light / for light backgrounds)
+- `mark-mono-black`, `mark-mono-white` — single color, for print and merchandise
+- `tile-indigo`, `tile-deep`, `tile-night`, `tile-mist` — 128×128 tile, radius 32 (25%)
+- `lockup-horizontal-dark|light` — mark plus wordmark, no tile
+- `lockup-horizontal-tile-dark|light` — tile plus wordmark (the application version)
+- `lockup-vertical-dark|light` — vertical arrangement
+
+In every `dark`/`light` pair, `dark` is the variant for dark backgrounds.
 
 ### brand/png/
-- `icon-indigo-16…1024` — favicon, PWA, apple-touch (180), sklepy (512/1024)
-- `icon-night-512|1024`, `icon-mist-512|1024` — warianty tła
-- `mark-*-1200` — sam znak, przezroczyste tło
+- `icon-indigo-16…1024` — favicon, PWA, apple-touch (180), stores (512/1024)
+- `icon-night-512|1024`, `icon-mist-512|1024` — background variants
+- `mark-*-1200` — the bare mark, transparent background
 
 ### brand/tokens.json
-Kolory i typografia w formacie do importu.
+Colors and typography in an importable format.
 
-## Uwaga o lockupach SVG
+## A Note On The SVG Lockups
 
-Teksty w plikach lockupów są żywym tekstem (`<text>`), nie krzywymi — renderują się
-poprawnie wszędzie tam, gdzie Instrument Sans i IBM Plex Mono są dostępne (web, Figma
-z zainstalowanymi fontami). Do druku lub przekazania na zewnątrz zamień teksty na krzywe
-(Illustrator/Figma: Outline text) albo użyj samego znaku + złożenia tekstu na miejscu.
+Text in the lockup files is live text (`<text>`), not outlines. It renders
+correctly wherever Instrument Sans and IBM Plex Mono are available — the web,
+or Figma with the fonts installed. For print, or before handing a file to
+someone outside the project, convert the text to outlines (Illustrator or
+Figma: Outline text), or use the bare mark and set the text in place.
+
+## Where These Are Used
+
+The admin UI loads icons and lockups from here through `/admin/assets/brand/...`
+(see [web/README.md](../web/README.md)). The repository README uses the vertical
+lockups directly.

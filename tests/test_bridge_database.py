@@ -47,7 +47,7 @@ class Runner:
 def create_database(path: Path, *session_ids: str) -> None:
     store = Store(path)
     for session_id in session_ids:
-        store.create_session(session_id, session_id, "manual-context")
+        store.create_session(session_id, session_id)
 
 
 def test_database_inspection_and_verified_backup(tmp_path: Path) -> None:

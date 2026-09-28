@@ -163,7 +163,7 @@ class UninstallManager:
             self.layout.db_path,
             Path(f"{self.layout.db_path}-wal"),
             Path(f"{self.layout.db_path}-shm"),
-            self.layout.context_packs_dir,
+            self.layout.legacy_context_packs_dir,
             self.layout.pending_root,
             self.layout.installation_file,
             self.layout.status_file,

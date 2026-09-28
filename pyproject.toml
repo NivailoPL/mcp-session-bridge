@@ -1,6 +1,6 @@
 [project]
 name = "mcp-session-bridge"
-version = "2026.8.2"
+version = "2026.9.1"
 description = "Auth-first remote MCP spike for shared AI session context."
 requires-python = ">=3.12"
 dependencies = [
@@ -16,6 +16,7 @@ dependencies = [
     "tiktoken>=0.11.0",
     "uvicorn>=0.48.0",
     "websockets>=15,<16",
+    "pillow>=12.3,<13",
 ]
 
 [dependency-groups]
@@ -28,5 +29,5 @@ testpaths = ["tests"]
 pythonpath = ["."]
 
 [tool.mcp-session-bridge.development]
-target-version = "2026.8.2"
-label = "2026.8.2-beta"
+target-version = "2026.9.1"
+label = "2026.9.1-beta"

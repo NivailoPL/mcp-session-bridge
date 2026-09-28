@@ -1,34 +1,62 @@
 # Client Setup
 
-MCP Session Bridge is designed for remote MCP clients that support streamable HTTP and OAuth. The exact UI varies by client, but the server exposes the same resource URL everywhere.
+MCP Session Bridge is designed for remote MCP clients that support streamable
+HTTP and OAuth. The exact UI varies by client, but the server exposes the same
+resource URL everywhere.
 
-## Local Endpoint
+Verified against chatgpt.com, claude.ai, grok.com, the Codex App, and the Claude
+Code App. Any client that accepts a custom MCP connector should work; these are
+the ones that have been run end to end.
 
-For local development:
+## The Endpoint
+
+After [a managed installation](managed-installation.md), your endpoint is your
+domain plus `/mcp`:
+
+```text
+https://your-mcp.example.com/mcp
+```
+
+Setup already configured the domain, the certificate, the owner credentials and
+the transport allowlist. Nothing in this document needs to be set by hand on a
+managed installation; read on only if a client misbehaves and you want to know
+what it is talking to.
+
+Add that URL as a custom connector, authorise it, then paste
+[project-prompt-template.md](project-prompt-template.md) into the project
+instructions for conversations that should use the Bridge.
+
+## Steps, Per Client
+
+1. Find the custom connector or custom MCP server setting.
+2. Give it the resource URL above. Some clients ask for a name as well.
+3. Authorise. The client opens the Bridge login, you sign in as the owner, and
+   the client stores the resulting token.
+4. Confirm with `bridge_ping`, described under
+   [First Tool Check](#first-tool-check).
+
+A client that offers "add by URL" and one that offers a JSON snippet both need
+the same single value: the resource URL.
+
+## Running From A Checkout
+
+For local development the endpoint is:
 
 ```text
 http://127.0.0.1:8787/mcp
 ```
 
-The local server must be running:
+with the server running:
 
 ```bash
 uv run uvicorn app.main:app --host 127.0.0.1 --port 8787 --reload
 ```
 
-## Hosted Endpoint
-
-For a hosted deployment, set:
+A checkout you host yourself sets its own base URL:
 
 ```env
 BRIDGE_PUBLIC_BASE_URL=https://your-mcp.example.com
 BRIDGE_RESOURCE_PATH=/mcp
-```
-
-Then the remote MCP endpoint is:
-
-```text
-https://your-mcp.example.com/mcp
 ```
 
 ## OAuth Flow
@@ -53,11 +81,15 @@ BRIDGE_OWNER_USERNAME
 BRIDGE_OWNER_PASSWORD_HASH
 ```
 
-Use `scripts/set_owner_password.py` to create or update the password hash.
+A managed installation set these during setup; change them with
+`mcp-bridge configure administrator`. In a checkout, use
+`scripts/set_owner_password.py` to create or update the password hash.
 
 ## Transport Security Allowlist
 
-The server enables DNS rebinding protection. Configure allowed hosts and browser origins for your deployment:
+The server enables DNS rebinding protection. A managed installation configures
+this for your domain during setup. For a checkout, set the allowed hosts and
+browser origins yourself:
 
 ```env
 BRIDGE_TRANSPORT_ALLOWED_HOSTS=your-mcp.example.com,your-mcp.example.com:443,127.0.0.1:8787,localhost:8787
@@ -76,3 +108,29 @@ auth_whoami
 ```
 
 `bridge_ping` proves the authenticated MCP tool path works. `auth_whoami` shows which OAuth client is attached to the current token.
+
+## Checking Two Clients Share One Bridge
+
+`save_probe` and `read_probe` are a key/value scratchpad for exactly one job:
+confirming that two connectors reach the same Bridge. Write from one client:
+
+```text
+save_probe(key="connector-check", value="written from ChatGPT")
+```
+
+Then read it from another:
+
+```text
+read_probe(key="connector-check")
+```
+
+The read returns the value along with `updated_by`, the OAuth client ID that
+wrote it, and `updated_at`. A missing key comes back as `{"found": false}`
+rather than an error, so a fresh key is a safe thing to try.
+
+Keys are overwritten in place and are not part of any session or transcript.
+Nothing prunes them, and the value is stored as plain text in the database that
+holds your conversations, so keep probe values throwaway: use them to prove a
+connector works, not to pass anything you would not want sitting in the database
+indefinitely. To move real text between clients, save it to a session or upload
+it as a file.

@@ -146,7 +146,7 @@ def test_setup_adopts_legacy_database_and_preserves_source(tmp_path: Path) -> No
     (source / "app/__init__.py").write_text("", encoding="utf-8")
     legacy_db = source / "data/bridge.sqlite3"
     store = Store(legacy_db)
-    store.create_session("legacy-session", "Keep this", "manual-context")
+    store.create_session("legacy-session", "Keep this")
     marker = source / "do-not-delete.txt"
     marker.write_text("preserved", encoding="utf-8")
     layout = Layout.for_root(tmp_path / "target")
@@ -319,7 +319,7 @@ def test_repeated_setup_does_not_readopt_stale_legacy_database(tmp_path: Path) -
     (source / "app").mkdir()
     (source / "app/__init__.py").write_text("", encoding="utf-8")
     legacy_db = source / "data/bridge.sqlite3"
-    Store(legacy_db).create_session("legacy-session", "Legacy", "manual-context")
+    Store(legacy_db).create_session("legacy-session", "Legacy")
     layout = Layout.for_root(tmp_path / "target")
     installer = ManagedInstaller(layout, source, RecordingRunner())
     answers = SetupAnswers(
@@ -330,7 +330,7 @@ def test_repeated_setup_does_not_readopt_stale_legacy_database(tmp_path: Path) -
 
     installer.install(answers, legacy_db=legacy_db, activate=False)
     Store(layout.db_path, allow_startup_migrations=False).create_session(
-        "managed-session", "Created after adoption", "manual-context"
+        "managed-session", "Created after adoption"
     )
     installer.install(answers, legacy_db=legacy_db, activate=False)
 

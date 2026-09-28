@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import json
 import logging
 import re
@@ -15,6 +16,7 @@ from mcp.server.auth.middleware.auth_context import get_access_token
 from mcp.server.auth.provider import AccessToken, TokenVerifier
 from mcp.server.auth.settings import AuthSettings
 from mcp.server.fastmcp import FastMCP
+from mcp.types import CallToolResult, ImageContent, TextContent
 from mcp.server.transport_security import TransportSecuritySettings
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
@@ -51,7 +53,6 @@ from app.time_format import (
 )
 from app.tool_output import configured_tool_output_mode, large_tool_structured_output
 
-MANUAL_CONTEXT_ID = "manual-context"
 SERVER_INSTRUCTIONS = (
     "MCP Session Bridge shares model transcripts. Sessions are unlisted: without a "
     "session_id, ask the user or create a new session; never enumerate or guess sessions. With a "
@@ -66,6 +67,7 @@ settings = load_settings()
 store = Store(
     settings.db_path,
     pdf_storage_max_bytes=settings.pdf_storage_max_bytes,
+    image_storage_max_bytes=settings.image_storage_max_bytes,
     allow_startup_migrations=settings.allow_startup_migrations,
 )
 logger = logging.getLogger(__name__)
@@ -215,7 +217,7 @@ def _write_restart_request(path) -> None:
 admin = AdminHandlers(
     settings,
     store,
-    ROOT / "admin-viewer.html",
+    ROOT / "web" / "admin-viewer.html",
     active_tool_output_mode=ACTIVE_TOOL_OUTPUT_MODE,
     restart_requester=_request_service_restart,
     codex_client=codex,
@@ -275,6 +277,11 @@ async def admin_sessions_page(request: Request) -> Response:
 
 @mcp.custom_route("/admin/graph", methods=["GET"])
 async def admin_graph_page(request: Request) -> Response:
+    return await admin.graph_page(request)
+
+
+@mcp.custom_route("/admin/lab", methods=["GET"])
+async def admin_lab_page(request: Request) -> Response:
     return await admin.graph_page(request)
 
 
@@ -814,7 +821,6 @@ def create_session(title: str = "", group_id: str = "") -> dict[str, Any]:
         session = store.create_session(
             session_id=session_id,
             title=resolved_title,
-            context_pack_id=MANUAL_CONTEXT_ID,
             title_is_auto=title_is_auto,
             group_id=group_id,
         )
@@ -827,7 +833,6 @@ def create_session(title: str = "", group_id: str = "") -> dict[str, Any]:
         "title": session.title,
         "group_id": session.group_id,
         "group": _group_payload(group),
-        "context_source": "manual",
         "title_is_auto": session.title_is_auto,
         "created_at": session.created_at,
     }
@@ -853,7 +858,6 @@ def get_session_overview(session_id: str) -> dict[str, Any]:
     chunk_max_chars, chunk_max_lines = _current_transcript_chunk_limits()
     return {
         "ok": True,
-        "context_source": "manual",
         "group": _group_payload(group),
         "files": files,
         **render_session_overview(
@@ -1083,6 +1087,22 @@ async def upload_group_pdf(
     return {"ok": True, "file": session_file_payload(saved)}
 
 
+@mcp.tool(structured_output=False)
+async def view_session_image(session_id: str, file_id: int) -> CallToolResult:
+    """View an image belonging to this session or its current group as native MCP image content. Requires a client that forwards image tool results to a vision model. Use list_session_files to find file_id."""
+    try:
+        result = await asyncio.to_thread(store.get_image_for_session, session_id, file_id)
+        if result is None:
+            raise ValueError("File is unavailable for this session")
+        saved, raw = result
+    except (ValueError, SessionFileConflictError) as exc:
+        return CallToolResult(isError=True, content=[TextContent(type="text", text=str(exc))])
+    return CallToolResult(content=[
+        TextContent(type="text", text=json.dumps(session_file_payload(saved), ensure_ascii=False)),
+        ImageContent(type="image", data=base64.b64encode(raw).decode("ascii"), mimeType=saved.mime_type),
+    ])
+
+
 @mcp.tool()
 def list_session_files(session_id: str) -> dict[str, Any]:
     """List files belonging to a session or its current group."""
@@ -1095,7 +1115,7 @@ def list_session_files(session_id: str) -> dict[str, Any]:
 
 @mcp.tool(structured_output=LARGE_TOOL_STRUCTURED_OUTPUT)
 def download_session_file(session_id: str, file_id: int) -> dict[str, Any]:
-    """Read a file visible to a session; PDFs return extracted text, never original bytes."""
+    """Read a visible text file or extracted PDF text. Images return metadata and direct you to view_session_image, never base64 text."""
     try:
         saved = store.get_session_file_for_session(session_id, file_id)
     except SessionFileConflictError:
@@ -1104,6 +1124,8 @@ def download_session_file(session_id: str, file_id: int) -> dict[str, Any]:
         return {"ok": False, "error": str(exc)}
     if saved is None:
         return {"ok": False, "error": "File is unavailable for this session."}
+    if saved.content_kind == "image":
+        return {"ok": True, "file": session_file_payload(saved), "view_tool": "view_session_image"}
     return {"ok": True, "file": session_file_payload(saved, include_content=True)}
 
 

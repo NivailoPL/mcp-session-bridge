@@ -6,6 +6,8 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
+from app.security import validate_secret_key
+
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -15,8 +17,6 @@ class Settings:
     public_base_url: str
     resource_path: str
     db_path: Path
-    context_packs_dir: Path
-    default_context_pack_id: str
     transcript_chunk_max_lines: int
     transcript_chunk_max_chars: int
     owner_username: str
@@ -30,6 +30,7 @@ class Settings:
     transport_allowed_hosts: list[str]
     transport_allowed_origins: list[str]
     pdf_storage_max_bytes: int = 1_000_000_000
+    image_storage_max_bytes: int = 1_000_000_000
     allow_startup_migrations: bool = True
     graph_experimental: bool = False
     restart_request_file: Path | None = None
@@ -72,13 +73,11 @@ def load_settings() -> Settings:
         public_base_url=public_base_url,
         resource_path=resource_path,
         db_path=db_path,
-        context_packs_dir=Path(os.getenv("BRIDGE_CONTEXT_PACKS_DIR", str(ROOT / "data" / "context-packs"))),
-        default_context_pack_id=os.getenv("BRIDGE_DEFAULT_CONTEXT_PACK_ID", "manual-context"),
         transcript_chunk_max_lines=int(os.getenv("BRIDGE_TRANSCRIPT_CHUNK_MAX_LINES", "180")),
         transcript_chunk_max_chars=int(os.getenv("BRIDGE_TRANSCRIPT_CHUNK_MAX_CHARS", "12000")),
         owner_username=os.getenv("BRIDGE_OWNER_USERNAME", "owner"),
         owner_password_hash=_required("BRIDGE_OWNER_PASSWORD_HASH"),
-        secret_key=_required("BRIDGE_SECRET_KEY"),
+        secret_key=validate_secret_key(_required("BRIDGE_SECRET_KEY")),
         access_token_seconds=int(os.getenv("BRIDGE_ACCESS_TOKEN_SECONDS", "1800")),
         refresh_token_seconds=int(os.getenv("BRIDGE_REFRESH_TOKEN_SECONDS", "2592000")),
         auth_code_seconds=int(os.getenv("BRIDGE_AUTH_CODE_SECONDS", "300")),
@@ -96,6 +95,7 @@ def load_settings() -> Settings:
             os.getenv("BRIDGE_PDF_STORAGE_MAX_BYTES", "1000000000")
         ),
         allow_startup_migrations=_bool_env("BRIDGE_ALLOW_STARTUP_MIGRATIONS", True),
+        image_storage_max_bytes=int(os.getenv("BRIDGE_IMAGE_STORAGE_MAX_BYTES", "1000000000")),
         graph_experimental=_bool_env("BRIDGE_GRAPH_EXPERIMENTAL", False),
         restart_request_file=(
             Path(value)
