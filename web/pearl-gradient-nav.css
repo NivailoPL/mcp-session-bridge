@@ -31,7 +31,7 @@
   justify-self: start;
   display: inline-flex;
   align-items: center;
-  width: 210px;
+  width: 262px;
 }
 
 .workspace-brand img {
@@ -56,7 +56,7 @@
 .workspace-actions form { margin: 0; }
 
 @media (max-width: 800px) {
-  .workspace-brand { width: 150px; }
+  .workspace-brand { width: 180px; }
   .workspace-actions form { display: none; }
 }
 

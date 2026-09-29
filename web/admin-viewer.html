@@ -27,6 +27,11 @@
       color-scheme: dark;
 
       --bg-base: #0b0d12;
+      /* two grounds only: the chrome (bar + sidebar) recedes, the stage (session) is raised */
+      --chrome: #0a0c10;
+      --stage: #11131a;
+      --stage-deep: #0d0f14;
+      --stage-stroke: rgba(255, 255, 255, .07);
       --text: #e6e8f0;
       --text-2: #b6bccb;
       --muted: #8e93a8;
@@ -86,11 +91,11 @@
       color: var(--text);
       line-height: 1.5;
       -webkit-font-smoothing: antialiased;
-      background:
-        radial-gradient(900px 480px at 22% -12%, rgba(99, 102, 241, .12), transparent 62%),
-        var(--bg-base);
-      background-attachment: fixed;
+      background: var(--chrome);
     }
+
+    /* the sessions page shares the bar's geometry with Lab, but here it is chrome, not a panel */
+    .workspace-bar { border-bottom-color: transparent; background: var(--chrome); }
 
     button, input, textarea, select { font: inherit; color: inherit; }
 
@@ -200,8 +205,7 @@
       height: calc(100vh - var(--workspace-bar-height));
       display: flex;
       flex-direction: column;
-      border-right: 1px solid var(--stroke-soft);
-      background: rgba(255, 255, 255, .02);
+      background: transparent;
       min-width: 0;
     }
 
@@ -209,8 +213,7 @@
       display: flex;
       gap: .45rem;
       align-items: center;
-      padding: 16px;
-      border-bottom: 1px solid var(--stroke-soft);
+      padding: 6px 16px 16px;
     }
     .settings-row button { min-height: var(--h-ctrl); padding: 0 10px; font-size: var(--t-ctrl); border-radius: var(--r-ctrl); }
     .settings-button { display: inline-flex; align-items: center; gap: .42rem; }
@@ -247,11 +250,20 @@
     .group-panel {
       display: grid;
       gap: 12px;
-      padding: 16px;
-      border-bottom: 1px solid var(--stroke-soft);
+      padding: 0 16px 16px;
     }
-    .group-head { display: flex; align-items: center; gap: .6rem; }
-    .group-head span { font-size: var(--t-label); text-transform: uppercase; letter-spacing: .14em; color: var(--faint-ink); }
+    .group-head { display: flex; align-items: center; justify-content: space-between; gap: .6rem; min-height: 26px; }
+    .group-head span {
+      color: var(--faint-ink);
+      font-family: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: var(--t-label); font-weight: 500; text-transform: uppercase; letter-spacing: .16em;
+    }
+    .group-edit {
+      width: 26px; min-height: 26px; padding: 0;
+      border: 0; border-radius: var(--r-xs); background: transparent; color: var(--faint-ink);
+    }
+    .group-edit:hover { background: var(--glass-3); color: var(--text); border-color: transparent; }
+    .group-edit svg { width: 14px; height: 14px; }
     .group-list {
       display: grid;
       grid-template-columns: repeat(auto-fill, var(--h-tile));
@@ -309,9 +321,15 @@
       background: color-mix(in oklab, var(--g, var(--accent)) 26%, rgba(255, 255, 255, .03));
       border-color: color-mix(in oklab, var(--g, var(--accent)) 62%, transparent);
     }
-    .group-actions { display: flex; justify-content: flex-end; gap: .45rem; min-height: var(--h-compact); }
-    .group-actions button[hidden], .edit-actions button[hidden] { display: none; }
-    .group-actions button { min-height: var(--h-compact); padding: 0 8px; font-size: var(--t-meta); border-radius: var(--r-ctrl); }
+    /* adding a group happens where the group will appear: the last tile of the grid */
+    .group-add {
+      width: var(--h-tile); height: var(--h-tile); min-height: var(--h-tile); padding: 0;
+      border: 1px dashed rgba(255, 255, 255, .14); border-radius: var(--r-ctrl);
+      background: transparent; color: var(--faint-ink);
+    }
+    .group-add:hover { border-color: rgba(255, 255, 255, .3); background: var(--glass); color: var(--text); }
+    .group-add svg { width: 16px; height: 16px; }
+    .edit-actions button[hidden] { display: none; }
 
     .session-list {
       display: grid; align-content: start; gap: 0;
@@ -445,6 +463,15 @@
     .main {
       position: relative; display: flex; flex-direction: column; min-width: 0; min-height: 0;
       height: calc(100vh - var(--workspace-bar-height)); overflow: hidden;
+      padding: 0 14px 14px 0;
+    }
+    /* the stage: the one raised surface, holding the session header and its transcript */
+    .stage {
+      position: relative; display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0;
+      overflow: hidden;
+      border: 1px solid var(--stage-stroke); border-radius: 18px;
+      background: var(--stage);
+      box-shadow: 0 30px 60px -30px rgba(0, 0, 0, .8), inset 0 1px 0 rgba(255, 255, 255, .04);
     }
 
     /* a covered row keeps its geometry: the title is redacted, nothing else moves */
@@ -465,13 +492,15 @@
     .thread-sensitive-content {
       position: relative; display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0;
       overflow: auto; overscroll-behavior: contain;
+      border-top: 1px solid var(--stroke-soft);
+      background: var(--stage-deep);
     }
     .sensitive-curtain {
       position: absolute; inset: 0; z-index: 12;
       display: grid; place-items: start center;
       width: 100%; padding: 2rem;
       border: 0; border-radius: 0;
-      background: var(--bg-base);
+      background: var(--stage-deep);
       color: var(--text); text-align: center;
     }
     .sensitive-curtain[hidden] { display: none; }
@@ -490,7 +519,7 @@
       border-radius: var(--r-ctrl); background: var(--accent);
       color: #fff; font-size: var(--t-ctrl); font-weight: 600;
     }
-    .sensitive-curtain:hover { background: var(--bg-base); }
+    .sensitive-curtain:hover { background: var(--stage-deep); }
     .sensitive-curtain:hover .sensitive-curtain-action { background: var(--accent-2); }
     .sensitive-curtain-action svg { width: 14px; height: 14px; }
     .topbar-title h2.is-redacted {
@@ -504,59 +533,105 @@
       border-radius: 4px; background: rgba(255, 255, 255, .09);
     }
 
-    /* the ONE glass surface in the app */
+    /* session header: group, title and key on the left, the token meter on the right,
+       then one toolbar row under a hairline */
     .topbar {
       position: sticky; top: 0; z-index: 6;
-      display: flex; flex-direction: column; align-items: stretch; gap: .85rem;
-      padding: 1rem 1.5rem;
-      border-bottom: 1px solid var(--stroke-soft);
-      background: rgba(11, 13, 18, .66);
-      -webkit-backdrop-filter: blur(16px) saturate(120%);
-      backdrop-filter: blur(16px) saturate(120%);
+      display: flex; flex-direction: column; align-items: stretch; gap: 20px;
+      padding: 26px 32px 0;
     }
-    .topbar-title { min-width: 0; display: grid; gap: 10px; }
-    .session-title-line { display: flex; align-items: center; gap: .55rem; min-width: 0; margin-bottom: 2px; }
-    .session-title-icon { display: none; width: 1.35rem; height: 1.35rem; color: var(--g, var(--accent-ink)); flex: 0 0 auto; }
+    .session-hero { display: flex; align-items: center; gap: 18px; min-width: 0; }
+    .topbar-title { flex: 1; min-width: 0; display: grid; gap: 5px; }
+    .session-group-label {
+      color: var(--g, var(--faint-ink));
+      font-family: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: var(--t-meta); font-weight: 500; line-height: 1.2; letter-spacing: .18em; text-transform: uppercase;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .session-group-label:empty { display: none; }
+    .session-title-line { display: flex; align-items: center; min-width: 0; }
+    .session-title-icon { display: none; width: 58px; height: 58px; color: var(--g, var(--accent-ink)); flex: 0 0 auto; }
     .session-title-icon.show { display: inline-flex; }
     .session-title-icon svg, .session-compact-icon svg { width: 100%; height: 100%; }
+    .session-title-icon svg { stroke-width: 1.5; }
     .topbar-title h2 {
       margin: 0;
-      font-size: var(--t-display); font-weight: 700; letter-spacing: -.015em; line-height: 1.15;
-      overflow-wrap: anywhere;
+      font-size: 26px; font-weight: 700; letter-spacing: -.015em; line-height: 1.15;
+      color: #f3f4f8; overflow-wrap: anywhere;
     }
     .session-id-line { display: flex; align-items: center; min-width: 0; }
     .session-id-unit {
-      display: inline-flex; align-items: stretch; justify-content: flex-start;
-      max-width: 100%; min-height: var(--h-compact); padding: 0;
-      border: 1px solid var(--stroke-soft); border-radius: var(--r-ctrl);
-      background: rgba(0, 0, 0, .16); color: var(--text-2);
+      display: inline-flex; align-items: center; justify-content: flex-start; gap: 8px;
+      max-width: 100%; min-height: 24px; padding: 0;
+      border: 0; border-radius: var(--r-xs);
+      background: transparent; color: var(--faint-ink);
       font-weight: 400; overflow: hidden;
-      transition: border-color .16s ease, background .16s ease, color .16s ease;
+      transition: color .16s ease;
     }
-    .session-id-unit:hover {
-      border-color: var(--stroke); background: rgba(0, 0, 0, .34); color: var(--text);
-    }
-    .session-id-glyph { display: grid; place-items: center; padding-left: 10px; color: var(--faint-ink); }
-    .session-id-glyph svg { width: 13px; height: 13px; }
+    .session-id-unit:hover { border-color: transparent; background: transparent; color: var(--text-2); }
     .session-id {
-      display: inline-flex; align-items: center; min-width: 0; padding: 0 10px;
+      min-width: 0;
       font-family: "Geist Mono", ui-monospace, monospace; font-size: var(--t-meta);
       letter-spacing: .01em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     }
     .session-id-copy {
       display: inline-flex; align-items: center; gap: 6px; flex: 0 0 auto;
-      padding: 0 10px; border-left: 1px solid var(--stroke-soft);
-      background: var(--glass); font-size: var(--t-meta); font-weight: 700;
+      min-height: 24px; padding: 0 6px; border-radius: var(--r-xs);
+      color: var(--muted); font-size: var(--t-meta); font-weight: 700;
     }
-    .session-id-copy svg { width: 13px; height: 13px; }
-    .session-id-unit.is-copied { border-color: rgba(52, 211, 153, .42); }
-    .session-id-unit.is-copied .session-id-copy {
-      border-left-color: rgba(52, 211, 153, .42); background: rgba(52, 211, 153, .14); color: var(--ok);
+    .session-id-unit:hover .session-id-copy { background: var(--glass-3); color: var(--text); }
+    .session-id-copy svg { width: 14px; height: 14px; }
+    /* the label only speaks up to confirm a copy */
+    .session-id-copy-label { display: none; }
+    .session-id-unit.is-copied .session-id-copy { background: rgba(52, 211, 153, .14); color: var(--ok); }
+    .session-id-unit.is-copied .session-id-copy-label { display: inline; }
+    .meta { color: var(--muted); font-size: var(--t-ctrl); }
+    .meta:empty { display: none; }
+
+    /* token meter: one number, then who produced it, for any number of speakers */
+    .token-meter {
+      flex: 0 0 auto; width: 330px;
+      display: grid; gap: 10px; padding: 14px 16px;
+      border: 1px solid rgba(255, 255, 255, .06); border-radius: 14px;
+      background: rgba(0, 0, 0, .22);
+      font-variant-numeric: tabular-nums;
     }
-    .meta { display: flex; flex-wrap: wrap; align-items: center; gap: .45rem; color: var(--muted); font-size: var(--t-ctrl); font-variant-numeric: tabular-nums; }
-    .meta .sep { width: 3px; height: 3px; border-radius: 50%; background: var(--faint-ink); }
-    .meta .mono { font-size: var(--t-meta); color: var(--faint-ink); }
-    .top-actions { display: flex; flex-wrap: wrap; gap: .5rem; justify-content: flex-start; align-items: center; }
+    .token-meter-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+    .token-meter-total { color: #fff; font-size: 30px; font-weight: 800; letter-spacing: -.02em; line-height: 1; }
+    .token-meter-unit {
+      color: var(--muted);
+      font-family: "Geist Mono", ui-monospace, monospace; font-size: var(--t-label); letter-spacing: .16em; text-transform: uppercase;
+    }
+    .token-meter-bar { display: flex; gap: 3px; height: 6px; }
+    .token-meter-bar span { flex: var(--share) 1 0; min-width: 4px; border-radius: 3px; background: var(--m); }
+    .token-meter-legend { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px 18px; margin: 0; padding: 0; list-style: none; }
+    .token-meter-legend li { display: flex; align-items: center; gap: 6px; min-width: 0; color: var(--muted); font-size: var(--t-meta); }
+    .token-meter-legend li::before { content: ""; width: 7px; height: 7px; flex: 0 0 auto; border-radius: 50%; background: var(--m); }
+    .token-meter-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .token-meter-legend b { color: #d5d8e4; font-weight: 700; }
+
+    .top-actions {
+      display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-start; align-items: center;
+      padding: 14px 0; border-top: 1px solid var(--stroke-soft);
+    }
+    .top-actions-spacer { flex: 1; }
+    .top-actions .icon-button { width: 38px; min-height: 38px; padding: 0; }
+    .top-actions .icon-button svg { width: 15px; height: 15px; }
+    .export-menu { position: relative; }
+    .export-menu-trigger { min-height: 38px; }
+    .export-menu-trigger svg { width: 15px; height: 15px; }
+    .export-menu-trigger .chevron { width: 14px; height: 14px; color: var(--muted); }
+    .export-menu-list {
+      position: absolute; right: 0; top: calc(100% + 6px); z-index: 20;
+      display: grid; gap: 2px; min-width: 12rem; padding: 4px;
+      border: 1px solid rgba(255, 255, 255, .12); border-radius: 10px;
+      background: #161a24; box-shadow: var(--shadow-pop);
+    }
+    .export-menu-list button {
+      justify-content: flex-start; width: 100%; min-height: 34px; padding: 0 10px;
+      border: 0; border-radius: var(--r-ctrl); background: transparent; font-weight: 600;
+    }
+    .export-menu-list button:hover { background: var(--glass-3); }
     .content-wrap { position: relative; display: flex; align-items: flex-start; width: 100%; max-width: 84rem; }
     .side-rail {
       position: sticky; top: 50%; transform: translateY(-50%); z-index: 4; display: flex; flex-direction: column;
@@ -564,12 +639,31 @@
     }
     .turn-nav {
       display: none; flex-direction: column; gap: .35rem;
-      padding: .35rem; border: 1px solid var(--stroke-soft);
-      border-radius: var(--r-card); background: #10131a;
+      padding: .35rem; border: 1px solid var(--stage-stroke);
+      border-radius: var(--r-card); background: var(--stage);
     }
     .turn-nav.show { display: flex; }
     .turn-nav button { width: var(--h-tile); min-height: var(--h-tile); padding: 0; border-radius: var(--r-ctrl); }
     .turn-nav svg { width: 15px; height: 15px; }
+    /* where you are among the active exchanges: the count that used to sit in the header */
+    .turn-position {
+      display: grid; justify-items: center; padding: .2rem 0;
+      color: var(--text); font-family: "Geist Mono", ui-monospace, monospace; font-size: var(--t-label);
+      line-height: 1.25; font-variant-numeric: tabular-nums;
+    }
+    .turn-position:empty { display: none; }
+    .turn-position span { color: var(--faint-ink); }
+
+    /* a day divider opens every calendar day of the transcript */
+    .day-divider {
+      display: flex; align-items: center; gap: 14px; margin: .35rem 0;
+      color: #aab0c0; font-size: var(--t-meta); font-weight: 600; letter-spacing: .01em;
+    }
+    .day-divider::before, .day-divider::after { content: ""; flex: 1; height: 1px; background: rgba(255, 255, 255, .07); }
+    .day-divider span {
+      padding: 5px 14px; border: 1px solid rgba(255, 255, 255, .08); border-radius: var(--r-pill);
+      background: var(--stage); white-space: nowrap;
+    }
     /* Files is a destination, not scrolling: its own tinted card, apart from the arrows. */
     .file-dock {
       position: relative; display: flex; flex-direction: column; align-items: center; gap: .45rem;
@@ -1159,6 +1253,10 @@
     .seg button.is-active { background: var(--glass-3); color: var(--text); }
 
     .session-group-select { width: auto; min-width: 11rem; max-width: 15rem; }
+    .top-actions .seg { padding: 3px; border-color: rgba(255, 255, 255, .06); border-radius: 10px; background: rgba(0, 0, 0, .25); }
+    .top-actions .seg button { min-height: 30px; padding: 0 12px; border-radius: 7px; }
+    .top-actions .seg button.is-active { background: rgba(255, 255, 255, .1); color: #fff; font-weight: 700; }
+    .top-actions .session-group-select { min-height: 38px; border-radius: 10px; }
 
     dialog {
       border: 1px solid var(--stroke);
@@ -1577,7 +1675,10 @@
       .shell { grid-template-columns: 1fr; }
       .sidebar { position: static; height: auto; border-right: 0; border-bottom: 1px solid var(--stroke-soft); }
       .session-list { max-height: 19rem; }
-      .topbar { flex-direction: column; align-items: stretch; }
+      .main { padding: 0 8px 8px; }
+      .topbar { flex-direction: column; align-items: stretch; padding: 20px 18px 0; }
+      .session-hero { flex-wrap: wrap; }
+      .token-meter { width: 100%; }
       .top-actions { justify-content: flex-start; }
       #fileWorkspaceDialog, #fileViewerDialog { width: calc(100vw - 1rem); height: calc(100vh - 1rem); }
       #fileWorkspaceDialog { --fb-cols: 16px 36px minmax(0, 1fr) 3.6rem; }
@@ -1663,12 +1764,15 @@
       <section class="group-panel" aria-label="Session groups">
         <div class="group-head">
           <span>Groups</span>
+          <button id="editGroupButton" type="button" class="group-edit" aria-label="Edit selected group" hidden>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16z"></path><path d="m13.5 6.5 4 4"></path></svg>
+          </button>
         </div>
         <div id="groupList" class="group-list"></div>
-        <div class="group-actions">
-          <button id="addGroupButton" type="button" class="ghost" title="Add group">+ New</button>
-          <button id="editGroupButton" type="button" class="ghost" hidden>Edit</button>
-        </div>
+        <!-- renderGroups() moves this into the grid as its last tile -->
+        <button id="addGroupButton" type="button" class="group-add" title="New group" aria-label="New group">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+        </button>
       </section>
 
       <section class="session-panel" aria-label="Session list">
@@ -1680,23 +1784,34 @@
     </aside>
 
     <section class="main" aria-label="Session corrections">
+      <div class="stage">
       <header class="topbar">
-        <div class="topbar-title">
-          <div class="session-title-line">
-            <span id="sessionTitleIcon" class="session-title-icon" aria-hidden="true"></span>
-            <h2 id="sessionTitle">Select a session</h2>
+        <div class="session-hero">
+          <span id="sessionTitleIcon" class="session-title-icon" aria-hidden="true"></span>
+          <div class="topbar-title">
+            <span id="sessionGroupLabel" class="session-group-label"></span>
+            <div class="session-title-line">
+              <h2 id="sessionTitle">Select a session</h2>
+            </div>
+            <div id="sessionIdLine" class="session-id-line" hidden>
+              <button id="copySessionIdButton" type="button" class="session-id-unit" title="Copy session ID">
+                <span id="sessionId" class="session-id"></span>
+                <span class="session-id-copy">
+                  <span class="session-id-copy-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"></rect><path d="M15 5H6a2 2 0 0 0-2 2v9"></path></svg></span>
+                  <span id="copySessionIdLabel" class="session-id-copy-label">Copy</span>
+                </span>
+              </button>
+            </div>
+            <div id="sessionMeta" class="meta">Conversation history correction panel.</div>
           </div>
-          <div id="sessionIdLine" class="session-id-line" hidden>
-            <button id="copySessionIdButton" type="button" class="session-id-unit" title="Copy session ID">
-              <span class="session-id-glyph" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 6.5a4.6 4.6 0 1 1 6.5 6.5l-2.2 2.2"></path><path d="M9.5 17.5a4.6 4.6 0 1 1-6.5-6.5l2.2-2.2"></path><path d="M8.8 15.2l6.4-6.4"></path></svg></span>
-              <span id="sessionId" class="session-id"></span>
-              <span class="session-id-copy">
-                <span class="session-id-copy-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"></rect><path d="M15 5H6a2 2 0 0 0-2 2v9"></path></svg></span>
-                <span id="copySessionIdLabel" class="session-id-copy-label">Copy</span>
-              </span>
-            </button>
+          <div id="tokenMeter" class="token-meter" hidden>
+            <div class="token-meter-head">
+              <span id="tokenMeterTotal" class="token-meter-total">0</span>
+              <span class="token-meter-unit">Tokens</span>
+            </div>
+            <div id="tokenMeterBar" class="token-meter-bar" aria-hidden="true"></div>
+            <ul id="tokenMeterLegend" class="token-meter-legend" aria-label="Tokens by speaker"></ul>
           </div>
-          <div id="sessionMeta" class="meta">Conversation history correction panel.</div>
         </div>
         <div class="top-actions">
           <div id="layoutSeg" class="seg" role="tablist" aria-label="Exchange layout">
@@ -1712,14 +1827,26 @@
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="7" x2="20" y2="7"></line><line x1="8" y1="12" x2="20" y2="12"></line><line x1="8" y1="17" x2="16" y2="17"></line><circle cx="4" cy="7" r="1"></circle><circle cx="4" cy="12" r="1"></circle><circle cx="4" cy="17" r="1"></circle></svg>
               Thread
             </button>
+            <button id="rawToggleButton" type="button" title="Markdown - the transcript as raw Markdown">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"></rect><path d="M7 15V9l2.5 3L12 9v6M16 9v6M14 13l2 2 2-2"></path></svg>
+              Markdown
+            </button>
           </div>
           <select id="sessionGroupSelect" class="session-group-select" aria-label="Session group"></select>
-          <button id="rawToggleButton" type="button" class="ghost">Markdown</button>
-          <button id="copyButton" type="button" class="ghost">Copy transcript</button>
-          <button id="exportHtmlButton" type="button" class="ghost" disabled>Export HTML</button>
-          <button id="refreshButton" type="button" class="ghost">
-            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.6-6.4"></path><path d="M21 4v5h-5"></path></svg>
-            Refresh
+          <span class="top-actions-spacer"></span>
+          <div class="export-menu">
+            <button id="exportMenuButton" type="button" class="ghost export-menu-trigger" aria-haspopup="menu" aria-expanded="false" aria-controls="exportMenuList">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M4 20h16"></path></svg>
+              Export
+              <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg>
+            </button>
+            <div id="exportMenuList" class="export-menu-list" role="menu" aria-label="Export" hidden>
+              <button id="copyButton" type="button" role="menuitem">Copy transcript</button>
+              <button id="exportHtmlButton" type="button" role="menuitem" disabled>Export HTML</button>
+            </div>
+          </div>
+          <button id="refreshButton" type="button" class="ghost icon-button" title="Refresh" aria-label="Refresh">
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.6-6.4"></path><path d="M21 4v5h-5"></path></svg>
           </button>
         </div>
       </header>
@@ -1730,6 +1857,7 @@
         <nav id="turnNav" class="turn-nav" aria-label="Transcript navigation">
           <button id="scrollTopButton" type="button" class="ghost" title="Scroll to top"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"></path><path d="M6 5h12"></path></svg></button>
           <button id="scrollPrevButton" type="button" class="ghost" title="Previous turn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"></path></svg></button>
+          <span id="turnPosition" class="turn-position" aria-live="polite"></span>
           <button id="scrollNextButton" type="button" class="ghost" title="Next turn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"></path></svg></button>
           <button id="scrollBottomButton" type="button" class="ghost" title="Scroll to bottom"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"></path><path d="M6 19h12"></path></svg></button>
         </nav>
@@ -1759,6 +1887,7 @@
           </span>
         </span>
       </button>
+      </div>
       </div>
     </section>
   </main>
@@ -2624,6 +2753,8 @@
         exchangeList: document.getElementById("exchangeList"),
         editGroupButton: document.getElementById("editGroupButton"),
         exportHtmlButton: document.getElementById("exportHtmlButton"),
+        exportMenuButton: document.getElementById("exportMenuButton"),
+        exportMenuList: document.getElementById("exportMenuList"),
         fileCopyButton: document.getElementById("fileCopyButton"),
         fileDeleteButton: document.getElementById("fileDeleteButton"),
         fileDeleteCancel: document.getElementById("fileDeleteCancel"),
@@ -2738,6 +2869,7 @@
         scrollPrevButton: document.getElementById("scrollPrevButton"),
         scrollTopButton: document.getElementById("scrollTopButton"),
         searchOpenButton: document.getElementById("searchOpenButton"),
+        sessionGroupLabel: document.getElementById("sessionGroupLabel"),
         sessionGroupSelect: document.getElementById("sessionGroupSelect"),
         sessionFileInput: document.getElementById("sessionFileInput"),
         sessionList: document.getElementById("sessionList"),
@@ -2761,7 +2893,12 @@
         threadSensitiveContent: document.getElementById("threadSensitiveContent"),
         threadSensitiveOverlay: document.getElementById("threadSensitiveOverlay"),
         threadSensitiveTitle: document.getElementById("threadSensitiveTitle"),
+        tokenMeter: document.getElementById("tokenMeter"),
+        tokenMeterBar: document.getElementById("tokenMeterBar"),
+        tokenMeterLegend: document.getElementById("tokenMeterLegend"),
+        tokenMeterTotal: document.getElementById("tokenMeterTotal"),
         turnNav: document.getElementById("turnNav"),
+        turnPosition: document.getElementById("turnPosition"),
       };
       const settingsDom = Object.fromEntries([
         "settingsSaveButton", "settingsActionbar", "toolOutputRestart", "toolOutputRestartRequired", "toolOutputRestartMessage", "toolOutputActiveSummary", "toolOutputOptimized", "toolOutputMaximumCompatibility", "cohereKeyInput",
@@ -3020,10 +3157,29 @@
         if (btn) setLayout(btn.dataset.layout);
       });
       dom.rawToggleButton.addEventListener("click", () => {
-        state.rawVisible = !state.rawVisible;
-        dom.rawToggleButton.textContent = state.rawVisible ? "Exchanges" : "Markdown";
+        state.rawVisible = true;
+        applyLayoutButtons();
         renderExchanges();
       });
+      dom.exportMenuButton.addEventListener("click", () => setExportMenuOpen(dom.exportMenuList.hidden));
+      dom.exportMenuList.addEventListener("click", (event) => {
+        if (event.target.closest("button")) setExportMenuOpen(false);
+      });
+      document.addEventListener("click", (event) => {
+        if (!dom.exportMenuList.hidden && !event.target.closest(".export-menu")) setExportMenuOpen(false);
+      });
+      document.addEventListener("keydown", (event) => {
+        if (event.key !== "Escape" || dom.exportMenuList.hidden) return;
+        setExportMenuOpen(false);
+        dom.exportMenuButton.focus();
+      });
+      dom.threadSensitiveContent.addEventListener("scroll", () => {
+        if (updateTurnPosition.frame) return;
+        updateTurnPosition.frame = window.requestAnimationFrame(() => {
+          updateTurnPosition.frame = 0;
+          updateTurnPosition();
+        });
+      }, { passive: true });
       dom.copyButton.addEventListener("click", async () => {
         const md = buildMarkdown();
         if (!md) { setStatus("No transcript to copy.", "warn"); return; }
@@ -4377,6 +4533,7 @@
         for (const group of state.groups) {
           dom.groupList.append(groupButton(group, groupCounts.get(group.group_id) || 0));
         }
+        dom.groupList.append(dom.addGroupButton);
         renderGroupActions();
       }
 
@@ -4425,6 +4582,7 @@
         const group = currentGroup();
         dom.editGroupButton.hidden = !group || group.is_system || group.group_id === "all";
         dom.editGroupButton.title = group ? `Edit ${group.name}` : "Edit selected group";
+        dom.editGroupButton.setAttribute("aria-label", dom.editGroupButton.title);
       }
 
       function currentGroup() {
@@ -7029,54 +7187,71 @@
 
         if (!state.selectedSession) {
           dom.sessionTitle.textContent = "Select a session";
-          dom.sessionTitleIcon.classList.remove("show");
-          dom.sessionTitleIcon.replaceChildren();
+          renderSessionTitleIcon(null);
           dom.sessionIdLine.hidden = true;
           dom.sessionId.textContent = "";
           dom.sessionMeta.textContent = "Conversation history correction panel.";
+          renderTokenMeter();
+          updateTurnPosition();
           dom.exchangeList.append(emptyState("No session selected", "Select a session from the list on the left to review and correct its exchanges."));
           return;
         }
 
-        const activeCount = state.exchanges.filter((e) => !e.is_deleted).length;
-        const deletedCount = state.exchanges.length - activeCount;
         const group = state.groups.find((item) => item.group_id === state.selectedSession.group_id);
-        const fileCount = Number((state.files.session || []).length) + Number((state.files.group || []).length);
         dom.sessionTitle.textContent = state.selectedSession.title || state.selectedSession.session_id;
         renderSessionTitleIcon(group);
         dom.sessionId.textContent = state.selectedSession.session_id;
         dom.sessionIdLine.hidden = false;
-        renderMeta([
-          { text: `group ${group ? group.name : state.selectedSession.group_id || "uncategorized"}` },
-          { text: `${formatNumber(state.selectedSession.token_count || 0)} tokens` },
-          { text: `${fileCount} files` },
-          { text: `${activeCount} active exchanges` },
-          { text: `${deletedCount} excluded` },
-          { text: `timezone ${state.displayTimezone}` },
-          { text: `updated ${formatDate(state.selectedSession.updated_at_iso)}` },
-        ]);
+        dom.sessionMeta.textContent = "";
+        renderTokenMeter();
 
         // covered means not rendered: nothing to read off the screen, a screenshot,
         // the accessibility tree or the DOM until the group is revealed
         if (selectedThreadIsGuarded()) {
           dom.sessionTitle.textContent = "";
+          updateTurnPosition();
           return;
         }
 
         const visible = state.exchanges;
         if (!visible.length) {
+          updateTurnPosition();
           dom.exchangeList.append(emptyState("No exchanges", "This session has no exchanges."));
           return;
         }
 
-        if (state.rawVisible) { renderMarkdownView(); return; }
-        if (state.layout === "pairs") {
-          for (const exchange of visible) dom.exchangeList.append(renderExchange(exchange));
-        } else {
-          const chat = div("chat " + state.layout);
-          for (const exchange of visible) chat.append(renderExGroup(exchange));
-          dom.exchangeList.append(chat);
+        if (state.rawVisible) { renderMarkdownView(); updateTurnPosition(); return; }
+        const target = state.layout === "pairs" ? dom.exchangeList : div("chat " + state.layout);
+        let previousDay = "";
+        for (const exchange of visible) {
+          const { day } = responseStamp(exchange);
+          if (day && day !== previousDay) target.append(dayDivider(day));
+          if (day) previousDay = day;
+          target.append(state.layout === "pairs" ? renderExchange(exchange) : renderExGroup(exchange));
         }
+        if (target !== dom.exchangeList) dom.exchangeList.append(target);
+        updateTurnPosition();
+      }
+
+      // "15:23 (Monday, September 7, 2026)" -> the time for the turn, the day for its divider
+      function responseStamp(exchange) {
+        const display = exchange.assistant_created_at_display || formatBridgeTimestamp(exchange.assistant_created_at_iso);
+        const match = /^(\d{1,2}:\d{2}) \((.+)\)$/.exec(display || "");
+        return match ? { time: match[1], day: match[2] } : { time: display || "", day: "" };
+      }
+
+      function dayDivider(day) {
+        const node = div("day-divider");
+        node.setAttribute("role", "separator");
+        node.setAttribute("aria-label", day);
+        node.append(spanCls("", day));
+        return node;
+      }
+
+      function setExportMenuOpen(open) {
+        dom.exportMenuList.hidden = !open;
+        dom.exportMenuButton.setAttribute("aria-expanded", String(open));
+        if (open) dom.exportMenuList.querySelector("button:not(:disabled)")?.focus();
       }
 
       function renderThreadSensitiveGuard() {
@@ -7116,7 +7291,6 @@
         if (!layout) return;
         state.layout = layout;
         state.rawVisible = false;
-        dom.rawToggleButton.textContent = "Markdown";
         localStorage.setItem("mcp-admin:layout", layout);
         applyLayoutButtons();
         renderExchanges();
@@ -7124,8 +7298,9 @@
 
       function applyLayoutButtons() {
         for (const btn of dom.layoutSeg.querySelectorAll("button[data-layout]")) {
-          btn.classList.toggle("is-active", btn.dataset.layout === state.layout);
+          btn.classList.toggle("is-active", !state.rawVisible && btn.dataset.layout === state.layout);
         }
+        dom.rawToggleButton.classList.toggle("is-active", state.rawVisible);
       }
 
       async function saveTimezone(timezone) {
@@ -7240,7 +7415,7 @@
           return group;
         }
         group.style.setProperty("--m", modelIdentity(exchange.model_name).color);
-        const modelTime = exchange.assistant_created_at_display || formatDate(exchange.assistant_created_at_iso);
+        const modelTime = responseStamp(exchange).time;
         group.append(
           renderMsg("USER", exchange.user_message, false, "", exchange.user_message_token_count),
           renderMsg(exchange.model_name || "Model", exchange.assistant_response, true, modelTime, exchange.assistant_response_token_count, exchange.is_masked),
@@ -7495,11 +7670,14 @@
 
       function renderSessionTitleIcon(group) {
         dom.sessionTitleIcon.replaceChildren();
+        dom.sessionGroupLabel.textContent = group ? group.name : "";
         if (!group) {
           dom.sessionTitleIcon.classList.remove("show");
           return;
         }
-        dom.sessionTitleIcon.style.setProperty("--g", group.color || "#8b93a7");
+        const color = group.color || "#8b93a7";
+        dom.sessionTitleIcon.style.setProperty("--g", color);
+        dom.sessionGroupLabel.style.setProperty("--g", color);
         dom.sessionTitleIcon.append(svgNode(group.icon_key || "folder"));
         dom.sessionTitleIcon.classList.add("show");
       }
@@ -7560,15 +7738,55 @@
         container.scrollTo({ top: Math.max(0, targetY), behavior: "smooth" });
       }
 
-      function renderMeta(parts) {
-        dom.sessionMeta.replaceChildren();
-        parts.filter((p) => p.text).forEach((p, i) => {
-          if (i > 0) { const s = document.createElement("span"); s.className = "sep"; dom.sessionMeta.append(s); }
-          const node = document.createElement("span");
-          if (p.mono) node.className = "mono";
-          node.textContent = p.text;
-          dom.sessionMeta.append(node);
-        });
+      // where the current scroll position sits among the active exchanges
+      function updateTurnPosition() {
+        const nodes = state.rawVisible ? [] : Array.from(dom.exchangeList.querySelectorAll(".exchange:not(.is-deleted), .ex-group:not(.is-deleted)"));
+        dom.turnPosition.replaceChildren();
+        if (!nodes.length) return;
+        const currentY = transcriptScrollContainer().scrollTop + scrollTopOffset() + 12;
+        let index = 0;
+        nodes.forEach((node, i) => { if (transcriptNodeTop(node) <= currentY) index = i; });
+        dom.turnPosition.append(document.createTextNode(String(index + 1)), spanCls("", `/${nodes.length}`));
+        dom.turnPosition.setAttribute("aria-label", `Exchange ${index + 1} of ${nodes.length}`);
+      }
+
+      // tokens per speaker, summed over every exchange, so the parts add up to the session total
+      function sessionTokenShares() {
+        const shares = new Map();
+        const add = (identityName, label, tokens) => {
+          const key = label.toLowerCase();
+          const entry = shares.get(key) || { label, color: modelIdentity(identityName).color, tokens: 0 };
+          entry.tokens += Number(tokens || 0);
+          shares.set(key, entry);
+        };
+        for (const exchange of state.exchanges) {
+          add("USER", userDisplayName(), exchange.user_message_token_count);
+          add(exchange.model_name, exchange.model_name || "Model", exchange.assistant_response_token_count);
+        }
+        const [user, ...models] = shares.values();
+        return user ? [user, ...models.sort((a, b) => b.tokens - a.tokens)] : [];
+      }
+
+      function renderTokenMeter() {
+        const shares = state.selectedSession ? sessionTokenShares() : [];
+        dom.tokenMeter.hidden = !shares.length;
+        dom.tokenMeterBar.replaceChildren();
+        dom.tokenMeterLegend.replaceChildren();
+        if (!shares.length) return;
+        const total = shares.reduce((sum, share) => sum + share.tokens, 0);
+        dom.tokenMeterTotal.textContent = formatNumber(total);
+        for (const share of shares) {
+          const segment = document.createElement("span");
+          segment.style.setProperty("--m", share.color);
+          segment.style.setProperty("--share", String(share.tokens));
+          dom.tokenMeterBar.append(segment);
+          const item = document.createElement("li");
+          item.style.setProperty("--m", share.color);
+          const value = document.createElement("b");
+          value.textContent = formatNumber(share.tokens);
+          item.append(spanCls("token-meter-name", share.label), value);
+          dom.tokenMeterLegend.append(item);
+        }
       }
 
       function renderExchange(exchange) {
@@ -7590,7 +7808,7 @@
         model.append(div("name", exchange.model_name || "Unknown model"));
         const stamps = div("stamps");
         const stampParts = [
-          exchange.assistant_created_at_display || formatDate(exchange.assistant_created_at_iso),
+          responseStamp(exchange).time,
           exchange.edited_at_iso ? `edited ${formatDate(exchange.edited_at_iso)}` : "",
           exchange.is_masked ? `masked ${formatDate(exchange.assistant_masked_at_iso)}` : "",
           exchange.is_deleted ? `excluded ${formatDate(exchange.deleted_at_iso)}` : "",
