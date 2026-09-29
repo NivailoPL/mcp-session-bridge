@@ -509,6 +509,14 @@ def test_admin_viewer_sensitive_group_privacy_contract() -> None:
     assert 'dom.sessionTitle.textContent = "";' in render_exchanges
     guarded_return = render_exchanges.index("if (selectedThreadIsGuarded()) {")
     assert render_exchanges.index("const visible = state.exchanges;") > guarded_return
+    # the token meter keeps its shape but shows neither totals nor speaker names
+    token_meter = viewer[
+        viewer.index("function renderTokenMeter()"):
+        viewer.index('const total = shares.reduce')
+    ]
+    assert "if (selectedThreadIsGuarded()) {" in token_meter
+    assert 'dom.tokenMeterTotal.textContent = "";' in token_meter
+    assert "return;" in token_meter[token_meter.index("if (selectedThreadIsGuarded()) {"):]
     assert "state.revealedSensitiveSessionLists.add(session.group_id);" in viewer
     assert "state.revealedSensitiveThreads.add(groupId);" in viewer
     assert 'input.disabled = Boolean(group.is_sensitive);' in viewer

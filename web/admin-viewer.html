@@ -609,6 +609,9 @@
     .token-meter-legend li::before { content: ""; width: 7px; height: 7px; flex: 0 0 auto; border-radius: 50%; background: var(--m); }
     .token-meter-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .token-meter-legend b { color: #d5d8e4; font-weight: 700; }
+    .token-meter.is-redacted { --m: rgba(255, 255, 255, .09); }
+    .token-meter.is-redacted .token-meter-total { width: 7.5rem; height: 24px; border-radius: 4px; background: rgba(255, 255, 255, .09); }
+    .token-meter-redacted { flex: 1; height: 9px; border-radius: 3px; background: rgba(255, 255, 255, .09); }
 
     .top-actions {
       display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-start; align-items: center;
@@ -7772,7 +7775,22 @@
         dom.tokenMeter.hidden = !shares.length;
         dom.tokenMeterBar.replaceChildren();
         dom.tokenMeterLegend.replaceChildren();
+        dom.tokenMeter.classList.remove("is-redacted");
+        dom.tokenMeterLegend.setAttribute("aria-label", "Tokens by speaker");
         if (!shares.length) return;
+        // a covered thread keeps the meter's shape but renders no totals and no speaker names
+        if (selectedThreadIsGuarded()) {
+          dom.tokenMeter.classList.add("is-redacted");
+          dom.tokenMeterTotal.textContent = "";
+          dom.tokenMeterBar.append(document.createElement("span"));
+          dom.tokenMeterLegend.setAttribute("aria-label", "Tokens hidden until the conversation is revealed");
+          for (let i = 0; i < 2; i += 1) {
+            const item = document.createElement("li");
+            item.append(spanCls("token-meter-redacted"));
+            dom.tokenMeterLegend.append(item);
+          }
+          return;
+        }
         const total = shares.reduce((sum, share) => sum + share.tokens, 0);
         dom.tokenMeterTotal.textContent = formatNumber(total);
         for (const share of shares) {
