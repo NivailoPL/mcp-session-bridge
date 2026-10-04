@@ -530,6 +530,31 @@ async def admin_api_file_raw(request: Request) -> Response:
     return await admin.api_file_raw(request)
 
 
+@mcp.custom_route("/admin/api/files/{file_id}/thumbnail", methods=["GET"])
+async def admin_api_file_thumbnail(request: Request) -> Response:
+    return await admin.api_file_thumbnail(request)
+
+
+@mcp.custom_route("/admin/api/sessions/{session_id}/file-labels", methods=["POST"])
+async def admin_api_create_file_label(request: Request) -> Response:
+    return await admin.api_create_file_label(request)
+
+
+@mcp.custom_route("/admin/api/sessions/{session_id}/file-labels/{label_id}", methods=["PATCH"])
+async def admin_api_update_file_label(request: Request) -> Response:
+    return await admin.api_update_file_label(request)
+
+
+@mcp.custom_route("/admin/api/sessions/{session_id}/file-labels/{label_id}", methods=["DELETE"])
+async def admin_api_delete_file_label(request: Request) -> Response:
+    return await admin.api_delete_file_label(request)
+
+
+@mcp.custom_route("/admin/api/sessions/{session_id}/file-labels/{label_id}/files", methods=["POST"])
+async def admin_api_assign_file_label(request: Request) -> Response:
+    return await admin.api_assign_file_label(request)
+
+
 @mcp.custom_route("/admin/assets/pdfjs/{asset_name}", methods=["GET"])
 async def admin_pdfjs_asset(request: Request) -> Response:
     return await admin.pdfjs_asset(request)

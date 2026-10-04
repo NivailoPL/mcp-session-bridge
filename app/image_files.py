@@ -1,4 +1,8 @@
-"""Bounded validation of original image attachments; no image transformation."""
+"""Bounded validation of original image attachments, plus small admin thumbnails.
+
+Originals are never transformed; thumbnails are derived on demand for the admin
+file browser and are not stored.
+"""
 from __future__ import annotations
 
 import asyncio
@@ -92,3 +96,23 @@ def validate_image_isolated(filename: str, raw: bytes) -> ValidatedImage:
     if payload.get("mime_type") != expected:
         raise ValueError("Image format does not match its filename extension")
     return ValidatedImage(raw, expected)
+
+
+THUMBNAIL_MAX_SIDE = 480
+
+
+def thumbnail_image_isolated(raw: bytes) -> bytes:
+    """Return a small JPEG preview, decoded in the same isolated worker as validation."""
+    if not raw or len(raw) > MAX_IMAGE_BYTES:
+        raise ValueError("Image must not be empty and must be at most 10 MB")
+    try:
+        process = subprocess.run(
+            [sys.executable, "-m", "app.image_worker", "--thumbnail", str(THUMBNAIL_MAX_SIDE)],
+            input=raw, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+            timeout=IMAGE_TIMEOUT_SECONDS, check=False,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise ValueError("Thumbnail generation timed out") from exc
+    if process.returncode != 0 or not process.stdout.startswith(b"\xff\xd8"):
+        raise ValueError("Thumbnail generation failed")
+    return process.stdout

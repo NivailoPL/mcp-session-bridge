@@ -72,7 +72,7 @@ def test_admin_viewer_group_ui_contract() -> None:
     assert 'id="groupDeleteButton"' in viewer
     assert 'icon_key: "all_sessions"' in viewer
     assert 'node.dataset.count = String(conversationCount);' in viewer
-    assert 'spanCls("group-file-identity")' in viewer
+    assert 'id="fileScopeGroupMark"' in viewer
     assert 'setStatus(`Selected ${sessionId}.`, "ok");' not in viewer
     assert 'spanCls("file-meta", "No files")' not in viewer
 
@@ -88,7 +88,7 @@ def test_admin_viewer_transcript_owns_vertical_scroll() -> None:
     topbar_css = viewer[viewer.index(".topbar {"):viewer.index(".topbar-title {")]
     scroll_helpers = viewer[
         viewer.index("function scrollTranscript"):
-        viewer.index("function renderMeta")
+        viewer.index("function updateTurnPosition")
     ]
 
     assert "height: calc(100vh - var(--workspace-bar-height));" in main_css
@@ -496,7 +496,7 @@ def test_admin_viewer_sensitive_group_privacy_contract() -> None:
     assert 'id="threadSensitiveBody"' in viewer
     assert "dom.threadSensitiveBody.inert = threadIsGuarded;" in viewer
     assert "dom.threadSensitiveContent.inert" not in viewer
-    assert ".sensitive-curtain:hover { background: var(--bg-base); }" in viewer
+    assert ".sensitive-curtain:hover { background: var(--stage-deep); }" in viewer
     # a covered thread keeps its header usable, but not its title
     assert 'dom.sessionTitle.classList.toggle("is-redacted", threadIsGuarded);' in viewer
     assert ".topbar-title h2.is-redacted" in viewer
@@ -509,6 +509,14 @@ def test_admin_viewer_sensitive_group_privacy_contract() -> None:
     assert 'dom.sessionTitle.textContent = "";' in render_exchanges
     guarded_return = render_exchanges.index("if (selectedThreadIsGuarded()) {")
     assert render_exchanges.index("const visible = state.exchanges;") > guarded_return
+    # the token meter keeps its shape but shows neither totals nor speaker names
+    token_meter = viewer[
+        viewer.index("function renderTokenMeter()"):
+        viewer.index('const total = shares.reduce')
+    ]
+    assert "if (selectedThreadIsGuarded()) {" in token_meter
+    assert 'dom.tokenMeterTotal.textContent = "";' in token_meter
+    assert "return;" in token_meter[token_meter.index("if (selectedThreadIsGuarded()) {"):]
     assert "state.revealedSensitiveSessionLists.add(session.group_id);" in viewer
     assert "state.revealedSensitiveThreads.add(groupId);" in viewer
     assert 'input.disabled = Boolean(group.is_sensitive);' in viewer

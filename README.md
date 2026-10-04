@@ -15,7 +15,7 @@ add to it.
 
 Nothing is summarised. Nothing leaves your server.
 
-![Version](https://img.shields.io/badge/version-2026.8.2-6C5CF2)
+![Version](https://img.shields.io/badge/version-2026.10.1-6C5CF2)
 ![License](https://img.shields.io/badge/license-MIT-6C5CF2)
 
 ---
@@ -173,7 +173,7 @@ getting right.
 
 ## Status
 
-Version 2026.8.2. Built and used daily by one person.
+Version 2026.10.1. Built and used daily by one person.
 Expect rough edges, and open an issue when you find one.
 
 ---

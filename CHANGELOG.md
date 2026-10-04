@@ -6,6 +6,48 @@ This project follows a lightweight changelog format inspired by Keep a Changelog
 
 ## [Unreleased]
 
+## [2026.10.1] - 2026-10-04
+
+### Highlights
+
+- Rebuilt the Sessions workspace with a clearer session header, a token breakdown by speaker, and one transcript toolbar.
+- Replaced the old files dialog with a full-window browser and a separate viewer for previewing and editing attachments.
+- Added searchable list and grid views, file previews, private group labels, and drag-and-drop uploads and moves.
+- Kept token totals and speaker details hidden until a sensitive conversation is revealed.
+
+### New Features
+
+- Added Session and Group file tabs, search, sorting, type filters, list and grid layouts, and previews for Markdown, tables, source text, images, and PDFs.
+- Added a file viewer with previous/next navigation, file details, labels, editing, download, and move/delete actions.
+- Added Admin-only group labels, including bulk assignment and drag-and-drop tagging. Labels are excluded from MCP responses.
+- Added multi-file drag-and-drop uploads and moves between session and group storage, with Undo that restores removed labels.
+
+### Quality of Life
+
+- Reorganized the session header around its group, title, and copyable session ID; added total and per-speaker token counts.
+- Combined transcript modes into one segmented control and grouped transcript copy and HTML export in an Export menu.
+- Added calendar-day dividers and an active-exchange position indicator to transcript navigation.
+- Added a separate Files dock with session/group counts and the F shortcut, plus an upload-format help dialog.
+- Made group creation and editing easier to find and enlarged the shared Sessions/Lab logo.
+
+### Fixes and Tuning
+
+- Fixed PDF cleanup for pdf.js 6 and added on-demand image thumbnails for the Admin file browser.
+- Remove obsolete file-label assignments when files change scope or sessions change group, and remove group labels when their group is deleted.
+
+### Security
+
+- Redact token totals, speaker names, and per-speaker counts while a sensitive group remains covered.
+
+### Included commits
+
+- [`dc697a7`](https://github.com/NivailoPL/mcp-session-bridge/commit/dc697a709050652a8b965595e7a77eff28056be5) chore(release): start 2026.10.1 beta cycle
+- [`dbec707`](https://github.com/NivailoPL/mcp-session-bridge/commit/dbec70737a3be13c1a2f37a778f9d5b8a8619fef) feat(admin): rebuild the files window as a browser and a viewer (NIV-23)
+- [`6ada01e`](https://github.com/NivailoPL/mcp-session-bridge/commit/6ada01e5d54d04ada805b2b960f41e42113ceb38) feat(admin): give the session view a clear hierarchy
+- [`612af59`](https://github.com/NivailoPL/mcp-session-bridge/commit/612af59e561cb27e790b3aa289fd5e4309df2735) fix(admin): cover the token meter in sensitive groups
+
+[Compare changes: v2026.9.1...v2026.10.1](https://github.com/NivailoPL/mcp-session-bridge/compare/v2026.9.1...v2026.10.1)
+
 ## [2026.9.1] - 2026-09-28
 
 ### Highlights
