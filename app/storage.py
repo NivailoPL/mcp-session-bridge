@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import secrets
 import sqlite3
 import time
 import hashlib
@@ -109,6 +110,15 @@ SESSION_FILE_RECORD_COLUMNS = f"{SESSION_FILE_MANIFEST_COLUMNS}, content"
 FILE_LABEL_COLORS = ("yellow", "purple", "pink", "sky", "lime", "orange")
 MAX_FILE_LABELS_PER_GROUP = 24
 MAX_FILE_LABEL_NAME_CHARS = 40
+MAX_CONTEXT_NAME_CHARS = 80
+MAX_CONTEXTS = 200
+CONTEXT_ID_PREFIX = "ctx_"
+CONTEXT_ID_ALPHABET = "abcdefghijkmnpqrstuvwxyz23456789"
+CONTEXT_ID_LENGTH = 16
+CONTEXT_BLOCK_COLUMNS = (
+    "block_id, context_id, position, source_type, source_key, source_session_id, "
+    "source_file_id, title, source_hash, found_ids, token_count, snapshot_at, created_at"
+)
 FILE_PREVIEW_CHARS = 600
 
 
@@ -227,6 +237,33 @@ class SessionFileRecord:
 
 class ImageStorageQuotaError(ValueError):
     pass
+
+
+class ContextNotFoundError(ValueError):
+    pass
+
+
+class ContextLockedError(ValueError):
+    pass
+
+
+class ContextBlockConflictError(ValueError):
+    pass
+
+
+@dataclass(frozen=True)
+class ContextBlockSnapshot:
+    """The text of one source at the moment it was dropped into a context."""
+
+    source_type: str
+    source_key: str
+    source_session_id: str | None
+    source_file_id: int | None
+    title: str
+    content: str
+    source_hash: str
+    found_ids: dict[str, list[str]]
+    token_count: int
 
 
 class Store:
@@ -507,6 +544,44 @@ class Store:
 
                 CREATE INDEX IF NOT EXISTS idx_session_file_labels_label
                     ON session_file_labels(label_id);
+
+                -- Contexts: admin-built bundles of session and file snapshots that a
+                -- model reads by context_id. Blocks keep their own copy of the source
+                -- text, so they hold no foreign key to sessions or files and survive
+                -- the source being edited or deleted. Older Bridge versions ignore both.
+                CREATE TABLE IF NOT EXISTS contexts (
+                    context_id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    color TEXT NOT NULL,
+                    is_locked INTEGER NOT NULL DEFAULT 0,
+                    sort_order INTEGER NOT NULL DEFAULT 0,
+                    created_at INTEGER NOT NULL,
+                    updated_at INTEGER NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS context_blocks (
+                    block_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    context_id TEXT NOT NULL,
+                    position INTEGER NOT NULL,
+                    source_type TEXT NOT NULL CHECK (source_type IN ('session', 'file')),
+                    source_key TEXT NOT NULL,
+                    source_session_id TEXT,
+                    source_file_id INTEGER,
+                    title TEXT NOT NULL,
+                    content TEXT NOT NULL,
+                    source_hash TEXT NOT NULL,
+                    found_ids TEXT NOT NULL DEFAULT '{{}}',
+                    token_count INTEGER NOT NULL DEFAULT 0,
+                    snapshot_at INTEGER NOT NULL,
+                    created_at INTEGER NOT NULL,
+                    FOREIGN KEY(context_id) REFERENCES contexts(context_id) ON DELETE CASCADE
+                );
+
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_context_blocks_source
+                    ON context_blocks(context_id, source_key);
+
+                CREATE INDEX IF NOT EXISTS idx_context_blocks_position
+                    ON context_blocks(context_id, position);
 
                 CREATE TABLE IF NOT EXISTS exchange_admin_events (
                     event_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -3063,6 +3138,326 @@ class Store:
             result.setdefault(row["file_id"], []).append(row["label_id"])
         return result
 
+    # ---------- contexts ----------
+
+    def create_context(self, name: str = "", color: str = "#7a7df0") -> dict[str, Any]:
+        resolved_color = _validate_context_color(color)
+        now = int(time.time())
+        with self._lock, self._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            count, last_order = conn.execute(
+                "SELECT COUNT(*), COALESCE(MAX(sort_order), -1) FROM contexts"
+            ).fetchone()
+            if count >= MAX_CONTEXTS:
+                raise ValueError(f"Bridge can hold at most {MAX_CONTEXTS} contexts")
+            resolved_name = _validate_context_name(name or f"Context {count + 1}")
+            context_id = _new_context_id()
+            while conn.execute("SELECT 1 FROM contexts WHERE context_id = ?", (context_id,)).fetchone():
+                context_id = _new_context_id()
+            conn.execute(
+                """
+                INSERT INTO contexts(context_id, name, color, is_locked, sort_order, created_at, updated_at)
+                VALUES (?, ?, ?, 0, ?, ?, ?)
+                """,
+                (context_id, resolved_name, resolved_color, last_order + 1, now, now),
+            )
+            return self._context_payload(conn, context_id)
+
+    def list_contexts(self) -> list[dict[str, Any]]:
+        with self._lock, self._connect() as conn:
+            ids = [
+                row[0]
+                for row in conn.execute("SELECT context_id FROM contexts ORDER BY sort_order, created_at")
+            ]
+            return [self._context_payload(conn, context_id) for context_id in ids]
+
+    def get_context(self, context_id: str, *, include_content: bool = False) -> dict[str, Any] | None:
+        with self._lock, self._connect() as conn:
+            if not conn.execute("SELECT 1 FROM contexts WHERE context_id = ?", (context_id,)).fetchone():
+                return None
+            return self._context_payload(conn, context_id, include_content=include_content)
+
+    def list_context_ids(self) -> list[str]:
+        with self._lock, self._connect() as conn:
+            return [row[0] for row in conn.execute("SELECT context_id FROM contexts")]
+
+    def list_session_ids(self) -> list[str]:
+        with self._lock, self._connect() as conn:
+            return [row[0] for row in conn.execute("SELECT session_id FROM sessions")]
+
+    def update_context(
+        self,
+        context_id: str,
+        *,
+        name: str | None = None,
+        color: str | None = None,
+        is_locked: bool | None = None,
+    ) -> dict[str, Any]:
+        with self._lock, self._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            row = self._require_context(conn, context_id)
+            locked = bool(row["is_locked"]) if is_locked is None else bool(is_locked)
+            if locked and (name is not None or color is not None):
+                raise ContextLockedError("Unlock the context to rename it or change its color")
+            conn.execute(
+                "UPDATE contexts SET name = ?, color = ?, is_locked = ?, updated_at = ? WHERE context_id = ?",
+                (
+                    _validate_context_name(name) if name is not None else row["name"],
+                    _validate_context_color(color) if color is not None else row["color"],
+                    int(locked),
+                    int(time.time()),
+                    context_id,
+                ),
+            )
+            return self._context_payload(conn, context_id)
+
+    def reorder_contexts(self, context_ids: list[str]) -> list[dict[str, Any]]:
+        """Set the column order. Locks do not apply: the order is not part of a context."""
+        with self._lock, self._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            existing = {row[0] for row in conn.execute("SELECT context_id FROM contexts")}
+            if set(context_ids) != existing or len(context_ids) != len(existing):
+                raise ValueError("Send every context ID exactly once")
+            for order, context_id in enumerate(context_ids):
+                conn.execute("UPDATE contexts SET sort_order = ? WHERE context_id = ?", (order, context_id))
+        return self.list_contexts()
+
+    def delete_context(self, context_id: str) -> dict[str, Any]:
+        with self._lock, self._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            row = self._require_context(conn, context_id)
+            if row["is_locked"]:
+                raise ContextLockedError("Unlock the context before deleting it")
+            payload = self._context_payload(conn, context_id)
+            conn.execute("DELETE FROM contexts WHERE context_id = ?", (context_id,))
+        return payload
+
+    def add_context_block(
+        self,
+        context_id: str,
+        snapshot: ContextBlockSnapshot,
+        *,
+        position: int | None = None,
+    ) -> dict[str, Any]:
+        now = int(time.time())
+        with self._lock, self._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            self._require_unlocked_context(conn, context_id)
+            block_id = self._insert_context_block(conn, context_id, snapshot, position, snapshot_at=now)
+            self._touch_context(conn, context_id, now)
+            return self._context_block_payload(conn, block_id)
+
+    def refresh_context_block(self, block_id: int, snapshot: ContextBlockSnapshot) -> dict[str, Any]:
+        now = int(time.time())
+        with self._lock, self._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            block = self._require_context_block(conn, block_id)
+            self._require_unlocked_context(conn, block["context_id"])
+            if snapshot.source_key != block["source_key"]:
+                raise ValueError("A refresh must come from the same source")
+            conn.execute(
+                """
+                UPDATE context_blocks
+                SET title = ?, content = ?, source_hash = ?, found_ids = ?, token_count = ?, snapshot_at = ?
+                WHERE block_id = ?
+                """,
+                (
+                    snapshot.title,
+                    snapshot.content,
+                    snapshot.source_hash,
+                    json.dumps(snapshot.found_ids, sort_keys=True),
+                    snapshot.token_count,
+                    now,
+                    block_id,
+                ),
+            )
+            self._touch_context(conn, block["context_id"], now)
+            return self._context_block_payload(conn, block_id)
+
+    def move_context_block(
+        self,
+        block_id: int,
+        *,
+        context_id: str,
+        position: int | None = None,
+        copy: bool = False,
+    ) -> dict[str, Any]:
+        """Reorder a block, move it to another context, or copy it there."""
+        now = int(time.time())
+        with self._lock, self._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            block = self._require_context_block(conn, block_id)
+            source_context_id = block["context_id"]
+            self._require_unlocked_context(conn, context_id)
+            if source_context_id == context_id:
+                if copy:
+                    raise ContextBlockConflictError("This source is already in the context")
+                self._place_context_block(conn, block_id, context_id, position)
+                self._touch_context(conn, context_id, now)
+                return self._context_block_payload(conn, block_id)
+            if conn.execute(
+                "SELECT 1 FROM context_blocks WHERE context_id = ? AND source_key = ?",
+                (context_id, block["source_key"]),
+            ).fetchone():
+                raise ContextBlockConflictError("This source is already in the target context")
+            if copy:
+                snapshot = _context_snapshot_from_row(
+                    conn.execute("SELECT * FROM context_blocks WHERE block_id = ?", (block_id,)).fetchone()
+                )
+                new_id = self._insert_context_block(
+                    conn, context_id, snapshot, position, snapshot_at=block["snapshot_at"]
+                )
+                self._touch_context(conn, context_id, now)
+                return self._context_block_payload(conn, new_id)
+            self._require_unlocked_context(conn, source_context_id)
+            conn.execute(
+                "UPDATE context_blocks SET context_id = ?, position = ? WHERE block_id = ?",
+                (context_id, _LAST_POSITION, block_id),
+            )
+            self._compact_context_positions(conn, source_context_id)
+            self._place_context_block(conn, block_id, context_id, position)
+            self._touch_context(conn, source_context_id, now)
+            self._touch_context(conn, context_id, now)
+            return self._context_block_payload(conn, block_id)
+
+    def delete_context_block(self, block_id: int) -> dict[str, Any]:
+        """Remove a block and return it whole, content included, so the admin can undo."""
+        with self._lock, self._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            block = self._require_context_block(conn, block_id)
+            self._require_unlocked_context(conn, block["context_id"])
+            payload = self._context_block_payload(conn, block_id, include_content=True)
+            conn.execute("DELETE FROM context_blocks WHERE block_id = ?", (block_id,))
+            self._compact_context_positions(conn, block["context_id"])
+            self._touch_context(conn, block["context_id"], int(time.time()))
+        return payload
+
+    def _insert_context_block(
+        self,
+        conn: sqlite3.Connection,
+        context_id: str,
+        snapshot: ContextBlockSnapshot,
+        position: int | None,
+        *,
+        snapshot_at: int,
+    ) -> int:
+        if snapshot.source_type not in {"session", "file"}:
+            raise ValueError("A context block comes from a session or a file")
+        try:
+            cursor = conn.execute(
+                """
+                INSERT INTO context_blocks (
+                    context_id, position, source_type, source_key, source_session_id, source_file_id,
+                    title, content, source_hash, found_ids, token_count, snapshot_at, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    context_id,
+                    _LAST_POSITION,
+                    snapshot.source_type,
+                    snapshot.source_key,
+                    snapshot.source_session_id,
+                    snapshot.source_file_id,
+                    snapshot.title,
+                    snapshot.content,
+                    snapshot.source_hash,
+                    json.dumps(snapshot.found_ids, sort_keys=True),
+                    snapshot.token_count,
+                    snapshot_at,
+                    int(time.time()),
+                ),
+            )
+        except sqlite3.IntegrityError as exc:
+            raise ContextBlockConflictError("This source is already in the context") from exc
+        block_id = int(cursor.lastrowid)
+        self._place_context_block(conn, block_id, context_id, position)
+        return block_id
+
+    @staticmethod
+    def _place_context_block(
+        conn: sqlite3.Connection, block_id: int, context_id: str, position: int | None
+    ) -> None:
+        """Put one block at ``position`` (end when None) and renumber the rest 0..n-1."""
+        others = [
+            row[0]
+            for row in conn.execute(
+                "SELECT block_id FROM context_blocks WHERE context_id = ? AND block_id != ? ORDER BY position, block_id",
+                (context_id, block_id),
+            )
+        ]
+        index = len(others) if position is None else max(0, min(int(position), len(others)))
+        others.insert(index, block_id)
+        for order, item in enumerate(others):
+            conn.execute("UPDATE context_blocks SET position = ? WHERE block_id = ?", (order, item))
+
+    @staticmethod
+    def _compact_context_positions(conn: sqlite3.Connection, context_id: str) -> None:
+        rows = conn.execute(
+            "SELECT block_id FROM context_blocks WHERE context_id = ? ORDER BY position, block_id",
+            (context_id,),
+        ).fetchall()
+        for order, row in enumerate(rows):
+            conn.execute("UPDATE context_blocks SET position = ? WHERE block_id = ?", (order, row[0]))
+
+    @staticmethod
+    def _touch_context(conn: sqlite3.Connection, context_id: str, now: int) -> None:
+        conn.execute("UPDATE contexts SET updated_at = ? WHERE context_id = ?", (now, context_id))
+
+    @staticmethod
+    def _require_context(conn: sqlite3.Connection, context_id: str) -> sqlite3.Row:
+        row = conn.execute("SELECT * FROM contexts WHERE context_id = ?", (context_id,)).fetchone()
+        if row is None:
+            raise ContextNotFoundError(f"Unknown context_id: {context_id}")
+        return row
+
+    def _require_unlocked_context(self, conn: sqlite3.Connection, context_id: str) -> sqlite3.Row:
+        row = self._require_context(conn, context_id)
+        if row["is_locked"]:
+            raise ContextLockedError("This context is locked")
+        return row
+
+    @staticmethod
+    def _require_context_block(conn: sqlite3.Connection, block_id: int) -> sqlite3.Row:
+        row = conn.execute(
+            f"SELECT {CONTEXT_BLOCK_COLUMNS} FROM context_blocks WHERE block_id = ?", (block_id,)
+        ).fetchone()
+        if row is None:
+            raise ContextNotFoundError(f"Unknown context block: {block_id}")
+        return row
+
+    @staticmethod
+    def _context_block_payload(
+        conn: sqlite3.Connection, block_id: int, *, include_content: bool = False
+    ) -> dict[str, Any]:
+        columns = CONTEXT_BLOCK_COLUMNS + (", content" if include_content else "")
+        row = conn.execute(f"SELECT {columns} FROM context_blocks WHERE block_id = ?", (block_id,)).fetchone()
+        return _context_block_from_row(row)
+
+    @staticmethod
+    def _context_payload(
+        conn: sqlite3.Connection, context_id: str, *, include_content: bool = False
+    ) -> dict[str, Any]:
+        row = conn.execute("SELECT * FROM contexts WHERE context_id = ?", (context_id,)).fetchone()
+        columns = CONTEXT_BLOCK_COLUMNS + (", content" if include_content else "")
+        blocks = [
+            _context_block_from_row(block)
+            for block in conn.execute(
+                f"SELECT {columns} FROM context_blocks WHERE context_id = ? ORDER BY position, block_id",
+                (context_id,),
+            )
+        ]
+        return {
+            "context_id": row["context_id"],
+            "name": row["name"],
+            "color": row["color"],
+            "is_locked": bool(row["is_locked"]),
+            "sort_order": row["sort_order"],
+            "created_at": row["created_at"],
+            "updated_at": row["updated_at"],
+            "token_count": sum(block["token_count"] for block in blocks),
+            "blocks": blocks,
+        }
+
     def get_session(self, session_id: str) -> SessionRecord | None:
         with self._lock, self._connect() as conn:
             row = conn.execute("SELECT * FROM sessions WHERE session_id = ?", (session_id,)).fetchone()
@@ -3922,3 +4317,62 @@ def _graph_lab_row(row: sqlite3.Row) -> dict[str, Any]:
         "started_at": row["started_at"],
         "completed_at": row["completed_at"],
     }
+
+
+# Blocks are parked here before being placed, so a placement never collides.
+_LAST_POSITION = 1_000_000_000
+
+
+def _new_context_id() -> str:
+    return CONTEXT_ID_PREFIX + "".join(secrets.choice(CONTEXT_ID_ALPHABET) for _ in range(CONTEXT_ID_LENGTH))
+
+
+def _validate_context_name(value: str) -> str:
+    name = " ".join(str(value or "").split())
+    if not name:
+        raise ValueError("Context name must not be empty")
+    if len(name) > MAX_CONTEXT_NAME_CHARS:
+        raise ValueError(f"Context name must be {MAX_CONTEXT_NAME_CHARS} characters or fewer")
+    return name
+
+
+def _validate_context_color(value: str) -> str:
+    color = str(value or "").strip().lower()
+    if not re.fullmatch(r"#[0-9a-f]{6}", color):
+        raise ValueError("Context color must be a #rrggbb hex color")
+    return color
+
+
+def _context_block_from_row(row: sqlite3.Row) -> dict[str, Any]:
+    payload = {
+        "block_id": row["block_id"],
+        "context_id": row["context_id"],
+        "position": row["position"],
+        "source_type": row["source_type"],
+        "source_key": row["source_key"],
+        "source_session_id": row["source_session_id"],
+        "source_file_id": row["source_file_id"],
+        "title": row["title"],
+        "source_hash": row["source_hash"],
+        "found_ids": json.loads(row["found_ids"] or "{}"),
+        "token_count": row["token_count"],
+        "snapshot_at": row["snapshot_at"],
+        "created_at": row["created_at"],
+    }
+    if "content" in row.keys():
+        payload["content"] = row["content"]
+    return payload
+
+
+def _context_snapshot_from_row(row: sqlite3.Row) -> ContextBlockSnapshot:
+    return ContextBlockSnapshot(
+        source_type=row["source_type"],
+        source_key=row["source_key"],
+        source_session_id=row["source_session_id"],
+        source_file_id=row["source_file_id"],
+        title=row["title"],
+        content=row["content"],
+        source_hash=row["source_hash"],
+        found_ids=json.loads(row["found_ids"] or "{}"),
+        token_count=row["token_count"],
+    )
