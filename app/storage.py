@@ -3177,6 +3177,16 @@ class Store:
                 return None
             return self._context_payload(conn, context_id, include_content=include_content)
 
+    def get_context_block(self, block_id: int, *, include_content: bool = False) -> dict[str, Any]:
+        with self._lock, self._connect() as conn:
+            self._require_context_block(conn, block_id)
+            return self._context_block_payload(conn, block_id, include_content=include_content)
+
+    def get_context_block_context(self, block_id: int) -> str | None:
+        with self._lock, self._connect() as conn:
+            row = conn.execute("SELECT context_id FROM context_blocks WHERE block_id = ?", (block_id,)).fetchone()
+        return row[0] if row else None
+
     def list_context_ids(self) -> list[str]:
         with self._lock, self._connect() as conn:
             return [row[0] for row in conn.execute("SELECT context_id FROM contexts")]
@@ -3184,6 +3194,54 @@ class Store:
     def list_session_ids(self) -> list[str]:
         with self._lock, self._connect() as conn:
             return [row[0] for row in conn.execute("SELECT session_id FROM sessions")]
+
+    def list_context_library_sessions(self) -> list[dict[str, Any]]:
+        """What a session card needs beyond list_sessions: who spoke and roughly how much."""
+        with self._lock, self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT session_id,
+                       GROUP_CONCAT(DISTINCT model_name) AS models,
+                       COALESCE(SUM(LENGTH(user_message) + LENGTH(assistant_response)), 0) AS chars
+                FROM exchanges
+                WHERE deleted_at IS NULL
+                GROUP BY session_id
+                """
+            ).fetchall()
+        stats = {
+            row["session_id"]: {"models": sorted((row["models"] or "").split(",")) if row["models"] else [], "chars": row["chars"]}
+            for row in rows
+        }
+        sessions = self.list_sessions()
+        for session in sessions:
+            extra = stats.get(session["session_id"], {"models": [], "chars": 0})
+            session["models"] = extra["models"]
+            session["token_estimate"] = _estimate_tokens(extra["chars"])
+        return sessions
+
+    def list_context_library_files(self, *, preview_chars: int = 600) -> list[dict[str, Any]]:
+        """Every file in Bridge with its effective group and the start of its text."""
+        with self._lock, self._connect() as conn:
+            rows = conn.execute(
+                f"""
+                SELECT {", ".join("f." + column.strip() for column in SESSION_FILE_MANIFEST_COLUMNS.split(","))},
+                       COALESCE(f.group_id, s.group_id) AS effective_group_id,
+                       CASE WHEN f.content_kind = 'image' THEN '' ELSE SUBSTR(f.content, 1, ?) END AS preview,
+                       CASE WHEN f.content_kind = 'image' THEN 0 ELSE LENGTH(f.content) END AS chars
+                FROM session_files f
+                LEFT JOIN sessions s ON s.session_id = f.session_id
+                ORDER BY f.created_at DESC, f.file_id DESC
+                """,
+                (preview_chars,),
+            ).fetchall()
+        files = []
+        for row in rows:
+            payload = _session_file_manifest_from_row(row)
+            payload["effective_group_id"] = row["effective_group_id"]
+            payload["preview"] = row["preview"]
+            payload["token_estimate"] = _estimate_tokens(row["chars"])
+            files.append(payload)
+        return files
 
     def update_context(
         self,
@@ -4321,6 +4379,11 @@ def _graph_lab_row(row: sqlite3.Row) -> dict[str, Any]:
 
 # Blocks are parked here before being placed, so a placement never collides.
 _LAST_POSITION = 1_000_000_000
+
+
+def _estimate_tokens(chars: int) -> int:
+    """Library cards show a quick estimate; a block counts its real tokens once dropped."""
+    return (int(chars or 0) + 3) // 4
 
 
 def _new_context_id() -> str:
