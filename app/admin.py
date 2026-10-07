@@ -159,6 +159,7 @@ class AdminHandlers:
         self.html_path = html_path
         self.graph_html_path = html_path.parent / "graph-viewer.html"
         self.graph_wip_html_path = html_path.parent / "graph-wip.html"
+        self.contexts_html_path = html_path.parent / "contexts-viewer.html"
         self.graph_asset_dir = html_path.parent
         self.brand_dir = ROOT / "brand"
         self.pdfjs_dir = ROOT / "vendor" / "pdfjs"
@@ -180,6 +181,16 @@ class AdminHandlers:
             body = self.html_path.read_text(encoding="utf-8")
         except OSError:
             return HTMLResponse("Admin viewer is not installed.", status_code=500, headers=self._no_store_headers())
+        return HTMLResponse(body, headers=self._admin_headers())
+
+    async def contexts_page(self, request: Request) -> Response:
+        _, error = self._require_admin(request)
+        if error:
+            return error
+        try:
+            body = self.contexts_html_path.read_text(encoding="utf-8")
+        except OSError:
+            return HTMLResponse("Contexts workspace is not installed.", status_code=500, headers=self._no_store_headers())
         return HTMLResponse(body, headers=self._admin_headers())
 
     async def graph_page(self, request: Request) -> Response:
@@ -210,6 +221,9 @@ class AdminHandlers:
             "pearl-gradient-nav.js": "text/javascript",
             "pearl-gradient-nav.css": "text/css",
             "graph-viewer.js": "text/javascript",
+            "contexts-viewer.css": "text/css",
+            "contexts-viewer.js": "text/javascript",
+            "bridge-identity.js": "text/javascript",
         }
         media_type = media_types.get(asset_name)
         if media_type is None:

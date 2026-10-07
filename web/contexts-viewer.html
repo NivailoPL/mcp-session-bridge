@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MCP Session Bridge · Contexts</title>
+  <link rel="icon" type="image/png" sizes="32x32" href="/admin/assets/brand/png/icon-indigo-32.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/admin/assets/pearl-gradient-nav.css">
+  <link rel="stylesheet" href="/admin/assets/admin-confirmation.css">
+  <link rel="stylesheet" href="/admin/assets/contexts-viewer.css">
+</head>
+<body>
+  <header class="workspace-bar">
+    <a class="workspace-brand" href="/admin/sessions" aria-label="MCP Session Bridge Sessions">
+      <img src="/admin/assets/brand/svg/lockup-horizontal-dark.svg" alt="MCP Session Bridge">
+    </a>
+    <nav class="workspace-nav sb-nav" role="tablist" aria-label="Admin workspaces">
+      <a class="sb-nav__tab" role="tab" href="/admin/sessions" aria-selected="false" tabindex="-1" data-label="SESSIONS">SESSIONS</a>
+      <a class="sb-nav__tab" role="tab" href="/admin/contexts" aria-current="page" aria-selected="true" tabindex="0" data-label="CONTEXTS">CONTEXTS</a>
+      <a class="sb-nav__tab" role="tab" href="/admin/lab" aria-selected="false" tabindex="-1" data-label="LAB">LAB</a>
+    </nav>
+    <div class="workspace-actions">
+      <form method="post" action="/admin/logout"><button class="text-button" type="submit">Log out</button></form>
+    </div>
+  </header>
+
+  <main class="cx-shell">
+    <aside class="cx-library" aria-label="Library">
+      <div class="cx-library-head">
+        <div class="cx-tabs" role="tablist" aria-label="Library source">
+          <button id="tabSessions" class="cx-tab" role="tab" type="button" aria-selected="true">Sessions <small id="countSessions">0</small></button>
+          <button id="tabFiles" class="cx-tab" role="tab" type="button" aria-selected="false">Files <small id="countFiles">0</small></button>
+        </div>
+        <label class="cx-search">
+          <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+          <input id="librarySearch" type="search" placeholder="Search sessions by title…" aria-label="Search the library">
+        </label>
+      </div>
+      <div id="groupTiles" class="cx-groups" role="group" aria-label="Filter by group"></div>
+      <div id="filterLabel" class="cx-filter-label"></div>
+      <div class="cx-grid-scroll">
+        <div id="libraryGrid" class="cx-grid"></div>
+        <div id="libraryEmpty" class="cx-empty" hidden>Nothing matches this search.</div>
+      </div>
+    </aside>
+
+    <div class="cx-rail" aria-hidden="true">
+      <span class="cx-chev"><svg class="i" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"></path></svg><svg class="i" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"></path></svg><svg class="i" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"></path></svg></span>
+      <span class="cx-rail-label">DRAG INTO A CONTEXT</span>
+      <span class="cx-chev"><svg class="i" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"></path></svg><svg class="i" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"></path></svg><svg class="i" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"></path></svg></span>
+    </div>
+
+    <section class="cx-manager" aria-label="Context manager">
+      <div class="cx-manager-head">
+        <div>
+          <div id="contextCount" class="cx-eyebrow">CONTEXTS</div>
+          <h1>Context manager</h1>
+          <p>Drag cards from the library into a column. Each column is one context with its own ID, built from blocks added one after another. Between columns a card moves; hold Alt to copy it.</p>
+        </div>
+        <button id="newContext" class="cx-primary" type="button"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>New context</button>
+      </div>
+      <div id="board" class="cx-board"></div>
+    </section>
+  </main>
+
+  <div id="toast" class="cx-toast" role="status" hidden></div>
+
+  <dialog id="preview" class="cx-preview show-redactions" aria-labelledby="previewTitle">
+    <div class="cx-preview-head">
+      <span id="previewDot" class="cx-preview-dot"></span>
+      <div style="flex: 1; min-width: 0">
+        <div id="previewEyebrow" class="cx-eyebrow">PREVIEW · CONTEXT.MD</div>
+        <h2 id="previewTitle">Context</h2>
+        <p>This is exactly what the model receives. The context name stays with you and never goes into the file.</p>
+      </div>
+      <button id="previewClose" class="cx-icon-btn" type="button" aria-label="Close preview"><svg class="i" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"></path></svg></button>
+    </div>
+    <div class="cx-preview-bar">
+      <label><input id="previewHighlight" type="checkbox" checked>Highlight replaced IDs</label>
+      <span id="previewStats" class="mono"></span>
+    </div>
+    <pre id="previewBody" class="cx-preview-body"></pre>
+    <div class="cx-preview-foot">
+      <button id="previewCopyId" class="cx-primary" type="button">Copy context ID</button>
+      <button id="previewDownload" class="cx-ghost" type="button">Download .md</button>
+    </div>
+  </dialog>
+
+  <script src="/admin/assets/pearl-gradient-nav.js"></script>
+  <script src="/admin/assets/admin-confirmation.js"></script>
+  <script src="/admin/assets/bridge-identity.js"></script>
+  <script src="/admin/assets/contexts-viewer.js"></script>
+</body>
+</html>

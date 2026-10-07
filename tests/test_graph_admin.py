@@ -39,13 +39,13 @@ def test_graph_page_and_assets_require_admin_login(admin_client, load_main) -> N
     assert 'class="workspace-nav sb-nav" role="tablist"' in page.text
     assert 'href="/admin/lab" aria-current="page" aria-selected="true"' in page.text
     assert 'data-label="LAB">LAB</a>' in page.text
-    assert "CONTEXTS" not in page.text
+    assert 'href="/admin/contexts" aria-selected="false"' in page.text
     assert "Map" in page.text
     assert "Config" in page.text
     sessions = client.get("/admin/sessions")
     assert sessions.status_code == 200
     assert 'href="/admin/lab"' in sessions.text
-    assert "CONTEXTS" not in sessions.text
+    assert 'href="/admin/contexts" aria-selected="false"' in sessions.text
     assert "WIP" not in sessions.text
     assert client.get("/admin/assets/graph-viewer.css").status_code == 200
     css = client.get("/admin/assets/pearl-gradient-nav.css")
@@ -73,7 +73,7 @@ def test_graph_release_gate_defaults_closed_and_serves_wip_page(admin_client, lo
     assert sessions.status_code == 200
     assert 'href="/admin/lab"' in sessions.text
     assert 'data-label="LAB">LAB</a>' in sessions.text
-    assert "CONTEXTS" not in sessions.text
+    assert 'href="/admin/contexts" aria-selected="false"' in sessions.text
     assert "WIP" not in sessions.text
 
     page = client.get("/admin/lab")

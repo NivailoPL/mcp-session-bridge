@@ -278,6 +278,11 @@ async def admin_sessions_page(request: Request) -> Response:
     return await admin.sessions_page(request)
 
 
+@mcp.custom_route("/admin/contexts", methods=["GET"])
+async def admin_contexts_page(request: Request) -> Response:
+    return await admin.contexts_page(request)
+
+
 @mcp.custom_route("/admin/graph", methods=["GET"])
 async def admin_graph_page(request: Request) -> Response:
     return await admin.graph_page(request)

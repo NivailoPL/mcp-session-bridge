@@ -215,3 +215,59 @@ def test_library_lists_sessions_with_models_and_files_with_previews(load_main, a
     assert names["brief.md"]["effective_group_id"] == "uncategorized"
     assert names["group.md"]["effective_group_id"] == "uncategorized"
     assert client.get("/admin/api/context-library?kind=images").status_code == 400
+
+
+# ---------- page ----------
+
+def test_contexts_page_and_assets_need_a_login(load_main, admin_client) -> None:
+    main = load_main()
+    anonymous = TestClient(main.app, base_url=ADMIN_BASE_URL)
+    assert anonymous.get("/admin/contexts", follow_redirects=False).status_code == 303
+    assert anonymous.get("/admin/assets/contexts-viewer.js", follow_redirects=False).status_code == 303
+
+    client, _ = admin_client(main)
+    page = client.get("/admin/contexts")
+    assert page.status_code == 200
+    assert page.headers["x-frame-options"] == "DENY"
+    for asset, media in (
+        ("contexts-viewer.js", "text/javascript"),
+        ("contexts-viewer.css", "text/css"),
+        ("bridge-identity.js", "text/javascript"),
+    ):
+        assert f"/admin/assets/{asset}" in page.text
+        response = client.get(f"/admin/assets/{asset}")
+        assert response.status_code == 200
+        assert response.headers["content-type"].startswith(media)
+
+
+def test_every_workspace_links_to_contexts_between_sessions_and_lab() -> None:
+    from pathlib import Path
+
+    for name in ("admin-viewer.html", "graph-viewer.html", "graph-wip.html", "contexts-viewer.html"):
+        html = Path("web", name).read_text(encoding="utf-8")
+        sessions = html.index('href="/admin/sessions" aria')
+        contexts = html.index('href="/admin/contexts"')
+        lab = html.index('href="/admin/lab"')
+        assert sessions < contexts < lab, name
+
+
+def test_shared_identity_marks_match_the_sessions_page() -> None:
+    """bridge-identity.js is a verbatim copy; drift would draw two symbols for one thing."""
+    import re
+    from pathlib import Path
+
+    viewer = Path("web/admin-viewer.html").read_text(encoding="utf-8")
+    shared = Path("web/bridge-identity.js").read_text(encoding="utf-8")
+
+    def block(source: str, start: str, end: str) -> str:
+        i = source.index(start)
+        return re.sub(r"^\s+", "", source[i:source.index(end, i)], flags=re.M)
+
+    for start, end in (
+        ("function modelIdentity(name)", "\n  }\n"),
+        ("const VOICE_ENVELOPES", "function voiceprintSvg"),
+        ("const GROUP_ICON_PATHS = {", "};"),
+        ("const FILE_KINDS = {", "};"),
+    ):
+        viewer_end = end.replace("\n  }\n", "\n      }\n")
+        assert block(viewer, start, viewer_end) == block(shared, start, end), start

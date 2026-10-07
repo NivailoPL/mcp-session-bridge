@@ -6,6 +6,22 @@ This project follows a lightweight changelog format inspired by Keep a Changelog
 
 ## [Unreleased]
 
+### Highlights
+
+- Added a Contexts workspace between Sessions and Lab: build a temporary context from any sessions and files in the bridge and hand it to a model by its `ctx_` ID (NIV-25).
+
+### New Features
+
+- Added a library of every session and file as cards, with model voiceprints, group pictograms, file previews (Markdown, PDF, CSV, JSON, HTML, images) and token estimates.
+- Added contexts as columns: drag cards in, reorder blocks, move them between contexts or copy them with Alt, rename, recolor, lock, delete, and undo a removed block.
+- Each block is a snapshot taken when it was dropped; blocks whose source changed show Out of date and can be updated, and blocks whose source was deleted keep their text.
+- Added a preview of the exact `context.md` a model receives, with every replaced identifier highlighted, plus copy and download.
+- Added the `get_context` MCP tool, which returns a context in chunks sized like transcripts.
+
+### Security
+
+- Contexts are redacted when they are assembled: session IDs, context IDs and links into the bridge become numbered placeholders such as `[SESSION-1]`, so a model cannot follow a context back to its sources. The context name never reaches the model.
+
 ## [2026.10.1] - 2026-10-04
 
 ### Highlights
