@@ -537,11 +537,11 @@
        then one toolbar row under a hairline */
     .topbar {
       position: sticky; top: 0; z-index: 6;
-      display: flex; flex-direction: column; align-items: stretch; gap: 20px;
-      padding: 26px 32px 0;
+      display: flex; flex-direction: column; align-items: stretch; gap: 14px;
+      padding: 18px 32px 0;
     }
-    .session-hero { display: flex; align-items: center; gap: 18px; min-width: 0; }
-    .topbar-title { flex: 1; min-width: 0; display: grid; gap: 5px; }
+    .session-hero { display: flex; align-items: center; gap: 16px; min-width: 0; }
+    .topbar-title { flex: 1; min-width: 0; display: grid; gap: 3px; }
     .session-group-label {
       color: var(--g, var(--faint-ink));
       font-family: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -550,13 +550,13 @@
     }
     .session-group-label:empty { display: none; }
     .session-title-line { display: flex; align-items: center; min-width: 0; }
-    .session-title-icon { display: none; width: 58px; height: 58px; color: var(--g, var(--accent-ink)); flex: 0 0 auto; }
+    .session-title-icon { display: none; width: 46px; height: 46px; color: var(--g, var(--accent-ink)); flex: 0 0 auto; }
     .session-title-icon.show { display: inline-flex; }
     .session-title-icon svg, .session-compact-icon svg { width: 100%; height: 100%; }
     .session-title-icon svg { stroke-width: 1.5; }
     .topbar-title h2 {
       margin: 0;
-      font-size: 26px; font-weight: 700; letter-spacing: -.015em; line-height: 1.15;
+      font-size: 24px; font-weight: 700; letter-spacing: -.015em; line-height: 1.15;
       color: #f3f4f8; overflow-wrap: anywhere;
     }
     .session-id-line { display: flex; align-items: center; min-width: 0; }
@@ -588,34 +588,40 @@
     .meta { color: var(--muted); font-size: var(--t-ctrl); }
     .meta:empty { display: none; }
 
-    /* token meter: one number, then who produced it, for any number of speakers */
+    /* token meter: one number on the left, who produced it on the right, two rows tall
+       so it never makes the header taller than the title beside it */
     .token-meter {
-      flex: 0 0 auto; width: 330px;
-      display: grid; gap: 10px; padding: 14px 16px;
-      border: 1px solid rgba(255, 255, 255, .06); border-radius: 14px;
+      flex: 0 1 auto; min-width: 0; max-width: min(36rem, 50%);
+      display: grid; grid-template-columns: auto minmax(0, 1fr);
+      grid-template-areas: "head bar" "head legend";
+      align-items: center; gap: 8px 14px; padding: 9px 14px;
+      border: 1px solid rgba(255, 255, 255, .06); border-radius: 12px;
       background: rgba(0, 0, 0, .22);
       font-variant-numeric: tabular-nums;
     }
-    .token-meter-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
-    .token-meter-total { color: #fff; font-size: 30px; font-weight: 800; letter-spacing: -.02em; line-height: 1; }
+    .token-meter-head {
+      grid-area: head; display: grid; gap: 4px; align-content: center;
+      padding-right: 14px; border-right: 1px solid rgba(255, 255, 255, .07);
+    }
+    .token-meter-total { color: #fff; font-size: 22px; font-weight: 800; letter-spacing: -.02em; line-height: 1; }
     .token-meter-unit {
       color: var(--muted);
       font-family: "Geist Mono", ui-monospace, monospace; font-size: var(--t-label); letter-spacing: .16em; text-transform: uppercase;
     }
-    .token-meter-bar { display: flex; gap: 3px; height: 6px; }
-    .token-meter-bar span { flex: var(--share) 1 0; min-width: 4px; border-radius: 3px; background: var(--m); }
-    .token-meter-legend { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px 18px; margin: 0; padding: 0; list-style: none; }
-    .token-meter-legend li { display: flex; align-items: center; gap: 6px; min-width: 0; color: var(--muted); font-size: var(--t-meta); }
+    .token-meter-bar { grid-area: bar; display: flex; gap: 3px; height: 4px; min-width: 12rem; }
+    .token-meter-bar span { flex: var(--share) 1 0; min-width: 4px; border-radius: 2px; background: var(--m); }
+    .token-meter-legend { grid-area: legend; display: flex; flex-wrap: wrap; gap: 3px 14px; margin: 0; padding: 0; list-style: none; }
+    .token-meter-legend li { display: flex; align-items: center; gap: 6px; min-width: 0; color: var(--muted); font-size: var(--t-meta); white-space: nowrap; }
     .token-meter-legend li::before { content: ""; width: 7px; height: 7px; flex: 0 0 auto; border-radius: 50%; background: var(--m); }
-    .token-meter-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .token-meter-name { min-width: 0; max-width: 9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .token-meter-legend b { color: #d5d8e4; font-weight: 700; }
     .token-meter.is-redacted { --m: rgba(255, 255, 255, .09); }
-    .token-meter.is-redacted .token-meter-total { width: 7.5rem; height: 24px; border-radius: 4px; background: rgba(255, 255, 255, .09); }
-    .token-meter-redacted { flex: 1; height: 9px; border-radius: 3px; background: rgba(255, 255, 255, .09); }
+    .token-meter.is-redacted .token-meter-total { width: 5.5rem; height: 18px; border-radius: 4px; background: rgba(255, 255, 255, .09); }
+    .token-meter-redacted { width: 5.5rem; height: 9px; border-radius: 3px; background: rgba(255, 255, 255, .09); }
 
     .top-actions {
       display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-start; align-items: center;
-      padding: 14px 0; border-top: 1px solid var(--stroke-soft);
+      padding: 10px 0; border-top: 1px solid var(--stroke-soft);
     }
     .top-actions-spacer { flex: 1; }
     .top-actions .icon-button { width: 38px; min-height: 38px; padding: 0; }
@@ -1681,7 +1687,7 @@
       .main { padding: 0 8px 8px; }
       .topbar { flex-direction: column; align-items: stretch; padding: 20px 18px 0; }
       .session-hero { flex-wrap: wrap; }
-      .token-meter { width: 100%; }
+      .token-meter { width: 100%; max-width: none; }
       .top-actions { justify-content: flex-start; }
       #fileWorkspaceDialog, #fileViewerDialog { width: calc(100vw - 1rem); height: calc(100vh - 1rem); }
       #fileWorkspaceDialog { --fb-cols: 16px 36px minmax(0, 1fr) 3.6rem; }
