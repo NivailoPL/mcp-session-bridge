@@ -78,6 +78,22 @@ def test_store_sorts_sessions_by_last_active_turn_not_admin_update(tmp_path) -> 
     assert sessions[0]["last_turn_at_iso"]
 
 
+def test_store_pins_session_without_touching_activity(tmp_path) -> None:
+    store = Store(tmp_path / "bridge.sqlite3")
+    session = store.create_session("s1", "Pin me")
+
+    pinned = store.set_session_pinned("s1", True)
+    assert pinned.pinned_at is not None
+    assert pinned.updated_at == session.updated_at
+    assert store.set_session_pinned("s1", True).pinned_at == pinned.pinned_at
+    assert store.list_sessions()[0]["pinned"] is True
+
+    assert store.set_session_pinned("s1", False).pinned_at is None
+    assert store.list_sessions()[0]["pinned"] is False
+    with pytest.raises(ValueError):
+        store.set_session_pinned("missing", True)
+
+
 def test_store_manages_session_groups_and_reassigns_deleted_group(tmp_path) -> None:
     store = Store(tmp_path / "bridge.sqlite3")
 

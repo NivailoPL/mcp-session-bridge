@@ -352,6 +352,42 @@
     }
     .session-date-heading:first-child { margin-top: 12px; }
 
+    /* pinned sessions sit in their own warm, framed tray above the dated list,
+       so they never read as just another row of it */
+    .session-pinned {
+      --pin: #f6c85f;
+      grid-column: 1 / -1;
+      margin: 12px 10px 6px;
+      padding-bottom: 4px;
+      /* clip, not hidden: a scroll container would let the list's grid squash it to 0 */
+      overflow: clip;
+      border: 1px solid rgba(246, 200, 95, .38);
+      border-radius: var(--r-card);
+      background: linear-gradient(180deg, rgba(246, 200, 95, .13), rgba(246, 200, 95, .05) 70%);
+      box-shadow: inset 3px 0 0 var(--pin), 0 6px 18px -12px rgba(246, 200, 95, .45);
+    }
+    .session-pinned-heading {
+      display: flex; align-items: center; gap: 6px;
+      margin: 0; padding: 9px 16px 4px;
+      color: var(--pin);
+      font-family: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: var(--t-label);
+      font-weight: 600;
+      letter-spacing: .09em;
+      line-height: 1.2;
+      text-transform: uppercase;
+    }
+    .session-pinned-heading svg { width: 12px; height: 12px; }
+    .session-pinned .session-button { padding-left: 18px; }
+    .session-pinned .session-button:hover { background: rgba(246, 200, 95, .08); }
+    .session-pinned .session-button.is-active {
+      background: rgba(246, 200, 95, .16);
+      box-shadow: inset 2px 0 0 #fff3ce;
+    }
+    .session-pinned .session-title { color: #f3ead2; }
+    .session-pinned + .session-date-heading { margin-top: 14px; }
+    .session-actions button.is-on { color: #f6c85f; }
+
     .session-button {
       position: relative;
       display: block;
@@ -4620,71 +4656,91 @@
         }
 
         const currentDay = sessionDateKey(new Date(), state.displayTimezone);
+        const pinned = visible.filter((session) => session.pinned);
+        if (pinned.length) {
+          const tray = document.createElement("section");
+          tray.className = "session-pinned";
+          tray.setAttribute("aria-label", "Pinned sessions");
+          const heading = document.createElement("h3");
+          heading.className = "session-pinned-heading";
+          heading.append(actionIcon("pin"), document.createTextNode("Pinned"));
+          tray.append(heading);
+          for (const session of pinned) {
+            tray.append(sessionRow(session, sessionDateBucket(session, null, currentDay)));
+          }
+          dom.sessionList.append(tray);
+        }
+
         let previousDateBucket = null;
         for (const session of visible) {
+          if (session.pinned) continue;
           const dateBucket = sessionDateBucket(session, null, currentDay);
           if (dateBucket !== previousDateBucket) {
             dom.sessionList.append(sessionDateHeading(sessionDateGroupLabel(dateBucket)));
             previousDateBucket = dateBucket;
           }
-          const item = document.createElement("article");
-          item.className = "session-button";
-          const isSelected = session.session_id === state.selectedSessionId;
-          item.classList.toggle("is-active", isSelected);
-          const group = sessionGroup(session);
-          const cardIsGuarded = sessionRowIsCovered(session, group);
-          const selectSession = () => {
-            if (state.fileOperationPending) {
-              setStatus("Wait for the file operation to finish.", "warn");
-              return;
-            }
-            const continueSelection = async () => {
-              if (dom.fileWorkspaceDialog.open) dom.fileWorkspaceDialog.close();
-              await loadSession(session.session_id);
-            };
-            runFileContinuation("session", continueSelection, item);
-          };
-          const revealGroup = () => {
-            state.revealedSensitiveSessionLists.add(session.group_id);
-            renderSessions();
-          };
-          const activate = cardIsGuarded ? revealGroup : selectSession;
-          item.classList.toggle("is-guarded", cardIsGuarded);
-          item.tabIndex = 0;
-          item.role = "button";
-          if (cardIsGuarded) {
-            item.setAttribute("aria-label", `Covered session in ${group.name}. Activate to reveal the group.`);
-          } else if (!isSelected) {
-            item.setAttribute("aria-label", `${session.title || "Untitled"} — ${group?.name || session.group_id || "Uncategorized"}`);
-          }
-          item.addEventListener("click", activate);
-          item.addEventListener("keydown", (event) => {
-            if (event.target !== item) return;
-            if (event.key === "Enter" || event.key === " ") {
-              event.preventDefault();
-              activate();
-            }
-          });
-
-          const content = div("session-card-content");
-          if (cardIsGuarded) {
-            content.append(
-              sessionCompactTitle(session, group, dateBucket, true),
-              sessionMetaLine(session, group),
-              renderSessionActions(session),
-            );
-          } else if (state.manualRenameSessionId === session.session_id) {
-            content.append(renderSessionRenameForm(session));
-          } else {
-            content.append(
-              sessionCompactTitle(session, group, dateBucket),
-              sessionMetaLine(session, group),
-              renderSessionActions(session),
-            );
-          }
-          item.append(content);
-          dom.sessionList.append(item);
+          dom.sessionList.append(sessionRow(session, dateBucket));
         }
+      }
+
+      function sessionRow(session, dateBucket) {
+        const item = document.createElement("article");
+        item.className = "session-button";
+        const isSelected = session.session_id === state.selectedSessionId;
+        item.classList.toggle("is-active", isSelected);
+        const group = sessionGroup(session);
+        const cardIsGuarded = sessionRowIsCovered(session, group);
+        const selectSession = () => {
+          if (state.fileOperationPending) {
+            setStatus("Wait for the file operation to finish.", "warn");
+            return;
+          }
+          const continueSelection = async () => {
+            if (dom.fileWorkspaceDialog.open) dom.fileWorkspaceDialog.close();
+            await loadSession(session.session_id);
+          };
+          runFileContinuation("session", continueSelection, item);
+        };
+        const revealGroup = () => {
+          state.revealedSensitiveSessionLists.add(session.group_id);
+          renderSessions();
+        };
+        const activate = cardIsGuarded ? revealGroup : selectSession;
+        item.classList.toggle("is-guarded", cardIsGuarded);
+        item.tabIndex = 0;
+        item.role = "button";
+        if (cardIsGuarded) {
+          item.setAttribute("aria-label", `Covered session in ${group.name}. Activate to reveal the group.`);
+        } else if (!isSelected) {
+          item.setAttribute("aria-label", `${session.title || "Untitled"} — ${group?.name || session.group_id || "Uncategorized"}`);
+        }
+        item.addEventListener("click", activate);
+        item.addEventListener("keydown", (event) => {
+          if (event.target !== item) return;
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            activate();
+          }
+        });
+
+        const content = div("session-card-content");
+        if (cardIsGuarded) {
+          content.append(
+            sessionCompactTitle(session, group, dateBucket, true),
+            sessionMetaLine(session, group),
+            renderSessionActions(session),
+          );
+        } else if (state.manualRenameSessionId === session.session_id) {
+          content.append(renderSessionRenameForm(session));
+        } else {
+          content.append(
+            sessionCompactTitle(session, group, dateBucket),
+            sessionMetaLine(session, group),
+            renderSessionActions(session),
+          );
+        }
+        item.append(content);
+        return item;
       }
 
       function chip(text, warn) {
@@ -6823,6 +6879,7 @@
       const SESSION_ACTION_ICONS = {
         ai_rename: '<path d="M12 4l1.4 3.9 3.9 1.4-3.9 1.4L12 14.6l-1.4-3.9L6.7 9.3l3.9-1.4z"></path><path d="M17.8 14.6l.6 1.6 1.6.6-1.6.6-.6 1.6-.6-1.6-1.6-.6 1.6-.6z"></path>',
         rename: '<path d="M4 20h4L18 10a2.1 2.1 0 10-3-3L5 17z"></path><path d="M13.5 7.5l3 3"></path>',
+        pin: '<path d="M9 4h6l-1 5 3 3v2H7v-2l3-3z"></path><path d="M12 14v6"></path>',
         move: '<path d="M3 7.5A2.5 2.5 0 015.5 5H10l2 2h6.5A2.5 2.5 0 0121 9.5v7A2.5 2.5 0 0118.5 19h-13A2.5 2.5 0 013 16.5z"></path><path d="M9.5 13h5M12.5 10.8l2.2 2.2-2.2 2.2"></path>',
       };
 
@@ -6876,7 +6933,15 @@
         });
         moveButton.disabled = state.busy || !state.groups.some((group) => group.group_id !== session.group_id);
 
-        actions.append(aiButton, manualButton, moveButton);
+        const pinButton = iconAction("pin", session.pinned ? "Unpin" : "Pin to the top", (event) => {
+          event.stopPropagation();
+          setSessionPinned(session.session_id, !session.pinned);
+        });
+        pinButton.classList.toggle("is-on", Boolean(session.pinned));
+        pinButton.setAttribute("aria-pressed", session.pinned ? "true" : "false");
+        pinButton.disabled = state.busy;
+
+        actions.append(pinButton, aiButton, manualButton, moveButton);
         return actions;
       }
 
@@ -6914,6 +6979,14 @@
           return;
         }
         await renameSessionRequest(sessionId, { method: "PATCH", body: JSON.stringify({ title: trimmed }) }, "Session title updated.");
+      }
+
+      async function setSessionPinned(sessionId, pinned) {
+        await renameSessionRequest(
+          sessionId,
+          { method: "PATCH", body: JSON.stringify({ pinned }) },
+          pinned ? "Session pinned." : "Session unpinned.",
+        );
       }
 
       async function aiRenameSession(sessionId) {

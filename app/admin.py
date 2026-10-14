@@ -1154,8 +1154,10 @@ class AdminHandlers:
         payload, parse_error = await _json_body(request)
         if parse_error:
             return parse_error
-        if "group_id" not in payload and "title" not in payload:
-            return self._json_error("group_id or title is required.", status_code=400)
+        if not {"group_id", "title", "pinned"} & payload.keys():
+            return self._json_error("group_id, title or pinned is required.", status_code=400)
+        if "pinned" in payload and not isinstance(payload["pinned"], bool):
+            return self._json_error("pinned must be a boolean.", status_code=400)
         try:
             session_id = request.path_params["session_id"]
             session = self.store.get_session(session_id)
@@ -1165,6 +1167,8 @@ class AdminHandlers:
                 session = self.store.set_session_group(session.session_id, str(payload.get("group_id", "")))
             if "title" in payload:
                 session = self.store.set_session_title(session.session_id, str(payload.get("title", "")))
+            if "pinned" in payload:
+                session = self.store.set_session_pinned(session.session_id, payload["pinned"])
         except ValueError as exc:
             return self._value_error(exc)
         return JSONResponse(
@@ -2314,6 +2318,8 @@ def _session_payload(session: SessionRecord) -> dict[str, Any]:
         "title": session.title,
         "group_id": session.group_id,
         "title_is_auto": session.title_is_auto,
+        "pinned": session.pinned_at is not None,
+        "pinned_at": session.pinned_at,
         "created_at": session.created_at,
         "created_at_iso": format_timestamp_iso(session.created_at),
         "updated_at": session.updated_at,

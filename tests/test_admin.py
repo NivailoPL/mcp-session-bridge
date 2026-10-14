@@ -554,7 +554,7 @@ def test_admin_viewer_sensitive_group_privacy_contract() -> None:
 
     guard = viewer[
         viewer.index("const cardIsGuarded = sessionRowIsCovered(session, group);"):
-        viewer.index("dom.sessionList.append(item);", viewer.index("const cardIsGuarded"))
+        viewer.index("return item;", viewer.index("const cardIsGuarded"))
     ]
     assert "const activate = cardIsGuarded ? revealGroup : selectSession;" in guard
     assert 'item.addEventListener("keydown"' in guard
@@ -1216,6 +1216,27 @@ def test_admin_can_manage_session_groups_and_move_sessions(load_main) -> None:
     assert moved.status_code == 200
     assert moved.json()["session"]["group_id"] == "ideas"
     assert main.store.get_session("s1").group_id == "ideas"
+
+    pinned = client.patch(
+        "/admin/api/sessions/s1",
+        json={"pinned": True},
+        headers={"x-csrf-token": csrf_token},
+    )
+    assert pinned.status_code == 200
+    assert pinned.json()["session"]["pinned"] is True
+    assert client.get("/admin/api/sessions").json()["sessions"][0]["pinned"] is True
+    bad_pin = client.patch(
+        "/admin/api/sessions/s1",
+        json={"pinned": "yes"},
+        headers={"x-csrf-token": csrf_token},
+    )
+    assert bad_pin.status_code == 400
+    unpinned = client.patch(
+        "/admin/api/sessions/s1",
+        json={"pinned": False},
+        headers={"x-csrf-token": csrf_token},
+    )
+    assert unpinned.json()["session"]["pinned"] is False
 
     updated = client.patch(
         "/admin/api/session-groups/ideas",

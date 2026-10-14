@@ -199,6 +199,7 @@ class SessionRecord:
     title_is_auto: bool
     created_at: int
     updated_at: int
+    pinned_at: int | None = None
 
 
 @dataclass(frozen=True)
@@ -475,7 +476,8 @@ class Store:
                     context_pack_version TEXT,
                     title_is_auto INTEGER NOT NULL DEFAULT 0,
                     created_at INTEGER NOT NULL,
-                    updated_at INTEGER NOT NULL
+                    updated_at INTEGER NOT NULL,
+                    pinned_at INTEGER
                 );
 
                 CREATE TABLE IF NOT EXISTS exchanges (
@@ -722,6 +724,8 @@ class Store:
             self._ensure_column(conn, "sessions", "context_pack_version", "TEXT")
             self._ensure_column(conn, "sessions", "title_is_auto", "INTEGER NOT NULL DEFAULT 0")
             self._ensure_column(conn, "sessions", "group_id", f"TEXT NOT NULL DEFAULT '{UNCATEGORIZED_GROUP_ID}'")
+            # Nullable and ignored by older Bridges, so it needs no schema bump.
+            self._ensure_column(conn, "sessions", "pinned_at", "INTEGER")
             self._ensure_column(conn, "session_groups", "is_sensitive", "INTEGER NOT NULL DEFAULT 0")
             self._ensure_column(conn, "exchanges", "assistant_created_at", "INTEGER")
             self._ensure_column(conn, "exchanges", "assistant_masked_at", "INTEGER")
@@ -3564,6 +3568,22 @@ class Store:
             updated = conn.execute("SELECT * FROM sessions WHERE session_id = ?", (session_id,)).fetchone()
         return _session_from_row(updated)
 
+    def set_session_pinned(self, session_id: str, pinned: bool) -> SessionRecord:
+        # Pinning is list housekeeping, not activity, so updated_at stays put.
+        with self._lock, self._connect() as conn:
+            row = conn.execute("SELECT * FROM sessions WHERE session_id = ?", (session_id,)).fetchone()
+            if row is None:
+                raise ValueError(f"Unknown session_id: {session_id}")
+            if pinned and row["pinned_at"] is None:
+                conn.execute(
+                    "UPDATE sessions SET pinned_at = ? WHERE session_id = ?",
+                    (int(time.time()), session_id),
+                )
+            elif not pinned:
+                conn.execute("UPDATE sessions SET pinned_at = NULL WHERE session_id = ?", (session_id,))
+            updated = conn.execute("SELECT * FROM sessions WHERE session_id = ?", (session_id,)).fetchone()
+        return _session_from_row(updated)
+
     def list_sessions(self) -> list[dict[str, Any]]:
         with self._lock, self._connect() as conn:
             rows = conn.execute(
@@ -3575,6 +3595,7 @@ class Store:
                     s.title_is_auto,
                     s.created_at,
                     s.updated_at,
+                    s.pinned_at,
                     g.name AS group_name,
                     g.color AS group_color,
                     g.icon_key AS group_icon_key,
@@ -3604,6 +3625,8 @@ class Store:
                 "group_id": row["group_id"],
                 "group": _group_payload_from_join(row),
                 "title_is_auto": bool(row["title_is_auto"]),
+                "pinned": row["pinned_at"] is not None,
+                "pinned_at": row["pinned_at"],
                 "created_at": row["created_at"],
                 "updated_at": row["updated_at"],
                 "last_turn_at": row["last_turn_at"],
@@ -3966,6 +3989,7 @@ def _session_from_row(row: sqlite3.Row) -> SessionRecord:
         title_is_auto=bool(row["title_is_auto"]),
         created_at=row["created_at"],
         updated_at=row["updated_at"],
+        pinned_at=row["pinned_at"] if "pinned_at" in row.keys() else None,
     )
 
 
