@@ -352,41 +352,31 @@
     }
     .session-date-heading:first-child { margin-top: 12px; }
 
-    /* pinned sessions sit in their own warm, framed tray above the dated list,
+    /* pinned sessions sit in their own quietly tinted tray above the dated list,
        so they never read as just another row of it */
     .session-pinned {
-      --pin: #f6c85f;
       grid-column: 1 / -1;
       margin: 12px 10px 6px;
-      padding-bottom: 4px;
       /* clip, not hidden: a scroll container would let the list's grid squash it to 0 */
       overflow: clip;
-      border: 1px solid rgba(246, 200, 95, .38);
+      border: 1px solid rgba(122, 125, 240, .22);
       border-radius: var(--r-card);
-      background: linear-gradient(180deg, rgba(246, 200, 95, .13), rgba(246, 200, 95, .05) 70%);
-      box-shadow: inset 3px 0 0 var(--pin), 0 6px 18px -12px rgba(246, 200, 95, .45);
+      background: rgba(99, 102, 241, .06);
     }
     .session-pinned-heading {
       display: flex; align-items: center; gap: 6px;
       margin: 0; padding: 9px 16px 4px;
-      color: var(--pin);
+      color: var(--accent-ink);
       font-family: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
       font-size: var(--t-label);
-      font-weight: 600;
+      font-weight: 500;
       letter-spacing: .09em;
       line-height: 1.2;
       text-transform: uppercase;
     }
     .session-pinned-heading svg { width: 12px; height: 12px; }
-    .session-pinned .session-button { padding-left: 18px; }
-    .session-pinned .session-button:hover { background: rgba(246, 200, 95, .08); }
-    .session-pinned .session-button.is-active {
-      background: rgba(246, 200, 95, .16);
-      box-shadow: inset 2px 0 0 #fff3ce;
-    }
-    .session-pinned .session-title { color: #f3ead2; }
     .session-pinned + .session-date-heading { margin-top: 14px; }
-    .session-actions button.is-on { color: #f6c85f; }
+    .session-actions button.is-on { color: var(--accent-ink); }
 
     .session-button {
       position: relative;
