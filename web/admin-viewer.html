@@ -668,9 +668,10 @@
     }
     .export-menu-list button:hover { background: var(--glass-3); }
     .content-wrap { position: relative; display: flex; align-items: flex-start; width: 100%; max-width: 84rem; }
+    /* pinned to the top-left of the transcript: the highlight and strand docks lead it */
     .side-rail {
-      position: sticky; top: 50%; transform: translateY(-50%); z-index: 4; display: flex; flex-direction: column;
-      align-items: center; gap: .9rem; margin: 0 .55rem 0 1rem;
+      position: sticky; top: 1.4rem; z-index: 4; display: flex; flex-direction: column;
+      align-items: center; gap: .7rem; margin: 1.4rem .55rem 0 1rem;
     }
     .turn-nav {
       display: none; flex-direction: column; gap: .35rem;
@@ -721,6 +722,84 @@
     .file-dock-tip kbd { margin-left: .35rem; color: var(--faint-ink); font-family: "Geist Mono", ui-monospace, monospace; font-size: var(--t-label); }
     .file-dock-tip span { display: flex; justify-content: space-between; gap: .75rem; }
     .file-dock-tip span > span:last-child { font-family: "Geist Mono", ui-monospace, monospace; }
+    /* Highlights and strands: two docks above the transcript navigation, each opening a panel
+       beside the rail. Yellow marks the owner's own picks (amber already means Exclude);
+       indigo marks strands, the exchange ranges. Nothing here is shown to models. */
+    .anchor-dock {
+      position: relative; display: flex; flex-direction: column; align-items: center; gap: .45rem;
+      width: 3.4rem; min-height: 0; padding: .65rem 0 .5rem; border: 1px solid var(--stage-stroke);
+      border-radius: var(--r-card); background: var(--stage); color: var(--muted);
+    }
+    .anchor-dock[hidden] { display: none; }
+    .anchor-dock:hover { color: var(--text); border-color: var(--stroke-strong); }
+    .anchor-dock[aria-expanded="true"] { background: #1a1e36; border-color: var(--accent-2); color: #c7c9fb; box-shadow: 0 0 0 4px rgba(99, 102, 241, .08); }
+    .anchor-dock > svg { width: 18px; height: 18px; }
+    .anchor-dock-stripe { width: 2rem; height: 4px; border-radius: var(--r-pill); background: var(--hl, #fde047); }
+    .anchor-dock.is-strands .anchor-dock-stripe { background: var(--accent-2); }
+    .anchor-dock.has-pending .anchor-dock-stripe { background: repeating-linear-gradient(90deg, var(--accent-2) 0 5px, transparent 5px 8px); }
+    .anchor-dock.is-running .anchor-dock-stripe { animation: anchor-pulse 1.2s ease-in-out infinite; }
+    @keyframes anchor-pulse { 50% { opacity: .35; } }
+    .anchor-dock-count { font-family: "Geist Mono", ui-monospace, monospace; font-size: var(--t-label); font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; }
+    .anchor-panel {
+      position: absolute; left: calc(100% + .75rem); top: 0; z-index: 7; display: flex; flex-direction: column;
+      width: 24rem; max-width: calc(100vw - 8rem); max-height: min(72vh, 36rem); overflow: auto;
+      border: 1px solid rgba(255, 255, 255, .12); border-radius: var(--r-card); background: #161a24; box-shadow: var(--shadow-pop);
+      color: var(--text); font-size: var(--t-ctrl); text-align: left;
+    }
+    .anchor-panel[hidden] { display: none; }
+    .anchor-panel-head { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; gap: .5rem; padding: .7rem .85rem; border-bottom: 1px solid rgba(255, 255, 255, .07); background: #161a24; }
+    .anchor-panel-title { font-family: "Geist Mono", ui-monospace, monospace; font-size: var(--t-label); font-weight: 500; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); }
+    .anchor-panel-count { font-family: "Geist Mono", ui-monospace, monospace; font-size: var(--t-label); color: var(--text); }
+    .anchor-spacer { flex: 1 1 auto; }
+    .anchor-panel button.anchor-compact { min-height: var(--h-compact); padding: 0 10px; font-size: var(--t-meta); }
+    .anchor-panel button.anchor-icon-button { width: var(--h-compact); min-height: var(--h-compact); padding: 0; border: 0; background: transparent; color: var(--muted); font-size: 16px; line-height: 1; }
+    .anchor-panel button.anchor-icon-button:hover { color: var(--text); background: var(--glass-3); }
+    .anchor-panel button.anchor-icon-button svg { width: 14px; height: 14px; }
+    .anchor-panel button.anchor-accept { border: 1px solid rgba(122, 125, 240, .34); background: rgba(122, 125, 240, .14); color: var(--text); }
+    .anchor-panel button.anchor-danger { color: var(--danger); }
+    .anchor-list { display: flex; flex-direction: column; }
+    .anchor-row { display: flex; align-items: flex-start; gap: .55rem; padding: .6rem .85rem; border-bottom: 1px solid rgba(255, 255, 255, .05); }
+    .anchor-row.is-focus { background: rgba(122, 125, 240, .08); }
+    .anchor-dot { flex: 0 0 auto; width: 8px; height: 8px; margin-top: .45rem; border-radius: 2px; background: var(--hl, #fde047); }
+    .anchor-panel button.anchor-row-main {
+      flex: 1 1 auto; min-width: 0; min-height: 0; display: flex; flex-direction: column; align-items: flex-start; gap: .2rem;
+      padding: 0; border: 0; background: transparent; color: var(--text); text-align: left; font-weight: 500; letter-spacing: 0;
+    }
+    .anchor-quote { font-size: var(--t-ctrl); line-height: 1.45; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+    .anchor-title { font-size: var(--t-ctrl); font-weight: 600; line-height: 1.4; overflow-wrap: anywhere; }
+    .anchor-meta { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem; color: var(--muted); font-size: var(--t-meta); }
+    .anchor-ex { font-family: "Geist Mono", ui-monospace, monospace; color: #b9bbff; }
+    .anchor-badge { padding: 0 .45rem; border-radius: var(--r-pill); background: rgba(255, 255, 255, .07); color: var(--text-2); font-size: 11px; }
+    .anchor-proposal { display: flex; flex-direction: column; margin: .65rem; border: 1px dashed rgba(122, 125, 240, .5); border-radius: var(--r-ctrl); background: rgba(122, 125, 240, .06); }
+    .anchor-proposal-head { display: flex; align-items: center; gap: .4rem; padding: .5rem .65rem; color: #b9bbff; font-size: var(--t-meta); font-weight: 600; }
+    .anchor-proposal .anchor-row { padding: .5rem .65rem; border-top: 1px solid rgba(255, 255, 255, .05); border-bottom: 0; }
+    .anchor-notice { margin: .65rem .85rem 0; padding: .55rem .7rem; border-radius: var(--r-ctrl); background: rgba(255, 255, 255, .04); color: var(--text-2); font-size: var(--t-meta); line-height: 1.45; }
+    .anchor-notice.is-running { color: #c7c9fb; background: rgba(122, 125, 240, .1); }
+    .anchor-notice.is-error { color: #fda4af; background: var(--danger-soft); }
+    .anchor-empty { margin: 0; padding: .9rem .85rem; color: var(--muted); font-size: var(--t-meta); line-height: 1.5; }
+    .anchor-foot { position: sticky; bottom: 0; display: flex; align-items: center; gap: .5rem; padding: .6rem .85rem; border-top: 1px solid rgba(255, 255, 255, .07); background: #161a24; }
+    .anchor-form { display: grid; gap: .5rem; margin: .65rem .85rem 0; padding: .65rem; border: 1px solid var(--stroke); border-radius: var(--r-ctrl); }
+    .anchor-form label { display: grid; gap: .25rem; color: var(--muted); font-size: var(--t-meta); }
+    .anchor-form-range { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .5rem; }
+    .anchor-form-actions { display: flex; justify-content: flex-end; gap: .4rem; }
+    .highlight-pop {
+      position: fixed; z-index: 60; display: inline-flex; align-items: center; gap: .45rem; min-height: 32px; padding: 0 12px;
+      border: 1px solid rgba(255, 255, 255, .14); border-radius: var(--r-ctrl); background: #161a24; box-shadow: var(--shadow-pop);
+      color: var(--text); font-size: var(--t-ctrl); font-weight: 600;
+    }
+    .highlight-pop[hidden] { display: none; }
+    .highlight-pop.is-hint { color: var(--muted); font-weight: 500; }
+    .highlight-pop-swatch { width: 10px; height: 10px; border-radius: 3px; background: var(--hl, #fde047); }
+    ::highlight(bridge-highlight) { background-color: rgba(253, 224, 71, .2); text-decoration: underline 2px #fde047; text-underline-offset: 3px; }
+    ::highlight(bridge-highlight-focus) { background-color: rgba(253, 224, 71, .45); }
+    .exchange.is-strand-focus, .ex-group.is-strand-focus { box-shadow: 0 0 0 1px rgba(122, 125, 240, .6), 0 0 0 5px rgba(99, 102, 241, .1); border-radius: var(--r-card); }
+    .settings-item-stack { flex-direction: column; align-items: stretch; }
+    .settings-item-stack .settings-item-label { align-self: flex-start; }
+    .settings-item-stack .settings-item-control { display: block; width: 100%; }
+    .settings-textarea { width: 100%; min-height: 11rem; resize: vertical; font-family: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; line-height: 1.5; }
+    .settings-inline-status { color: var(--muted); font-size: var(--t-meta); }
+    .settings-inline-status.is-error { color: var(--danger); }
+    .settings-inline-status.is-ok { color: var(--ok); }
     .content { display: grid; gap: 1rem; width: 100%; min-width: 0; max-width: 80rem; padding: 1.4rem 1.5rem 3rem .4rem; }
 
     .status {
@@ -1890,6 +1969,16 @@
       <div id="threadSensitiveContent" class="thread-sensitive-content">
       <div id="threadSensitiveBody" class="content-wrap">
         <div class="side-rail">
+        <button id="highlightDock" type="button" class="anchor-dock" aria-expanded="false" aria-controls="anchorPanel" hidden>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 15-4 4h5l2-2"></path><path d="m14.5 4.5 5 5-7 7-5-5z"></path></svg>
+          <span class="anchor-dock-stripe" aria-hidden="true"></span>
+          <span id="highlightDockCount" class="anchor-dock-count" aria-hidden="true">0</span>
+        </button>
+        <button id="strandDock" type="button" class="anchor-dock is-strands" aria-expanded="false" aria-controls="anchorPanel" hidden>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><path d="M4 7h10M4 12h16M4 17h7"></path></svg>
+          <span class="anchor-dock-stripe" aria-hidden="true"></span>
+          <span id="strandDockCount" class="anchor-dock-count" aria-hidden="true">0</span>
+        </button>
         <nav id="turnNav" class="turn-nav" aria-label="Transcript navigation">
           <button id="scrollTopButton" type="button" class="ghost" title="Scroll to top"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"></path><path d="M6 5h12"></path></svg></button>
           <button id="scrollPrevButton" type="button" class="ghost" title="Previous turn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"></path></svg></button>
@@ -1903,11 +1992,13 @@
           <span id="fileWorkspaceCount" class="file-dock-count" aria-hidden="true">0</span>
           <span id="fileDockTip" class="file-dock-tip" aria-hidden="true"></span>
         </button>
+        <section id="anchorPanel" class="anchor-panel" role="region" hidden></section>
         </div>
         <section class="content">
           <p id="demoBanner" class="demo-banner"></p>
           <p id="status" class="status" role="status"></p>
           <div id="exchangeList" aria-live="polite"></div>
+          <button id="highlightPop" type="button" class="highlight-pop" hidden></button>
         </section>
       </div>
       <button id="threadSensitiveOverlay" type="button" class="sensitive-curtain" hidden>
@@ -2271,6 +2362,7 @@
         <button type="button" data-settings-tab="transcript"><span>MCP</span><span class="settings-tab-meta"><span id="settingsHintTranscript" class="settings-tab-hint"></span><span class="settings-tab-dirty" hidden aria-label="Unsaved changes"></span></span></button>
         <button type="button" data-settings-tab="search"><span>Search</span><span class="settings-tab-meta"><span id="settingsHintSearch" class="settings-tab-hint"></span><span class="settings-tab-dirty" hidden aria-label="Unsaved changes"></span></span></button>
         <button type="button" data-settings-tab="api"><span>API keys</span><span class="settings-tab-meta"><span id="settingsHintApi" class="settings-tab-hint"></span></span></button>
+        <button type="button" data-settings-tab="codex"><span>Codex</span><span class="settings-tab-meta"><span id="settingsHintCodex" class="settings-tab-hint"></span></span></button>
         <button type="button" data-settings-tab="system"><span>System</span><span class="settings-tab-meta"><span id="settingsHintSystem" class="settings-tab-hint"></span><span id="statusUpdateDot" class="update-dot" hidden aria-hidden="true"></span></span></button>
       </nav>
       <div class="settings-body">
@@ -2528,6 +2620,64 @@
           </section>
         </section>
 
+        <section data-settings-panel="codex" class="settings-panel" hidden>
+          <div class="settings-panel-head">
+            <h4>Codex</h4>
+            <span class="context-help"><button type="button" class="context-help-trigger" aria-label="About Codex" aria-describedby="settingsHelpCodex">?</button><span id="settingsHelpCodex" class="context-help-box" role="tooltip">Codex App Server runs on this server and uses the plan of the OpenAI account signed in here. Bridge calls it only when you press a button, such as Propose with Codex in a session's Strands panel.</span></span>
+            <span id="codexSettingsPill" class="settings-pill"></span>
+          </div>
+          <section class="settings-group">
+            <div class="settings-group-head"><h5>Connection</h5></div>
+            <div class="settings-item">
+              <div class="settings-item-label"><span class="settings-item-title">Status</span></div>
+              <div class="settings-item-control"><span id="codexSettingsStatus" class="settings-value-muted">Checking...</span></div>
+            </div>
+            <div id="codexSettingsLogin" class="settings-item" hidden>
+              <div class="settings-item-label"><span class="settings-item-title">Sign-in code</span></div>
+              <div class="settings-item-control">
+                <strong id="codexSettingsCode" class="settings-value settings-value-mono"></strong>
+                <a id="codexSettingsLink" href="#" target="_blank" rel="noopener noreferrer">Open OpenAI sign-in</a>
+                <button type="button" class="ghost settings-compact" id="codexSettingsCancel">Cancel</button>
+              </div>
+            </div>
+            <div class="settings-item">
+              <div class="settings-item-label"><span class="settings-item-title">Account</span></div>
+              <div class="settings-item-control">
+                <button type="button" class="primary settings-compact" id="codexSettingsSignIn" hidden>Sign in with OpenAI</button>
+                <button type="button" class="settings-quiet-danger settings-compact" id="codexSettingsSignOut" hidden>Sign out</button>
+                <button type="button" class="ghost settings-compact" id="codexSettingsRefresh">Refresh</button>
+              </div>
+            </div>
+          </section>
+          <section class="settings-group">
+            <div class="settings-group-head"><h5>Strands</h5><span class="settings-value-muted">Runs only when you press Propose with Codex</span></div>
+            <div class="settings-item">
+              <div class="settings-item-label"><span class="settings-item-title"><label for="strandModelInput">Model</label></span></div>
+              <div class="settings-item-control">
+                <input id="strandModelInput" class="settings-input-mono settings-input-medium" list="strandModelOptions" spellcheck="false" autocomplete="off">
+                <datalist id="strandModelOptions"><option value="gpt-5.6-sol"></option></datalist>
+              </div>
+            </div>
+            <div class="settings-item">
+              <div class="settings-item-label"><span class="settings-item-title"><label for="strandEffortSelect">Reasoning effort</label></span></div>
+              <div class="settings-item-control">
+                <select id="strandEffortSelect"><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="xhigh">Extra high</option></select>
+              </div>
+            </div>
+            <div class="settings-item settings-item-stack">
+              <div class="settings-item-label"><span class="settings-item-title"><label for="strandPromptInput">Prompt</label></span></div>
+              <div class="settings-item-control"><textarea id="strandPromptInput" class="settings-textarea" spellcheck="false"></textarea></div>
+            </div>
+            <div class="settings-item">
+              <span id="strandSettingsStatus" class="settings-inline-status" aria-live="polite"></span>
+              <div class="settings-item-control">
+                <button type="button" class="ghost settings-compact" id="strandPromptReset">Reset prompt</button>
+                <button type="button" class="primary settings-compact" id="strandSettingsSave">Save</button>
+              </div>
+            </div>
+          </section>
+        </section>
+
         <section data-settings-panel="system" class="settings-panel" hidden>
           <div class="settings-panel-head">
             <h4>System</h4>
@@ -2768,6 +2918,39 @@
         revealedSensitiveSessionLists: new Set(),
         revealedSensitiveThreads: new Set(),
       };
+
+      // highlights and strands of the open session; see the "anchors" section below
+      const anchors = {
+        sessionId: "", available: false, highlights: [], strands: [], latestRun: null, codexConfigured: false,
+        panel: "", pollTimer: 0, focusStrandId: null, newStrandOpen: false, pendingHighlight: null,
+      };
+      const anchorDom = {
+        highlightDock: document.getElementById("highlightDock"),
+        highlightCount: document.getElementById("highlightDockCount"),
+        strandDock: document.getElementById("strandDock"),
+        strandCount: document.getElementById("strandDockCount"),
+        panel: document.getElementById("anchorPanel"),
+        pop: document.getElementById("highlightPop"),
+      };
+      const codexSettings = { login: null, pollTimer: 0, defaults: null };
+      const codexSettingsDom = {
+        pill: document.getElementById("codexSettingsPill"),
+        hint: document.getElementById("settingsHintCodex"),
+        status: document.getElementById("codexSettingsStatus"),
+        loginRow: document.getElementById("codexSettingsLogin"),
+        code: document.getElementById("codexSettingsCode"),
+        link: document.getElementById("codexSettingsLink"),
+        cancel: document.getElementById("codexSettingsCancel"),
+        signIn: document.getElementById("codexSettingsSignIn"),
+        signOut: document.getElementById("codexSettingsSignOut"),
+        refresh: document.getElementById("codexSettingsRefresh"),
+        model: document.getElementById("strandModelInput"),
+        effort: document.getElementById("strandEffortSelect"),
+        prompt: document.getElementById("strandPromptInput"),
+        resetPrompt: document.getElementById("strandPromptReset"),
+        save: document.getElementById("strandSettingsSave"),
+        strandStatus: document.getElementById("strandSettingsStatus"),
+      };
       let statusTimer = 0;
       let pdfJsPromise = null;
       let sessionMoveFocusTarget = null;
@@ -2979,6 +3162,8 @@
       });
       dom.aiSettingsClose.addEventListener("click", () => dom.aiSettingsDialog.close());
       bindSettingsEvents();
+      bindAnchorEvents();
+      bindCodexSettingsEvents();
       bindContextSearchEvents();
       bindDialogBackdropClose(dom.groupDialog, dom.groupDialogClose);
       bindDialogBackdropClose(dom.sessionMoveDialog, dom.sessionMoveCancel);
@@ -3545,6 +3730,7 @@
         for (const panel of document.querySelectorAll("[data-settings-panel]")) {
           panel.hidden = panel.dataset.settingsPanel !== name;
         }
+        if (name === "codex") loadCodexSettingsTab();
         renderSettingsDirty();
       }
 
@@ -4525,6 +4711,7 @@
           state.files = { session: [], group: [] };
           renderFiles();
           renderExchanges();
+          resetAnchors();
           return;
         }
         state.selectedSessionId = sessionId;
@@ -4550,6 +4737,7 @@
           renderFiles();
           renderExchanges();
           if (quiet) scrollContainer.scrollTop = scrollTop;
+          loadAnchors(sessionId);
         } finally {
           if (!quiet && loadGeneration === state.sessionLoadGeneration) setBusy(false);
         }
@@ -7303,6 +7491,7 @@
           target.append(state.layout === "pairs" ? renderExchange(exchange) : renderExGroup(exchange));
         }
         if (target !== dom.exchangeList) dom.exchangeList.append(target);
+        applyAnchorDecorations();
         updateTurnPosition();
       }
 
@@ -7483,6 +7672,7 @@
       // bubbles / thread: each exchange becomes a USER + MODEL message pair plus an action row
       function renderExGroup(exchange) {
         const group = div("ex-group" + (exchange.is_deleted ? " is-deleted" : ""));
+        group.dataset.exchangeId = String(exchange.exchange_id);
         if (exchange.is_deleted) {
           group.append(renderExcludedTurnBar(exchange));
           return group;
@@ -8065,6 +8255,868 @@
       }
 
       // ---------- API (with offline demo fallback) ----------
+      // ---------- anchors: highlights and strands (admin-only, never shown to models) ----------
+      // A highlight is a verbatim quote inside one turn; a strand is a named set of exchange
+      // ranges. Strand proposals come from Codex only when the owner presses the button.
+
+      const HIGHLIGHT_REGISTRY = "bridge-highlight";
+      const HIGHLIGHT_FOCUS_REGISTRY = "bridge-highlight-focus";
+      const HIGHLIGHT_MARKUP_CHARS = new Set(["*", "_", "`", "#", ">", "|", "~"]);
+      const HIGHLIGHT_BLOCK_SELECTOR = "p, li, h1, h2, h3, h4, h5, h6, pre, blockquote, td, th, div";
+      const HIGHLIGHT_STATUS_LABELS = Object.freeze({
+        source_changed: "Source changed · quote kept",
+        source_excluded: "Exchange excluded · quote kept",
+        source_masked: "Response masked · quote kept",
+        source_deleted: "Source gone · quote kept",
+      });
+      const ANCHOR_ICONS = Object.freeze({
+        trash: '<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" aria-hidden="true"><path d="M3 4h8M5.5 4V2.8h3V4M4 4l.6 7.5h4.8L10 4"></path></svg>',
+        pen: '<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" aria-hidden="true"><path d="M2 10.5V12h1.5L11 4.5 9.5 3 2 10.5z"></path></svg>',
+        check: '<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 7.5 2.5 2.5L11 4.5"></path></svg>',
+        cross: '<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="m4 4 6 6M10 4l-6 6"></path></svg>',
+      });
+
+      function resetAnchors() {
+        window.clearTimeout(anchors.pollTimer);
+        Object.assign(anchors, {
+          sessionId: "", available: false, highlights: [], strands: [], latestRun: null,
+          panel: "", focusStrandId: null, newStrandOpen: false, pendingHighlight: null,
+        });
+        hideHighlightPop();
+        renderAnchors();
+      }
+
+      async function loadAnchors(sessionId) {
+        if (anchors.sessionId !== sessionId) {
+          window.clearTimeout(anchors.pollTimer);
+          Object.assign(anchors, { panel: "", focusStrandId: null, newStrandOpen: false, highlights: [], strands: [], latestRun: null });
+          hideHighlightPop();
+        }
+        anchors.sessionId = sessionId;
+        const base = `/admin/api/sessions/${encodeURIComponent(sessionId)}`;
+        try {
+          const [highlightPayload, strandPayload] = await Promise.all([api(`${base}/highlights`), api(`${base}/strands`)]);
+          if (anchors.sessionId !== sessionId) return;
+          anchors.available = true;
+          anchors.highlights = highlightPayload.highlights || [];
+          applyStrandPayload(strandPayload);
+        } catch (_) {
+          if (anchors.sessionId !== sessionId) return;
+          anchors.available = false;
+        }
+        renderAnchors();
+      }
+
+      function applyStrandPayload(payload) {
+        anchors.strands = payload.strands || [];
+        anchors.latestRun = payload.latest_run || null;
+        anchors.codexConfigured = Boolean(payload.codex_configured);
+        if (anchors.focusStrandId && !anchors.strands.some((item) => item.strand_id === anchors.focusStrandId)) {
+          anchors.focusStrandId = null;
+        }
+        scheduleStrandRunPoll();
+      }
+
+      function strandRunActive(run) {
+        return Boolean(run && (run.status === "queued" || run.status === "running"));
+      }
+
+      function scheduleStrandRunPoll() {
+        window.clearTimeout(anchors.pollTimer);
+        if (!strandRunActive(anchors.latestRun)) return;
+        const sessionId = anchors.sessionId;
+        anchors.pollTimer = window.setTimeout(async () => {
+          try {
+            const payload = await api(`/admin/api/sessions/${encodeURIComponent(sessionId)}/strands`);
+            if (anchors.sessionId !== sessionId) return;
+            const wasActive = strandRunActive(anchors.latestRun);
+            applyStrandPayload(payload);
+            renderAnchors();
+            if (wasActive && anchors.latestRun?.status === "completed") setStatus(`Codex proposed ${anchors.latestRun.proposed_count} strands. Review them in Strands.`);
+            if (wasActive && anchors.latestRun?.status === "failed") setStatus(anchors.latestRun.error_message || "The Codex run failed.", "error");
+          } catch (_) {
+            if (anchors.sessionId === sessionId) scheduleStrandRunPoll();
+          }
+        }, 2500);
+      }
+
+      function renderAnchors() {
+        renderAnchorDocks();
+        renderAnchorPanel();
+        applyAnchorDecorations();
+      }
+
+      function renderAnchorDocks() {
+        const show = Boolean(state.selectedSession) && anchors.available && !selectedThreadIsGuarded();
+        const pending = anchors.strands.filter((item) => item.status === "pending").length;
+        const docks = [
+          [anchorDom.highlightDock, anchorDom.highlightCount, "highlights", anchors.highlights.length, `Highlights: ${anchors.highlights.length} in this session`],
+          [anchorDom.strandDock, anchorDom.strandCount, "strands", anchors.strands.length, `Strands: ${anchors.strands.length} in this session${pending ? `, ${pending} proposed` : ""}`],
+        ];
+        for (const [dock, count, name, total, labelText] of docks) {
+          dock.hidden = !show;
+          count.textContent = String(total);
+          dock.setAttribute("aria-expanded", anchors.panel === name ? "true" : "false");
+          dock.setAttribute("aria-label", labelText);
+          dock.title = labelText;
+        }
+        anchorDom.strandDock.classList.toggle("has-pending", pending > 0);
+        anchorDom.strandDock.classList.toggle("is-running", strandRunActive(anchors.latestRun));
+      }
+
+      function toggleAnchorPanel(name) {
+        anchors.panel = anchors.panel === name ? "" : name;
+        anchors.newStrandOpen = false;
+        if (anchors.panel !== "strands") anchors.focusStrandId = null;
+        renderAnchors();
+      }
+
+      function closeAnchorPanel() {
+        anchors.panel = "";
+        anchors.newStrandOpen = false;
+        anchors.focusStrandId = null;
+        renderAnchors();
+      }
+
+      function renderAnchorPanel() {
+        const panel = anchorDom.panel;
+        panel.replaceChildren();
+        if (!anchors.panel || !anchors.available || !state.selectedSession || selectedThreadIsGuarded()) {
+          panel.hidden = true;
+          return;
+        }
+        panel.hidden = false;
+        panel.setAttribute("aria-label", anchors.panel === "highlights" ? "Highlights in this session" : "Strands in this session");
+        if (anchors.panel === "highlights") renderHighlightPanel(panel);
+        else renderStrandPanel(panel);
+      }
+
+      function anchorPanelHead(title, count, extra = []) {
+        const head = div("anchor-panel-head");
+        const close = anchorIconButton("cross", `Close ${title.toLowerCase()}`, closeAnchorPanel);
+        head.append(spanCls("anchor-panel-title", title), spanCls("anchor-panel-count", String(count)), div("anchor-spacer"), ...extra, close);
+        return head;
+      }
+
+      function anchorIconButton(icon, labelText, onClick, extraClass = "") {
+        const node = button("", onClick, `ghost anchor-icon-button${extraClass ? ` ${extraClass}` : ""}`);
+        node.innerHTML = ANCHOR_ICONS[icon];
+        node.setAttribute("aria-label", labelText);
+        node.title = labelText;
+        return node;
+      }
+
+      function anchorEmpty(text) {
+        const node = document.createElement("p");
+        node.className = "anchor-empty";
+        node.textContent = text;
+        return node;
+      }
+
+      function anchorNotice(text, tone = "") {
+        return div(`anchor-notice${tone ? ` is-${tone}` : ""}`, text);
+      }
+
+      // ---------- highlights panel ----------
+
+      function renderHighlightPanel(panel) {
+        panel.append(anchorPanelHead("Highlights", anchors.highlights.length));
+        if (!anchors.highlights.length) {
+          panel.append(anchorEmpty("Select text inside one turn of the conversation, then press Highlight."));
+          return;
+        }
+        const list = div("anchor-list");
+        for (const item of anchors.highlights) {
+          const row = div("anchor-row");
+          const main = button("", () => focusHighlight(item), "anchor-row-main");
+          const meta = div("anchor-meta");
+          const speaker = item.side === "user" ? userDisplayName() : (item.model_name || "Model");
+          meta.append(spanCls("anchor-ex", `#${item.exchange_id}`), spanCls("", `· ${speaker}`));
+          if (item.status !== "ok") meta.append(spanCls("anchor-badge", HIGHLIGHT_STATUS_LABELS[item.status] || item.status));
+          main.append(spanCls("anchor-quote", `„${item.quote}”`), meta);
+          row.append(spanCls("anchor-dot", ""), main, anchorIconButton("trash", "Delete highlight", () => deleteHighlight(item)));
+          list.append(row);
+        }
+        panel.append(list);
+      }
+
+      async function deleteHighlight(item) {
+        const preview = item.quote.length > 140 ? `${item.quote.slice(0, 140)}…` : item.quote;
+        const confirmed = await window.adminConfirmation.confirm({
+          title: "Delete highlight?",
+          message: `„${preview}”`,
+          detail: "Only the highlight is removed. The transcript stays as it is.",
+          confirmLabel: "Delete highlight",
+          tone: "danger",
+        });
+        if (!confirmed) return;
+        try {
+          await api(`/admin/api/highlights/${item.highlight_id}`, { method: "DELETE" });
+          anchors.highlights = anchors.highlights.filter((entry) => entry.highlight_id !== item.highlight_id);
+          renderAnchors();
+          setStatus("Highlight deleted.");
+        } catch (error) {
+          setStatus(error.message, "error");
+        }
+      }
+
+      function focusHighlight(item) {
+        const content = highlightContent(item);
+        const range = item.status === "ok" && content ? findQuoteRange(content, item.quote) : null;
+        const target = range ? range.startContainer.parentElement : dom.exchangeList.querySelector(`[data-exchange-id="${item.exchange_id}"]`);
+        if (!target) {
+          setStatus("This exchange is not shown in the current view.", "warn");
+          return;
+        }
+        target.scrollIntoView({ block: "center", behavior: "smooth" });
+        if (!range) {
+          setStatus(HIGHLIGHT_STATUS_LABELS[item.status] || "The quote was not found in the current view.", "warn");
+          return;
+        }
+        if (window.CSS && CSS.highlights && typeof Highlight === "function") {
+          CSS.highlights.set(HIGHLIGHT_FOCUS_REGISTRY, new Highlight(range));
+          window.setTimeout(() => CSS.highlights.delete(HIGHLIGHT_FOCUS_REGISTRY), 2200);
+        }
+      }
+
+      // ---------- strands panel ----------
+
+      function renderStrandPanel(panel) {
+        const newButton = button("+ New", () => { anchors.newStrandOpen = !anchors.newStrandOpen; renderAnchorPanel(); }, "ghost anchor-compact");
+        newButton.setAttribute("aria-expanded", anchors.newStrandOpen ? "true" : "false");
+        panel.append(anchorPanelHead("Strands", anchors.strands.length, [newButton]));
+        if (anchors.newStrandOpen) panel.append(renderNewStrandForm());
+
+        const run = anchors.latestRun;
+        if (strandRunActive(run)) {
+          panel.append(anchorNotice(`Codex is reading ${run.exchange_count} exchanges with ${run.model} · ${run.effort}…`, "running"));
+        } else if (run && run.status === "failed") {
+          panel.append(anchorNotice(`Last Codex run failed: ${run.error_message || "unknown error"}`, "error"));
+        }
+
+        const pending = anchors.strands.filter((item) => item.status === "pending");
+        const accepted = anchors.strands.filter((item) => item.status === "accepted");
+        if (pending.length) {
+          const box = div("anchor-proposal");
+          const head = div("anchor-proposal-head");
+          head.append(
+            spanCls("", `Codex proposed ${pending.length}`),
+            div("anchor-spacer"),
+            button("Discard all", () => discardStrands(null), "ghost anchor-compact"),
+            button("Accept all", () => acceptStrands(null), "anchor-compact anchor-accept"),
+          );
+          box.append(head);
+          for (const strand of pending) box.append(strandRow(strand, true));
+          panel.append(box);
+        }
+        if (accepted.length) {
+          const list = div("anchor-list");
+          for (const strand of accepted) list.append(strandRow(strand, false));
+          panel.append(list);
+        }
+        if (!anchors.strands.length && !strandRunActive(run)) {
+          panel.append(anchorEmpty("No strands yet. Ask Codex to propose them, or add one by hand with + New. Codex never runs on its own."));
+        }
+        panel.append(strandFooter(pending.length));
+      }
+
+      function strandRow(strand, isPending) {
+        const row = div(`anchor-row${anchors.focusStrandId === strand.strand_id ? " is-focus" : ""}`);
+        const main = button("", () => focusStrand(strand), "anchor-row-main");
+        const meta = div("anchor-meta");
+        meta.append(spanCls("anchor-ex", formatStrandRanges(strand.ranges)), spanCls("", `· ${strand.origin === "codex" ? "Codex" : "Manual"}`));
+        main.append(spanCls("anchor-title", strand.title), meta);
+        row.append(main);
+        if (isPending) {
+          row.append(
+            anchorIconButton("cross", "Discard proposal", () => discardStrands(strand.strand_id)),
+            anchorIconButton("check", "Accept proposal", () => acceptStrands(strand.strand_id), "anchor-accept"),
+          );
+        } else {
+          row.append(
+            anchorIconButton("pen", "Rename strand", () => renameStrand(strand)),
+            anchorIconButton("trash", "Delete strand", () => deleteStrand(strand)),
+          );
+        }
+        return row;
+      }
+
+      function strandFooter(pendingCount) {
+        const foot = div("anchor-foot");
+        const run = anchors.latestRun;
+        const active = strandRunActive(run);
+        const propose = button(active ? "Codex is working…" : "Propose with Codex", proposeStrands, "anchor-compact anchor-accept");
+        propose.disabled = active || pendingCount > 0 || !anchors.codexConfigured;
+        propose.title = !anchors.codexConfigured
+          ? "Codex App Server is not configured on this Bridge."
+          : pendingCount ? "Accept or discard the pending proposal first."
+          : active ? "A Codex run for this session is in progress."
+          : "Send this whole session to Codex once and get proposed strands to review.";
+        foot.append(propose, div("anchor-spacer"));
+        const revertRunId = latestAcceptedCodexRun();
+        if (revertRunId) foot.append(button(`Revert run #${revertRunId}`, () => revertStrandRun(revertRunId), "ghost anchor-compact anchor-danger"));
+        return foot;
+      }
+
+      function latestAcceptedCodexRun() {
+        const ids = anchors.strands.filter((item) => item.origin === "codex" && item.status === "accepted" && item.run_id).map((item) => item.run_id);
+        return ids.length ? Math.max(...ids) : null;
+      }
+
+      function formatStrandRanges(ranges) {
+        return (ranges || []).map((item) => (
+          item.start_exchange_id === item.end_exchange_id ? `#${item.start_exchange_id}` : `#${item.start_exchange_id}–${item.end_exchange_id}`
+        )).join(", ");
+      }
+
+      function strandExchangeIds(strand) {
+        const order = state.exchanges.map((exchange) => exchange.exchange_id);
+        const covered = new Set();
+        for (const item of strand?.ranges || []) {
+          const start = order.indexOf(item.start_exchange_id);
+          const end = order.indexOf(item.end_exchange_id);
+          if (start < 0 || end < start) continue;
+          for (const id of order.slice(start, end + 1)) covered.add(id);
+        }
+        return covered;
+      }
+
+      function focusStrand(strand) {
+        anchors.focusStrandId = anchors.focusStrandId === strand.strand_id ? null : strand.strand_id;
+        renderAnchors();
+        if (!anchors.focusStrandId) return;
+        const first = strand.ranges?.[0]?.start_exchange_id;
+        const target = first && dom.exchangeList.querySelector(`[data-exchange-id="${first}"]`);
+        if (target) target.scrollIntoView({ block: "start", behavior: "smooth" });
+        else setStatus("This strand's first exchange is not shown in the current view.", "warn");
+      }
+
+      function renderNewStrandForm() {
+        const form = document.createElement("form");
+        form.className = "anchor-form";
+        const visible = state.exchanges.filter((exchange) => !exchange.is_deleted);
+        const titleLabel = document.createElement("label");
+        titleLabel.textContent = "Title";
+        const titleInput = document.createElement("input");
+        titleInput.required = true;
+        titleInput.maxLength = 120;
+        titleInput.placeholder = "What this part of the conversation is about";
+        titleLabel.append(titleInput);
+        const range = div("anchor-form-range");
+        const selects = ["From", "To"].map((text, index) => {
+          const wrap = document.createElement("label");
+          wrap.textContent = text;
+          const select = document.createElement("select");
+          for (const exchange of visible) {
+            const option = document.createElement("option");
+            option.value = String(exchange.exchange_id);
+            option.textContent = `#${exchange.exchange_id}`;
+            select.append(option);
+          }
+          if (visible.length) select.value = String(visible[index === 0 ? 0 : visible.length - 1].exchange_id);
+          wrap.append(select);
+          range.append(wrap);
+          return select;
+        });
+        const actions = div("anchor-form-actions");
+        actions.append(
+          button("Cancel", () => { anchors.newStrandOpen = false; renderAnchorPanel(); }, "ghost anchor-compact"),
+          button("Add strand", null, "anchor-compact anchor-accept", "submit"),
+        );
+        form.append(titleLabel, range, actions);
+        form.addEventListener("submit", async (event) => {
+          event.preventDefault();
+          const sessionId = anchors.sessionId;
+          try {
+            const payload = await api(`/admin/api/sessions/${encodeURIComponent(sessionId)}/strands`, {
+              method: "POST",
+              body: JSON.stringify({ title: titleInput.value, ranges: [{ start: Number(selects[0].value), end: Number(selects[1].value) }] }),
+            });
+            if (anchors.sessionId !== sessionId) return;
+            anchors.newStrandOpen = false;
+            await reloadStrands();
+            anchors.focusStrandId = payload.strand.strand_id;
+            renderAnchors();
+            setStatus("Strand added.");
+          } catch (error) {
+            setStatus(error.message, "error");
+          }
+        });
+        window.setTimeout(() => titleInput.focus(), 0);
+        return form;
+      }
+
+      async function reloadStrands() {
+        const sessionId = anchors.sessionId;
+        const payload = await api(`/admin/api/sessions/${encodeURIComponent(sessionId)}/strands`);
+        if (anchors.sessionId !== sessionId) return;
+        applyStrandPayload(payload);
+        renderAnchors();
+      }
+
+      async function acceptStrands(strandId) {
+        await pendingStrandAction("accept", strandId, strandId ? "Strand accepted." : "All proposed strands accepted.");
+      }
+
+      async function discardStrands(strandId) {
+        if (strandId === null) {
+          const confirmed = await window.adminConfirmation.confirm({
+            title: "Discard all proposed strands?",
+            message: "The proposals from this Codex run are removed. Accepted and manual strands stay.",
+            confirmLabel: "Discard proposals",
+            tone: "warning",
+          });
+          if (!confirmed) return;
+        }
+        await pendingStrandAction("discard", strandId, strandId ? "Proposal discarded." : "Proposals discarded.");
+      }
+
+      async function pendingStrandAction(action, strandId, message) {
+        const sessionId = anchors.sessionId;
+        try {
+          const payload = await api(`/admin/api/sessions/${encodeURIComponent(sessionId)}/strands/${action}`, {
+            method: "POST",
+            body: JSON.stringify(strandId ? { strand_id: strandId } : {}),
+          });
+          if (anchors.sessionId !== sessionId) return;
+          applyStrandPayload(payload);
+          renderAnchors();
+          setStatus(message);
+        } catch (error) {
+          setStatus(error.message, "error");
+        }
+      }
+
+      async function renameStrand(strand) {
+        const title = await window.adminConfirmation.prompt({
+          title: "Rename strand",
+          inputLabel: "Title",
+          defaultValue: strand.title,
+          confirmLabel: "Rename",
+          initialFocus: "input",
+        });
+        if (title === null || title.trim() === strand.title) return;
+        try {
+          await api(`/admin/api/strands/${strand.strand_id}`, { method: "PATCH", body: JSON.stringify({ title }) });
+          await reloadStrands();
+        } catch (error) {
+          setStatus(error.message, "error");
+        }
+      }
+
+      async function deleteStrand(strand) {
+        const confirmed = await window.adminConfirmation.confirm({
+          title: "Delete strand?",
+          message: strand.title,
+          detail: "Only the strand is removed. The transcript stays as it is.",
+          confirmLabel: "Delete strand",
+          tone: "danger",
+        });
+        if (!confirmed) return;
+        try {
+          await api(`/admin/api/strands/${strand.strand_id}`, { method: "DELETE" });
+          await reloadStrands();
+          setStatus("Strand deleted.");
+        } catch (error) {
+          setStatus(error.message, "error");
+        }
+      }
+
+      async function revertStrandRun(runId) {
+        const count = anchors.strands.filter((item) => item.run_id === runId).length;
+        const confirmed = await window.adminConfirmation.confirm({
+          title: `Revert Codex run #${runId}?`,
+          message: `Removes the ${count} strand${count === 1 ? "" : "s"} this run proposed, accepted or not.`,
+          detail: "Manual strands and other runs stay as they are.",
+          confirmLabel: "Revert run",
+          tone: "danger",
+        });
+        if (!confirmed) return;
+        try {
+          await api(`/admin/api/strand-runs/${runId}/revert`, { method: "POST", body: "{}" });
+          await reloadStrands();
+          setStatus(`Codex run #${runId} reverted.`);
+        } catch (error) {
+          setStatus(error.message, "error");
+        }
+      }
+
+      async function proposeStrands() {
+        const sessionId = anchors.sessionId;
+        let settings;
+        try {
+          settings = (await api("/admin/api/settings/strands")).settings;
+        } catch (error) {
+          setStatus(error.message, "error");
+          return;
+        }
+        const visible = state.exchanges.filter((exchange) => !exchange.is_deleted);
+        const tokens = visible.reduce((sum, exchange) => (
+          sum + (exchange.user_message_token_count || 0) + (exchange.is_masked ? 0 : (exchange.assistant_response_token_count || 0))
+        ), 0);
+        const group = state.groups.find((item) => item.group_id === state.selectedSession?.group_id);
+        const sensitive = Boolean(group?.is_sensitive);
+        const confirmed = await window.adminConfirmation.confirm({
+          title: "Propose strands with Codex?",
+          message: `Sends all ${visible.length} exchanges (about ${formatNumber(tokens)} tokens) to ${settings.model} · ${settings.effort}, once.`,
+          detail: sensitive
+            ? "This session is in a sensitive group: its whole transcript leaves this server for Codex. Proposals wait for your review."
+            : "Proposals wait for your review. Nothing runs again until you press this button.",
+          confirmLabel: sensitive ? "Send this once" : "Propose strands",
+          tone: sensitive ? "warning" : "default",
+        });
+        if (!confirmed || anchors.sessionId !== sessionId) return;
+        try {
+          const payload = await api(`/admin/api/sessions/${encodeURIComponent(sessionId)}/strand-runs`, {
+            method: "POST",
+            body: JSON.stringify({ confirm_sensitive: sensitive }),
+          });
+          if (anchors.sessionId !== sessionId) return;
+          anchors.latestRun = payload.run;
+          scheduleStrandRunPoll();
+          renderAnchors();
+        } catch (error) {
+          setStatus(error.message, "error");
+          await reloadStrands().catch(() => {});
+        }
+      }
+
+      // ---------- selecting text to highlight ----------
+
+      function turnContentOf(node) {
+        const element = node && (node.nodeType === Node.ELEMENT_NODE ? node : node.parentElement);
+        return element ? element.closest(".turn-content, .msg-content") : null;
+      }
+
+      function evaluateHighlightSelection() {
+        anchors.pendingHighlight = null;
+        if (!anchors.available || !state.selectedSession || state.rawVisible) { hideHighlightPop(); return; }
+        const selection = window.getSelection();
+        if (!selection || selection.isCollapsed || !selection.rangeCount) { hideHighlightPop(); return; }
+        const text = selection.toString().trim();
+        const range = selection.getRangeAt(0);
+        if (text.length < 3 || !dom.exchangeList.contains(range.commonAncestorContainer)) { hideHighlightPop(); return; }
+        const startContent = turnContentOf(range.startContainer);
+        const endContent = turnContentOf(range.endContainer);
+        if (!startContent && !endContent) { hideHighlightPop(); return; }
+        const exchangeNode = startContent?.closest("[data-exchange-id]");
+        if (!startContent || startContent !== endContent || !exchangeNode) {
+          showHighlightPop(range.getBoundingClientRect(), null);
+          return;
+        }
+        const side = startContent.closest(".turn.user, .message.is-user") ? "user" : "model";
+        anchors.pendingHighlight = { exchange_id: Number(exchangeNode.dataset.exchangeId), side, quote: text };
+        showHighlightPop(range.getBoundingClientRect(), anchors.pendingHighlight);
+      }
+
+      function showHighlightPop(rect, payload) {
+        const pop = anchorDom.pop;
+        pop.replaceChildren();
+        pop.classList.toggle("is-hint", !payload);
+        pop.disabled = !payload;
+        if (payload) {
+          pop.append(spanCls("highlight-pop-swatch", ""), document.createTextNode("Highlight"));
+          pop.setAttribute("aria-label", "Highlight the selected text");
+        } else {
+          pop.textContent = "A highlight lives inside one turn";
+          pop.removeAttribute("aria-label");
+        }
+        pop.hidden = false;
+        const width = pop.offsetWidth || 120;
+        const top = Math.min(window.innerHeight - 44, rect.bottom + 8);
+        const left = Math.max(8, Math.min(window.innerWidth - width - 8, rect.left + rect.width / 2 - width / 2));
+        pop.style.top = `${Math.max(8, top)}px`;
+        pop.style.left = `${left}px`;
+      }
+
+      function hideHighlightPop() {
+        if (anchorDom.pop) anchorDom.pop.hidden = true;
+      }
+
+      async function saveHighlight() {
+        const payload = anchors.pendingHighlight;
+        if (!payload) return;
+        const sessionId = anchors.sessionId;
+        hideHighlightPop();
+        try {
+          const result = await api(`/admin/api/sessions/${encodeURIComponent(sessionId)}/highlights`, {
+            method: "POST",
+            body: JSON.stringify(payload),
+          });
+          if (anchors.sessionId !== sessionId) return;
+          anchors.highlights = [result.highlight, ...anchors.highlights.filter((item) => item.highlight_id !== result.highlight.highlight_id)];
+          anchors.pendingHighlight = null;
+          window.getSelection()?.removeAllRanges();
+          renderAnchors();
+          setStatus("Highlight saved.");
+        } catch (error) {
+          setStatus(error.message, "error");
+        }
+      }
+
+      // ---------- marking highlights and the focused strand in the transcript ----------
+
+      function highlightContent(item) {
+        const node = dom.exchangeList.querySelector(`[data-exchange-id="${item.exchange_id}"]`);
+        if (!node) return null;
+        return node.querySelector(item.side === "user"
+          ? ".turn.user .turn-content, .message.is-user .msg-content"
+          : ".turn.model .turn-content, .message.is-model .msg-content");
+      }
+
+      function normalizeHighlightChars(text, onChar) {
+        let lastSpace = true;
+        for (let index = 0; index < text.length; index += 1) {
+          let value = text[index].normalize("NFKC").toLowerCase();
+          if (HIGHLIGHT_MARKUP_CHARS.has(value)) continue;
+          if (/\s/.test(value)) {
+            if (lastSpace) continue;
+            value = " ";
+            lastSpace = true;
+          } else {
+            lastSpace = false;
+          }
+          for (const char of value) onChar(char, index);
+        }
+        return lastSpace;
+      }
+
+      function normalizeHighlightText(text) {
+        let result = "";
+        normalizeHighlightChars(text, (char) => { result += char; });
+        return result.trim();
+      }
+
+      // Rendered text has no markdown, but paragraphs meet without a space; a block
+      // boundary therefore counts as whitespace, like it does in the selection text.
+      function findQuoteRange(root, quote) {
+        const target = normalizeHighlightText(quote);
+        if (!target) return null;
+        const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+        let flat = "";
+        const map = [];
+        let previousBlock = null;
+        for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+          const block = node.parentElement?.closest(HIGHLIGHT_BLOCK_SELECTOR) || root;
+          if (previousBlock && block !== previousBlock && flat && !flat.endsWith(" ")) {
+            flat += " ";
+            map.push([node, 0]);
+          }
+          previousBlock = block;
+          let pendingSpace = false;
+          let leading = flat.length === 0 || flat.endsWith(" ");
+          const value = node.nodeValue;
+          for (let index = 0; index < value.length; index += 1) {
+            let chars = value[index].normalize("NFKC").toLowerCase();
+            if (HIGHLIGHT_MARKUP_CHARS.has(chars)) continue;
+            if (/\s/.test(chars)) {
+              if (!leading) pendingSpace = true;
+              continue;
+            }
+            if (pendingSpace) {
+              flat += " ";
+              map.push([node, index]);
+              pendingSpace = false;
+            }
+            leading = false;
+            for (const char of chars) {
+              flat += char;
+              map.push([node, index]);
+            }
+          }
+          if (pendingSpace) {
+            flat += " ";
+            map.push([node, value.length - 1]);
+          }
+        }
+        const start = flat.indexOf(target);
+        if (start < 0) return null;
+        const first = map[start];
+        const last = map[start + target.length - 1];
+        const range = document.createRange();
+        range.setStart(first[0], first[1]);
+        range.setEnd(last[0], Math.min(last[1] + 1, last[0].nodeValue.length));
+        return range;
+      }
+
+      function applyAnchorDecorations() {
+        if (window.CSS && CSS.highlights && typeof Highlight === "function") {
+          const ranges = [];
+          if (state.selectedSession && anchors.sessionId === state.selectedSessionId && !state.rawVisible) {
+            for (const item of anchors.highlights) {
+              if (item.status !== "ok") continue;
+              const content = highlightContent(item);
+              const range = content && findQuoteRange(content, item.quote);
+              if (range) ranges.push(range);
+            }
+          }
+          CSS.highlights.set(HIGHLIGHT_REGISTRY, new Highlight(...ranges));
+        }
+        const strand = anchors.strands.find((item) => item.strand_id === anchors.focusStrandId);
+        const covered = strand ? strandExchangeIds(strand) : new Set();
+        for (const node of dom.exchangeList.querySelectorAll("[data-exchange-id]")) {
+          node.classList.toggle("is-strand-focus", covered.has(Number(node.dataset.exchangeId)));
+        }
+      }
+
+      function bindAnchorEvents() {
+        anchorDom.highlightDock.addEventListener("click", () => toggleAnchorPanel("highlights"));
+        anchorDom.strandDock.addEventListener("click", () => toggleAnchorPanel("strands"));
+        anchorDom.pop.addEventListener("mousedown", (event) => event.preventDefault());
+        anchorDom.pop.addEventListener("click", () => saveHighlight());
+        dom.exchangeList.addEventListener("mouseup", () => window.setTimeout(evaluateHighlightSelection, 0));
+        dom.exchangeList.addEventListener("keyup", (event) => {
+          if (event.shiftKey) window.setTimeout(evaluateHighlightSelection, 0);
+        });
+        document.addEventListener("selectionchange", () => {
+          const selection = window.getSelection();
+          if (!selection || selection.isCollapsed) hideHighlightPop();
+        });
+        document.addEventListener("scroll", hideHighlightPop, true);
+        document.addEventListener("keydown", (event) => {
+          if (event.key !== "Escape" || document.querySelector("dialog[open]")) return;
+          if (!anchorDom.pop.hidden) { hideHighlightPop(); return; }
+          if (anchors.panel) closeAnchorPanel();
+        });
+      }
+
+      // ---------- Settings › Codex ----------
+
+      function renderCodexSettings(status, message = "") {
+        const authenticated = Boolean(status?.authenticated);
+        const available = status?.available !== false;
+        const account = status?.account;
+        const accountLabel = account?.email || (account?.type === "api_key" ? "API key account" : "OpenAI account");
+        codexSettingsDom.status.textContent = message || (authenticated
+          ? `Connected as ${accountLabel}${account?.plan_type ? ` (${account.plan_type})` : ""}.`
+          : available ? "Not signed in. Sign in with the OpenAI account whose plan Codex should use." : "Codex App Server is unavailable on this Bridge.");
+        const tone = authenticated ? "ok" : available ? "warn" : "fail";
+        codexSettingsDom.pill.dataset.tone = tone;
+        codexSettingsDom.pill.textContent = authenticated ? "Ready" : available ? "Signed out" : "Unavailable";
+        codexSettingsDom.hint.dataset.tone = tone;
+        codexSettingsDom.hint.textContent = authenticated ? "Ready" : available ? "Sign in" : "Off";
+        codexSettingsDom.signIn.hidden = authenticated || Boolean(codexSettings.login) || !available;
+        codexSettingsDom.signOut.hidden = !authenticated;
+        codexSettingsDom.loginRow.hidden = !codexSettings.login || authenticated;
+        if (codexSettings.login && !authenticated) {
+          codexSettingsDom.code.textContent = codexSettings.login.user_code || "";
+          codexSettingsDom.link.href = codexSettings.login.verification_url || "#";
+        }
+      }
+
+      async function refreshCodexSettings(loginPoll = false) {
+        window.clearTimeout(codexSettings.pollTimer);
+        try {
+          const payload = await api(loginPoll ? "/admin/api/codex/auth/device/status" : "/admin/api/codex/status");
+          const status = payload.codex;
+          if (status.authenticated || (status.login_status && status.login_status !== "pending")) codexSettings.login = null;
+          renderCodexSettings(status);
+          if (loginPoll && status.login_status === "pending" && dom.aiSettingsDialog.open) {
+            codexSettings.pollTimer = window.setTimeout(() => refreshCodexSettings(true), 2000);
+          }
+        } catch (error) {
+          codexSettings.login = null;
+          renderCodexSettings({ available: false, authenticated: false }, error.message || "Codex App Server is unavailable.");
+        }
+      }
+
+      async function startCodexSettingsLogin() {
+        codexSettingsDom.signIn.disabled = true;
+        try {
+          const payload = await api("/admin/api/codex/auth/device/start", { method: "POST" });
+          codexSettings.login = payload.login;
+          renderCodexSettings({ available: true, authenticated: false }, "Open the OpenAI sign-in page and enter the code.");
+          codexSettings.pollTimer = window.setTimeout(() => refreshCodexSettings(true), 1500);
+        } catch (error) {
+          renderCodexSettings({ available: true, authenticated: false }, error.message);
+        } finally {
+          codexSettingsDom.signIn.disabled = false;
+        }
+      }
+
+      async function cancelCodexSettingsLogin() {
+        window.clearTimeout(codexSettings.pollTimer);
+        try {
+          await api("/admin/api/codex/auth/device/cancel", { method: "POST" });
+        } catch (_) {
+          // the status refresh below shows what is left
+        }
+        codexSettings.login = null;
+        await refreshCodexSettings();
+      }
+
+      async function signOutCodexSettings() {
+        const confirmed = await window.adminConfirmation.confirm({
+          title: "Sign Codex out?",
+          message: "Strand proposals and Graph stop working until you sign in again.",
+          confirmLabel: "Sign out",
+          tone: "warning",
+        });
+        if (!confirmed) return;
+        try {
+          await api("/admin/api/codex/logout", { method: "POST" });
+          renderCodexSettings({ available: true, authenticated: false }, "Signed out.");
+        } catch (error) {
+          renderCodexSettings({ available: true, authenticated: false }, error.message);
+        }
+      }
+
+      function setStrandSettingsMessage(message, tone = "") {
+        codexSettingsDom.strandStatus.textContent = message;
+        codexSettingsDom.strandStatus.classList.toggle("is-error", tone === "error");
+        codexSettingsDom.strandStatus.classList.toggle("is-ok", tone === "ok");
+      }
+
+      async function loadStrandSettings() {
+        try {
+          const payload = await api("/admin/api/settings/strands");
+          codexSettings.defaults = payload.defaults;
+          codexSettingsDom.model.value = payload.settings.model;
+          codexSettingsDom.effort.value = payload.settings.effort;
+          codexSettingsDom.prompt.value = payload.settings.prompt;
+          setStrandSettingsMessage("");
+        } catch (error) {
+          setStrandSettingsMessage(`Could not load strand settings: ${error.message}`, "error");
+        }
+      }
+
+      async function saveStrandSettings() {
+        codexSettingsDom.save.disabled = true;
+        try {
+          const payload = await api("/admin/api/settings/strands", {
+            method: "PUT",
+            body: JSON.stringify({
+              model: codexSettingsDom.model.value,
+              effort: codexSettingsDom.effort.value,
+              prompt: codexSettingsDom.prompt.value,
+            }),
+          });
+          codexSettingsDom.prompt.value = payload.settings.prompt;
+          setStrandSettingsMessage("Saved. The next Propose with Codex uses these settings.", "ok");
+        } catch (error) {
+          setStrandSettingsMessage(error.message, "error");
+        } finally {
+          codexSettingsDom.save.disabled = false;
+        }
+      }
+
+      function loadCodexSettingsTab() {
+        refreshCodexSettings();
+        loadStrandSettings();
+      }
+
+      function bindCodexSettingsEvents() {
+        codexSettingsDom.signIn.addEventListener("click", startCodexSettingsLogin);
+        codexSettingsDom.cancel.addEventListener("click", cancelCodexSettingsLogin);
+        codexSettingsDom.signOut.addEventListener("click", signOutCodexSettings);
+        codexSettingsDom.refresh.addEventListener("click", () => refreshCodexSettings());
+        codexSettingsDom.save.addEventListener("click", saveStrandSettings);
+        codexSettingsDom.resetPrompt.addEventListener("click", () => {
+          if (codexSettings.defaults) codexSettingsDom.prompt.value = codexSettings.defaults.prompt;
+          setStrandSettingsMessage("Default prompt restored. Save to keep it.");
+        });
+      }
+
       async function api(path, options = {}) {
         if (demo.enabled) return demoApi(path, options);
 

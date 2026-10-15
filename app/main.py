@@ -22,10 +22,12 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
 from app.admin import AdminHandlers
+from app.admin_anchors import AnchorAdminHandlers
 from app.admin_contexts import ContextAdminHandlers
 from app.codex_app_server import CodexAppServerClient
 from app.graph_runtime import GraphRuntime
 from app.oauth import OAuthHandlers
+from app.strand_runtime import StrandRuntime
 from app.pdf_files import (
     MAX_MCP_PDF_BYTES,
     PdfWorkerBusyError,
@@ -144,6 +146,7 @@ async def app_lifespan(_: Any):
             if graph_monitor is not None:
                 with suppress(asyncio.CancelledError):
                     await graph_monitor
+            await strand_runtime.close()
             await codex.close()
 
 
@@ -172,6 +175,8 @@ codex = CodexAppServerClient(
     workspace_dir=CODEX_WORKSPACE_PATH,
 )
 graph_runtime = GraphRuntime(store, codex)
+# Strand runs start only from an admin request; there is no background loop.
+strand_runtime = StrandRuntime(store, codex)
 
 
 async def _request_service_restart() -> None:
@@ -226,6 +231,7 @@ admin = AdminHandlers(
     graph_runtime=graph_runtime,
 )
 contexts_admin = ContextAdminHandlers(admin)
+anchors_admin = AnchorAdminHandlers(admin, strand_runtime)
 
 
 @mcp.custom_route("/healthz", methods=["GET"])
@@ -616,6 +622,76 @@ async def admin_api_refresh_context_block(request: Request) -> Response:
 @mcp.custom_route("/admin/api/context-blocks/{block_id}", methods=["DELETE"])
 async def admin_api_delete_context_block(request: Request) -> Response:
     return await contexts_admin.api_delete_block(request)
+
+
+@mcp.custom_route("/admin/api/sessions/{session_id}/highlights", methods=["GET"])
+async def admin_api_list_highlights(request: Request) -> Response:
+    return await anchors_admin.api_list_highlights(request)
+
+
+@mcp.custom_route("/admin/api/sessions/{session_id}/highlights", methods=["POST"])
+async def admin_api_create_highlight(request: Request) -> Response:
+    return await anchors_admin.api_create_highlight(request)
+
+
+@mcp.custom_route("/admin/api/highlights/{highlight_id}", methods=["DELETE"])
+async def admin_api_delete_highlight(request: Request) -> Response:
+    return await anchors_admin.api_delete_highlight(request)
+
+
+@mcp.custom_route("/admin/api/sessions/{session_id}/strands", methods=["GET"])
+async def admin_api_list_strands(request: Request) -> Response:
+    return await anchors_admin.api_list_strands(request)
+
+
+@mcp.custom_route("/admin/api/sessions/{session_id}/strands", methods=["POST"])
+async def admin_api_create_strand(request: Request) -> Response:
+    return await anchors_admin.api_create_strand(request)
+
+
+@mcp.custom_route("/admin/api/sessions/{session_id}/strands/accept", methods=["POST"])
+async def admin_api_accept_strands(request: Request) -> Response:
+    return await anchors_admin.api_accept_strands(request)
+
+
+@mcp.custom_route("/admin/api/sessions/{session_id}/strands/discard", methods=["POST"])
+async def admin_api_discard_strands(request: Request) -> Response:
+    return await anchors_admin.api_discard_strands(request)
+
+
+@mcp.custom_route("/admin/api/strands/{strand_id}", methods=["PATCH"])
+async def admin_api_update_strand(request: Request) -> Response:
+    return await anchors_admin.api_update_strand(request)
+
+
+@mcp.custom_route("/admin/api/strands/{strand_id}", methods=["DELETE"])
+async def admin_api_delete_strand(request: Request) -> Response:
+    return await anchors_admin.api_delete_strand(request)
+
+
+@mcp.custom_route("/admin/api/sessions/{session_id}/strand-runs", methods=["POST"])
+async def admin_api_start_strand_run(request: Request) -> Response:
+    return await anchors_admin.api_start_strand_run(request)
+
+
+@mcp.custom_route("/admin/api/strand-runs/{run_id}", methods=["GET"])
+async def admin_api_get_strand_run(request: Request) -> Response:
+    return await anchors_admin.api_get_strand_run(request)
+
+
+@mcp.custom_route("/admin/api/strand-runs/{run_id}/revert", methods=["POST"])
+async def admin_api_revert_strand_run(request: Request) -> Response:
+    return await anchors_admin.api_revert_strand_run(request)
+
+
+@mcp.custom_route("/admin/api/settings/strands", methods=["GET"])
+async def admin_api_get_strand_settings(request: Request) -> Response:
+    return await anchors_admin.api_get_strand_settings(request)
+
+
+@mcp.custom_route("/admin/api/settings/strands", methods=["PUT"])
+async def admin_api_update_strand_settings(request: Request) -> Response:
+    return await anchors_admin.api_update_strand_settings(request)
 
 
 @mcp.custom_route("/admin/assets/pdfjs/{asset_name}", methods=["GET"])

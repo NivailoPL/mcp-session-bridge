@@ -2548,6 +2548,8 @@ FEATURE_CONTROLS = {
     "database export": ["databaseExportButton", "databaseExportResult"],
     "settings save bar": ["settingsActionbar", "settingsSaveButton", "settingsDiscardButton"],
     "api keys": ["aiKeyInput", "aiKeyRemoveButton", "cohereKeyInput", "cohereKeyRemoveButton", "openaiKeyPreview", "cohereKeyPreview"],
+    "anchors": ["highlightDock", "strandDock", "anchorPanel", "highlightPop"],
+    "codex settings": ["codexSettingsStatus", "codexSettingsSignIn", "strandModelInput", "strandEffortSelect", "strandPromptInput", "strandSettingsSave"],
 }
 
 
@@ -2569,8 +2571,9 @@ def test_admin_page_does_not_ship_retired_controls(admin_client) -> None:
     client, _ = admin_client(graph_experimental=True)
     page = client.get("/admin/sessions").text
 
-    # Codex was removed from the workspace: neither markup nor route may return.
-    for retired in ('id="codexOpenButton"', 'id="codexDialog"', "/admin/api/codex"):
+    # The Codex test chat was removed from the workspace: neither its markup nor its
+    # route may return. Settings › Codex only shows the connection and sign-in.
+    for retired in ('id="codexOpenButton"', 'id="codexDialog"', "/admin/api/codex/chat"):
         assert retired not in page
     assert client.get("/admin/api/codex").status_code == 404
 

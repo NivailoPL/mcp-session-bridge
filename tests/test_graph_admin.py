@@ -114,11 +114,6 @@ def test_graph_release_gate_blocks_workspace_mutations_and_subscription_actions(
         ("POST", "/admin/api/graph/config/activate", None),
         ("DELETE", "/admin/api/graph/config/draft", None),
         ("PUT", "/admin/api/graph/state", {"enabled": True}),
-        ("GET", "/admin/api/codex/status", None),
-        ("POST", "/admin/api/codex/auth/device/start", None),
-        ("GET", "/admin/api/codex/auth/device/status", None),
-        ("POST", "/admin/api/codex/auth/device/cancel", None),
-        ("POST", "/admin/api/codex/logout", None),
         ("POST", "/admin/api/codex/chat", {"message": "test"}),
     )
 
@@ -128,6 +123,18 @@ def test_graph_release_gate_blocks_workspace_mutations_and_subscription_actions(
         assert response.json()["code"] == "graph_feature_unavailable", path
 
     assert main.store.get_graph_config()["enabled"] is False
+
+    # Settings › Codex manages the account for strand runs, so the account endpoints
+    # are not behind the Graph gate; only the Graph test chat is.
+    for method, path in (
+        ("GET", "/admin/api/codex/status"),
+        ("POST", "/admin/api/codex/auth/device/start"),
+        ("GET", "/admin/api/codex/auth/device/status"),
+        ("POST", "/admin/api/codex/auth/device/cancel"),
+        ("POST", "/admin/api/codex/logout"),
+    ):
+        response = client.request(method, path, headers=headers)
+        assert response.status_code != 409, path
 
 
 def test_graph_release_gate_prevents_background_processing(load_main, monkeypatch) -> None:

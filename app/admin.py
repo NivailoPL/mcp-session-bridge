@@ -329,8 +329,6 @@ class AdminHandlers:
         _, error = self._require_admin(request)
         if error:
             return error
-        if unavailable := self._graph_feature_unavailable():
-            return unavailable
         if self.codex is None:
             return self._codex_unavailable()
         try:
@@ -343,8 +341,6 @@ class AdminHandlers:
         _, error = self._require_admin_mutation(request)
         if error:
             return error
-        if unavailable := self._graph_feature_unavailable():
-            return unavailable
         if self.codex is None:
             return self._codex_unavailable()
         try:
@@ -357,8 +353,6 @@ class AdminHandlers:
         _, error = self._require_admin(request)
         if error:
             return error
-        if unavailable := self._graph_feature_unavailable():
-            return unavailable
         if self.codex is None:
             return self._codex_unavailable()
         try:
@@ -371,8 +365,6 @@ class AdminHandlers:
         _, error = self._require_admin_mutation(request)
         if error:
             return error
-        if unavailable := self._graph_feature_unavailable():
-            return unavailable
         if self.codex is None:
             return self._codex_unavailable()
         try:
@@ -385,8 +377,6 @@ class AdminHandlers:
         _, error = self._require_admin_mutation(request)
         if error:
             return error
-        if unavailable := self._graph_feature_unavailable():
-            return unavailable
         if self.codex is None:
             return self._codex_unavailable()
         try:

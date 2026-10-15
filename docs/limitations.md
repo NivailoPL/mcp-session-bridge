@@ -56,3 +56,7 @@ Remote MCP clients vary in how they display authentication, tool errors, and ser
 The server stores full user messages and full assistant responses. Do not deploy it where untrusted users can write sensitive data unless you have appropriate access controls, backups, and retention policies.
 
 Sessions are unlisted through MCP, and session-scoped file reads cannot select an arbitrary group. This reduces accidental discovery but is not access control: a client that already knows a valid `session_id` can still read that session's transcript and files visible through its current group. The bridge does not understand boundaries created by Claude Projects or other MCP clients, does not issue per-project tokens, and does not prevent access through a guessed or leaked ID.
+
+## Strand Proposals Read The Whole Session
+
+Propose with Codex sends every included exchange of the session in one Codex turn. A session longer than about 460,000 characters is refused rather than cut, so nothing is proposed for it yet. Masked model responses are left out, the session title is never sent, and each run uses the plan of the OpenAI account signed in under Settings › Codex.
