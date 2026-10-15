@@ -2549,7 +2549,9 @@ FEATURE_CONTROLS = {
     "settings save bar": ["settingsActionbar", "settingsSaveButton", "settingsDiscardButton"],
     "api keys": ["aiKeyInput", "aiKeyRemoveButton", "cohereKeyInput", "cohereKeyRemoveButton", "openaiKeyPreview", "cohereKeyPreview"],
     "anchors": ["highlightDock", "strandDock", "anchorPanel", "highlightPop"],
-    "codex settings": ["codexSettingsStatus", "codexSettingsSignIn", "strandModelInput", "strandEffortSelect", "strandPromptInput", "strandSettingsSave"],
+    "codex settings": ["codexSettingsStatus", "codexSettingsSignIn", "codexSettingsCode", "codexSettingsCopy"],
+    "token features": ["tokenFeaturesMaster", "strandsEnabled", "strandModelInput", "strandEffortSelect", "strandPromptInput", "strandSettingsSave"],
+    "anchor docks": ["anchorDocks"],
 }
 
 

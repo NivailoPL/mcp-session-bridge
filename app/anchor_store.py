@@ -22,6 +22,8 @@ from app.highlights import (
 )
 from app.strands import (
     STRAND_SETTINGS_KEY,
+    TOKEN_FEATURES_MASTER_KEY,
+    TOKEN_FEATURES_STRANDS_KEY,
     StrandError,
     default_strand_settings,
     normalize_ranges,
@@ -336,6 +338,22 @@ class AnchorStoreMixin:
         settings = validate_strand_settings(payload)
         self.set_app_setting(STRAND_SETTINGS_KEY, json.dumps(settings, ensure_ascii=False))
         return settings
+
+    def get_token_features(self) -> dict[str, bool]:
+        master = self.get_app_setting(TOKEN_FEATURES_MASTER_KEY) != "false"
+        strands = self.get_app_setting(TOKEN_FEATURES_STRANDS_KEY) != "false"
+        return {"enabled": master, "strands": strands, "strands_active": master and strands}
+
+    def set_token_features(self, payload: Any) -> dict[str, bool]:
+        if not isinstance(payload, dict) or not payload or not set(payload) <= {"enabled", "strands"}:
+            raise StrandError("Send enabled and/or strands.", code="settings_invalid")
+        if not all(isinstance(value, bool) for value in payload.values()):
+            raise StrandError("Feature switches must be true or false.", code="settings_invalid")
+        if "enabled" in payload:
+            self.set_app_setting(TOKEN_FEATURES_MASTER_KEY, "true" if payload["enabled"] else "false")
+        if "strands" in payload:
+            self.set_app_setting(TOKEN_FEATURES_STRANDS_KEY, "true" if payload["strands"] else "false")
+        return self.get_token_features()
 
     def create_strand_run(
         self,

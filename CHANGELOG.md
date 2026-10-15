@@ -22,6 +22,9 @@ This project follows a lightweight changelog format inspired by Keep a Changelog
 - Strands: a panel lists named exchange ranges for the session. Add one by hand, or press Propose with Codex to send the whole session once and review the proposals; accept or discard each, and revert a whole Codex run in one step. Codex never runs on its own, and sessions in sensitive groups need an explicit confirmation.
 - Added Settings › Codex with the App Server connection, OpenAI sign-in and the model, reasoning effort and prompt used for strand proposals. Codex sign-in no longer depends on the experimental Graph switch.
 - The transcript rail now stays at the top-left of the conversation instead of its vertical middle.
+- Added a Uses tokens section to Settings with one switch for every feature that spends tokens; Strands is the first, with its own switch, model, effort and prompt. When either switch is off, Bridge refuses Codex strand runs.
+- Settings › Codex now shows the sign-in code in its own card, with copy and a link to the OpenAI page.
+- Highlights are drawn in solid highlighter yellow so they stay readable on every transcript layout, and the highlight and strand docks share one tinted card in the rail.
 
 ### Security
 

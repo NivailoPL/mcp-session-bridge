@@ -684,6 +684,16 @@ async def admin_api_revert_strand_run(request: Request) -> Response:
     return await anchors_admin.api_revert_strand_run(request)
 
 
+@mcp.custom_route("/admin/api/settings/token-features", methods=["GET"])
+async def admin_api_get_token_features(request: Request) -> Response:
+    return await anchors_admin.api_get_token_features(request)
+
+
+@mcp.custom_route("/admin/api/settings/token-features", methods=["PUT"])
+async def admin_api_update_token_features(request: Request) -> Response:
+    return await anchors_admin.api_update_token_features(request)
+
+
 @mcp.custom_route("/admin/api/settings/strands", methods=["GET"])
 async def admin_api_get_strand_settings(request: Request) -> Response:
     return await anchors_admin.api_get_strand_settings(request)

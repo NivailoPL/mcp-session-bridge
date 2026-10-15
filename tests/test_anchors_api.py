@@ -195,3 +195,34 @@ def test_saving_exchanges_never_starts_a_strand_run(load_main) -> None:
     main.store.save_exchange(SESSION, "Claude", "Jeszcze jedno", "Odpowiedź")
     assert fake.calls == []
     assert main.store.latest_strand_run(SESSION) is None
+
+
+def test_token_feature_switches_gate_codex_runs(load_main, admin_client) -> None:
+    main, ids = _setup(load_main)
+    client, csrf = admin_client(main)
+    headers = {"x-csrf-token": csrf}
+    assert client.get("/admin/api/settings/token-features").json()["features"] == {
+        "enabled": True, "strands": True, "strands_active": True,
+    }
+    main.strand_runtime.codex = FakeCodex({"strands": [{"title": "A", "ranges": [{"start": ids[0], "end": ids[0]}]}]})
+
+    for switch in ({"strands": False}, {"enabled": False, "strands": True}):
+        saved = client.put("/admin/api/settings/token-features", json=switch, headers=headers).json()["features"]
+        assert saved["strands_active"] is False
+        refused = client.post(f"/admin/api/sessions/{SESSION}/strand-runs", json={}, headers=headers)
+        assert refused.status_code == 409 and refused.json()["code"] == "feature_off"
+        assert client.get(f"/admin/api/sessions/{SESSION}/strands").json()["strands_enabled"] is False
+    assert fake_calls(main) == []
+
+    client.put("/admin/api/settings/token-features", json={"enabled": True}, headers=headers)
+    assert client.put("/admin/api/settings/token-features", json={"enabled": "yes"}, headers=headers).status_code == 422
+    manual = client.post(
+        f"/admin/api/sessions/{SESSION}/strands",
+        json={"title": "Ręczny działa zawsze", "ranges": [{"start": ids[0], "end": ids[0]}]},
+        headers=headers,
+    )
+    assert manual.status_code == 200
+
+
+def fake_calls(main):
+    return main.strand_runtime.codex.calls

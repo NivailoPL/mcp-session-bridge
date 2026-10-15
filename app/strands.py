@@ -20,6 +20,10 @@ STRAND_MAX_RANGES = 40
 STRAND_MAX_PROPOSALS = 40
 
 STRAND_SETTINGS_KEY = "strands.settings"
+# Token-spending features can be switched off one by one or all at once. Both
+# default to on so turning the feature into an opt-in never hides existing data.
+TOKEN_FEATURES_MASTER_KEY = "features.token_spend.enabled"
+TOKEN_FEATURES_STRANDS_KEY = "features.strands.enabled"
 STRAND_EFFORTS = ("low", "medium", "high", "xhigh")
 STRAND_MODEL_MAX_CHARS = 96
 STRAND_PROMPT_MAX_CHARS = 24_000

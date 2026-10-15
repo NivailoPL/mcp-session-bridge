@@ -43,6 +43,11 @@ class StrandRuntime:
     def _prepare(
         self, session_id: str, *, actor: str, confirm_sensitive: bool
     ) -> tuple[dict[str, Any], dict[str, Any]]:
+        if not self.store.get_token_features()["strands_active"]:
+            raise StrandError(
+                "Strand proposals are switched off in Settings. Turn them on to send a session to Codex.",
+                code="feature_off",
+            )
         session = self.store.get_session(session_id)
         if session is None:
             raise StrandError("Unknown session.", code="session_unknown")

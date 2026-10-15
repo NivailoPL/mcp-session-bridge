@@ -725,16 +725,25 @@
     /* Highlights and strands: two docks above the transcript navigation, each opening a panel
        beside the rail. Yellow marks the owner's own picks (amber already means Exclude);
        indigo marks strands, the exchange ranges. Nothing here is shown to models. */
-    .anchor-dock {
-      position: relative; display: flex; flex-direction: column; align-items: center; gap: .45rem;
-      width: 3.4rem; min-height: 0; padding: .65rem 0 .5rem; border: 1px solid var(--stage-stroke);
-      border-radius: var(--r-card); background: var(--stage); color: var(--muted);
+    /* one card for both docks, tinted by what they hold: yellow for your picks, indigo for ranges,
+       so they read apart from the grey turn arrows and the filled files card */
+    .anchor-docks {
+      display: flex; flex-direction: column; gap: .35rem; padding: .35rem;
+      border: 1px solid rgba(253, 224, 71, .22); border-radius: var(--r-card);
+      background: linear-gradient(180deg, rgba(253, 224, 71, .07), rgba(122, 125, 240, .09));
     }
-    .anchor-dock[hidden] { display: none; }
-    .anchor-dock:hover { color: var(--text); border-color: var(--stroke-strong); }
-    .anchor-dock[aria-expanded="true"] { background: #1a1e36; border-color: var(--accent-2); color: #c7c9fb; box-shadow: 0 0 0 4px rgba(99, 102, 241, .08); }
+    .anchor-docks[hidden] { display: none; }
+    .anchor-dock {
+      position: relative; display: flex; flex-direction: column; align-items: center; gap: .35rem;
+      width: var(--h-tile); min-height: 0; padding: .5rem 0 .4rem; border: 1px solid transparent;
+      border-radius: var(--r-ctrl); background: transparent; color: #fde047;
+    }
+    .anchor-dock.is-strands { color: #a5a8f6; }
+    .anchor-dock:hover { background: rgba(255, 255, 255, .05); border-color: rgba(255, 255, 255, .08); }
+    .anchor-dock[aria-expanded="true"] { background: rgba(253, 224, 71, .12); border-color: rgba(253, 224, 71, .55); }
+    .anchor-dock.is-strands[aria-expanded="true"] { background: rgba(122, 125, 240, .16); border-color: var(--accent-2); }
     .anchor-dock > svg { width: 18px; height: 18px; }
-    .anchor-dock-stripe { width: 2rem; height: 4px; border-radius: var(--r-pill); background: var(--hl, #fde047); }
+    .anchor-dock-stripe { width: 1.4rem; height: 3px; border-radius: var(--r-pill); background: var(--hl, #fde047); }
     .anchor-dock.is-strands .anchor-dock-stripe { background: var(--accent-2); }
     .anchor-dock.has-pending .anchor-dock-stripe { background: repeating-linear-gradient(90deg, var(--accent-2) 0 5px, transparent 5px 8px); }
     .anchor-dock.is-running .anchor-dock-stripe { animation: anchor-pulse 1.2s ease-in-out infinite; }
@@ -790,8 +799,9 @@
     .highlight-pop[hidden] { display: none; }
     .highlight-pop.is-hint { color: var(--muted); font-weight: 500; }
     .highlight-pop-swatch { width: 10px; height: 10px; border-radius: 3px; background: var(--hl, #fde047); }
-    ::highlight(bridge-highlight) { background-color: rgba(253, 224, 71, .2); text-decoration: underline 2px #fde047; text-underline-offset: 3px; }
-    ::highlight(bridge-highlight-focus) { background-color: rgba(253, 224, 71, .45); }
+    /* highlighter ink: dark text on solid yellow reads on every layout, including the indigo user bubble */
+    ::highlight(bridge-highlight) { background-color: rgba(250, 204, 21, .82); color: #1c1700; }
+    ::highlight(bridge-highlight-focus) { background-color: #fde047; color: #000; }
     .exchange.is-strand-focus, .ex-group.is-strand-focus { box-shadow: 0 0 0 1px rgba(122, 125, 240, .6), 0 0 0 5px rgba(99, 102, 241, .1); border-radius: var(--r-card); }
     .settings-item-stack { flex-direction: column; align-items: stretch; }
     .settings-item-stack .settings-item-label { align-self: flex-start; }
@@ -800,6 +810,23 @@
     .settings-inline-status { color: var(--muted); font-size: var(--t-meta); }
     .settings-inline-status.is-error { color: var(--danger); }
     .settings-inline-status.is-ok { color: var(--ok); }
+    /* "Uses tokens": features that spend money sit under one switch in the settings menu */
+    .settings-tabs-group { display: flex; align-items: center; justify-content: space-between; gap: .5rem; margin-top: .9rem; padding: .75rem 10px .35rem; border-top: 1px solid var(--stroke-soft); }
+    .settings-tabs-group-title { font-family: "Geist Mono", ui-monospace, monospace; font-size: var(--t-label); font-weight: 500; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+    .settings-switch-input.is-green:checked { background: var(--ok); }
+    .settings-switch-input.is-green:focus { box-shadow: 0 0 0 3px rgba(52, 211, 153, .2); }
+    .settings-panel-switch { display: inline-flex; align-items: center; gap: .55rem; margin-left: auto; }
+    .settings-switch-state { color: var(--muted); font-size: var(--t-meta); font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+    .settings-switch-state.is-on { color: var(--ok); }
+    .settings-feature-note { margin: -.35rem 0 0; color: var(--muted); font-size: var(--t-meta); line-height: 1.5; }
+    .codex-code-card { border-color: rgba(251, 191, 36, .35); background: rgba(251, 191, 36, .05); }
+    .codex-code-card[hidden] { display: none; }
+    .codex-code-body { display: grid; gap: .75rem; padding: 4px 16px 16px; }
+    .codex-code { font-family: "Geist Mono", ui-monospace, monospace; font-size: 30px; font-weight: 600; letter-spacing: .18em; color: #fff; user-select: all; }
+    .codex-code-help { margin: 0; color: var(--text-2); font-size: var(--t-meta); line-height: 1.55; }
+    .codex-code-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
+    .codex-code-open { display: inline-flex; align-items: center; min-height: var(--h-compact); padding: 0 12px; border-radius: var(--r-ctrl); background: var(--accent); color: #fff; font-size: var(--t-ctrl); font-weight: 700; text-decoration: none; }
+    .codex-code-open:hover { color: #fff; background: var(--accent-2); }
     .content { display: grid; gap: 1rem; width: 100%; min-width: 0; max-width: 80rem; padding: 1.4rem 1.5rem 3rem .4rem; }
 
     .status {
@@ -1969,6 +1996,7 @@
       <div id="threadSensitiveContent" class="thread-sensitive-content">
       <div id="threadSensitiveBody" class="content-wrap">
         <div class="side-rail">
+        <div id="anchorDocks" class="anchor-docks" role="group" aria-label="Highlights and strands" hidden>
         <button id="highlightDock" type="button" class="anchor-dock" aria-expanded="false" aria-controls="anchorPanel" hidden>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 15-4 4h5l2-2"></path><path d="m14.5 4.5 5 5-7 7-5-5z"></path></svg>
           <span class="anchor-dock-stripe" aria-hidden="true"></span>
@@ -1979,6 +2007,7 @@
           <span class="anchor-dock-stripe" aria-hidden="true"></span>
           <span id="strandDockCount" class="anchor-dock-count" aria-hidden="true">0</span>
         </button>
+        </div>
         <nav id="turnNav" class="turn-nav" aria-label="Transcript navigation">
           <button id="scrollTopButton" type="button" class="ghost" title="Scroll to top"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"></path><path d="M6 5h12"></path></svg></button>
           <button id="scrollPrevButton" type="button" class="ghost" title="Previous turn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"></path></svg></button>
@@ -2364,6 +2393,11 @@
         <button type="button" data-settings-tab="api"><span>API keys</span><span class="settings-tab-meta"><span id="settingsHintApi" class="settings-tab-hint"></span></span></button>
         <button type="button" data-settings-tab="codex"><span>Codex</span><span class="settings-tab-meta"><span id="settingsHintCodex" class="settings-tab-hint"></span></span></button>
         <button type="button" data-settings-tab="system"><span>System</span><span class="settings-tab-meta"><span id="settingsHintSystem" class="settings-tab-hint"></span><span id="statusUpdateDot" class="update-dot" hidden aria-hidden="true"></span></span></button>
+        <div class="settings-tabs-group">
+          <span id="tokenFeaturesTitle" class="settings-tabs-group-title">Uses tokens</span>
+          <input id="tokenFeaturesMaster" class="settings-switch-input is-green" type="checkbox" role="switch" aria-labelledby="tokenFeaturesTitle" title="Turn every feature that spends tokens on or off">
+        </div>
+        <button type="button" data-settings-tab="strands"><span>Strands</span><span class="settings-tab-meta"><span id="settingsHintStrands" class="settings-tab-hint"></span></span></button>
       </nav>
       <div class="settings-body">
       <div class="settings-content">
@@ -2623,22 +2657,26 @@
         <section data-settings-panel="codex" class="settings-panel" hidden>
           <div class="settings-panel-head">
             <h4>Codex</h4>
-            <span class="context-help"><button type="button" class="context-help-trigger" aria-label="About Codex" aria-describedby="settingsHelpCodex">?</button><span id="settingsHelpCodex" class="context-help-box" role="tooltip">Codex App Server runs on this server and uses the plan of the OpenAI account signed in here. Bridge calls it only when you press a button, such as Propose with Codex in a session's Strands panel.</span></span>
+            <span class="context-help"><button type="button" class="context-help-trigger" aria-label="About Codex" aria-describedby="settingsHelpCodex">?</button><span id="settingsHelpCodex" class="context-help-box" role="tooltip">Codex App Server runs on this server and uses the plan of the OpenAI account signed in here. Features under Uses tokens call it only when they are switched on.</span></span>
             <span id="codexSettingsPill" class="settings-pill"></span>
           </div>
+          <section id="codexSettingsLogin" class="settings-group codex-code-card" hidden aria-labelledby="codexCodeHeading">
+            <div class="settings-group-head"><h5 id="codexCodeHeading">Your sign-in code</h5><span class="settings-pill" data-tone="warn">Needed to finish signing in</span></div>
+            <div class="codex-code-body">
+              <strong id="codexSettingsCode" class="codex-code" aria-live="polite"></strong>
+              <p class="codex-code-help">Open the OpenAI page and type this code there. OpenAI calls it the code from your terminal; here it is shown by Bridge. It expires after about 15 minutes.</p>
+              <div class="codex-code-actions">
+                <a id="codexSettingsLink" class="codex-code-open" href="#" target="_blank" rel="noopener noreferrer">Open OpenAI sign-in</a>
+                <button type="button" class="ghost settings-compact" id="codexSettingsCopy">Copy code</button>
+                <button type="button" class="ghost settings-compact" id="codexSettingsCancel">Cancel</button>
+              </div>
+            </div>
+          </section>
           <section class="settings-group">
             <div class="settings-group-head"><h5>Connection</h5></div>
             <div class="settings-item">
               <div class="settings-item-label"><span class="settings-item-title">Status</span></div>
               <div class="settings-item-control"><span id="codexSettingsStatus" class="settings-value-muted">Checking...</span></div>
-            </div>
-            <div id="codexSettingsLogin" class="settings-item" hidden>
-              <div class="settings-item-label"><span class="settings-item-title">Sign-in code</span></div>
-              <div class="settings-item-control">
-                <strong id="codexSettingsCode" class="settings-value settings-value-mono"></strong>
-                <a id="codexSettingsLink" href="#" target="_blank" rel="noopener noreferrer">Open OpenAI sign-in</a>
-                <button type="button" class="ghost settings-compact" id="codexSettingsCancel">Cancel</button>
-              </div>
             </div>
             <div class="settings-item">
               <div class="settings-item-label"><span class="settings-item-title">Account</span></div>
@@ -2649,8 +2687,20 @@
               </div>
             </div>
           </section>
+        </section>
+
+        <section data-settings-panel="strands" class="settings-panel" hidden>
+          <div class="settings-panel-head">
+            <h4>Strands</h4>
+            <span class="context-help"><button type="button" class="context-help-trigger" aria-label="About Strands" aria-describedby="settingsHelpStrands">?</button><span id="settingsHelpStrands" class="context-help-box" role="tooltip">Codex proposes strands for one session at a time, only when you press Propose with Codex in that session. Each proposal reads the whole session and spends tokens from the plan signed in under Codex. Strands you add by hand never use tokens.</span></span>
+            <span class="settings-panel-switch">
+              <span id="strandsEnabledLabel" class="settings-switch-state">On</span>
+              <input id="strandsEnabled" class="settings-switch-input is-green" type="checkbox" role="switch" aria-labelledby="strandsEnabledLabel" aria-describedby="strandsEnabledNote">
+            </span>
+          </div>
+          <p id="strandsEnabledNote" class="settings-feature-note">When off, Propose with Codex is disabled in every session. Existing and hand-made strands stay.</p>
           <section class="settings-group">
-            <div class="settings-group-head"><h5>Strands</h5><span class="settings-value-muted">Runs only when you press Propose with Codex</span></div>
+            <div class="settings-group-head"><h5>Codex proposals</h5><span class="settings-value-muted">Used the next time you press Propose with Codex</span></div>
             <div class="settings-item">
               <div class="settings-item-label"><span class="settings-item-title"><label for="strandModelInput">Model</label></span></div>
               <div class="settings-item-control">
@@ -2922,9 +2972,10 @@
       // highlights and strands of the open session; see the "anchors" section below
       const anchors = {
         sessionId: "", available: false, highlights: [], strands: [], latestRun: null, codexConfigured: false,
-        panel: "", pollTimer: 0, focusStrandId: null, newStrandOpen: false, pendingHighlight: null,
+        strandsEnabled: true, panel: "", pollTimer: 0, focusStrandId: null, newStrandOpen: false, pendingHighlight: null,
       };
       const anchorDom = {
+        group: document.getElementById("anchorDocks"),
         highlightDock: document.getElementById("highlightDock"),
         highlightCount: document.getElementById("highlightDockCount"),
         strandDock: document.getElementById("strandDock"),
@@ -2941,6 +2992,11 @@
         code: document.getElementById("codexSettingsCode"),
         link: document.getElementById("codexSettingsLink"),
         cancel: document.getElementById("codexSettingsCancel"),
+        copy: document.getElementById("codexSettingsCopy"),
+        tokenMaster: document.getElementById("tokenFeaturesMaster"),
+        strandsEnabled: document.getElementById("strandsEnabled"),
+        strandsEnabledLabel: document.getElementById("strandsEnabledLabel"),
+        strandsHint: document.getElementById("settingsHintStrands"),
         signIn: document.getElementById("codexSettingsSignIn"),
         signOut: document.getElementById("codexSettingsSignOut"),
         refresh: document.getElementById("codexSettingsRefresh"),
@@ -3730,7 +3786,8 @@
         for (const panel of document.querySelectorAll("[data-settings-panel]")) {
           panel.hidden = panel.dataset.settingsPanel !== name;
         }
-        if (name === "codex") loadCodexSettingsTab();
+        if (name === "codex") refreshCodexSettings();
+        if (name === "strands") { loadStrandSettings(); loadTokenFeatures(); }
         renderSettingsDirty();
       }
 
@@ -3811,6 +3868,7 @@
         setProviderKeyEditing("openai", false);
         setProviderKeyEditing("cohere", false);
         selectSettingsTab(state.operationalStatus?.update?.state === "available" ? "system" : "general");
+        loadTokenFeatures();
         dom.aiSettingsStatus.textContent = "Loading settings...";
         dom.aiSettingsStatus.classList.remove("is-error", "is-ok");
         dom.aiSettingsDialog.showModal();
@@ -8311,6 +8369,7 @@
         anchors.strands = payload.strands || [];
         anchors.latestRun = payload.latest_run || null;
         anchors.codexConfigured = Boolean(payload.codex_configured);
+        anchors.strandsEnabled = payload.strands_enabled !== false;
         if (anchors.focusStrandId && !anchors.strands.some((item) => item.strand_id === anchors.focusStrandId)) {
           anchors.focusStrandId = null;
         }
@@ -8353,6 +8412,7 @@
           [anchorDom.highlightDock, anchorDom.highlightCount, "highlights", anchors.highlights.length, `Highlights: ${anchors.highlights.length} in this session`],
           [anchorDom.strandDock, anchorDom.strandCount, "strands", anchors.strands.length, `Strands: ${anchors.strands.length} in this session${pending ? `, ${pending} proposed` : ""}`],
         ];
+        anchorDom.group.hidden = !show;
         for (const [dock, count, name, total, labelText] of docks) {
           dock.hidden = !show;
           count.textContent = String(total);
@@ -8515,7 +8575,9 @@
           panel.append(list);
         }
         if (!anchors.strands.length && !strandRunActive(run)) {
-          panel.append(anchorEmpty("No strands yet. Ask Codex to propose them, or add one by hand with + New. Codex never runs on its own."));
+          panel.append(anchorEmpty(anchors.strandsEnabled
+            ? "No strands yet. Ask Codex to propose them, or add one by hand with + New. Codex never runs on its own."
+            : "No strands yet. Add one by hand with + New. Codex proposals are switched off in Settings › Strands."));
         }
         panel.append(strandFooter(pending.length));
       }
@@ -8546,8 +8608,10 @@
         const run = anchors.latestRun;
         const active = strandRunActive(run);
         const propose = button(active ? "Codex is working…" : "Propose with Codex", proposeStrands, "anchor-compact anchor-accept");
-        propose.disabled = active || pendingCount > 0 || !anchors.codexConfigured;
-        propose.title = !anchors.codexConfigured
+        propose.disabled = active || pendingCount > 0 || !anchors.codexConfigured || !anchors.strandsEnabled;
+        propose.title = !anchors.strandsEnabled
+          ? "Strand proposals are switched off in Settings › Strands."
+          : !anchors.codexConfigured
           ? "Codex App Server is not configured on this Bridge."
           : pendingCount ? "Accept or discard the pending proposal first."
           : active ? "A Codex run for this session is in progress."
@@ -9100,14 +9164,49 @@
         }
       }
 
-      function loadCodexSettingsTab() {
-        refreshCodexSettings();
-        loadStrandSettings();
+      function renderTokenFeatures(features) {
+        codexSettingsDom.tokenMaster.checked = features.enabled;
+        codexSettingsDom.strandsEnabled.checked = features.strands;
+        const active = features.strands_active;
+        codexSettingsDom.strandsEnabledLabel.textContent = features.strands ? (features.enabled ? "On" : "On · paused") : "Off";
+        codexSettingsDom.strandsEnabledLabel.classList.toggle("is-on", active);
+        codexSettingsDom.strandsHint.textContent = active ? "On" : "Off";
+        codexSettingsDom.strandsHint.dataset.tone = active ? "ok" : "off";
+        anchors.strandsEnabled = active;
+        renderAnchorPanel();
+      }
+
+      async function loadTokenFeatures() {
+        try {
+          renderTokenFeatures((await api("/admin/api/settings/token-features")).features);
+        } catch (_) {
+          codexSettingsDom.strandsHint.textContent = "";
+        }
+      }
+
+      async function saveTokenFeatures(change) {
+        try {
+          renderTokenFeatures((await api("/admin/api/settings/token-features", { method: "PUT", body: JSON.stringify(change) })).features);
+        } catch (error) {
+          setStrandSettingsMessage(error.message, "error");
+          await loadTokenFeatures();
+        }
       }
 
       function bindCodexSettingsEvents() {
         codexSettingsDom.signIn.addEventListener("click", startCodexSettingsLogin);
         codexSettingsDom.cancel.addEventListener("click", cancelCodexSettingsLogin);
+        codexSettingsDom.copy.addEventListener("click", async () => {
+          try {
+            await navigator.clipboard.writeText(codexSettingsDom.code.textContent.trim());
+            codexSettingsDom.copy.textContent = "Copied";
+            window.setTimeout(() => { codexSettingsDom.copy.textContent = "Copy code"; }, 1600);
+          } catch (_) {
+            window.getSelection()?.selectAllChildren(codexSettingsDom.code);
+          }
+        });
+        codexSettingsDom.tokenMaster.addEventListener("change", () => saveTokenFeatures({ enabled: codexSettingsDom.tokenMaster.checked }));
+        codexSettingsDom.strandsEnabled.addEventListener("change", () => saveTokenFeatures({ strands: codexSettingsDom.strandsEnabled.checked }));
         codexSettingsDom.signOut.addEventListener("click", signOutCodexSettings);
         codexSettingsDom.refresh.addEventListener("click", () => refreshCodexSettings());
         codexSettingsDom.save.addEventListener("click", saveStrandSettings);

@@ -20,7 +20,7 @@ if TYPE_CHECKING:
     from app.strand_runtime import StrandRuntime
 
 _NOT_FOUND_CODES = {"session_unknown", "strand_unknown", "run_unknown", "exchange_unknown"}
-_CONFLICT_CODES = {"pending_exists", "run_active", "sensitive_unconfirmed"}
+_CONFLICT_CODES = {"pending_exists", "run_active", "sensitive_unconfirmed", "feature_off"}
 
 
 class AnchorAdminHandlers:
@@ -185,6 +185,18 @@ class AnchorAdminHandlers:
             return error
         return self._run(lambda: {"settings": self.store.set_strand_settings(payload)})
 
+    async def api_get_token_features(self, request: Request) -> Response:
+        _, error = self.admin._require_admin(request)
+        if error:
+            return error
+        return self._ok({"features": self.store.get_token_features()})
+
+    async def api_update_token_features(self, request: Request) -> Response:
+        payload, error = await self._mutation(request, allowed={"enabled", "strands"})
+        if error:
+            return error
+        return self._run(lambda: {"features": self.store.set_token_features(payload)})
+
     # ---------- helpers ----------
 
     def _session_strands(self, session_id: str) -> dict[str, Any]:
@@ -192,6 +204,7 @@ class AnchorAdminHandlers:
             "strands": self.store.list_strands(session_id),
             "latest_run": self.store.latest_strand_run(session_id),
             "codex_configured": self.runtime.codex is not None,
+            "strands_enabled": self.store.get_token_features()["strands_active"],
         }
 
     async def _mutation(
