@@ -31,9 +31,9 @@ STRAND_PROMPT_MAX_CHARS = 24_000
 # prompt inside the Codex structured-input limit.
 STRAND_SOURCE_MAX_CHARS = 460_000
 
-DEFAULT_STRAND_PROMPT = """Split this conversation into strands.
+DEFAULT_STRAND_PROMPT = """Split this conversation into chapters.
 
-A strand is one subject the human pursued. Give each strand a short title (at most 80 characters, in the language of the conversation) and the exchange ranges where that subject is discussed, using the exchange numbers shown in the transcript. A subject the human comes back to later gets several ranges in one strand. Short asides that matter still get their own strand.
+A chapter is one subject the human pursued. Give each chapter a short title (at most 80 characters, in the language of the conversation) and the exchange ranges where that subject is discussed, using the exchange numbers shown in the transcript. A subject the human comes back to later gets several ranges in one chapter. Short asides that matter still get their own chapter.
 
 Follow the human's framing rather than the model's. Do not summarize or judge the content; only name and locate the subjects."""
 

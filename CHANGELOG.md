@@ -27,6 +27,9 @@ This project follows a lightweight changelog format inspired by Keep a Changelog
 - Each session now shows how far it is split into chapters: complete, new exchanges since the last split (+N), proposals to review, or hand-made only. The state appears next to the session in the list, as a progress bar under the Chapters dock, and as a status line in the panel.
 - Update chapters sends only the new exchanges and the existing chapter titles to Codex; it proposes extensions of existing chapters or new ones, which you accept, discard or revert like any proposal. Redo starts over and keeps hand-made chapters.
 - Hovering the Highlights or Chapters dock opens its panel for a quick jump and closes it when the pointer leaves; clicking pins it. Both panels can stay pinned, and the choice is remembered in the browser.
+- Added a fast cyan spinner wherever Bridge waits on something it sent out: on the Chapters dock and in the panel while Codex works, and in Settings › Codex while sign-in waits for the code.
+- Codex actions (sign-in, propose, update, redo) carry the OpenAI mark.
+- Settings › Chapters opens with a large on/off card that says whether chapters can spend tokens; the switch for all token features is hidden for now and stays on.
 - Highlights are drawn in solid highlighter yellow so they stay readable on every transcript layout, and the highlight and chapter docks share one tinted card in the rail.
 
 ### Security

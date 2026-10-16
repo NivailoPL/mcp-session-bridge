@@ -830,6 +830,38 @@
     .settings-inline-status { color: var(--muted); font-size: var(--t-meta); }
     .settings-inline-status.is-error { color: var(--danger); }
     .settings-inline-status.is-ok { color: var(--ok); }
+    /* "work in progress": a fast cyan ring wherever Bridge is waiting on something it sent out */
+    .work-spinner {
+      display: inline-block; flex: none; width: 14px; height: 14px; border-radius: 50%;
+      background: conic-gradient(from 0deg, rgba(34, 211, 238, 0) 0 20%, #22d3ee 100%);
+      -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 2.5px), #000 calc(100% - 2px));
+      mask: radial-gradient(farthest-side, transparent calc(100% - 2.5px), #000 calc(100% - 2px));
+      animation: work-spin .55s linear infinite;
+    }
+    .work-spinner.is-large { width: 18px; height: 18px; }
+    @keyframes work-spin { to { transform: rotate(360deg); } }
+    @media (prefers-reduced-motion: reduce) { .work-spinner { animation-duration: 1.6s; } }
+    .anchor-dock.is-working { border-color: rgba(34, 211, 238, .55); box-shadow: 0 0 0 3px rgba(34, 211, 238, .12); }
+    .anchor-dock.is-working .anchor-dock-progress span { background: #22d3ee; }
+    .anchor-notice.is-running { display: flex; align-items: center; gap: .55rem; color: #a5f3fc; background: rgba(34, 211, 238, .08); }
+    .anchor-panel button.is-working { display: inline-flex; align-items: center; gap: .45rem; color: #a5f3fc; border-color: rgba(34, 211, 238, .4); background: rgba(34, 211, 238, .08); opacity: 1; }
+    .openai-mark { width: 14px; height: 14px; flex: none; }
+    .with-openai { display: inline-flex; align-items: center; gap: .45rem; }
+    .codex-code-waiting { display: flex; align-items: center; gap: .55rem; color: #a5f3fc; font-size: var(--t-meta); }
+    /* the feature switch is the first thing to read on a token-spending feature */
+    .feature-switch-card {
+      display: flex; align-items: center; gap: 1rem; padding: 14px 16px; border-radius: var(--r-card);
+      border: 1px solid var(--stroke); background: rgba(255, 255, 255, .025);
+    }
+    .feature-switch-card.is-on { border-color: rgba(52, 211, 153, .4); background: rgba(52, 211, 153, .07); }
+    .feature-switch-card .settings-switch-input { width: 56px; height: 30px; min-height: 30px; }
+    .feature-switch-card .settings-switch-input::after { top: 3px; left: 3px; width: 24px; height: 24px; }
+    .feature-switch-card .settings-switch-input:checked::after { transform: translateX(26px); }
+    .feature-switch-text { display: grid; gap: .15rem; }
+    .feature-switch-state { font-size: 17px; font-weight: 800; letter-spacing: -.01em; color: var(--text-2); }
+    .feature-switch-card.is-on .feature-switch-state { color: var(--ok); }
+    .feature-switch-detail { color: var(--muted); font-size: var(--t-meta); line-height: 1.45; }
+    .settings-tabs-group .settings-switch-input[hidden] { display: none; }
     /* "Uses tokens": features that spend money sit under one switch in the settings menu */
     .settings-tabs-group { display: flex; align-items: center; justify-content: space-between; gap: .5rem; margin-top: .9rem; padding: .75rem 10px .35rem; border-top: 1px solid var(--stroke-soft); }
     .settings-tabs-group-title { font-family: "Geist Mono", ui-monospace, monospace; font-size: var(--t-label); font-weight: 500; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
@@ -2418,7 +2450,7 @@
         <button type="button" data-settings-tab="system"><span>System</span><span class="settings-tab-meta"><span id="settingsHintSystem" class="settings-tab-hint"></span><span id="statusUpdateDot" class="update-dot" hidden aria-hidden="true"></span></span></button>
         <div class="settings-tabs-group">
           <span id="tokenFeaturesTitle" class="settings-tabs-group-title">Uses tokens</span>
-          <input id="tokenFeaturesMaster" class="settings-switch-input is-green" type="checkbox" role="switch" aria-labelledby="tokenFeaturesTitle" title="Turn every feature that spends tokens on or off">
+          <input id="tokenFeaturesMaster" class="settings-switch-input is-green" type="checkbox" role="switch" aria-labelledby="tokenFeaturesTitle" title="Turn every feature that spends tokens on or off" hidden>
         </div>
         <button type="button" data-settings-tab="strands"><span>Chapters</span><span class="settings-tab-meta"><span id="settingsHintStrands" class="settings-tab-hint"></span></span></button>
       </nav>
@@ -2688,8 +2720,9 @@
             <div class="codex-code-body">
               <strong id="codexSettingsCode" class="codex-code" aria-live="polite"></strong>
               <p class="codex-code-help">Open the OpenAI page and type this code there. OpenAI calls it the code from your terminal; here it is shown by Bridge. It expires after about 15 minutes.</p>
+              <p class="codex-code-waiting"><span class="work-spinner" aria-hidden="true"></span>Waiting for you to enter the code on the OpenAI page…</p>
               <div class="codex-code-actions">
-                <a id="codexSettingsLink" class="codex-code-open" href="#" target="_blank" rel="noopener noreferrer">Open OpenAI sign-in</a>
+                <a id="codexSettingsLink" class="codex-code-open with-openai" href="#" target="_blank" rel="noopener noreferrer"><svg class="openai-mark" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M22.2819 9.8211a5.9847 5.9847 0 0 0-.5157-4.9108 6.0462 6.0462 0 0 0-6.5098-2.9A6.0651 6.0651 0 0 0 4.9807 4.1818a5.9847 5.9847 0 0 0-3.9977 2.9 6.0462 6.0462 0 0 0 .7427 7.0966 5.98 5.98 0 0 0 .511 4.9107 6.051 6.051 0 0 0 6.5146 2.9001A5.9847 5.9847 0 0 0 13.2599 24a6.0557 6.0557 0 0 0 5.7718-4.2058 5.9894 5.9894 0 0 0 3.9977-2.9001 6.0557 6.0557 0 0 0-.7475-7.0729zm-9.022 12.6081a4.4755 4.4755 0 0 1-2.8764-1.0408l.1419-.0804 4.7783-2.7582a.7948.7948 0 0 0 .3927-.6813v-6.7369l2.02 1.1686a.071.071 0 0 1 .038.052v5.5826a4.504 4.504 0 0 1-4.4945 4.4944zm-9.6607-4.1254a4.4708 4.4708 0 0 1-.5346-3.0137l.142.0852 4.783 2.7582a.7712.7712 0 0 0 .7806 0l5.8428-3.3685v2.3324a.0804.0804 0 0 1-.0332.0615L9.74 19.9502a4.4992 4.4992 0 0 1-6.1408-1.6464zM2.3408 7.8956a4.485 4.485 0 0 1 2.3655-1.9728V11.6a.7664.7664 0 0 0 .3879.6765l5.8144 3.3543-2.0201 1.1685a.0757.0757 0 0 1-.071 0l-4.8303-2.7865A4.504 4.504 0 0 1 2.3408 7.872zm16.5963 3.8558L13.1038 8.364 15.1192 7.2a.0757.0757 0 0 1 .071 0l4.8303 2.7913a4.4944 4.4944 0 0 1-.6765 8.1042v-5.6772a.79.79 0 0 0-.407-.667zm2.0107-3.0231l-.142-.0852-4.7735-2.7818a.7759.7759 0 0 0-.7854 0L9.409 9.2297V6.8974a.0662.0662 0 0 1 .0284-.0615l4.8303-2.7866a4.4992 4.4992 0 0 1 6.6802 4.66zM8.3065 12.863l-2.02-1.1638a.0804.0804 0 0 1-.038-.0567V6.0742a4.4992 4.4992 0 0 1 7.3757-3.4537l-.142.0805L8.704 5.459a.7948.7948 0 0 0-.3927.6813zm1.0976-2.3654l2.602-1.4998 2.6069 1.4998v2.9994l-2.5974 1.4997-2.6067-1.4997Z"></path></svg>Open OpenAI sign-in</a>
                 <button type="button" class="ghost settings-compact" id="codexSettingsCopy">Copy code</button>
                 <button type="button" class="ghost settings-compact" id="codexSettingsCancel">Cancel</button>
               </div>
@@ -2704,7 +2737,7 @@
             <div class="settings-item">
               <div class="settings-item-label"><span class="settings-item-title">Account</span></div>
               <div class="settings-item-control">
-                <button type="button" class="primary settings-compact" id="codexSettingsSignIn" hidden>Sign in with OpenAI</button>
+                <button type="button" class="primary settings-compact with-openai" id="codexSettingsSignIn" hidden><svg class="openai-mark" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M22.2819 9.8211a5.9847 5.9847 0 0 0-.5157-4.9108 6.0462 6.0462 0 0 0-6.5098-2.9A6.0651 6.0651 0 0 0 4.9807 4.1818a5.9847 5.9847 0 0 0-3.9977 2.9 6.0462 6.0462 0 0 0 .7427 7.0966 5.98 5.98 0 0 0 .511 4.9107 6.051 6.051 0 0 0 6.5146 2.9001A5.9847 5.9847 0 0 0 13.2599 24a6.0557 6.0557 0 0 0 5.7718-4.2058 5.9894 5.9894 0 0 0 3.9977-2.9001 6.0557 6.0557 0 0 0-.7475-7.0729zm-9.022 12.6081a4.4755 4.4755 0 0 1-2.8764-1.0408l.1419-.0804 4.7783-2.7582a.7948.7948 0 0 0 .3927-.6813v-6.7369l2.02 1.1686a.071.071 0 0 1 .038.052v5.5826a4.504 4.504 0 0 1-4.4945 4.4944zm-9.6607-4.1254a4.4708 4.4708 0 0 1-.5346-3.0137l.142.0852 4.783 2.7582a.7712.7712 0 0 0 .7806 0l5.8428-3.3685v2.3324a.0804.0804 0 0 1-.0332.0615L9.74 19.9502a4.4992 4.4992 0 0 1-6.1408-1.6464zM2.3408 7.8956a4.485 4.485 0 0 1 2.3655-1.9728V11.6a.7664.7664 0 0 0 .3879.6765l5.8144 3.3543-2.0201 1.1685a.0757.0757 0 0 1-.071 0l-4.8303-2.7865A4.504 4.504 0 0 1 2.3408 7.872zm16.5963 3.8558L13.1038 8.364 15.1192 7.2a.0757.0757 0 0 1 .071 0l4.8303 2.7913a4.4944 4.4944 0 0 1-.6765 8.1042v-5.6772a.79.79 0 0 0-.407-.667zm2.0107-3.0231l-.142-.0852-4.7735-2.7818a.7759.7759 0 0 0-.7854 0L9.409 9.2297V6.8974a.0662.0662 0 0 1 .0284-.0615l4.8303-2.7866a4.4992 4.4992 0 0 1 6.6802 4.66zM8.3065 12.863l-2.02-1.1638a.0804.0804 0 0 1-.038-.0567V6.0742a4.4992 4.4992 0 0 1 7.3757-3.4537l-.142.0805L8.704 5.459a.7948.7948 0 0 0-.3927.6813zm1.0976-2.3654l2.602-1.4998 2.6069 1.4998v2.9994l-2.5974 1.4997-2.6067-1.4997Z"></path></svg>Sign in with OpenAI</button>
                 <button type="button" class="settings-quiet-danger settings-compact" id="codexSettingsSignOut" hidden>Sign out</button>
                 <button type="button" class="ghost settings-compact" id="codexSettingsRefresh">Refresh</button>
               </div>
@@ -2716,12 +2749,15 @@
           <div class="settings-panel-head">
             <h4>Chapters</h4>
             <span class="context-help"><button type="button" class="context-help-trigger" aria-label="About Chapters" aria-describedby="settingsHelpStrands">?</button><span id="settingsHelpStrands" class="context-help-box" role="tooltip">Codex splits one session at a time into chapters, only when you press Propose or Update in that session's Chapters panel. A first split reads the whole session; an update reads only the new exchanges. Both spend tokens from the plan signed in under Codex. Chapters you add by hand never use tokens.</span></span>
-            <span class="settings-panel-switch">
-              <span id="strandsEnabledLabel" class="settings-switch-state">On</span>
-              <input id="strandsEnabled" class="settings-switch-input is-green" type="checkbox" role="switch" aria-labelledby="strandsEnabledLabel" aria-describedby="strandsEnabledNote">
-            </span>
           </div>
-          <p id="strandsEnabledNote" class="settings-feature-note">When off, Codex chapter proposals are disabled in every session. Existing and hand-made chapters stay.</p>
+          <p class="settings-feature-note">Codex splits a session into chapters only when you press Propose or Update in that session. Hand-made chapters never use tokens.</p>
+          <label id="strandsFeatureCard" class="feature-switch-card">
+            <input id="strandsEnabled" class="settings-switch-input is-green" type="checkbox" role="switch" aria-describedby="strandsEnabledNote">
+            <span class="feature-switch-text">
+              <span id="strandsEnabledLabel" class="feature-switch-state">On</span>
+              <span id="strandsEnabledNote" class="feature-switch-detail"></span>
+            </span>
+          </label>
           <section class="settings-group">
             <div class="settings-group-head"><h5>Codex proposals</h5><span class="settings-value-muted">Used the next time you propose or update chapters</span></div>
             <div class="settings-item">
@@ -3025,6 +3061,8 @@
         tokenMaster: document.getElementById("tokenFeaturesMaster"),
         strandsEnabled: document.getElementById("strandsEnabled"),
         strandsEnabledLabel: document.getElementById("strandsEnabledLabel"),
+        strandsNote: document.getElementById("strandsEnabledNote"),
+        strandsCard: document.getElementById("strandsFeatureCard"),
         strandsHint: document.getElementById("settingsHintStrands"),
         signIn: document.getElementById("codexSettingsSignIn"),
         signOut: document.getElementById("codexSettingsSignOut"),
@@ -8385,6 +8423,23 @@
         pin: '<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" aria-hidden="true"><path d="M5 1.8h4l-.6 3.4 2.1 2.2H3.5l2.1-2.2z"></path><path d="M7 7.4v4.8" stroke-linecap="round"></path></svg>',
         chapters: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h10M4 12h16M4 17h7"></path></svg>',
       });
+      const OPENAI_MARK = '<svg class="openai-mark" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M22.2819 9.8211a5.9847 5.9847 0 0 0-.5157-4.9108 6.0462 6.0462 0 0 0-6.5098-2.9A6.0651 6.0651 0 0 0 4.9807 4.1818a5.9847 5.9847 0 0 0-3.9977 2.9 6.0462 6.0462 0 0 0 .7427 7.0966 5.98 5.98 0 0 0 .511 4.9107 6.051 6.051 0 0 0 6.5146 2.9001A5.9847 5.9847 0 0 0 13.2599 24a6.0557 6.0557 0 0 0 5.7718-4.2058 5.9894 5.9894 0 0 0 3.9977-2.9001 6.0557 6.0557 0 0 0-.7475-7.0729zm-9.022 12.6081a4.4755 4.4755 0 0 1-2.8764-1.0408l.1419-.0804 4.7783-2.7582a.7948.7948 0 0 0 .3927-.6813v-6.7369l2.02 1.1686a.071.071 0 0 1 .038.052v5.5826a4.504 4.504 0 0 1-4.4945 4.4944zm-9.6607-4.1254a4.4708 4.4708 0 0 1-.5346-3.0137l.142.0852 4.783 2.7582a.7712.7712 0 0 0 .7806 0l5.8428-3.3685v2.3324a.0804.0804 0 0 1-.0332.0615L9.74 19.9502a4.4992 4.4992 0 0 1-6.1408-1.6464zM2.3408 7.8956a4.485 4.485 0 0 1 2.3655-1.9728V11.6a.7664.7664 0 0 0 .3879.6765l5.8144 3.3543-2.0201 1.1685a.0757.0757 0 0 1-.071 0l-4.8303-2.7865A4.504 4.504 0 0 1 2.3408 7.872zm16.5963 3.8558L13.1038 8.364 15.1192 7.2a.0757.0757 0 0 1 .071 0l4.8303 2.7913a4.4944 4.4944 0 0 1-.6765 8.1042v-5.6772a.79.79 0 0 0-.407-.667zm2.0107-3.0231l-.142-.0852-4.7735-2.7818a.7759.7759 0 0 0-.7854 0L9.409 9.2297V6.8974a.0662.0662 0 0 1 .0284-.0615l4.8303-2.7866a4.4992 4.4992 0 0 1 6.6802 4.66zM8.3065 12.863l-2.02-1.1638a.0804.0804 0 0 1-.038-.0567V6.0742a4.4992 4.4992 0 0 1 7.3757-3.4537l-.142.0805L8.704 5.459a.7948.7948 0 0 0-.3927.6813zm1.0976-2.3654l2.602-1.4998 2.6069 1.4998v2.9994l-2.5974 1.4997-2.6067-1.4997Z"></path></svg>';
+
+      function workSpinner(large = false) {
+        const node = spanCls(`work-spinner${large ? " is-large" : ""}`);
+        node.setAttribute("aria-hidden", "true");
+        return node;
+      }
+
+      // a Codex action button: OpenAI mark, label, and a spinner while it works
+      function codexButton(text, onClick, className, working = false) {
+        const node = button("", onClick, `${className} with-openai${working ? " is-working" : ""}`);
+        if (working) node.append(workSpinner());
+        else node.insertAdjacentHTML("beforeend", OPENAI_MARK);
+        node.append(document.createTextNode(text));
+        return node;
+      }
+
       const CHAPTER_STATE_LABELS = Object.freeze({
         none: "Not split into chapters yet",
         manual: "Only hand-made chapters",
@@ -8521,7 +8576,10 @@
         anchorDom.highlightDock.setAttribute("aria-label", highlightLabel);
         anchorDom.highlightDock.title = highlightLabel;
         const summary = chapterDockSummary();
-        anchorDom.strandCount.textContent = summary.mark;
+        const working = summary.state === "running";
+        anchorDom.strandDock.classList.toggle("is-working", working);
+        if (working) anchorDom.strandCount.replaceChildren(workSpinner());
+        else anchorDom.strandCount.textContent = summary.mark;
         anchorDom.strandDock.dataset.state = summary.state;
         anchorDom.chapterProgress.style.width = `${Math.round(summary.progress * 100)}%`;
         anchorDom.strandDock.setAttribute("aria-label", summary.label);
@@ -8692,7 +8750,9 @@
         const run = anchors.latestRun;
         if (strandRunActive(run)) {
           const what = run.mode === "update" ? `${run.exchange_count} new exchanges` : `${run.exchange_count} exchanges`;
-          return anchorNotice(`Codex is reading ${what} with ${run.model} · ${run.effort}…`, "running");
+          const notice = anchorNotice(`Codex is reading ${what} with ${run.model} · ${run.effort}…`, "running");
+          notice.prepend(workSpinner(true));
+          return notice;
         }
         if (run && run.status === "failed") return anchorNotice(`Last Codex run failed: ${run.error_message || "unknown error"}`, "error");
         if (!chapter) return null;
@@ -8791,7 +8851,7 @@
           behind: `Update chapters (+${chapter.new_count})`,
           complete: "Up to date",
         };
-        const propose = button(active ? "Codex is working…" : (labels[chapter.state] || "Propose with Codex"), () => proposeStrands(false), "anchor-compact anchor-accept");
+        const propose = codexButton(active ? "Codex is working…" : (labels[chapter.state] || "Propose with Codex"), () => proposeStrands(false), "anchor-compact anchor-accept", active);
         const blockedReason = !anchors.strandsEnabled ? "Chapter proposals are switched off in Settings › Chapters."
           : !anchors.codexConfigured ? "Codex App Server is not configured on this Bridge."
           : proposalCount ? "Accept or discard the pending proposal first."
@@ -8805,7 +8865,7 @@
         foot.append(propose, div("anchor-spacer"));
         const hasCodexChapters = anchors.strands.some((item) => item.origin === "codex");
         if (hasCodexChapters && !active && !proposalCount && anchors.strandsEnabled && anchors.codexConfigured) {
-          foot.append(button("Redo", () => proposeStrands(true), "ghost anchor-compact"));
+          foot.append(codexButton("Redo", () => proposeStrands(true), "ghost anchor-compact"));
         }
         const revertRunId = latestAcceptedCodexRun();
         if (revertRunId && !active) foot.append(button(`Revert run #${revertRunId}`, () => revertStrandRun(revertRunId), "ghost anchor-compact anchor-danger"));
@@ -9375,8 +9435,13 @@
         codexSettingsDom.tokenMaster.checked = features.enabled;
         codexSettingsDom.strandsEnabled.checked = features.strands;
         const active = features.strands_active;
-        codexSettingsDom.strandsEnabledLabel.textContent = features.strands ? (features.enabled ? "On" : "On · paused") : "Off";
-        codexSettingsDom.strandsEnabledLabel.classList.toggle("is-on", active);
+        codexSettingsDom.strandsEnabledLabel.textContent = active ? "Chapters are on" : features.strands ? "Chapters are paused" : "Chapters are off";
+        codexSettingsDom.strandsNote.textContent = active
+          ? "Codex can propose and update chapters when you ask in a session. Each run spends tokens from the plan signed in under Codex."
+          : features.strands
+          ? "All token-spending features are switched off, so chapters cannot use Codex."
+          : "No tokens are spent on chapters. Existing and hand-made chapters stay.";
+        codexSettingsDom.strandsCard.classList.toggle("is-on", active);
         codexSettingsDom.strandsHint.textContent = active ? "On" : "Off";
         codexSettingsDom.strandsHint.dataset.tone = active ? "ok" : "off";
         anchors.strandsEnabled = active;
