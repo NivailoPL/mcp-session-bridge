@@ -862,6 +862,31 @@
     .feature-switch-card.is-on .feature-switch-state { color: var(--ok); }
     .feature-switch-detail { color: var(--muted); font-size: var(--t-meta); line-height: 1.45; }
     .settings-tabs-group .settings-switch-input[hidden] { display: none; }
+    .chapter-days { display: flex; flex-wrap: wrap; gap: .3rem; }
+    .chapter-days label { display: inline-flex; align-items: center; justify-content: center; min-width: 2.6rem; min-height: var(--h-compact); padding: 0 .5rem; border: 1px solid var(--stroke); border-radius: var(--r-ctrl); color: var(--muted); font-size: var(--t-meta); font-weight: 600; cursor: pointer; }
+    .chapter-days input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+    .chapter-days label:has(input:checked) { color: var(--ok); border-color: rgba(52, 211, 153, .6); background: rgba(52, 211, 153, .18); }
+    .chapter-days label:has(input:focus-visible) { box-shadow: 0 0 0 3px var(--accent-soft); }
+    .chapter-groups { display: grid; gap: .35rem; width: 100%; }
+    .chapter-group { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: .65rem; padding: .45rem .6rem; border: 1px solid var(--stroke-soft); border-radius: var(--r-ctrl); }
+    .chapter-group.is-off { opacity: .55; }
+    .chapter-group-name { display: grid; gap: .3rem; min-width: 0; font-size: var(--t-ctrl); font-weight: 600; }
+    .chapter-group-name small { color: var(--muted); font-weight: 500; font-size: var(--t-label); }
+    .chapter-group-count { font-family: "Geist Mono", ui-monospace, monospace; font-size: var(--t-meta); color: var(--muted); }
+    .chapter-mini-bar { display: flex; height: 4px; border-radius: var(--r-pill); overflow: hidden; background: rgba(255, 255, 255, .08); }
+    .chapter-mini-bar span:first-child, .chapter-fill-bar span:first-child { background: var(--ok); }
+    .chapter-mini-bar span:last-child, .chapter-fill-bar span:last-child { background: repeating-linear-gradient(90deg, var(--accent-2) 0 4px, transparent 4px 7px); }
+    .chapter-fill-body { display: grid; gap: .7rem; padding: 4px 16px 16px; }
+    .chapter-fill-bar { display: flex; height: 10px; border-radius: var(--r-pill); overflow: hidden; background: rgba(255, 255, 255, .08); }
+    .chapter-fill-bar span { height: 100%; transition: width .3s ease; }
+    .chapter-fill-estimate { display: flex; align-items: center; gap: .35rem; color: var(--text-2); font-size: var(--t-meta); }
+    .chapter-fill-status { display: flex; align-items: center; gap: .55rem; margin: 0; color: var(--text-2); font-size: var(--t-meta); line-height: 1.45; }
+    .chapter-fill-status:empty { display: none; }
+    .chapter-fill-status.is-running { color: #a5f3fc; }
+    .chapter-fill-status.is-error { color: #fda4af; }
+    .chapter-fill-actions { display: flex; gap: .5rem; }
+    .chapter-fill-history { display: grid; gap: .2rem; margin: 0; padding: 0; list-style: none; color: var(--muted); font-size: var(--t-label); font-family: "Geist Mono", ui-monospace, monospace; }
+    .chapter-fill-history:empty { display: none; }
     /* "Uses tokens": features that spend money sit under one switch in the settings menu */
     .settings-tabs-group { display: flex; align-items: center; justify-content: space-between; gap: .5rem; margin-top: .9rem; padding: .75rem 10px .35rem; border-top: 1px solid var(--stroke-soft); }
     .settings-tabs-group-title { font-family: "Geist Mono", ui-monospace, monospace; font-size: var(--t-label); font-weight: 500; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
@@ -2748,16 +2773,54 @@
         <section data-settings-panel="strands" class="settings-panel" hidden>
           <div class="settings-panel-head">
             <h4>Chapters</h4>
-            <span class="context-help"><button type="button" class="context-help-trigger" aria-label="About Chapters" aria-describedby="settingsHelpStrands">?</button><span id="settingsHelpStrands" class="context-help-box" role="tooltip">Codex splits one session at a time into chapters, only when you press Propose or Update in that session's Chapters panel. A first split reads the whole session; an update reads only the new exchanges. Both spend tokens from the plan signed in under Codex. Chapters you add by hand never use tokens.</span></span>
+            <span class="context-help"><button type="button" class="context-help-trigger" aria-label="About Chapters" aria-describedby="settingsHelpStrands">?</button><span id="settingsHelpStrands" class="context-help-box" role="tooltip">Codex splits a session into chapters one session at a time. A first split reads the whole session; an update reads only the new exchanges. Every run spends tokens from the plan signed in under Codex. Chapters you add by hand never use tokens.</span></span>
           </div>
-          <p class="settings-feature-note">Codex splits a session into chapters only when you press Propose or Update in that session. Hand-made chapters never use tokens.</p>
+          <p class="settings-feature-note">Automatic chapters run on the schedule below. Propose and Update in a session, and Fill now at the bottom, always work when you press them.</p>
           <label id="strandsFeatureCard" class="feature-switch-card">
             <input id="strandsEnabled" class="settings-switch-input is-green" type="checkbox" role="switch" aria-describedby="strandsEnabledNote">
             <span class="feature-switch-text">
-              <span id="strandsEnabledLabel" class="feature-switch-state">On</span>
+              <span id="strandsEnabledLabel" class="feature-switch-state">Automatic chapters are off</span>
               <span id="strandsEnabledNote" class="feature-switch-detail"></span>
             </span>
           </label>
+          <section class="settings-group">
+            <div class="settings-group-head"><h5>Schedule</h5><span id="chapterNextRun" class="settings-value-muted"></span></div>
+            <div class="settings-item">
+              <div class="settings-item-label"><span class="settings-item-title"><label for="chapterScheduleMode">How often</label></span></div>
+              <div class="settings-item-control">
+                <select id="chapterScheduleMode">
+                  <option value="interval:3">Every 3 hours</option>
+                  <option value="interval:6">Every 6 hours</option>
+                  <option value="interval:12">Every 12 hours</option>
+                  <option value="daily">Every day at…</option>
+                  <option value="weekly">On selected days at…</option>
+                </select>
+              </div>
+            </div>
+            <div class="settings-item" id="chapterScheduleTimeRow">
+              <div class="settings-item-label"><span class="settings-item-title"><label for="chapterScheduleTime">At</label></span></div>
+              <div class="settings-item-control"><input id="chapterScheduleTime" type="time" class="settings-input-mono" step="300"></div>
+            </div>
+            <div class="settings-item" id="chapterScheduleDaysRow">
+              <div class="settings-item-label"><span class="settings-item-title">Days</span></div>
+              <div class="settings-item-control chapter-days" id="chapterScheduleDays" role="group" aria-label="Days of the week"></div>
+            </div>
+          </section>
+          <section class="settings-group">
+            <div class="settings-group-head"><h5>What gets split</h5><span class="settings-value-muted">Used by the schedule and by Fill now</span></div>
+            <div class="settings-item">
+              <div class="settings-item-label"><span class="settings-item-title"><label for="chapterFillAutoAccept">Accept proposals automatically</label><span class="context-help"><button type="button" class="context-help-trigger" aria-label="About accepting automatically" aria-describedby="settingsHelpAutoAccept">?</button><span id="settingsHelpAutoAccept" class="context-help-box" role="tooltip">When on, chapters from automatic runs are accepted right away. Each run can still be reverted from the session's Chapters panel. When off, every session waits for your review and is not split again until you accept or discard.</span></span></span></div>
+              <div class="settings-item-control"><input id="chapterFillAutoAccept" class="settings-switch-input is-green" type="checkbox" role="switch"></div>
+            </div>
+            <div class="settings-item">
+              <div class="settings-item-label"><span class="settings-item-title"><label for="chapterFillSensitive">Include sensitive groups</label></span></div>
+              <div class="settings-item-control"><input id="chapterFillSensitive" class="settings-switch-input" type="checkbox" role="switch"></div>
+            </div>
+            <div class="settings-item settings-item-stack">
+              <div class="settings-item-label"><span class="settings-item-title">Groups, in this order</span></div>
+              <div class="settings-item-control"><div id="chapterFillGroups" class="chapter-groups"></div></div>
+            </div>
+          </section>
           <section class="settings-group">
             <div class="settings-group-head"><h5>Codex proposals</h5><span class="settings-value-muted">Used the next time you propose or update chapters</span></div>
             <div class="settings-item">
@@ -2783,6 +2846,19 @@
                 <button type="button" class="ghost settings-compact" id="strandPromptReset">Reset prompt</button>
                 <button type="button" class="primary settings-compact" id="strandSettingsSave">Save</button>
               </div>
+            </div>
+          </section>
+          <section class="settings-group chapter-fill">
+            <div class="settings-group-head"><h5>Fill now</h5><span id="chapterFillCount" class="settings-value-muted"></span></div>
+            <div class="chapter-fill-body">
+              <div class="chapter-fill-bar" role="progressbar" aria-labelledby="chapterFillCount" id="chapterFillBar"><span id="chapterFillBarDone"></span><span id="chapterFillBarReview"></span></div>
+              <div class="chapter-fill-estimate"><span id="chapterFillEstimate"></span><span class="context-help"><button type="button" class="context-help-trigger" aria-label="How the token estimate is made" aria-describedby="chapterFillEstimateHelp">?</button><span id="chapterFillEstimateHelp" class="context-help-box" role="tooltip"></span></span></div>
+              <p id="chapterFillStatus" class="chapter-fill-status" aria-live="polite"></p>
+              <div class="chapter-fill-actions">
+                <button type="button" class="primary settings-compact with-openai" id="chapterFillStart"><svg class="openai-mark" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M22.2819 9.8211a5.9847 5.9847 0 0 0-.5157-4.9108 6.0462 6.0462 0 0 0-6.5098-2.9A6.0651 6.0651 0 0 0 4.9807 4.1818a5.9847 5.9847 0 0 0-3.9977 2.9 6.0462 6.0462 0 0 0 .7427 7.0966 5.98 5.98 0 0 0 .511 4.9107 6.051 6.051 0 0 0 6.5146 2.9001A5.9847 5.9847 0 0 0 13.2599 24a6.0557 6.0557 0 0 0 5.7718-4.2058 5.9894 5.9894 0 0 0 3.9977-2.9001 6.0557 6.0557 0 0 0-.7475-7.0729zm-9.022 12.6081a4.4755 4.4755 0 0 1-2.8764-1.0408l.1419-.0804 4.7783-2.7582a.7948.7948 0 0 0 .3927-.6813v-6.7369l2.02 1.1686a.071.071 0 0 1 .038.052v5.5826a4.504 4.504 0 0 1-4.4945 4.4944zm-9.6607-4.1254a4.4708 4.4708 0 0 1-.5346-3.0137l.142.0852 4.783 2.7582a.7712.7712 0 0 0 .7806 0l5.8428-3.3685v2.3324a.0804.0804 0 0 1-.0332.0615L9.74 19.9502a4.4992 4.4992 0 0 1-6.1408-1.6464zM2.3408 7.8956a4.485 4.485 0 0 1 2.3655-1.9728V11.6a.7664.7664 0 0 0 .3879.6765l5.8144 3.3543-2.0201 1.1685a.0757.0757 0 0 1-.071 0l-4.8303-2.7865A4.504 4.504 0 0 1 2.3408 7.872zm16.5963 3.8558L13.1038 8.364 15.1192 7.2a.0757.0757 0 0 1 .071 0l4.8303 2.7913a4.4944 4.4944 0 0 1-.6765 8.1042v-5.6772a.79.79 0 0 0-.407-.667zm2.0107-3.0231l-.142-.0852-4.7735-2.7818a.7759.7759 0 0 0-.7854 0L9.409 9.2297V6.8974a.0662.0662 0 0 1 .0284-.0615l4.8303-2.7866a4.4992 4.4992 0 0 1 6.6802 4.66zM8.3065 12.863l-2.02-1.1638a.0804.0804 0 0 1-.038-.0567V6.0742a4.4992 4.4992 0 0 1 7.3757-3.4537l-.142.0805L8.704 5.459a.7948.7948 0 0 0-.3927.6813zm1.0976-2.3654l2.602-1.4998 2.6069 1.4998v2.9994l-2.5974 1.4997-2.6067-1.4997Z"></path></svg>Start</button>
+                <button type="button" class="settings-quiet-danger settings-compact" id="chapterFillPause" hidden>Pause</button>
+              </div>
+              <ol id="chapterFillHistory" class="chapter-fill-history"></ol>
             </div>
           </section>
         </section>
@@ -3048,7 +3124,7 @@
         chapterProgress: document.getElementById("chapterDockProgress"),
         pop: document.getElementById("highlightPop"),
       };
-      const codexSettings = { login: null, pollTimer: 0, defaults: null };
+      const codexSettings = { login: null, pollTimer: 0, defaults: null, automation: null, automationTimer: 0 };
       const codexSettingsDom = {
         pill: document.getElementById("codexSettingsPill"),
         hint: document.getElementById("settingsHintCodex"),
@@ -3063,6 +3139,25 @@
         strandsEnabledLabel: document.getElementById("strandsEnabledLabel"),
         strandsNote: document.getElementById("strandsEnabledNote"),
         strandsCard: document.getElementById("strandsFeatureCard"),
+        nextRun: document.getElementById("chapterNextRun"),
+        scheduleMode: document.getElementById("chapterScheduleMode"),
+        scheduleTime: document.getElementById("chapterScheduleTime"),
+        scheduleTimeRow: document.getElementById("chapterScheduleTimeRow"),
+        scheduleDays: document.getElementById("chapterScheduleDays"),
+        scheduleDaysRow: document.getElementById("chapterScheduleDaysRow"),
+        fillAutoAccept: document.getElementById("chapterFillAutoAccept"),
+        fillSensitive: document.getElementById("chapterFillSensitive"),
+        fillGroups: document.getElementById("chapterFillGroups"),
+        fillCount: document.getElementById("chapterFillCount"),
+        fillBar: document.getElementById("chapterFillBar"),
+        fillBarDone: document.getElementById("chapterFillBarDone"),
+        fillBarReview: document.getElementById("chapterFillBarReview"),
+        fillEstimate: document.getElementById("chapterFillEstimate"),
+        fillEstimateHelp: document.getElementById("chapterFillEstimateHelp"),
+        fillStatus: document.getElementById("chapterFillStatus"),
+        fillStart: document.getElementById("chapterFillStart"),
+        fillPause: document.getElementById("chapterFillPause"),
+        fillHistory: document.getElementById("chapterFillHistory"),
         strandsHint: document.getElementById("settingsHintStrands"),
         signIn: document.getElementById("codexSettingsSignIn"),
         signOut: document.getElementById("codexSettingsSignOut"),
@@ -3854,7 +3949,7 @@
           panel.hidden = panel.dataset.settingsPanel !== name;
         }
         if (name === "codex") refreshCodexSettings();
-        if (name === "strands") { loadStrandSettings(); loadTokenFeatures(); }
+        if (name === "strands") { loadStrandSettings(); loadTokenFeatures(); loadChapterAutomation(); }
         renderSettingsDirty();
       }
 
@@ -9433,18 +9528,7 @@
 
       function renderTokenFeatures(features) {
         codexSettingsDom.tokenMaster.checked = features.enabled;
-        codexSettingsDom.strandsEnabled.checked = features.strands;
-        const active = features.strands_active;
-        codexSettingsDom.strandsEnabledLabel.textContent = active ? "Chapters are on" : features.strands ? "Chapters are paused" : "Chapters are off";
-        codexSettingsDom.strandsNote.textContent = active
-          ? "Codex can propose and update chapters when you ask in a session. Each run spends tokens from the plan signed in under Codex."
-          : features.strands
-          ? "All token-spending features are switched off, so chapters cannot use Codex."
-          : "No tokens are spent on chapters. Existing and hand-made chapters stay.";
-        codexSettingsDom.strandsCard.classList.toggle("is-on", active);
-        codexSettingsDom.strandsHint.textContent = active ? "On" : "Off";
-        codexSettingsDom.strandsHint.dataset.tone = active ? "ok" : "off";
-        anchors.strandsEnabled = active;
+        anchors.strandsEnabled = features.strands_active;
         renderAnchorPanel();
       }
 
@@ -9465,6 +9549,211 @@
         }
       }
 
+      // ---------- Settings › Chapters: schedule and Fill now ----------
+
+      const CHAPTER_WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+      function formatAutomationTime(seconds, timezone) {
+        if (!seconds) return "";
+        try {
+          return new Intl.DateTimeFormat("en-GB", {
+            weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: timezone,
+          }).format(new Date(seconds * 1000));
+        } catch (_) {
+          return new Date(seconds * 1000).toLocaleString();
+        }
+      }
+
+      function compactTokens(value) {
+        if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
+        if (value >= 1_000) return `${Math.round(value / 1_000)}k`;
+        return String(value);
+      }
+
+      async function loadChapterAutomation() {
+        try {
+          renderChapterAutomation((await api("/admin/api/chapters/automation")).automation);
+        } catch (error) {
+          codexSettingsDom.fillStatus.textContent = `Could not load automatic chapters: ${error.message}`;
+          codexSettingsDom.fillStatus.className = "chapter-fill-status is-error";
+        }
+      }
+
+      function scheduleChapterAutomationPoll(data) {
+        window.clearTimeout(codexSettings.automationTimer);
+        const busy = ["running", "pausing"].includes(data.batch?.status);
+        const visible = dom.aiSettingsDialog.open && activeSettingsTab() === "strands";
+        if (busy && visible) codexSettings.automationTimer = window.setTimeout(loadChapterAutomation, 2500);
+      }
+
+      function renderChapterAutomation(data) {
+        codexSettings.automation = data;
+        const { schedule, fill, progress, batch } = data;
+        // the big card: is anything going to run on its own?
+        const on = Boolean(schedule.enabled);
+        codexSettingsDom.strandsEnabled.checked = on;
+        codexSettingsDom.strandsCard.classList.toggle("is-on", on);
+        codexSettingsDom.strandsEnabledLabel.textContent = on ? "Automatic chapters are on" : "Automatic chapters are off";
+        codexSettingsDom.strandsNote.textContent = on
+          ? `Next run ${formatAutomationTime(data.next_run_at, data.timezone)} (${data.timezone}). Each run fills the groups below and spends tokens.`
+          : "Nothing runs on its own and no tokens are spent in the background. Use Fill now below whenever you want.";
+        codexSettingsDom.strandsHint.textContent = on ? "Auto" : "Off";
+        codexSettingsDom.strandsHint.dataset.tone = on ? "ok" : "off";
+        codexSettingsDom.nextRun.textContent = on && data.next_run_at ? `Next: ${formatAutomationTime(data.next_run_at, data.timezone)}` : "";
+
+        codexSettingsDom.scheduleMode.value = schedule.mode === "interval" ? `interval:${schedule.interval_hours}` : schedule.mode;
+        if (!codexSettingsDom.scheduleMode.value) codexSettingsDom.scheduleMode.value = "daily";
+        codexSettingsDom.scheduleTime.value = schedule.time;
+        codexSettingsDom.scheduleTimeRow.hidden = schedule.mode === "interval";
+        codexSettingsDom.scheduleDaysRow.hidden = schedule.mode !== "weekly";
+        codexSettingsDom.scheduleDays.replaceChildren();
+        CHAPTER_WEEKDAYS.forEach((name, day) => {
+          const wrap = document.createElement("label");
+          const input = document.createElement("input");
+          input.type = "checkbox";
+          input.checked = (schedule.days || []).includes(day);
+          input.addEventListener("change", () => {
+            const days = [...codexSettingsDom.scheduleDays.querySelectorAll("input")].map((item, index) => (item.checked ? index : -1)).filter((index) => index >= 0);
+            if (days.length) saveChapterSchedule({ days });
+            else input.checked = true;
+          });
+          wrap.append(input, document.createTextNode(name));
+          codexSettingsDom.scheduleDays.append(wrap);
+        });
+
+        codexSettingsDom.fillAutoAccept.checked = fill.auto_accept;
+        codexSettingsDom.fillSensitive.checked = fill.include_sensitive;
+        renderChapterGroups(progress, fill);
+
+        const total = Math.max(progress.total, 1);
+        codexSettingsDom.fillBarDone.style.width = `${(progress.done / total) * 100}%`;
+        codexSettingsDom.fillBarReview.style.width = `${(progress.review / total) * 100}%`;
+        codexSettingsDom.fillBar.setAttribute("aria-valuemin", "0");
+        codexSettingsDom.fillBar.setAttribute("aria-valuemax", String(progress.total));
+        codexSettingsDom.fillBar.setAttribute("aria-valuenow", String(progress.done));
+        codexSettingsDom.fillCount.textContent = `${progress.done} of ${progress.total} sessions split${progress.review ? ` · ${progress.review} waiting for review` : ""}`;
+        codexSettingsDom.fillEstimate.textContent = progress.todo
+          ? `${progress.todo} session${progress.todo === 1 ? "" : "s"} left · about ${compactTokens(progress.estimated_tokens)} tokens to send (estimate)`
+          : "Every session in these groups is split.";
+        codexSettingsDom.fillEstimateHelp.textContent = data.estimate_note;
+
+        const status = batch?.status || "idle";
+        const running = status === "running" || status === "pausing";
+        codexSettingsDom.fillStatus.replaceChildren();
+        codexSettingsDom.fillStatus.className = "chapter-fill-status";
+        if (running) {
+          codexSettingsDom.fillStatus.classList.add("is-running");
+          codexSettingsDom.fillStatus.append(workSpinner(true), document.createTextNode(
+            status === "pausing"
+              ? `Pausing after “${batch.current_title || "the current session"}”…`
+              : `Splitting “${batch.current_title || "…"}” · ${batch.processed || 0} done in this run${batch.trigger === "schedule" ? " (scheduled)" : ""}`,
+          ));
+        } else if (status === "paused") {
+          codexSettingsDom.fillStatus.classList.add(batch.last_error ? "is-error" : "is-running");
+          codexSettingsDom.fillStatus.textContent = batch.last_error || `Paused after ${batch.processed || 0} sessions. Press Resume to continue.`;
+        } else if (batch?.last_error) {
+          codexSettingsDom.fillStatus.textContent = `Last error: ${batch.last_error}`;
+        }
+        const startLabel = status === "paused" ? "Resume" : "Start";
+        codexSettingsDom.fillStart.lastChild.textContent = startLabel;
+        codexSettingsDom.fillStart.disabled = running || !data.codex_configured || (!progress.todo && status !== "paused");
+        codexSettingsDom.fillStart.title = !data.codex_configured ? "Codex App Server is not configured on this Bridge." : "";
+        codexSettingsDom.fillPause.hidden = !running;
+        codexSettingsDom.fillPause.disabled = status === "pausing";
+
+        codexSettingsDom.fillHistory.replaceChildren();
+        for (const entry of (data.history || []).slice(0, 5)) {
+          const item = document.createElement("li");
+          item.textContent = `${formatAutomationTime(entry.finished_at, data.timezone)} · ${entry.trigger === "schedule" ? "scheduled" : "manual"} · ${entry.processed} sessions` +
+            `${entry.failed ? ` · ${entry.failed} failed` : ""}${entry.skipped ? ` · ${entry.skipped} skipped` : ""}`;
+          codexSettingsDom.fillHistory.append(item);
+        }
+        scheduleChapterAutomationPoll(data);
+      }
+
+      function renderChapterGroups(progress, fill) {
+        const container = codexSettingsDom.fillGroups;
+        container.replaceChildren();
+        const chosen = fill.group_ids;
+        for (const group of progress.groups) {
+          if (!group.total) continue;
+          const row = document.createElement("label");
+          row.className = `chapter-group${group.in_scope ? "" : " is-off"}`;
+          const box = document.createElement("input");
+          box.type = "checkbox";
+          box.checked = chosen === null ? true : chosen.includes(group.group_id);
+          box.disabled = group.is_sensitive && !fill.include_sensitive;
+          box.addEventListener("change", () => {
+            const ids = progress.groups.filter((item) => item.total)
+              .filter((item) => (item.group_id === group.group_id ? box.checked : (chosen === null || chosen.includes(item.group_id))))
+              .map((item) => item.group_id);
+            saveChapterFill({ group_ids: ids });
+          });
+          const name = spanCls("chapter-group-name");
+          const bar = spanCls("chapter-mini-bar");
+          const done = spanCls("");
+          done.style.width = `${(group.done / group.total) * 100}%`;
+          const review = spanCls("");
+          review.style.width = `${(group.review / group.total) * 100}%`;
+          bar.append(done, review);
+          name.append(document.createTextNode(group.name));
+          if (group.is_sensitive) name.append(document.createElement("small"));
+          if (group.is_sensitive) name.lastChild.textContent = fill.include_sensitive ? "Sensitive · included" : "Sensitive · excluded";
+          name.append(bar);
+          row.append(box, name, spanCls("chapter-group-count", `${group.done}/${group.total}`));
+          container.append(row);
+        }
+      }
+
+      async function saveChapterSchedule(change) {
+        try {
+          renderChapterAutomation((await api("/admin/api/chapters/schedule", { method: "PUT", body: JSON.stringify(change) })).automation);
+        } catch (error) {
+          setStrandSettingsMessage(error.message, "error");
+          await loadChapterAutomation();
+        }
+      }
+
+      async function saveChapterFill(change) {
+        try {
+          renderChapterAutomation((await api("/admin/api/chapters/fill", { method: "PUT", body: JSON.stringify(change) })).automation);
+        } catch (error) {
+          setStrandSettingsMessage(error.message, "error");
+          await loadChapterAutomation();
+        }
+      }
+
+      async function startChapterFill() {
+        const data = codexSettings.automation;
+        if (!data) return;
+        const paused = data.batch?.status === "paused";
+        const groups = data.progress.groups.filter((group) => group.in_scope && group.todo).map((group) => group.name);
+        const confirmed = await window.adminConfirmation.confirm({
+          title: paused ? "Resume filling chapters?" : "Fill chapters now?",
+          message: `${data.progress.todo} session${data.progress.todo === 1 ? "" : "s"} in ${groups.join(", ") || "the chosen groups"}, about ${compactTokens(data.progress.estimated_tokens)} tokens to send (estimate).`,
+          detail: `${data.fill.auto_accept ? "Proposals are accepted automatically and can be reverted per session." : "Every session will wait for your review."} Pause stops after the session Codex is working on.`,
+          confirmLabel: paused ? "Resume" : "Start filling",
+          tone: "warning",
+        });
+        if (!confirmed) return;
+        try {
+          renderChapterAutomation((await api("/admin/api/chapters/batch/start", { method: "POST", body: "{}" })).automation);
+        } catch (error) {
+          setStrandSettingsMessage(error.message, "error");
+          await loadChapterAutomation();
+        }
+      }
+
+      async function pauseChapterFill() {
+        codexSettingsDom.fillPause.disabled = true;
+        try {
+          renderChapterAutomation((await api("/admin/api/chapters/batch/pause", { method: "POST", body: "{}" })).automation);
+        } catch (error) {
+          setStrandSettingsMessage(error.message, "error");
+          await loadChapterAutomation();
+        }
+      }
+
       function bindCodexSettingsEvents() {
         codexSettingsDom.signIn.addEventListener("click", startCodexSettingsLogin);
         codexSettingsDom.cancel.addEventListener("click", cancelCodexSettingsLogin);
@@ -9478,7 +9767,18 @@
           }
         });
         codexSettingsDom.tokenMaster.addEventListener("change", () => saveTokenFeatures({ enabled: codexSettingsDom.tokenMaster.checked }));
-        codexSettingsDom.strandsEnabled.addEventListener("change", () => saveTokenFeatures({ strands: codexSettingsDom.strandsEnabled.checked }));
+        codexSettingsDom.strandsEnabled.addEventListener("change", () => saveChapterSchedule({ enabled: codexSettingsDom.strandsEnabled.checked }));
+        codexSettingsDom.scheduleMode.addEventListener("change", () => {
+          const [mode, hours] = codexSettingsDom.scheduleMode.value.split(":");
+          saveChapterSchedule(hours ? { mode, interval_hours: Number(hours) } : { mode });
+        });
+        codexSettingsDom.scheduleTime.addEventListener("change", () => {
+          if (codexSettingsDom.scheduleTime.value) saveChapterSchedule({ time: codexSettingsDom.scheduleTime.value });
+        });
+        codexSettingsDom.fillAutoAccept.addEventListener("change", () => saveChapterFill({ auto_accept: codexSettingsDom.fillAutoAccept.checked }));
+        codexSettingsDom.fillSensitive.addEventListener("change", () => saveChapterFill({ include_sensitive: codexSettingsDom.fillSensitive.checked }));
+        codexSettingsDom.fillStart.addEventListener("click", startChapterFill);
+        codexSettingsDom.fillPause.addEventListener("click", pauseChapterFill);
         codexSettingsDom.signOut.addEventListener("click", signOutCodexSettings);
         codexSettingsDom.refresh.addEventListener("click", () => refreshCodexSettings());
         codexSettingsDom.save.addEventListener("click", saveStrandSettings);

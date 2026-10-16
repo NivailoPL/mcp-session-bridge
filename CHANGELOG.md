@@ -29,7 +29,10 @@ This project follows a lightweight changelog format inspired by Keep a Changelog
 - Hovering the Highlights or Chapters dock opens its panel for a quick jump and closes it when the pointer leaves; clicking pins it. Both panels can stay pinned, and the choice is remembered in the browser.
 - Added a fast cyan spinner wherever Bridge waits on something it sent out: on the Chapters dock and in the panel while Codex works, and in Settings › Codex while sign-in waits for the code.
 - Codex actions (sign-in, propose, update, redo) carry the OpenAI mark.
-- Settings › Chapters opens with a large on/off card that says whether chapters can spend tokens; the switch for all token features is hidden for now and stays on.
+- Added automatic chapters. The large card in Settings › Chapters now switches a schedule on or off: every 3, 6 or 12 hours, every day at a set time, or on chosen weekdays, in the admin's timezone. Turning it on never fires at once.
+- Added Fill now at the bottom of Settings › Chapters: a progress bar of split sessions, a token estimate (with how it is made), Start, and Pause. Pause lets the session Codex is working on finish and then stops; Resume continues where it stopped and retries sessions that hit a Codex error.
+- Automatic runs and Fill now share one scope: chosen groups in order, an Include sensitive groups switch (off by default) and Accept proposals automatically (on by default; each run stays revertible per session).
+- A fill pauses itself after three Codex errors in a row, skips sessions too long for one run, and comes back paused, never running, after a Bridge restart. The last runs are listed under Fill now.
 - Highlights are drawn in solid highlighter yellow so they stay readable on every transcript layout, and the highlight and chapter docks share one tinted card in the rail.
 
 ### Security

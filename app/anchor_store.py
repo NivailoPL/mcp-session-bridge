@@ -442,6 +442,24 @@ class AnchorStoreMixin:
             }
         return result
 
+    def chapter_char_estimates(self, states: dict[str, dict[str, Any]]) -> dict[str, int]:
+        """Characters the next Codex run would send per session (masked answers left out)."""
+        with self._lock, self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT session_id, exchange_id,
+                       length(user_message) + CASE WHEN assistant_masked_at IS NULL THEN length(assistant_response) ELSE 0 END AS chars
+                FROM exchanges WHERE deleted_at IS NULL
+                """
+            ).fetchall()
+        totals: dict[str, int] = {}
+        for row in rows:
+            analyzed_to = (states.get(row["session_id"]) or {}).get("analyzed_to")
+            if analyzed_to is not None and row["exchange_id"] <= analyzed_to:
+                continue
+            totals[row["session_id"]] = totals.get(row["session_id"], 0) + int(row["chars"] or 0)
+        return totals
+
     def chapter_state(self, session_id: str) -> dict[str, Any]:
         state = self.chapter_states(session_id).get(session_id)
         if state is not None:
@@ -483,7 +501,8 @@ class AnchorStoreMixin:
     def get_token_features(self) -> dict[str, bool]:
         master = self.get_app_setting(TOKEN_FEATURES_MASTER_KEY) != "false"
         strands = self.get_app_setting(TOKEN_FEATURES_STRANDS_KEY) != "false"
-        return {"enabled": master, "strands": strands, "strands_active": master and strands}
+        # The Chapters card now drives the schedule; manual runs only answer to the master switch.
+        return {"enabled": master, "strands": strands, "strands_active": master}
 
     def set_token_features(self, payload: Any) -> dict[str, bool]:
         if not isinstance(payload, dict) or not payload or not set(payload) <= {"enabled", "strands"}:

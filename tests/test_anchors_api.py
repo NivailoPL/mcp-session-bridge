@@ -206,7 +206,7 @@ def test_token_feature_switches_gate_codex_runs(load_main, admin_client) -> None
     }
     main.strand_runtime.codex = FakeCodex({"strands": [{"title": "A", "ranges": [{"start": ids[0], "end": ids[0]}]}]})
 
-    for switch in ({"strands": False}, {"enabled": False, "strands": True}):
+    for switch in ({"enabled": False, "strands": True},):
         saved = client.put("/admin/api/settings/token-features", json=switch, headers=headers).json()["features"]
         assert saved["strands_active"] is False
         refused = client.post(f"/admin/api/sessions/{SESSION}/strand-runs", json={}, headers=headers)
@@ -342,3 +342,22 @@ def test_session_list_carries_chapter_state(load_main, admin_client) -> None:
     assert listed["chapters"]["state"] == "complete"
     payload = client.get(f"/admin/api/sessions/{SESSION}/strands").json()
     assert payload["chapter_state"]["analyzed_count"] == 4
+
+
+def test_automation_endpoints(load_main, admin_client) -> None:
+    main, _ = _setup(load_main)
+    client, csrf = admin_client(main)
+    headers = {"x-csrf-token": csrf}
+    overview = client.get("/admin/api/chapters/automation").json()["automation"]
+    assert overview["schedule"]["enabled"] is False and overview["fill"]["auto_accept"] is True
+    assert overview["progress"]["todo"] == 1 and overview["next_run_at"] is None
+
+    saved = client.put("/admin/api/chapters/schedule", json={"enabled": True, "mode": "interval", "interval_hours": 6}, headers=headers)
+    assert saved.status_code == 200 and saved.json()["automation"]["next_run_at"] is not None
+    assert client.put("/admin/api/chapters/schedule", json={"interval_hours": 5}, headers=headers).status_code == 422
+    fill = client.put("/admin/api/chapters/fill", json={"include_sensitive": True, "auto_accept": False}, headers=headers)
+    assert fill.json()["automation"]["fill"]["auto_accept"] is False
+
+    paused = client.post("/admin/api/chapters/batch/pause", json={}, headers=headers)
+    assert paused.status_code == 409 and paused.json()["code"] == "batch_idle"
+    assert client.post("/admin/api/chapters/batch/start", json={}).status_code == 403

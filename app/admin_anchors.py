@@ -7,6 +7,7 @@ work on its own.
 
 from __future__ import annotations
 
+import asyncio
 from typing import TYPE_CHECKING, Any, Callable
 
 from starlette.requests import Request
@@ -17,6 +18,7 @@ from app.strands import StrandError, default_strand_settings
 
 if TYPE_CHECKING:
     from app.admin import AdminHandlers
+    from app.chapter_automation import ChapterAutomation
     from app.strand_runtime import StrandRuntime
 
 _NOT_FOUND_CODES = {"session_unknown", "strand_unknown", "run_unknown", "exchange_unknown"}
@@ -24,10 +26,11 @@ _CONFLICT_CODES = {"pending_exists", "run_active", "sensitive_unconfirmed", "fea
 
 
 class AnchorAdminHandlers:
-    def __init__(self, admin: AdminHandlers, runtime: StrandRuntime) -> None:
+    def __init__(self, admin: AdminHandlers, runtime: StrandRuntime, automation: ChapterAutomation | None = None) -> None:
         self.admin = admin
         self.store = admin.store
         self.runtime = runtime
+        self.automation = automation
 
     # ---------- highlights ----------
 
@@ -199,6 +202,59 @@ class AnchorAdminHandlers:
         if error:
             return error
         return self._run(lambda: {"features": self.store.set_token_features(payload)})
+
+    # ---------- automatic chapters ----------
+
+    async def api_chapter_automation(self, request: Request) -> Response:
+        _, error = self.admin._require_admin(request)
+        if error:
+            return error
+        return self._ok({"automation": await asyncio.to_thread(self._overview)})
+
+    def _overview(self) -> dict[str, Any]:
+        assert self.automation is not None
+        return {**self.automation.overview(), "codex_configured": self.runtime.codex is not None,
+                "running": self.automation.running()}
+
+    async def api_chapter_fill_settings(self, request: Request) -> Response:
+        payload, error = await self._mutation(request, allowed={"group_ids", "include_sensitive", "auto_accept"})
+        if error:
+            return error
+        return self._automation_call(lambda: self.automation.set_fill_settings(payload))
+
+    async def api_chapter_schedule(self, request: Request) -> Response:
+        payload, error = await self._mutation(request, allowed={"enabled", "mode", "interval_hours", "time", "days"})
+        if error:
+            return error
+        return self._automation_call(lambda: self.automation.set_schedule(payload))
+
+    async def api_chapter_batch_start(self, request: Request) -> Response:
+        _, error = await self._mutation(request, allowed=set(), allow_empty=True)
+        if error:
+            return error
+        from app.chapter_automation import AutomationError
+
+        try:
+            await self.automation.start(trigger="manual")
+        except AutomationError as exc:
+            status = 503 if exc.code == "codex_unavailable" else 409
+            return self._error(str(exc), status, exc.code)
+        return self._ok({"automation": await asyncio.to_thread(self._overview)})
+
+    async def api_chapter_batch_pause(self, request: Request) -> Response:
+        _, error = await self._mutation(request, allowed=set(), allow_empty=True)
+        if error:
+            return error
+        return self._automation_call(self.automation.pause)
+
+    def _automation_call(self, action: Callable[[], Any]) -> Response:
+        from app.chapter_automation import AutomationError
+
+        try:
+            action()
+        except AutomationError as exc:
+            return self._error(str(exc), 409 if exc.code.startswith("batch") else 422, exc.code)
+        return self._ok({"automation": self._overview()})
 
     # ---------- helpers ----------
 

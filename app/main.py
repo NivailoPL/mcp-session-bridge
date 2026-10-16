@@ -27,6 +27,7 @@ from app.admin_contexts import ContextAdminHandlers
 from app.codex_app_server import CodexAppServerClient
 from app.graph_runtime import GraphRuntime
 from app.oauth import OAuthHandlers
+from app.chapter_automation import SCHEDULER_TICK_SECONDS, ChapterAutomation
 from app.strand_runtime import StrandRuntime
 from app.pdf_files import (
     MAX_MCP_PDF_BYTES,
@@ -113,6 +114,17 @@ async def _search_index_monitor() -> None:
             logger.exception("Automatic search index refresh check failed")
 
 
+async def _chapter_schedule_monitor() -> None:
+    while True:
+        await asyncio.sleep(SCHEDULER_TICK_SECONDS)
+        try:
+            await chapter_automation.tick()
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception("Chapter schedule check failed")
+
+
 async def _graph_pipeline_monitor() -> None:
     while True:
         try:
@@ -128,6 +140,8 @@ async def _graph_pipeline_monitor() -> None:
 async def app_lifespan(_: Any):
     async with mcp.session_manager.run():
         monitor = asyncio.create_task(_search_index_monitor())
+        await asyncio.to_thread(chapter_automation.recover)
+        chapter_monitor = asyncio.create_task(_chapter_schedule_monitor())
         graph_monitor = (
             asyncio.create_task(_graph_pipeline_monitor())
             if settings.graph_experimental
@@ -139,6 +153,10 @@ async def app_lifespan(_: Any):
             yield {}
         finally:
             monitor.cancel()
+            chapter_monitor.cancel()
+            with suppress(asyncio.CancelledError):
+                await chapter_monitor
+            await chapter_automation.close()
             if graph_monitor is not None:
                 graph_monitor.cancel()
             with suppress(asyncio.CancelledError):
@@ -177,6 +195,8 @@ codex = CodexAppServerClient(
 graph_runtime = GraphRuntime(store, codex)
 # Strand runs start only from an admin request; there is no background loop.
 strand_runtime = StrandRuntime(store, codex)
+# Automatic chapters: "Fill now" and the schedule share one batch engine.
+chapter_automation = ChapterAutomation(store, strand_runtime)
 
 
 async def _request_service_restart() -> None:
@@ -231,7 +251,7 @@ admin = AdminHandlers(
     graph_runtime=graph_runtime,
 )
 contexts_admin = ContextAdminHandlers(admin)
-anchors_admin = AnchorAdminHandlers(admin, strand_runtime)
+anchors_admin = AnchorAdminHandlers(admin, strand_runtime, chapter_automation)
 
 
 @mcp.custom_route("/healthz", methods=["GET"])
@@ -682,6 +702,31 @@ async def admin_api_get_strand_run(request: Request) -> Response:
 @mcp.custom_route("/admin/api/strand-runs/{run_id}/revert", methods=["POST"])
 async def admin_api_revert_strand_run(request: Request) -> Response:
     return await anchors_admin.api_revert_strand_run(request)
+
+
+@mcp.custom_route("/admin/api/chapters/automation", methods=["GET"])
+async def admin_api_chapter_automation(request: Request) -> Response:
+    return await anchors_admin.api_chapter_automation(request)
+
+
+@mcp.custom_route("/admin/api/chapters/fill", methods=["PUT"])
+async def admin_api_chapter_fill_settings(request: Request) -> Response:
+    return await anchors_admin.api_chapter_fill_settings(request)
+
+
+@mcp.custom_route("/admin/api/chapters/schedule", methods=["PUT"])
+async def admin_api_chapter_schedule(request: Request) -> Response:
+    return await anchors_admin.api_chapter_schedule(request)
+
+
+@mcp.custom_route("/admin/api/chapters/batch/start", methods=["POST"])
+async def admin_api_chapter_batch_start(request: Request) -> Response:
+    return await anchors_admin.api_chapter_batch_start(request)
+
+
+@mcp.custom_route("/admin/api/chapters/batch/pause", methods=["POST"])
+async def admin_api_chapter_batch_pause(request: Request) -> Response:
+    return await anchors_admin.api_chapter_batch_pause(request)
 
 
 @mcp.custom_route("/admin/api/settings/token-features", methods=["GET"])
