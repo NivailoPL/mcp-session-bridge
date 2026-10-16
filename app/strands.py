@@ -164,11 +164,7 @@ def _range_ends(item: Any) -> tuple[int, int]:
 
 def build_strand_prompt(prompt: str, exchanges: Sequence[Any]) -> str:
     """Render the whole session with exchange numbers; refuse instead of truncating."""
-    blocks: list[str] = []
-    for exchange in exchanges:
-        assistant_text = "" if exchange.assistant_masked_at is not None else exchange.assistant_response
-        assistant = f"\n\nMODEL:\n{assistant_text}" if assistant_text else ""
-        blocks.append(f"Exchange {exchange.exchange_id}\nHUMAN:\n{exchange.user_message}{assistant}")
+    blocks = [_exchange_block(exchange) for exchange in exchanges]
     if not blocks:
         raise StrandError("This session has no exchanges to split.", code="source_empty")
     transcript = "\n\n---\n\n".join(blocks)
@@ -200,3 +196,111 @@ def validate_strand_result(raw: Any, positions: dict[int, int]) -> list[dict[str
             {"title": validate_title(item["title"]), "ranges": normalize_ranges(item["ranges"], positions)}
         )
     return proposals
+
+
+# ---------- incremental updates ----------
+
+STRAND_UPDATE_CONTEXT_EXCHANGES = 2
+
+STRAND_UPDATE_OUTPUT_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["extend", "new"],
+    "properties": {
+        "extend": {
+            "type": "array",
+            "maxItems": STRAND_MAX_PROPOSALS,
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["chapter_id", "ranges"],
+                "properties": {
+                    "chapter_id": {"type": "integer"},
+                    "ranges": STRAND_OUTPUT_SCHEMA["properties"]["strands"]["items"]["properties"]["ranges"],
+                },
+            },
+        },
+        "new": {
+            "type": "array",
+            "maxItems": STRAND_MAX_PROPOSALS,
+            "items": STRAND_OUTPUT_SCHEMA["properties"]["strands"]["items"],
+        },
+    },
+}
+
+
+def _exchange_block(exchange: Any) -> str:
+    assistant_text = "" if exchange.assistant_masked_at is not None else exchange.assistant_response
+    assistant = f"\n\nMODEL:\n{assistant_text}" if assistant_text else ""
+    return f"Exchange {exchange.exchange_id}\nHUMAN:\n{exchange.user_message}{assistant}"
+
+
+def build_strand_update_prompt(
+    prompt: str,
+    chapters: Sequence[dict[str, Any]],
+    context: Sequence[Any],
+    new_exchanges: Sequence[Any],
+) -> str:
+    """Only the new exchanges, the existing chapter titles and a little context."""
+    if not new_exchanges:
+        raise StrandError("There are no new exchanges to add to chapters.", code="already_complete")
+    listing = "\n".join(
+        f"- Chapter {chapter['strand_id']}: {chapter['title']} ({_ranges_text(chapter['ranges'])})"
+        for chapter in chapters
+    ) or "- (none yet)"
+    earlier = "\n\n---\n\n".join(_exchange_block(exchange) for exchange in context) or "(none)"
+    fresh = "\n\n---\n\n".join(_exchange_block(exchange) for exchange in new_exchanges)
+    if len(fresh) + len(earlier) > STRAND_SOURCE_MAX_CHARS:
+        raise StrandError(
+            "The new part of this session is too long for one Codex run. Nothing was sent or cut.",
+            code="source_too_large",
+        )
+    return (
+        f"{prompt}\n\n"
+        "This session was already split into chapters up to the NEW EXCHANGES below. "
+        "Place only the new exchanges: extend an existing chapter with ranges when the human "
+        "continues that subject, or propose a new chapter for a new subject. Never change or "
+        "repeat ranges outside the new exchanges. Return only the structured result.\n\n"
+        f"EXISTING CHAPTERS\n{listing}\n\n"
+        f"EARLIER EXCHANGES (context only, already in chapters)\n\n{earlier}\n\n"
+        f"NEW EXCHANGES\n\n{fresh}"
+    )
+
+
+def validate_strand_update_result(
+    raw: Any,
+    positions: dict[int, int],
+    new_ids: set[int],
+    chapter_ids: set[int],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Return (extensions, new chapters); any invalid item rejects the whole run."""
+    if not isinstance(raw, dict) or set(raw) != {"extend", "new"}:
+        raise StrandError("Codex returned an unexpected result shape.", code="result_invalid")
+    extend, new = raw["extend"], raw["new"]
+    if not isinstance(extend, list) or not isinstance(new, list):
+        raise StrandError("Codex returned an unexpected result shape.", code="result_invalid")
+    if not extend and not new:
+        raise StrandError("Codex placed none of the new exchanges.", code="result_empty")
+    new_positions = {exchange_id: position for exchange_id, position in positions.items() if exchange_id in new_ids}
+    extensions: dict[int, list[tuple[int, int]]] = {}
+    for item in extend:
+        if not isinstance(item, dict) or set(item) != {"chapter_id", "ranges"}:
+            raise StrandError("Codex returned an unexpected extension.", code="result_invalid")
+        chapter_id = item["chapter_id"]
+        if chapter_id not in chapter_ids:
+            raise StrandError("Codex extended a chapter that does not exist.", code="chapter_unknown")
+        extensions.setdefault(chapter_id, []).extend(normalize_ranges(item["ranges"], new_positions))
+    merged = [
+        {"strand_id": chapter_id, "ranges": normalize_ranges(spans, new_positions)}
+        for chapter_id, spans in extensions.items()
+    ]
+    chapters = validate_strand_result({"strands": new}, new_positions) if new else []
+    return merged, chapters
+
+
+def _ranges_text(ranges: Sequence[dict[str, Any]]) -> str:
+    return ", ".join(
+        f"#{item['start_exchange_id']}" if item["start_exchange_id"] == item["end_exchange_id"]
+        else f"#{item['start_exchange_id']}-{item['end_exchange_id']}"
+        for item in ranges
+    )

@@ -12,7 +12,7 @@ from pathlib import Path
 from threading import Lock
 from typing import Any
 
-from app.anchor_store import ANCHOR_SCHEMA_SQL, AnchorStoreMixin
+from app.anchor_store import ANCHOR_LATER_COLUMNS, ANCHOR_SCHEMA_SQL, AnchorStoreMixin
 from app.image_files import ValidatedImage
 
 from app.graph_config import (
@@ -723,6 +723,8 @@ class Store(AnchorStoreMixin):
             )
             # Admin-only highlights and strands (app.anchor_store); additive, no schema bump.
             conn.executescript(ANCHOR_SCHEMA_SQL)
+            for table, column, declaration in ANCHOR_LATER_COLUMNS:
+                self._ensure_column(conn, table, column, declaration)
             self._ensure_column(conn, "refresh_tokens", "resource", "TEXT")
             self._ensure_column(conn, "sessions", "context_pack_version", "TEXT")
             self._ensure_column(conn, "sessions", "title_is_auto", "INTEGER NOT NULL DEFAULT 0")

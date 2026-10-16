@@ -2548,7 +2548,7 @@ FEATURE_CONTROLS = {
     "database export": ["databaseExportButton", "databaseExportResult"],
     "settings save bar": ["settingsActionbar", "settingsSaveButton", "settingsDiscardButton"],
     "api keys": ["aiKeyInput", "aiKeyRemoveButton", "cohereKeyInput", "cohereKeyRemoveButton", "openaiKeyPreview", "cohereKeyPreview"],
-    "anchors": ["highlightDock", "strandDock", "anchorPanel", "highlightPop"],
+    "anchors": ["highlightDock", "strandDock", "anchorPanels", "chapterPanel", "highlightPanel", "chapterDockProgress", "highlightPop"],
     "codex settings": ["codexSettingsStatus", "codexSettingsSignIn", "codexSettingsCode", "codexSettingsCopy"],
     "token features": ["tokenFeaturesMaster", "strandsEnabled", "strandModelInput", "strandEffortSelect", "strandPromptInput", "strandSettingsSave"],
     "anchor docks": ["anchorDocks"],

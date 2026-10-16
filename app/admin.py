@@ -990,10 +990,14 @@ class AdminHandlers:
         _, error = self._require_admin(request)
         if error:
             return error
+        sessions = self.store.list_sessions()
+        chapter_states = self.store.chapter_states()
+        for item in sessions:
+            item["chapters"] = chapter_states.get(item["session_id"])
         return JSONResponse(
             {
                 "ok": True,
-                "sessions": self.store.list_sessions(),
+                "sessions": sessions,
             },
             headers=self._no_store_headers(),
         )

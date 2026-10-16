@@ -749,13 +749,33 @@
     .anchor-dock.is-running .anchor-dock-stripe { animation: anchor-pulse 1.2s ease-in-out infinite; }
     @keyframes anchor-pulse { 50% { opacity: .35; } }
     .anchor-dock-count { font-family: "Geist Mono", ui-monospace, monospace; font-size: var(--t-label); font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; }
+    .anchor-panels {
+      position: absolute; left: calc(100% + .75rem); top: 0; z-index: 7; display: flex; flex-direction: column; gap: .6rem;
+      width: 24rem; max-width: calc(100vw - 8rem); max-height: min(78vh, 46rem);
+    }
+    .anchor-panels[hidden] { display: none; }
     .anchor-panel {
-      position: absolute; left: calc(100% + .75rem); top: 0; z-index: 7; display: flex; flex-direction: column;
-      width: 24rem; max-width: calc(100vw - 8rem); max-height: min(72vh, 36rem); overflow: auto;
+      position: relative; display: flex; flex-direction: column; flex: 0 1 auto; min-height: 0; max-height: min(72vh, 36rem); overflow: auto;
       border: 1px solid rgba(255, 255, 255, .12); border-radius: var(--r-card); background: #161a24; box-shadow: var(--shadow-pop);
       color: var(--text); font-size: var(--t-ctrl); text-align: left;
     }
     .anchor-panel[hidden] { display: none; }
+    .anchor-panels.is-double .anchor-panel { flex: 0 1 auto; max-height: calc((min(78vh, 46rem) - .6rem) / 2); }
+    .anchor-panel button.anchor-icon-button.is-pinned { color: var(--accent-ink); background: var(--accent-soft); }
+    .anchor-dock-progress { width: 1.4rem; height: 3px; border-radius: var(--r-pill); overflow: hidden; background: rgba(255, 255, 255, .12); }
+    .anchor-dock-progress span { display: block; width: 0; height: 100%; border-radius: inherit; background: var(--accent-2); transition: width .2s ease; }
+    .anchor-dock[data-state="complete"] .anchor-dock-progress span { background: var(--ok); }
+    .anchor-dock[data-state="review"] .anchor-dock-progress span { width: 100% !important; background: repeating-linear-gradient(90deg, var(--accent-2) 0 4px, transparent 4px 7px); }
+    .anchor-dock[data-state="running"] .anchor-dock-progress span { animation: anchor-pulse 1.2s ease-in-out infinite; }
+    .anchor-dock[data-state="complete"] .anchor-dock-count { color: var(--ok); }
+    .anchor-dock[data-state="behind"] .anchor-dock-count { color: #c7c9fb; }
+    .anchor-dock[aria-pressed="true"]::after { content: ""; position: absolute; top: 4px; right: 4px; width: 5px; height: 5px; border-radius: var(--r-pill); background: currentColor; }
+    .anchor-notice.is-ok { color: #6ee7b7; background: rgba(52, 211, 153, .08); }
+    .anchor-notice.is-warn { color: #c7c9fb; background: rgba(122, 125, 240, .1); }
+    .session-chapter-glyph { display: inline-flex; align-items: center; gap: 2px; color: var(--faint-ink); font-family: "Geist Mono", ui-monospace, monospace; font-size: 10.5px; font-weight: 600; }
+    .session-chapter-glyph svg { width: 13px; height: 13px; }
+    .session-chapter-glyph[data-state="complete"] { color: var(--ok); }
+    .session-chapter-glyph[data-state="behind"], .session-chapter-glyph[data-state="review"], .session-chapter-glyph[data-state="running"] { color: #a5a8f6; }
     .anchor-panel-head { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; gap: .5rem; padding: .7rem .85rem; border-bottom: 1px solid rgba(255, 255, 255, .07); background: #161a24; }
     .anchor-panel-title { font-family: "Geist Mono", ui-monospace, monospace; font-size: var(--t-label); font-weight: 500; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); }
     .anchor-panel-count { font-family: "Geist Mono", ui-monospace, monospace; font-size: var(--t-label); color: var(--text); }
@@ -1996,16 +2016,16 @@
       <div id="threadSensitiveContent" class="thread-sensitive-content">
       <div id="threadSensitiveBody" class="content-wrap">
         <div class="side-rail">
-        <div id="anchorDocks" class="anchor-docks" role="group" aria-label="Highlights and strands" hidden>
-        <button id="highlightDock" type="button" class="anchor-dock" aria-expanded="false" aria-controls="anchorPanel" hidden>
+        <div id="anchorDocks" class="anchor-docks" role="group" aria-label="Chapters and highlights" hidden>
+        <button id="strandDock" type="button" class="anchor-dock is-strands" aria-expanded="false" aria-controls="chapterPanel" hidden>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><path d="M4 7h10M4 12h16M4 17h7"></path></svg>
+          <span class="anchor-dock-progress" aria-hidden="true"><span id="chapterDockProgress"></span></span>
+          <span id="strandDockCount" class="anchor-dock-count" aria-hidden="true">0</span>
+        </button>
+        <button id="highlightDock" type="button" class="anchor-dock" aria-expanded="false" aria-controls="highlightPanel" hidden>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 15-4 4h5l2-2"></path><path d="m14.5 4.5 5 5-7 7-5-5z"></path></svg>
           <span class="anchor-dock-stripe" aria-hidden="true"></span>
           <span id="highlightDockCount" class="anchor-dock-count" aria-hidden="true">0</span>
-        </button>
-        <button id="strandDock" type="button" class="anchor-dock is-strands" aria-expanded="false" aria-controls="anchorPanel" hidden>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><path d="M4 7h10M4 12h16M4 17h7"></path></svg>
-          <span class="anchor-dock-stripe" aria-hidden="true"></span>
-          <span id="strandDockCount" class="anchor-dock-count" aria-hidden="true">0</span>
         </button>
         </div>
         <nav id="turnNav" class="turn-nav" aria-label="Transcript navigation">
@@ -2021,7 +2041,10 @@
           <span id="fileWorkspaceCount" class="file-dock-count" aria-hidden="true">0</span>
           <span id="fileDockTip" class="file-dock-tip" aria-hidden="true"></span>
         </button>
-        <section id="anchorPanel" class="anchor-panel" role="region" hidden></section>
+        <div id="anchorPanels" class="anchor-panels" hidden>
+          <section id="chapterPanel" class="anchor-panel" aria-label="Chapters in this session" hidden></section>
+          <section id="highlightPanel" class="anchor-panel" aria-label="Highlights in this session" hidden></section>
+        </div>
         </div>
         <section class="content">
           <p id="demoBanner" class="demo-banner"></p>
@@ -2397,7 +2420,7 @@
           <span id="tokenFeaturesTitle" class="settings-tabs-group-title">Uses tokens</span>
           <input id="tokenFeaturesMaster" class="settings-switch-input is-green" type="checkbox" role="switch" aria-labelledby="tokenFeaturesTitle" title="Turn every feature that spends tokens on or off">
         </div>
-        <button type="button" data-settings-tab="strands"><span>Strands</span><span class="settings-tab-meta"><span id="settingsHintStrands" class="settings-tab-hint"></span></span></button>
+        <button type="button" data-settings-tab="strands"><span>Chapters</span><span class="settings-tab-meta"><span id="settingsHintStrands" class="settings-tab-hint"></span></span></button>
       </nav>
       <div class="settings-body">
       <div class="settings-content">
@@ -2691,16 +2714,16 @@
 
         <section data-settings-panel="strands" class="settings-panel" hidden>
           <div class="settings-panel-head">
-            <h4>Strands</h4>
-            <span class="context-help"><button type="button" class="context-help-trigger" aria-label="About Strands" aria-describedby="settingsHelpStrands">?</button><span id="settingsHelpStrands" class="context-help-box" role="tooltip">Codex proposes strands for one session at a time, only when you press Propose with Codex in that session. Each proposal reads the whole session and spends tokens from the plan signed in under Codex. Strands you add by hand never use tokens.</span></span>
+            <h4>Chapters</h4>
+            <span class="context-help"><button type="button" class="context-help-trigger" aria-label="About Chapters" aria-describedby="settingsHelpStrands">?</button><span id="settingsHelpStrands" class="context-help-box" role="tooltip">Codex splits one session at a time into chapters, only when you press Propose or Update in that session's Chapters panel. A first split reads the whole session; an update reads only the new exchanges. Both spend tokens from the plan signed in under Codex. Chapters you add by hand never use tokens.</span></span>
             <span class="settings-panel-switch">
               <span id="strandsEnabledLabel" class="settings-switch-state">On</span>
               <input id="strandsEnabled" class="settings-switch-input is-green" type="checkbox" role="switch" aria-labelledby="strandsEnabledLabel" aria-describedby="strandsEnabledNote">
             </span>
           </div>
-          <p id="strandsEnabledNote" class="settings-feature-note">When off, Propose with Codex is disabled in every session. Existing and hand-made strands stay.</p>
+          <p id="strandsEnabledNote" class="settings-feature-note">When off, Codex chapter proposals are disabled in every session. Existing and hand-made chapters stay.</p>
           <section class="settings-group">
-            <div class="settings-group-head"><h5>Codex proposals</h5><span class="settings-value-muted">Used the next time you press Propose with Codex</span></div>
+            <div class="settings-group-head"><h5>Codex proposals</h5><span class="settings-value-muted">Used the next time you propose or update chapters</span></div>
             <div class="settings-item">
               <div class="settings-item-label"><span class="settings-item-title"><label for="strandModelInput">Model</label></span></div>
               <div class="settings-item-control">
@@ -2970,9 +2993,12 @@
       };
 
       // highlights and strands of the open session; see the "anchors" section below
+      // read at startup by bindAnchorEvents, so it lives above the bind calls
+      const ANCHOR_PIN_STORAGE_KEY = "mcp-admin:anchor-pins";
       const anchors = {
         sessionId: "", available: false, highlights: [], strands: [], latestRun: null, codexConfigured: false,
-        strandsEnabled: true, panel: "", pollTimer: 0, focusStrandId: null, newStrandOpen: false, pendingHighlight: null,
+        strandsEnabled: true, chapterState: null, pinned: { highlights: false, chapters: false }, peek: "", peekTimer: 0,
+        pollTimer: 0, focusStrandId: null, newStrandOpen: false, pendingHighlight: null,
       };
       const anchorDom = {
         group: document.getElementById("anchorDocks"),
@@ -2980,7 +3006,10 @@
         highlightCount: document.getElementById("highlightDockCount"),
         strandDock: document.getElementById("strandDock"),
         strandCount: document.getElementById("strandDockCount"),
-        panel: document.getElementById("anchorPanel"),
+        panels: document.getElementById("anchorPanels"),
+        chapterPanel: document.getElementById("chapterPanel"),
+        highlightPanel: document.getElementById("highlightPanel"),
+        chapterProgress: document.getElementById("chapterDockProgress"),
         pop: document.getElementById("highlightPop"),
       };
       const codexSettings = { login: null, pollTimer: 0, defaults: null };
@@ -7033,6 +7062,8 @@
           glyph.innerHTML = sensitiveIconSvg();
           stampGroup.append(glyph);
         }
+        const chapterGlyph = guarded ? null : sessionChapterGlyph(session);
+        if (chapterGlyph) stampGroup.append(chapterGlyph);
         stampGroup.append(sessionListStampNode(session.last_turn_at_iso || session.updated_at_iso, dateBucket));
         titleLine.append(
           icon,
@@ -7045,6 +7076,22 @@
       function sessionRowIsCovered(session, group = sessionGroup(session)) {
         return Boolean(group?.is_sensitive)
           && !state.revealedSensitiveSessionLists.has(session.group_id);
+      }
+
+      // chapter state of a session in the list; see the anchors section for the labels
+
+      function sessionChapterGlyph(session) {
+        const chapter = session.chapters;
+        if (!chapter || chapter.state === "none") return null;
+        const glyph = spanCls("session-chapter-glyph");
+        glyph.dataset.state = chapter.state;
+        const label = CHAPTER_STATE_LABELS[chapter.state] || "";
+        glyph.title = chapter.state === "behind" ? `${label}: ${chapter.new_count}` : label;
+        glyph.setAttribute("aria-label", glyph.title);
+        glyph.innerHTML = ANCHOR_ICONS.chapters;
+        const marks = { complete: "✓", behind: `+${chapter.new_count}`, review: "•" };
+        if (marks[chapter.state]) glyph.append(spanCls("session-chapter-mark", marks[chapter.state]));
+        return glyph;
       }
 
       function redactedSessionTitle(session) {
@@ -8313,14 +8360,17 @@
       }
 
       // ---------- API (with offline demo fallback) ----------
-      // ---------- anchors: highlights and strands (admin-only, never shown to models) ----------
-      // A highlight is a verbatim quote inside one turn; a strand is a named set of exchange
-      // ranges. Strand proposals come from Codex only when the owner presses the button.
+      // ---------- anchors: highlights and chapters (admin-only, never shown to models) ----------
+      // A highlight is a verbatim quote inside one turn; a chapter (stored as a "strand") is a named
+      // set of exchange ranges. Codex proposes chapters only when the owner presses the button.
+      // Hovering a dock peeks its panel; clicking pins it, and both panels can stay pinned.
 
       const HIGHLIGHT_REGISTRY = "bridge-highlight";
       const HIGHLIGHT_FOCUS_REGISTRY = "bridge-highlight-focus";
       const HIGHLIGHT_MARKUP_CHARS = new Set(["*", "_", "`", "#", ">", "|", "~"]);
       const HIGHLIGHT_BLOCK_SELECTOR = "p, li, h1, h2, h3, h4, h5, h6, pre, blockquote, td, th, div";
+      const ANCHOR_PEEK_OPEN_MS = 150;
+      const ANCHOR_PEEK_CLOSE_MS = 300;
       const HIGHLIGHT_STATUS_LABELS = Object.freeze({
         source_changed: "Source changed · quote kept",
         source_excluded: "Exchange excluded · quote kept",
@@ -8332,13 +8382,36 @@
         pen: '<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" aria-hidden="true"><path d="M2 10.5V12h1.5L11 4.5 9.5 3 2 10.5z"></path></svg>',
         check: '<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 7.5 2.5 2.5L11 4.5"></path></svg>',
         cross: '<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="m4 4 6 6M10 4l-6 6"></path></svg>',
+        pin: '<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" aria-hidden="true"><path d="M5 1.8h4l-.6 3.4 2.1 2.2H3.5l2.1-2.2z"></path><path d="M7 7.4v4.8" stroke-linecap="round"></path></svg>',
+        chapters: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h10M4 12h16M4 17h7"></path></svg>',
       });
+      const CHAPTER_STATE_LABELS = Object.freeze({
+        none: "Not split into chapters yet",
+        manual: "Only hand-made chapters",
+        running: "Codex is splitting this session",
+        review: "Chapter proposals wait for your review",
+        complete: "Every exchange is split into chapters",
+        behind: "New exchanges since the last split",
+      });
+
+      function readAnchorPins() {
+        try {
+          const value = JSON.parse(localStorage.getItem(ANCHOR_PIN_STORAGE_KEY) || "{}");
+          return { highlights: value.highlights === true, chapters: value.chapters === true };
+        } catch (_) {
+          return { highlights: false, chapters: false };
+        }
+      }
+
+      function saveAnchorPins() {
+        try { localStorage.setItem(ANCHOR_PIN_STORAGE_KEY, JSON.stringify(anchors.pinned)); } catch (_) { /* private mode */ }
+      }
 
       function resetAnchors() {
         window.clearTimeout(anchors.pollTimer);
         Object.assign(anchors, {
-          sessionId: "", available: false, highlights: [], strands: [], latestRun: null,
-          panel: "", focusStrandId: null, newStrandOpen: false, pendingHighlight: null,
+          sessionId: "", available: false, highlights: [], strands: [], latestRun: null, chapterState: null,
+          peek: "", focusStrandId: null, newStrandOpen: false, pendingHighlight: null,
         });
         hideHighlightPop();
         renderAnchors();
@@ -8347,7 +8420,9 @@
       async function loadAnchors(sessionId) {
         if (anchors.sessionId !== sessionId) {
           window.clearTimeout(anchors.pollTimer);
-          Object.assign(anchors, { panel: "", focusStrandId: null, newStrandOpen: false, highlights: [], strands: [], latestRun: null });
+          Object.assign(anchors, {
+            peek: "", focusStrandId: null, newStrandOpen: false, highlights: [], strands: [], latestRun: null, chapterState: null,
+          });
           hideHighlightPop();
         }
         anchors.sessionId = sessionId;
@@ -8370,10 +8445,21 @@
         anchors.latestRun = payload.latest_run || null;
         anchors.codexConfigured = Boolean(payload.codex_configured);
         anchors.strandsEnabled = payload.strands_enabled !== false;
+        anchors.chapterState = payload.chapter_state || null;
         if (anchors.focusStrandId && !anchors.strands.some((item) => item.strand_id === anchors.focusStrandId)) {
           anchors.focusStrandId = null;
         }
+        syncSessionChapterState();
         scheduleStrandRunPoll();
+      }
+
+      // keep the session list indicator in step with what the open session just changed
+      function syncSessionChapterState() {
+        const session = state.sessions.find((item) => item.session_id === anchors.sessionId);
+        if (!session || !anchors.chapterState) return;
+        const previous = session.chapters?.state;
+        session.chapters = anchors.chapterState.state === "none" ? null : anchors.chapterState;
+        if (previous !== session.chapters?.state) renderSessions();
       }
 
       function strandRunActive(run) {
@@ -8391,7 +8477,7 @@
             const wasActive = strandRunActive(anchors.latestRun);
             applyStrandPayload(payload);
             renderAnchors();
-            if (wasActive && anchors.latestRun?.status === "completed") setStatus(`Codex proposed ${anchors.latestRun.proposed_count} strands. Review them in Strands.`);
+            if (wasActive && anchors.latestRun?.status === "completed") setStatus(`Codex proposed ${anchors.latestRun.proposed_count} chapter changes. Review them in Chapters.`);
             if (wasActive && anchors.latestRun?.status === "failed") setStatus(anchors.latestRun.error_message || "The Codex run failed.", "error");
           } catch (_) {
             if (anchors.sessionId === sessionId) scheduleStrandRunPoll();
@@ -8401,60 +8487,120 @@
 
       function renderAnchors() {
         renderAnchorDocks();
-        renderAnchorPanel();
+        renderAnchorPanels();
         applyAnchorDecorations();
+      }
+
+      // ---------- docks and panel visibility ----------
+
+      function anchorPanelOpen(name) {
+        return anchors.pinned[name] || anchors.peek === name;
+      }
+
+      function chapterDockSummary() {
+        const chapter = anchors.chapterState || { state: "none", exchange_count: 0, analyzed_count: 0, covered_count: 0, chapter_count: 0, new_count: 0 };
+        const total = Math.max(chapter.exchange_count || 0, 1);
+        const done = chapter.analyzed_to ? chapter.analyzed_count : chapter.covered_count;
+        const marks = { complete: "✓", behind: `+${chapter.new_count}`, review: "•••", running: "…" };
+        return {
+          state: chapter.state,
+          progress: Math.min(1, done / total),
+          mark: marks[chapter.state] || String(chapter.chapter_count || 0),
+          label: `Chapters: ${CHAPTER_STATE_LABELS[chapter.state] || ""}. ${chapter.chapter_count || 0} chapters` +
+            (chapter.analyzed_to ? `, split up to #${chapter.analyzed_to}` : ""),
+        };
       }
 
       function renderAnchorDocks() {
         const show = Boolean(state.selectedSession) && anchors.available && !selectedThreadIsGuarded();
-        const pending = anchors.strands.filter((item) => item.status === "pending").length;
-        const docks = [
-          [anchorDom.highlightDock, anchorDom.highlightCount, "highlights", anchors.highlights.length, `Highlights: ${anchors.highlights.length} in this session`],
-          [anchorDom.strandDock, anchorDom.strandCount, "strands", anchors.strands.length, `Strands: ${anchors.strands.length} in this session${pending ? `, ${pending} proposed` : ""}`],
-        ];
         anchorDom.group.hidden = !show;
-        for (const [dock, count, name, total, labelText] of docks) {
-          dock.hidden = !show;
-          count.textContent = String(total);
-          dock.setAttribute("aria-expanded", anchors.panel === name ? "true" : "false");
-          dock.setAttribute("aria-label", labelText);
-          dock.title = labelText;
+        anchorDom.highlightDock.hidden = !show;
+        anchorDom.strandDock.hidden = !show;
+        anchorDom.highlightCount.textContent = String(anchors.highlights.length);
+        const highlightLabel = `Highlights: ${anchors.highlights.length} in this session`;
+        anchorDom.highlightDock.setAttribute("aria-label", highlightLabel);
+        anchorDom.highlightDock.title = highlightLabel;
+        const summary = chapterDockSummary();
+        anchorDom.strandCount.textContent = summary.mark;
+        anchorDom.strandDock.dataset.state = summary.state;
+        anchorDom.chapterProgress.style.width = `${Math.round(summary.progress * 100)}%`;
+        anchorDom.strandDock.setAttribute("aria-label", summary.label);
+        anchorDom.strandDock.title = summary.label;
+        for (const [dock, name] of [[anchorDom.highlightDock, "highlights"], [anchorDom.strandDock, "chapters"]]) {
+          dock.setAttribute("aria-expanded", anchorPanelOpen(name) ? "true" : "false");
+          dock.setAttribute("aria-pressed", anchors.pinned[name] ? "true" : "false");
         }
-        anchorDom.strandDock.classList.toggle("has-pending", pending > 0);
-        anchorDom.strandDock.classList.toggle("is-running", strandRunActive(anchors.latestRun));
       }
 
-      function toggleAnchorPanel(name) {
-        anchors.panel = anchors.panel === name ? "" : name;
-        anchors.newStrandOpen = false;
-        if (anchors.panel !== "strands") anchors.focusStrandId = null;
+      function peekAnchorPanel(name) {
+        window.clearTimeout(anchors.peekTimer);
+        anchors.peekTimer = window.setTimeout(() => {
+          if (anchors.peek === name) return;
+          anchors.peek = name;
+          renderAnchorDocks();
+          renderAnchorPanels();
+        }, ANCHOR_PEEK_OPEN_MS);
+      }
+
+      function schedulePeekClose() {
+        window.clearTimeout(anchors.peekTimer);
+        if (!anchors.peek) return;
+        anchors.peekTimer = window.setTimeout(() => {
+          anchors.peek = "";
+          anchors.newStrandOpen = anchors.newStrandOpen && anchors.pinned.chapters;
+          renderAnchorDocks();
+          renderAnchorPanels();
+        }, ANCHOR_PEEK_CLOSE_MS);
+      }
+
+      function keepPeekOpen() {
+        window.clearTimeout(anchors.peekTimer);
+      }
+
+      function toggleAnchorPin(name) {
+        window.clearTimeout(anchors.peekTimer);
+        anchors.pinned[name] = !anchors.pinned[name];
+        anchors.peek = anchors.pinned[name] ? "" : anchors.peek;
+        if (!anchorPanelOpen("chapters")) { anchors.focusStrandId = null; anchors.newStrandOpen = false; }
+        saveAnchorPins();
         renderAnchors();
       }
 
-      function closeAnchorPanel() {
-        anchors.panel = "";
-        anchors.newStrandOpen = false;
-        anchors.focusStrandId = null;
+      function closeAnchorPanel(name) {
+        anchors.pinned[name] = false;
+        if (anchors.peek === name) anchors.peek = "";
+        if (name === "chapters") { anchors.focusStrandId = null; anchors.newStrandOpen = false; }
+        saveAnchorPins();
         renderAnchors();
       }
 
+      function renderAnchorPanels() {
+        const visible = Boolean(state.selectedSession) && anchors.available && !selectedThreadIsGuarded();
+        const showChapters = visible && anchorPanelOpen("chapters");
+        const showHighlights = visible && anchorPanelOpen("highlights");
+        anchorDom.panels.hidden = !(showChapters || showHighlights);
+        anchorDom.panels.classList.toggle("is-double", showChapters && showHighlights);
+        anchorDom.chapterPanel.hidden = !showChapters;
+        anchorDom.highlightPanel.hidden = !showHighlights;
+        anchorDom.chapterPanel.replaceChildren();
+        anchorDom.highlightPanel.replaceChildren();
+        if (showChapters) renderStrandPanel(anchorDom.chapterPanel);
+        if (showHighlights) renderHighlightPanel(anchorDom.highlightPanel);
+      }
+
+      // kept for callers outside this section (Settings switches)
       function renderAnchorPanel() {
-        const panel = anchorDom.panel;
-        panel.replaceChildren();
-        if (!anchors.panel || !anchors.available || !state.selectedSession || selectedThreadIsGuarded()) {
-          panel.hidden = true;
-          return;
-        }
-        panel.hidden = false;
-        panel.setAttribute("aria-label", anchors.panel === "highlights" ? "Highlights in this session" : "Strands in this session");
-        if (anchors.panel === "highlights") renderHighlightPanel(panel);
-        else renderStrandPanel(panel);
+        renderAnchorDocks();
+        renderAnchorPanels();
       }
 
-      function anchorPanelHead(title, count, extra = []) {
+      function anchorPanelHead(name, title, count, extra = []) {
         const head = div("anchor-panel-head");
-        const close = anchorIconButton("cross", `Close ${title.toLowerCase()}`, closeAnchorPanel);
-        head.append(spanCls("anchor-panel-title", title), spanCls("anchor-panel-count", String(count)), div("anchor-spacer"), ...extra, close);
+        const pinned = anchors.pinned[name];
+        const pin = anchorIconButton("pin", pinned ? `Unpin ${title.toLowerCase()}` : `Keep ${title.toLowerCase()} open`, () => toggleAnchorPin(name), pinned ? "is-pinned" : "");
+        pin.setAttribute("aria-pressed", pinned ? "true" : "false");
+        const close = anchorIconButton("cross", `Close ${title.toLowerCase()}`, () => closeAnchorPanel(name));
+        head.append(spanCls("anchor-panel-title", title), spanCls("anchor-panel-count", String(count)), div("anchor-spacer"), ...extra, pin, close);
         return head;
       }
 
@@ -8480,7 +8626,7 @@
       // ---------- highlights panel ----------
 
       function renderHighlightPanel(panel) {
-        panel.append(anchorPanelHead("Highlights", anchors.highlights.length));
+        panel.append(anchorPanelHead("highlights", "Highlights", anchors.highlights.length));
         if (!anchors.highlights.length) {
           panel.append(anchorEmpty("Select text inside one turn of the conversation, then press Highlight."));
           return;
@@ -8539,33 +8685,51 @@
         }
       }
 
-      // ---------- strands panel ----------
+      // ---------- chapters panel ----------
 
-      function renderStrandPanel(panel) {
-        const newButton = button("+ New", () => { anchors.newStrandOpen = !anchors.newStrandOpen; renderAnchorPanel(); }, "ghost anchor-compact");
-        newButton.setAttribute("aria-expanded", anchors.newStrandOpen ? "true" : "false");
-        panel.append(anchorPanelHead("Strands", anchors.strands.length, [newButton]));
-        if (anchors.newStrandOpen) panel.append(renderNewStrandForm());
-
+      function chapterStatusLine() {
+        const chapter = anchors.chapterState;
         const run = anchors.latestRun;
         if (strandRunActive(run)) {
-          panel.append(anchorNotice(`Codex is reading ${run.exchange_count} exchanges with ${run.model} · ${run.effort}…`, "running"));
-        } else if (run && run.status === "failed") {
-          panel.append(anchorNotice(`Last Codex run failed: ${run.error_message || "unknown error"}`, "error"));
+          const what = run.mode === "update" ? `${run.exchange_count} new exchanges` : `${run.exchange_count} exchanges`;
+          return anchorNotice(`Codex is reading ${what} with ${run.model} · ${run.effort}…`, "running");
         }
+        if (run && run.status === "failed") return anchorNotice(`Last Codex run failed: ${run.error_message || "unknown error"}`, "error");
+        if (!chapter) return null;
+        const texts = {
+          complete: `Split into chapters up to #${chapter.analyzed_to}. Every exchange is covered.`,
+          behind: `Split up to #${chapter.analyzed_to}. ${chapter.new_count} new exchange${chapter.new_count === 1 ? "" : "s"} since then.`,
+          review: "Codex proposals wait for your review below.",
+          manual: "Only hand-made chapters. Codex has not split this session.",
+          none: "",
+        };
+        const text = texts[chapter.state];
+        return text ? anchorNotice(text, chapter.state === "complete" ? "ok" : chapter.state === "behind" ? "warn" : "") : null;
+      }
+
+      function renderStrandPanel(panel) {
+        const newButton = button("+ New", () => { anchors.newStrandOpen = !anchors.newStrandOpen; renderAnchorPanels(); }, "ghost anchor-compact");
+        newButton.setAttribute("aria-expanded", anchors.newStrandOpen ? "true" : "false");
+        const accepted = anchors.strands.filter((item) => item.status === "accepted");
+        panel.append(anchorPanelHead("chapters", "Chapters", accepted.length, [newButton]));
+        const status = chapterStatusLine();
+        if (status) panel.append(status);
+        if (anchors.newStrandOpen) panel.append(renderNewStrandForm());
 
         const pending = anchors.strands.filter((item) => item.status === "pending");
-        const accepted = anchors.strands.filter((item) => item.status === "accepted");
-        if (pending.length) {
+        const extensions = accepted.filter((item) => item.pending_ranges?.length);
+        const proposalCount = pending.length + extensions.length;
+        if (proposalCount) {
           const box = div("anchor-proposal");
           const head = div("anchor-proposal-head");
           head.append(
-            spanCls("", `Codex proposed ${pending.length}`),
+            spanCls("", `Codex proposed ${proposalCount}`),
             div("anchor-spacer"),
             button("Discard all", () => discardStrands(null), "ghost anchor-compact"),
             button("Accept all", () => acceptStrands(null), "anchor-compact anchor-accept"),
           );
           box.append(head);
+          for (const strand of extensions) box.append(extensionRow(strand));
           for (const strand of pending) box.append(strandRow(strand, true));
           panel.append(box);
         }
@@ -8574,12 +8738,12 @@
           for (const strand of accepted) list.append(strandRow(strand, false));
           panel.append(list);
         }
-        if (!anchors.strands.length && !strandRunActive(run)) {
+        if (!anchors.strands.length && !strandRunActive(anchors.latestRun)) {
           panel.append(anchorEmpty(anchors.strandsEnabled
-            ? "No strands yet. Ask Codex to propose them, or add one by hand with + New. Codex never runs on its own."
-            : "No strands yet. Add one by hand with + New. Codex proposals are switched off in Settings › Strands."));
+            ? "No chapters yet. Ask Codex to propose them, or add one by hand with + New. Codex never runs on its own."
+            : "No chapters yet. Add one by hand with + New. Codex proposals are switched off in Settings › Chapters."));
         }
-        panel.append(strandFooter(pending.length));
+        panel.append(strandFooter(proposalCount));
       }
 
       function strandRow(strand, isPending) {
@@ -8596,34 +8760,65 @@
           );
         } else {
           row.append(
-            anchorIconButton("pen", "Rename strand", () => renameStrand(strand)),
-            anchorIconButton("trash", "Delete strand", () => deleteStrand(strand)),
+            anchorIconButton("pen", "Rename chapter", () => renameStrand(strand)),
+            anchorIconButton("trash", "Delete chapter", () => deleteStrand(strand)),
           );
         }
         return row;
       }
 
-      function strandFooter(pendingCount) {
+      // an accepted chapter that Codex wants to continue into the new exchanges
+      function extensionRow(strand) {
+        const row = div("anchor-row");
+        const main = button("", () => focusStrand(strand), "anchor-row-main");
+        const meta = div("anchor-meta");
+        meta.append(spanCls("anchor-ex", `+${formatStrandRanges(strand.pending_ranges)}`), spanCls("", "· extends this chapter"));
+        main.append(spanCls("anchor-title", strand.title), meta);
+        row.append(
+          main,
+          anchorIconButton("cross", "Discard extension", () => discardStrands(strand.strand_id)),
+          anchorIconButton("check", "Accept extension", () => acceptStrands(strand.strand_id), "anchor-accept"),
+        );
+        return row;
+      }
+
+      function strandFooter(proposalCount) {
         const foot = div("anchor-foot");
         const run = anchors.latestRun;
         const active = strandRunActive(run);
-        const propose = button(active ? "Codex is working…" : "Propose with Codex", proposeStrands, "anchor-compact anchor-accept");
-        propose.disabled = active || pendingCount > 0 || !anchors.codexConfigured || !anchors.strandsEnabled;
-        propose.title = !anchors.strandsEnabled
-          ? "Strand proposals are switched off in Settings › Strands."
-          : !anchors.codexConfigured
-          ? "Codex App Server is not configured on this Bridge."
-          : pendingCount ? "Accept or discard the pending proposal first."
+        const chapter = anchors.chapterState || { state: "none" };
+        const labels = {
+          behind: `Update chapters (+${chapter.new_count})`,
+          complete: "Up to date",
+        };
+        const propose = button(active ? "Codex is working…" : (labels[chapter.state] || "Propose with Codex"), () => proposeStrands(false), "anchor-compact anchor-accept");
+        const blockedReason = !anchors.strandsEnabled ? "Chapter proposals are switched off in Settings › Chapters."
+          : !anchors.codexConfigured ? "Codex App Server is not configured on this Bridge."
+          : proposalCount ? "Accept or discard the pending proposal first."
           : active ? "A Codex run for this session is in progress."
-          : "Send this whole session to Codex once and get proposed strands to review.";
+          : chapter.state === "complete" ? "Every exchange is already split into chapters."
+          : "";
+        propose.disabled = Boolean(blockedReason);
+        propose.title = blockedReason || (chapter.state === "behind"
+          ? "Send only the new exchanges to Codex and get extensions or new chapters to review."
+          : "Send this whole session to Codex once and get proposed chapters to review.");
         foot.append(propose, div("anchor-spacer"));
+        const hasCodexChapters = anchors.strands.some((item) => item.origin === "codex");
+        if (hasCodexChapters && !active && !proposalCount && anchors.strandsEnabled && anchors.codexConfigured) {
+          foot.append(button("Redo", () => proposeStrands(true), "ghost anchor-compact"));
+        }
         const revertRunId = latestAcceptedCodexRun();
-        if (revertRunId) foot.append(button(`Revert run #${revertRunId}`, () => revertStrandRun(revertRunId), "ghost anchor-compact anchor-danger"));
+        if (revertRunId && !active) foot.append(button(`Revert run #${revertRunId}`, () => revertStrandRun(revertRunId), "ghost anchor-compact anchor-danger"));
         return foot;
       }
 
       function latestAcceptedCodexRun() {
-        const ids = anchors.strands.filter((item) => item.origin === "codex" && item.status === "accepted" && item.run_id).map((item) => item.run_id);
+        const ids = [];
+        for (const item of anchors.strands) {
+          if (item.status !== "accepted") continue;
+          if (item.origin === "codex" && item.run_id) ids.push(item.run_id);
+          for (const range of item.ranges) if (range.run_id) ids.push(range.run_id);
+        }
         return ids.length ? Math.max(...ids) : null;
       }
 
@@ -8636,7 +8831,7 @@
       function strandExchangeIds(strand) {
         const order = state.exchanges.map((exchange) => exchange.exchange_id);
         const covered = new Set();
-        for (const item of strand?.ranges || []) {
+        for (const item of [...(strand?.ranges || []), ...(strand?.pending_ranges || [])]) {
           const start = order.indexOf(item.start_exchange_id);
           const end = order.indexOf(item.end_exchange_id);
           if (start < 0 || end < start) continue;
@@ -8649,10 +8844,10 @@
         anchors.focusStrandId = anchors.focusStrandId === strand.strand_id ? null : strand.strand_id;
         renderAnchors();
         if (!anchors.focusStrandId) return;
-        const first = strand.ranges?.[0]?.start_exchange_id;
+        const first = (strand.ranges?.[0] || strand.pending_ranges?.[0])?.start_exchange_id;
         const target = first && dom.exchangeList.querySelector(`[data-exchange-id="${first}"]`);
         if (target) target.scrollIntoView({ block: "start", behavior: "smooth" });
-        else setStatus("This strand's first exchange is not shown in the current view.", "warn");
+        else setStatus("This chapter's first exchange is not shown in the current view.", "warn");
       }
 
       function renderNewStrandForm() {
@@ -8684,8 +8879,8 @@
         });
         const actions = div("anchor-form-actions");
         actions.append(
-          button("Cancel", () => { anchors.newStrandOpen = false; renderAnchorPanel(); }, "ghost anchor-compact"),
-          button("Add strand", null, "anchor-compact anchor-accept", "submit"),
+          button("Cancel", () => { anchors.newStrandOpen = false; renderAnchorPanels(); }, "ghost anchor-compact"),
+          button("Add chapter", null, "anchor-compact anchor-accept", "submit"),
         );
         form.append(titleLabel, range, actions);
         form.addEventListener("submit", async (event) => {
@@ -8701,7 +8896,7 @@
             await reloadStrands();
             anchors.focusStrandId = payload.strand.strand_id;
             renderAnchors();
-            setStatus("Strand added.");
+            setStatus("Chapter added.");
           } catch (error) {
             setStatus(error.message, "error");
           }
@@ -8719,14 +8914,14 @@
       }
 
       async function acceptStrands(strandId) {
-        await pendingStrandAction("accept", strandId, strandId ? "Strand accepted." : "All proposed strands accepted.");
+        await pendingStrandAction("accept", strandId, strandId ? "Accepted." : "All proposals accepted.");
       }
 
       async function discardStrands(strandId) {
         if (strandId === null) {
           const confirmed = await window.adminConfirmation.confirm({
-            title: "Discard all proposed strands?",
-            message: "The proposals from this Codex run are removed. Accepted and manual strands stay.",
+            title: "Discard all proposals?",
+            message: "The proposals from this Codex run are removed. Accepted and hand-made chapters stay.",
             confirmLabel: "Discard proposals",
             tone: "warning",
           });
@@ -8753,7 +8948,7 @@
 
       async function renameStrand(strand) {
         const title = await window.adminConfirmation.prompt({
-          title: "Rename strand",
+          title: "Rename chapter",
           inputLabel: "Title",
           defaultValue: strand.title,
           confirmLabel: "Rename",
@@ -8770,28 +8965,32 @@
 
       async function deleteStrand(strand) {
         const confirmed = await window.adminConfirmation.confirm({
-          title: "Delete strand?",
+          title: "Delete chapter?",
           message: strand.title,
-          detail: "Only the strand is removed. The transcript stays as it is.",
-          confirmLabel: "Delete strand",
+          detail: "Only the chapter is removed. The transcript stays as it is.",
+          confirmLabel: "Delete chapter",
           tone: "danger",
         });
         if (!confirmed) return;
         try {
           await api(`/admin/api/strands/${strand.strand_id}`, { method: "DELETE" });
           await reloadStrands();
-          setStatus("Strand deleted.");
+          setStatus("Chapter deleted.");
         } catch (error) {
           setStatus(error.message, "error");
         }
       }
 
       async function revertStrandRun(runId) {
-        const count = anchors.strands.filter((item) => item.run_id === runId).length;
+        const chapters = anchors.strands.filter((item) => item.run_id === runId).length;
+        const extensions = anchors.strands.filter((item) => item.ranges.some((range) => range.run_id === runId)).length;
+        const parts = [];
+        if (chapters) parts.push(`${chapters} chapter${chapters === 1 ? "" : "s"}`);
+        if (extensions) parts.push(`${extensions} extension${extensions === 1 ? "" : "s"}`);
         const confirmed = await window.adminConfirmation.confirm({
           title: `Revert Codex run #${runId}?`,
-          message: `Removes the ${count} strand${count === 1 ? "" : "s"} this run proposed, accepted or not.`,
-          detail: "Manual strands and other runs stay as they are.",
+          message: `Removes what this run added: ${parts.join(" and ") || "nothing left"}.`,
+          detail: "Hand-made chapters and other runs stay as they are.",
           confirmLabel: "Revert run",
           tone: "danger",
         });
@@ -8805,7 +9004,7 @@
         }
       }
 
-      async function proposeStrands() {
+      async function proposeStrands(redo) {
         const sessionId = anchors.sessionId;
         let settings;
         try {
@@ -8814,31 +9013,38 @@
           setStatus(error.message, "error");
           return;
         }
+        const chapter = anchors.chapterState || {};
         const visible = state.exchanges.filter((exchange) => !exchange.is_deleted);
-        const tokens = visible.reduce((sum, exchange) => (
+        const update = !redo && chapter.state === "behind";
+        const sent = update ? visible.filter((exchange) => exchange.exchange_id > chapter.analyzed_to) : visible;
+        const tokens = sent.reduce((sum, exchange) => (
           sum + (exchange.user_message_token_count || 0) + (exchange.is_masked ? 0 : (exchange.assistant_response_token_count || 0))
         ), 0);
         const group = state.groups.find((item) => item.group_id === state.selectedSession?.group_id);
         const sensitive = Boolean(group?.is_sensitive);
+        const what = update
+          ? `the ${sent.length} new exchange${sent.length === 1 ? "" : "s"} (about ${formatNumber(tokens)} tokens) plus the chapter titles`
+          : `all ${sent.length} exchanges (about ${formatNumber(tokens)} tokens)`;
         const confirmed = await window.adminConfirmation.confirm({
-          title: "Propose strands with Codex?",
-          message: `Sends all ${visible.length} exchanges (about ${formatNumber(tokens)} tokens) to ${settings.model} · ${settings.effort}, once.`,
-          detail: sensitive
-            ? "This session is in a sensitive group: its whole transcript leaves this server for Codex. Proposals wait for your review."
-            : "Proposals wait for your review. Nothing runs again until you press this button.",
-          confirmLabel: sensitive ? "Send this once" : "Propose strands",
-          tone: sensitive ? "warning" : "default",
+          title: redo ? "Redo chapters from scratch?" : update ? "Update chapters with Codex?" : "Propose chapters with Codex?",
+          message: `Sends ${what} to ${settings.model} · ${settings.effort}, once.`,
+          detail: [
+            redo ? "Every Codex chapter of this session is removed first; hand-made chapters stay." : "",
+            sensitive ? "This session is in a sensitive group: its transcript leaves this server for Codex." : "",
+            "Proposals wait for your review. Nothing runs again until you press this button.",
+          ].filter(Boolean).join(" "),
+          confirmLabel: sensitive ? "Send this once" : redo ? "Redo chapters" : update ? "Update chapters" : "Propose chapters",
+          tone: sensitive || redo ? "warning" : "default",
         });
         if (!confirmed || anchors.sessionId !== sessionId) return;
         try {
           const payload = await api(`/admin/api/sessions/${encodeURIComponent(sessionId)}/strand-runs`, {
             method: "POST",
-            body: JSON.stringify({ confirm_sensitive: sensitive }),
+            body: JSON.stringify({ confirm_sensitive: sensitive, redo }),
           });
           if (anchors.sessionId !== sessionId) return;
           anchors.latestRun = payload.run;
-          scheduleStrandRunPoll();
-          renderAnchors();
+          await reloadStrands();
         } catch (error) {
           setStatus(error.message, "error");
           await reloadStrands().catch(() => {});
@@ -8918,7 +9124,7 @@
         }
       }
 
-      // ---------- marking highlights and the focused strand in the transcript ----------
+      // ---------- marking highlights and the focused chapter in the transcript ----------
 
       function highlightContent(item) {
         const node = dom.exchangeList.querySelector(`[data-exchange-id="${item.exchange_id}"]`);
@@ -8928,7 +9134,8 @@
           : ".turn.model .turn-content, .message.is-model .msg-content");
       }
 
-      function normalizeHighlightChars(text, onChar) {
+      function normalizeHighlightText(text) {
+        let result = "";
         let lastSpace = true;
         for (let index = 0; index < text.length; index += 1) {
           let value = text[index].normalize("NFKC").toLowerCase();
@@ -8940,14 +9147,8 @@
           } else {
             lastSpace = false;
           }
-          for (const char of value) onChar(char, index);
+          result += value;
         }
-        return lastSpace;
-      }
-
-      function normalizeHighlightText(text) {
-        let result = "";
-        normalizeHighlightChars(text, (char) => { result += char; });
         return result.trim();
       }
 
@@ -8971,7 +9172,7 @@
           let leading = flat.length === 0 || flat.endsWith(" ");
           const value = node.nodeValue;
           for (let index = 0; index < value.length; index += 1) {
-            let chars = value[index].normalize("NFKC").toLowerCase();
+            const chars = value[index].normalize("NFKC").toLowerCase();
             if (HIGHLIGHT_MARKUP_CHARS.has(chars)) continue;
             if (/\s/.test(chars)) {
               if (!leading) pendingSpace = true;
@@ -9024,8 +9225,14 @@
       }
 
       function bindAnchorEvents() {
-        anchorDom.highlightDock.addEventListener("click", () => toggleAnchorPanel("highlights"));
-        anchorDom.strandDock.addEventListener("click", () => toggleAnchorPanel("strands"));
+        anchors.pinned = readAnchorPins();
+        for (const [dock, name] of [[anchorDom.highlightDock, "highlights"], [anchorDom.strandDock, "chapters"]]) {
+          dock.addEventListener("click", () => toggleAnchorPin(name));
+          dock.addEventListener("mouseenter", () => { if (!anchors.pinned[name]) peekAnchorPanel(name); else keepPeekOpen(); });
+          dock.addEventListener("mouseleave", schedulePeekClose);
+        }
+        anchorDom.panels.addEventListener("mouseenter", keepPeekOpen);
+        anchorDom.panels.addEventListener("mouseleave", schedulePeekClose);
         anchorDom.pop.addEventListener("mousedown", (event) => event.preventDefault());
         anchorDom.pop.addEventListener("click", () => saveHighlight());
         dom.exchangeList.addEventListener("mouseup", () => window.setTimeout(evaluateHighlightSelection, 0));
@@ -9040,7 +9247,7 @@
         document.addEventListener("keydown", (event) => {
           if (event.key !== "Escape" || document.querySelector("dialog[open]")) return;
           if (!anchorDom.pop.hidden) { hideHighlightPop(); return; }
-          if (anchors.panel) closeAnchorPanel();
+          if (anchors.peek) { anchors.peek = ""; renderAnchorDocks(); renderAnchorPanels(); }
         });
       }
 
@@ -9112,7 +9319,7 @@
       async function signOutCodexSettings() {
         const confirmed = await window.adminConfirmation.confirm({
           title: "Sign Codex out?",
-          message: "Strand proposals and Graph stop working until you sign in again.",
+          message: "Chapter proposals and Graph stop working until you sign in again.",
           confirmLabel: "Sign out",
           tone: "warning",
         });
@@ -9156,7 +9363,7 @@
             }),
           });
           codexSettingsDom.prompt.value = payload.settings.prompt;
-          setStrandSettingsMessage("Saved. The next Propose with Codex uses these settings.", "ok");
+          setStrandSettingsMessage("Saved. The next chapter proposal or update uses these settings.", "ok");
         } catch (error) {
           setStrandSettingsMessage(error.message, "error");
         } finally {

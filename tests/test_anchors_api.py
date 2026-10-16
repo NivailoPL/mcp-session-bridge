@@ -226,3 +226,119 @@ def test_token_feature_switches_gate_codex_runs(load_main, admin_client) -> None
 
 def fake_calls(main):
     return main.strand_runtime.codex.calls
+
+
+# ---------- chapter state and incremental updates ----------
+
+def _first_run(main, ids):
+    main.strand_runtime.codex = FakeCodex({"strands": [
+        {"title": "Początek", "ranges": [{"start": ids[0], "end": ids[1]}]},
+        {"title": "Dalej", "ranges": [{"start": ids[2], "end": ids[3]}]},
+    ]})
+    return asyncio.run(main.strand_runtime.run_now(SESSION, actor="owner"))
+
+
+def test_chapter_state_moves_from_none_to_review_complete_and_behind(load_main) -> None:
+    main, ids = _setup(load_main)
+    assert main.store.chapter_state(SESSION)["state"] == "none"
+    _first_run(main, ids)
+    assert main.store.chapter_state(SESSION)["state"] == "review"
+    main.store.accept_strands(SESSION)
+    state = main.store.chapter_state(SESSION)
+    assert state["state"] == "complete" and state["chapter_count"] == 2 and state["new_count"] == 0
+    main.store.save_exchange(SESSION, "Claude", "Nowe pytanie", "Nowa odpowiedź")
+    main.store.save_exchange(SESSION, "Claude", "Jeszcze", "Odpowiedź")
+    state = main.store.chapter_state(SESSION)
+    assert state["state"] == "behind" and state["new_count"] == 2
+
+
+def test_discarding_every_proposal_still_counts_as_analyzed(load_main) -> None:
+    main, ids = _setup(load_main)
+    _first_run(main, ids)
+    main.store.discard_pending_strands(SESSION)
+    assert main.store.chapter_state(SESSION)["state"] == "complete"
+
+
+def test_manual_only_and_revert_states(load_main) -> None:
+    main, ids = _setup(load_main)
+    main.store.create_strand(SESSION, "Ręczny", [[ids[0], ids[0]]])
+    assert main.store.chapter_state(SESSION)["state"] == "manual"
+    run = _first_run(main, ids)
+    main.store.accept_strands(SESSION)
+    main.store.revert_strand_run(run["run_id"])
+    assert main.store.chapter_state(SESSION)["state"] == "manual"
+
+
+def test_update_run_sends_only_new_exchanges_and_extends_chapters(load_main) -> None:
+    main, ids = _setup(load_main)
+    _first_run(main, ids)
+    main.store.accept_strands(SESSION)
+    chapters = {item["title"]: item["strand_id"] for item in main.store.list_strands(SESSION)}
+    new = [main.store.save_exchange(SESSION, "Claude", f"Nowe {i}", f"Odp {i}").exchange_id for i in range(3)]
+    fake = FakeCodex({
+        "extend": [{"chapter_id": chapters["Dalej"], "ranges": [{"start": new[0], "end": new[1]}]}],
+        "new": [{"title": "Nowy wątek", "ranges": [{"start": new[2], "end": new[2]}]}],
+    })
+    main.strand_runtime.codex = fake
+
+    run = asyncio.run(main.strand_runtime.run_now(SESSION, actor="owner"))
+
+    assert run["status"] == "completed" and run["mode"] == "update" and run["exchange_count"] == 3
+    prompt = fake.calls[0]["message"]
+    assert f"Exchange {new[0]}" in prompt and f"Chapter {chapters['Dalej']}: Dalej" in prompt
+    assert f"Exchange {ids[0]}\n" not in prompt  # old exchanges are not resent, only the last two as context
+    dalej = next(item for item in main.store.list_strands(SESSION) if item["title"] == "Dalej")
+    assert [(r["start_exchange_id"], r["end_exchange_id"]) for r in dalej["pending_ranges"]] == [(new[0], new[1])]
+    assert main.store.chapter_state(SESSION)["state"] == "review"
+
+    assert main.store.accept_strands(SESSION) == 2
+    dalej = next(item for item in main.store.list_strands(SESSION) if item["title"] == "Dalej")
+    assert len(dalej["ranges"]) == 2 and dalej["pending_ranges"] == []
+    assert main.store.chapter_state(SESSION)["state"] == "complete"
+
+    main.store.revert_strand_run(run["run_id"])
+    titles = sorted(item["title"] for item in main.store.list_strands(SESSION))
+    dalej = next(item for item in main.store.list_strands(SESSION) if item["title"] == "Dalej")
+    assert titles == ["Dalej", "Początek"] and len(dalej["ranges"]) == 1
+
+
+def test_update_rejects_ranges_outside_the_new_exchanges(load_main) -> None:
+    main, ids = _setup(load_main)
+    _first_run(main, ids)
+    main.store.accept_strands(SESSION)
+    new = main.store.save_exchange(SESSION, "Claude", "Nowe", "Odp").exchange_id
+    main.strand_runtime.codex = FakeCodex({"extend": [], "new": [{"title": "Zły", "ranges": [{"start": ids[0], "end": new}]}]})
+    run = asyncio.run(main.strand_runtime.run_now(SESSION, actor="owner"))
+    assert run["status"] == "failed" and run["error_code"] == "range_unknown"
+
+
+def test_complete_session_refuses_a_new_run_but_redo_starts_over(load_main) -> None:
+    from app.strands import StrandError
+
+    main, ids = _setup(load_main)
+    main.store.create_strand(SESSION, "Ręczny", [[ids[3], ids[3]]])
+    _first_run(main, ids)
+    main.store.accept_strands(SESSION)
+    try:
+        asyncio.run(main.strand_runtime.run_now(SESSION, actor="owner"))
+        raise AssertionError("expected already_complete")
+    except StrandError as exc:
+        assert exc.code == "already_complete"
+
+    main.strand_runtime.codex = FakeCodex({"strands": [{"title": "Od nowa", "ranges": [{"start": ids[0], "end": ids[3]}]}]})
+    run = asyncio.run(main.strand_runtime.run_now(SESSION, actor="owner", redo=True))
+    assert run["mode"] == "full"
+    titles = sorted(item["title"] for item in main.store.list_strands(SESSION))
+    assert titles == ["Od nowa", "Ręczny"]
+
+
+def test_session_list_carries_chapter_state(load_main, admin_client) -> None:
+    main, ids = _setup(load_main)
+    _first_run(main, ids)
+    main.store.accept_strands(SESSION)
+    client, _ = admin_client(main)
+    sessions = client.get("/admin/api/sessions").json()["sessions"]
+    listed = next(item for item in sessions if item["session_id"] == SESSION)
+    assert listed["chapters"]["state"] == "complete"
+    payload = client.get(f"/admin/api/sessions/{SESSION}/strands").json()
+    assert payload["chapter_state"]["analyzed_count"] == 4

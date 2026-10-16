@@ -9,7 +9,7 @@ This project follows a lightweight changelog format inspired by Keep a Changelog
 ### Highlights
 
 - Added a Contexts workspace between Sessions and Lab: build a temporary context from any sessions and files in the bridge and hand it to a model by its `ctx_` ID (NIV-25).
-- Added highlights and strands inside the session view: mark the exact words that matter to you, and cut a session into named exchange ranges by hand or with a Codex proposal you start yourself.
+- Added highlights and chapters inside the session view: mark the exact words that matter to you, and split a session into named exchange ranges by hand or with a Codex proposal you start yourself.
 
 ### New Features
 
@@ -19,16 +19,19 @@ This project follows a lightweight changelog format inspired by Keep a Changelog
 - Added a preview of the exact `context.md` a model receives, with every replaced identifier highlighted, plus copy and download.
 - Added the `get_context` MCP tool, which returns a context in chunks sized like transcripts.
 - Added two docks at the top of the transcript rail. Highlights: select text inside one turn and press Highlight; the quote is checked against the stored turn, kept even if the exchange is later edited, and listed in a panel that jumps back to it.
-- Strands: a panel lists named exchange ranges for the session. Add one by hand, or press Propose with Codex to send the whole session once and review the proposals; accept or discard each, and revert a whole Codex run in one step. Codex never runs on its own, and sessions in sensitive groups need an explicit confirmation.
-- Added Settings › Codex with the App Server connection, OpenAI sign-in and the model, reasoning effort and prompt used for strand proposals. Codex sign-in no longer depends on the experimental Graph switch.
+- Chapters: a panel lists named exchange ranges for the session. Add one by hand, or press Propose with Codex to send the whole session once and review the proposals; accept or discard each, and revert a whole Codex run in one step. Codex never runs on its own, and sessions in sensitive groups need an explicit confirmation.
+- Added Settings › Codex with the App Server connection, OpenAI sign-in and the model, reasoning effort and prompt used for chapter proposals. Codex sign-in no longer depends on the experimental Graph switch.
 - The transcript rail now stays at the top-left of the conversation instead of its vertical middle.
-- Added a Uses tokens section to Settings with one switch for every feature that spends tokens; Strands is the first, with its own switch, model, effort and prompt. When either switch is off, Bridge refuses Codex strand runs.
+- Added a Uses tokens section to Settings with one switch for every feature that spends tokens; Chapters is the first, with its own switch, model, effort and prompt. When either switch is off, Bridge refuses Codex chapter runs.
 - Settings › Codex now shows the sign-in code in its own card, with copy and a link to the OpenAI page.
-- Highlights are drawn in solid highlighter yellow so they stay readable on every transcript layout, and the highlight and strand docks share one tinted card in the rail.
+- Each session now shows how far it is split into chapters: complete, new exchanges since the last split (+N), proposals to review, or hand-made only. The state appears next to the session in the list, as a progress bar under the Chapters dock, and as a status line in the panel.
+- Update chapters sends only the new exchanges and the existing chapter titles to Codex; it proposes extensions of existing chapters or new ones, which you accept, discard or revert like any proposal. Redo starts over and keeps hand-made chapters.
+- Hovering the Highlights or Chapters dock opens its panel for a quick jump and closes it when the pointer leaves; clicking pins it. Both panels can stay pinned, and the choice is remembered in the browser.
+- Highlights are drawn in solid highlighter yellow so they stay readable on every transcript layout, and the highlight and chapter docks share one tinted card in the rail.
 
 ### Security
 
-- Highlights and strands are admin-only: they are never part of transcript chunks, contexts or any MCP response.
+- Highlights and chapters are admin-only: they are never part of transcript chunks, contexts or any MCP response.
 - Contexts are redacted when they are assembled: session IDs, context IDs and links into the bridge become numbered placeholders such as `[SESSION-1]`, so a model cannot follow a context back to its sources. The context name never reaches the model.
 
 ## [2026.10.1] - 2026-10-04

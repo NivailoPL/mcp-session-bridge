@@ -61,6 +61,7 @@ CREATE TABLE IF NOT EXISTS strand_runs (
     exchange_count INTEGER NOT NULL,
     settings_json TEXT NOT NULL,
     status TEXT NOT NULL CHECK (status IN ('queued', 'running', 'completed', 'failed')),
+    mode TEXT NOT NULL DEFAULT 'full',
     proposed_count INTEGER NOT NULL DEFAULT 0,
     error_code TEXT,
     error_message TEXT,
@@ -97,10 +98,20 @@ CREATE TABLE IF NOT EXISTS strand_ranges (
     ordinal INTEGER NOT NULL,
     start_exchange_id INTEGER NOT NULL,
     end_exchange_id INTEGER NOT NULL,
+    status TEXT NOT NULL DEFAULT 'accepted',
+    run_id INTEGER,
     FOREIGN KEY(strand_id) REFERENCES strands(strand_id) ON DELETE CASCADE,
     UNIQUE(strand_id, ordinal)
 );
 """
+
+# Columns added after the first release of these tables; Store adds them to
+# databases created before them. (table, column, declaration)
+ANCHOR_LATER_COLUMNS = (
+    ("strand_runs", "mode", "TEXT NOT NULL DEFAULT 'full'"),
+    ("strand_ranges", "status", "TEXT NOT NULL DEFAULT 'accepted'"),
+    ("strand_ranges", "run_id", "INTEGER"),
+)
 
 
 class AnchorStoreMixin:
@@ -210,7 +221,12 @@ class AnchorStoreMixin:
         by_strand: dict[int, list[dict[str, int]]] = {}
         for item in ranges:
             by_strand.setdefault(item["strand_id"], []).append(
-                {"start_exchange_id": item["start_exchange_id"], "end_exchange_id": item["end_exchange_id"]}
+                {
+                    "start_exchange_id": item["start_exchange_id"],
+                    "end_exchange_id": item["end_exchange_id"],
+                    "status": item["status"],
+                    "run_id": item["run_id"],
+                }
             )
         positions = self.strand_positions(session_id)
         payload = [
@@ -221,7 +237,8 @@ class AnchorStoreMixin:
                 "origin": row["origin"],
                 "status": row["status"],
                 "run_id": row["run_id"],
-                "ranges": by_strand.get(row["strand_id"], []),
+                "ranges": [item for item in by_strand.get(row["strand_id"], []) if item["status"] == "accepted"],
+                "pending_ranges": [item for item in by_strand.get(row["strand_id"], []) if item["status"] == "pending"],
                 "created_at": row["created_at"],
                 "updated_at": row["updated_at"],
             }
@@ -264,7 +281,7 @@ class AnchorStoreMixin:
                 (cleaned_title, now, strand_id),
             )
             if spans is not None:
-                conn.execute("DELETE FROM strand_ranges WHERE strand_id = ?", (strand_id,))
+                conn.execute("DELETE FROM strand_ranges WHERE strand_id = ? AND status = 'accepted'", (strand_id,))
                 self._insert_ranges(conn, strand_id, spans)
         updated = self.get_strand(strand_id)
         assert updated is not None
@@ -276,35 +293,45 @@ class AnchorStoreMixin:
         return cursor.rowcount > 0
 
     def accept_strands(self, session_id: str, strand_id: int | None = None) -> int:
+        """Accept pending chapters and pending extensions; returns how many items changed."""
         now = int(time.time())
+        scope, params = _pending_scope(session_id, strand_id)
         with self._lock, self._connect() as conn:
-            if strand_id is None:
-                cursor = conn.execute(
-                    "UPDATE strands SET status = 'accepted', updated_at = ? WHERE session_id = ? AND status = 'pending'",
-                    (now, session_id),
-                )
-            else:
-                cursor = conn.execute(
-                    """
-                    UPDATE strands SET status = 'accepted', updated_at = ?
-                    WHERE session_id = ? AND strand_id = ? AND status = 'pending'
-                    """,
-                    (now, session_id, strand_id),
-                )
-        return cursor.rowcount
+            extensions = conn.execute(
+                f"""
+                UPDATE strand_ranges SET status = 'accepted'
+                WHERE status = 'pending'
+                  AND strand_id IN (SELECT strand_id FROM strands WHERE status = 'accepted' AND {scope})
+                """,
+                params,
+            ).rowcount
+            conn.execute(
+                f"""
+                UPDATE strand_ranges SET status = 'accepted'
+                WHERE status = 'pending' AND strand_id IN (SELECT strand_id FROM strands WHERE {scope})
+                """,
+                params,
+            )
+            chapters = conn.execute(
+                f"UPDATE strands SET status = 'accepted', updated_at = ? WHERE status = 'pending' AND {scope}",
+                (now, *params),
+            ).rowcount
+        return chapters + extensions
 
     def discard_pending_strands(self, session_id: str, strand_id: int | None = None) -> int:
+        """Drop pending chapters and pending extensions; accepted ranges stay."""
+        scope, params = _pending_scope(session_id, strand_id)
         with self._lock, self._connect() as conn:
-            if strand_id is None:
-                cursor = conn.execute(
-                    "DELETE FROM strands WHERE session_id = ? AND status = 'pending'", (session_id,)
-                )
-            else:
-                cursor = conn.execute(
-                    "DELETE FROM strands WHERE session_id = ? AND strand_id = ? AND status = 'pending'",
-                    (session_id, strand_id),
-                )
-        return cursor.rowcount
+            extensions = conn.execute(
+                f"""
+                DELETE FROM strand_ranges
+                WHERE status = 'pending'
+                  AND strand_id IN (SELECT strand_id FROM strands WHERE status = 'accepted' AND {scope})
+                """,
+                params,
+            ).rowcount
+            chapters = conn.execute(f"DELETE FROM strands WHERE status = 'pending' AND {scope}", params).rowcount
+        return chapters + extensions
 
     def revert_strand_run(self, run_id: int) -> int:
         now = int(time.time())
@@ -312,16 +339,130 @@ class AnchorStoreMixin:
             run = conn.execute("SELECT run_id FROM strand_runs WHERE run_id = ?", (run_id,)).fetchone()
             if run is None:
                 raise StrandError("Unknown Codex run.", code="run_unknown")
-            cursor = conn.execute("DELETE FROM strands WHERE run_id = ?", (run_id,))
+            removed = conn.execute("DELETE FROM strands WHERE run_id = ?", (run_id,)).rowcount
+            removed += conn.execute("DELETE FROM strand_ranges WHERE run_id = ?", (run_id,)).rowcount
             conn.execute("UPDATE strand_runs SET reverted_at = ? WHERE run_id = ?", (now, run_id))
-        return cursor.rowcount
+        return removed
 
     def has_pending_strands(self, session_id: str) -> bool:
         with self._lock, self._connect() as conn:
-            row = conn.execute(
-                "SELECT 1 FROM strands WHERE session_id = ? AND status = 'pending' LIMIT 1", (session_id,)
-            ).fetchone()
+            row = conn.execute(_PENDING_EXISTS_SQL, (session_id, session_id)).fetchone()
         return row is not None
+
+    # ---------- chapter state ----------
+
+    def chapter_states(self, session_id: str | None = None) -> dict[str, dict[str, Any]]:
+        """How far each session is split into chapters.
+
+        A completed, unreverted Codex run whose proposals are all resolved marks
+        the session analyzed up to its last exchange; exchanges added later make
+        it "behind". Exchange coverage is reported alongside but never decides
+        completeness, because Codex may rightly leave noise out of every chapter.
+        """
+        where, params = ("WHERE session_id = ?", (session_id,)) if session_id else ("", ())
+        with self._lock, self._connect() as conn:
+            exchanges = conn.execute(
+                f"""
+                SELECT session_id, exchange_id FROM exchanges
+                {where.replace("WHERE", "WHERE deleted_at IS NULL AND") if where else "WHERE deleted_at IS NULL"}
+                ORDER BY session_id, created_at, exchange_id
+                """,
+                params,
+            ).fetchall()
+            runs = conn.execute(
+                f"SELECT session_id, run_id, status, source_exchange_id, reverted_at FROM strand_runs {where}",
+                params,
+            ).fetchall()
+            pending_runs = {
+                row[0]
+                for row in conn.execute(
+                    """
+                    SELECT run_id FROM strands WHERE status = 'pending' AND run_id IS NOT NULL
+                    UNION SELECT run_id FROM strand_ranges WHERE status = 'pending' AND run_id IS NOT NULL
+                    """
+                ).fetchall()
+            }
+            chapters = conn.execute(
+                f"""
+                SELECT s.session_id, s.strand_id, s.origin, s.status, r.start_exchange_id, r.end_exchange_id, r.status AS range_status
+                FROM strands s LEFT JOIN strand_ranges r ON r.strand_id = s.strand_id
+                {where.replace("session_id", "s.session_id")}
+                """,
+                params,
+            ).fetchall()
+        order: dict[str, list[int]] = {}
+        for row in exchanges:
+            order.setdefault(row["session_id"], []).append(row["exchange_id"])
+        sessions = set(order) | {row["session_id"] for row in runs} | {row["session_id"] for row in chapters}
+        result: dict[str, dict[str, Any]] = {}
+        for sid in sessions:
+            ids = order.get(sid, [])
+            session_runs = [row for row in runs if row["session_id"] == sid]
+            session_chapters = [row for row in chapters if row["session_id"] == sid]
+            running = any(row["status"] in ("queued", "running") for row in session_runs)
+            pending = any(
+                row["status"] == "pending" or row["range_status"] == "pending" for row in session_chapters
+            )
+            resolved = [
+                row["source_exchange_id"]
+                for row in session_runs
+                if row["status"] == "completed" and row["reverted_at"] is None and row["run_id"] not in pending_runs
+            ]
+            analyzed_to = max(resolved) if resolved else None
+            analyzed = sum(1 for exchange_id in ids if analyzed_to is not None and exchange_id <= analyzed_to)
+            accepted = {row["strand_id"] for row in session_chapters if row["status"] == "accepted"}
+            covered_positions: set[int] = set()
+            index = {exchange_id: position for position, exchange_id in enumerate(ids)}
+            for row in session_chapters:
+                if row["status"] != "accepted" or row["range_status"] != "accepted":
+                    continue
+                start, end = index.get(row["start_exchange_id"]), index.get(row["end_exchange_id"])
+                if start is not None and end is not None:
+                    covered_positions.update(range(start, end + 1))
+            if running:
+                state = "running"
+            elif pending:
+                state = "review"
+            elif analyzed_to is not None:
+                state = "complete" if analyzed == len(ids) else "behind"
+            elif accepted:
+                state = "manual"
+            else:
+                state = "none"
+            if state == "none" and not session_runs:
+                continue
+            result[sid] = {
+                "state": state,
+                "exchange_count": len(ids),
+                "analyzed_count": analyzed,
+                "new_count": len(ids) - analyzed if analyzed_to is not None else 0,
+                "covered_count": len(covered_positions),
+                "chapter_count": len(accepted),
+                "analyzed_to": analyzed_to,
+            }
+        return result
+
+    def chapter_state(self, session_id: str) -> dict[str, Any]:
+        state = self.chapter_states(session_id).get(session_id)
+        if state is not None:
+            return state
+        count = len(self.list_exchanges(session_id))
+        return {
+            "state": "none", "exchange_count": count, "analyzed_count": 0, "new_count": 0,
+            "covered_count": 0, "chapter_count": 0, "analyzed_to": None,
+        }
+
+    def codex_runs_with_chapters(self, session_id: str) -> list[int]:
+        with self._lock, self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT run_id FROM strand_runs
+                WHERE session_id = ? AND status = 'completed' AND reverted_at IS NULL
+                ORDER BY run_id
+                """,
+                (session_id,),
+            ).fetchall()
+        return [row["run_id"] for row in rows]
 
     # ---------- strand runs ----------
 
@@ -363,6 +504,7 @@ class AnchorStoreMixin:
         exchange_count: int,
         settings: dict[str, str],
         actor: str,
+        mode: str = "full",
         now: int | None = None,
     ) -> dict[str, Any]:
         current = int(now if now is not None else time.time())
@@ -382,9 +524,7 @@ class AnchorStoreMixin:
             ).fetchone()
             if active is not None:
                 raise StrandError("A Codex run for this session is already in progress.", code="run_active")
-            pending = conn.execute(
-                "SELECT 1 FROM strands WHERE session_id = ? AND status = 'pending' LIMIT 1", (session_id,)
-            ).fetchone()
+            pending = conn.execute(_PENDING_EXISTS_SQL, (session_id, session_id)).fetchone()
             if pending is not None:
                 raise StrandError(
                     "Accept or discard the pending proposal before a new Codex run.", code="pending_exists"
@@ -392,10 +532,13 @@ class AnchorStoreMixin:
             cursor = conn.execute(
                 """
                 INSERT INTO strand_runs (
-                    session_id, source_exchange_id, exchange_count, settings_json, status, created_by, created_at
-                ) VALUES (?, ?, ?, ?, 'queued', ?, ?)
+                    session_id, source_exchange_id, exchange_count, settings_json, status, mode, created_by, created_at
+                ) VALUES (?, ?, ?, ?, 'queued', ?, ?, ?)
                 """,
-                (session_id, source_exchange_id, exchange_count, json.dumps(settings, ensure_ascii=False), actor, current),
+                (
+                    session_id, source_exchange_id, exchange_count, json.dumps(settings, ensure_ascii=False),
+                    mode, actor, current,
+                ),
             )
             run_id = int(cursor.lastrowid)
         run = self.get_strand_run(run_id)
@@ -410,7 +553,14 @@ class AnchorStoreMixin:
                 (current, run_id),
             )
 
-    def complete_strand_run(self, run_id: int, proposals: list[dict[str, Any]], *, now: int | None = None) -> None:
+    def complete_strand_run(
+        self,
+        run_id: int,
+        proposals: list[dict[str, Any]],
+        *,
+        extensions: list[dict[str, Any]] | None = None,
+        now: int | None = None,
+    ) -> None:
         current = int(now if now is not None else time.time())
         with self._lock, self._connect() as conn:
             run = conn.execute(
@@ -422,12 +572,26 @@ class AnchorStoreMixin:
                 self._insert_strand(
                     conn, run["session_id"], proposal["title"], proposal["ranges"], "codex", "pending", run_id, current
                 )
+            for extension in extensions or []:
+                owner = conn.execute(
+                    "SELECT 1 FROM strands WHERE strand_id = ? AND session_id = ? AND status = 'accepted'",
+                    (extension["strand_id"], run["session_id"]),
+                ).fetchone()
+                if owner is None:
+                    continue
+                start = conn.execute(
+                    "SELECT COALESCE(MAX(ordinal), -1) + 1 FROM strand_ranges WHERE strand_id = ?",
+                    (extension["strand_id"],),
+                ).fetchone()[0]
+                self._insert_ranges(
+                    conn, extension["strand_id"], extension["ranges"], status="pending", run_id=run_id, start_ordinal=start
+                )
             conn.execute(
                 """
                 UPDATE strand_runs SET status = 'completed', proposed_count = ?, completed_at = ?
                 WHERE run_id = ?
                 """,
-                (len(proposals), current, run_id),
+                (len(proposals) + len(extensions or []), current, run_id),
             )
 
     def fail_strand_run(self, run_id: int, *, error_code: str, error_message: str, now: int | None = None) -> None:
@@ -479,18 +643,33 @@ class AnchorStoreMixin:
         return strand_id
 
     @staticmethod
-    def _insert_ranges(conn: sqlite3.Connection, strand_id: int, spans: list[tuple[int, int]]) -> None:
+    def _insert_ranges(
+        conn: sqlite3.Connection,
+        strand_id: int,
+        spans: list[tuple[int, int]],
+        *,
+        status: str = "accepted",
+        run_id: int | None = None,
+        start_ordinal: int | None = None,
+    ) -> None:
+        if start_ordinal is None:
+            start_ordinal = conn.execute(
+                "SELECT COALESCE(MAX(ordinal), -1) + 1 FROM strand_ranges WHERE strand_id = ?", (strand_id,)
+            ).fetchone()[0]
         conn.executemany(
             """
-            INSERT INTO strand_ranges (strand_id, ordinal, start_exchange_id, end_exchange_id)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO strand_ranges (strand_id, ordinal, start_exchange_id, end_exchange_id, status, run_id)
+            VALUES (?, ?, ?, ?, ?, ?)
             """,
-            [(strand_id, ordinal, start, end) for ordinal, (start, end) in enumerate(spans)],
+            [
+                (strand_id, start_ordinal + index, start, end, status, run_id)
+                for index, (start, end) in enumerate(spans)
+            ],
         )
 
 
 def _first_position(strand: dict[str, Any], positions: dict[int, int]) -> tuple[int, int]:
-    starts = [positions.get(item["start_exchange_id"], 10**9) for item in strand["ranges"]]
+    starts = [positions.get(item["start_exchange_id"], 10**9) for item in strand["ranges"] + strand["pending_ranges"]]
     return (min(starts) if starts else 10**9, strand["strand_id"])
 
 
@@ -504,6 +683,7 @@ def _strand_run_payload(row: sqlite3.Row) -> dict[str, Any]:
         "model": settings.get("model"),
         "effort": settings.get("effort"),
         "status": row["status"],
+        "mode": row["mode"],
         "proposed_count": row["proposed_count"],
         "error_code": row["error_code"],
         "error_message": row["error_message"],
@@ -512,3 +692,18 @@ def _strand_run_payload(row: sqlite3.Row) -> dict[str, Any]:
         "completed_at": row["completed_at"],
         "reverted_at": row["reverted_at"],
     }
+
+
+_PENDING_EXISTS_SQL = """
+SELECT 1 FROM strands WHERE session_id = ? AND status = 'pending'
+UNION ALL
+SELECT 1 FROM strand_ranges r JOIN strands s ON s.strand_id = r.strand_id
+WHERE s.session_id = ? AND r.status = 'pending'
+LIMIT 1
+"""
+
+
+def _pending_scope(session_id: str, strand_id: int | None) -> tuple[str, tuple[Any, ...]]:
+    if strand_id is None:
+        return "session_id = ?", (session_id,)
+    return "session_id = ? AND strand_id = ?", (session_id, strand_id)

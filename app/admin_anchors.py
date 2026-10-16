@@ -20,7 +20,7 @@ if TYPE_CHECKING:
     from app.strand_runtime import StrandRuntime
 
 _NOT_FOUND_CODES = {"session_unknown", "strand_unknown", "run_unknown", "exchange_unknown"}
-_CONFLICT_CODES = {"pending_exists", "run_active", "sensitive_unconfirmed", "feature_off"}
+_CONFLICT_CODES = {"pending_exists", "run_active", "sensitive_unconfirmed", "feature_off", "already_complete"}
 
 
 class AnchorAdminHandlers:
@@ -138,14 +138,17 @@ class AnchorAdminHandlers:
         payload, parse_error = await _json_body(request, allow_empty=True)
         if parse_error:
             return parse_error
-        if not set(payload) <= {"confirm_sensitive"}:
-            return self._error("Only confirm_sensitive is accepted.", 400, "payload_invalid")
+        if not set(payload) <= {"confirm_sensitive", "redo"}:
+            return self._error("Only confirm_sensitive and redo are accepted.", 400, "payload_invalid")
         confirm = payload.get("confirm_sensitive", False)
-        if not isinstance(confirm, bool):
-            return self._error("confirm_sensitive must be true or false.", 400, "payload_invalid")
+        redo = payload.get("redo", False)
+        if not isinstance(confirm, bool) or not isinstance(redo, bool):
+            return self._error("confirm_sensitive and redo must be true or false.", 400, "payload_invalid")
         session_id = request.path_params["session_id"]
         try:
-            run = await self.runtime.start_run(session_id, actor=session["username"], confirm_sensitive=confirm)
+            run = await self.runtime.start_run(
+                session_id, actor=session["username"], confirm_sensitive=confirm, redo=redo
+            )
         except (StrandError, HighlightError) as exc:
             return self._domain_error(exc)
         return JSONResponse({"ok": True, "run": run}, status_code=202, headers=self.admin._no_store_headers())
@@ -205,6 +208,7 @@ class AnchorAdminHandlers:
             "latest_run": self.store.latest_strand_run(session_id),
             "codex_configured": self.runtime.codex is not None,
             "strands_enabled": self.store.get_token_features()["strands_active"],
+            "chapter_state": self.store.chapter_state(session_id),
         }
 
     async def _mutation(

@@ -28,6 +28,10 @@ def exchanges(store: Store, count: int, session: str = SESSION) -> list[int]:
     ]
 
 
+def spans(strand: dict) -> list[tuple[int, int]]:
+    return [(item["start_exchange_id"], item["end_exchange_id"]) for item in strand["ranges"]]
+
+
 def completed_run(store: Store, session: str, proposals: list[dict]) -> int:
     run = store.create_strand_run(
         session,
@@ -46,10 +50,7 @@ def test_manual_strand_with_two_ranges_is_accepted(store):
     strand = store.create_strand(SESSION, "  Highlighty   i źródła ", [[ids[0], ids[1]], [ids[4], ids[4]]])
     assert strand["title"] == "Highlighty i źródła"
     assert strand["origin"] == "manual" and strand["status"] == "accepted" and strand["run_id"] is None
-    assert strand["ranges"] == [
-        {"start_exchange_id": ids[0], "end_exchange_id": ids[1]},
-        {"start_exchange_id": ids[4], "end_exchange_id": ids[4]},
-    ]
+    assert spans(strand) == [(ids[0], ids[1]), (ids[4], ids[4])]
 
 
 def test_overlapping_and_touching_ranges_are_merged(store):
@@ -133,7 +134,7 @@ def test_update_and_delete_strand(store):
     strand = store.create_strand(SESSION, "Stary", [[ids[0], ids[0]]])
     updated = store.update_strand(strand["strand_id"], title="Nowy", ranges=[[ids[1], ids[2]]])
     assert updated["title"] == "Nowy"
-    assert updated["ranges"] == [{"start_exchange_id": ids[1], "end_exchange_id": ids[2]}]
+    assert spans(updated) == [(ids[1], ids[2])]
     assert store.delete_strand(strand["strand_id"]) is True
     assert store.list_strands(SESSION) == []
 
