@@ -868,15 +868,19 @@
     .chapter-days label:has(input:checked) { color: var(--ok); border-color: rgba(52, 211, 153, .6); background: rgba(52, 211, 153, .18); }
     .chapter-days label:has(input:focus-visible) { box-shadow: 0 0 0 3px var(--accent-soft); }
     .chapter-groups { display: grid; gap: .35rem; width: 100%; }
-    .chapter-group { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: .65rem; padding: .45rem .6rem; border: 1px solid var(--stroke-soft); border-radius: var(--r-ctrl); }
+    /* fixed count column (room for 9999/9999) so every group's bar ends at the same point */
+    .chapter-group { display: grid; grid-template-columns: auto minmax(0, 1fr) 9.5ch; align-items: center; gap: .65rem; padding: .45rem .6rem; border: 1px solid var(--stroke-soft); border-radius: var(--r-ctrl); }
     .chapter-group.is-off { opacity: .55; }
     .chapter-group-name { display: grid; gap: .3rem; min-width: 0; font-size: var(--t-ctrl); font-weight: 600; }
-    .chapter-group-name small { color: var(--muted); font-weight: 500; font-size: var(--t-label); }
-    .chapter-group-count { font-family: "Geist Mono", ui-monospace, monospace; font-size: var(--t-meta); color: var(--muted); }
+    .chapter-group-title { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; min-width: 0; }
+    .chapter-group-sensitive { display: inline-flex; align-items: center; gap: .3rem; color: #d9b96a; font-size: var(--t-label); font-weight: 600; }
+    .chapter-group-sensitive svg { width: 13px; height: 13px; }
+    .chapter-group-sensitive.is-excluded { color: var(--muted); }
+    .chapter-group-count { font-family: "Geist Mono", ui-monospace, monospace; font-size: var(--t-meta); color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
     .chapter-mini-bar { display: flex; height: 4px; border-radius: var(--r-pill); overflow: hidden; background: rgba(255, 255, 255, .08); }
     .chapter-mini-bar span:first-child, .chapter-fill-bar span:first-child { background: var(--ok); }
     .chapter-mini-bar span:last-child, .chapter-fill-bar span:last-child { background: repeating-linear-gradient(90deg, var(--accent-2) 0 4px, transparent 4px 7px); }
-    .chapter-fill-body { display: grid; gap: .7rem; padding: 4px 16px 16px; }
+    .chapter-fill-body { display: grid; gap: .8rem; padding: 18px 16px 16px; }
     .chapter-fill-bar { display: flex; height: 10px; border-radius: var(--r-pill); overflow: hidden; background: rgba(255, 255, 255, .08); }
     .chapter-fill-bar span { height: 100%; transition: width .3s ease; }
     .chapter-fill-estimate { display: flex; align-items: center; gap: .35rem; color: var(--text-2); font-size: var(--t-meta); }
@@ -9696,10 +9700,14 @@
           const review = spanCls("");
           review.style.width = `${(group.review / group.total) * 100}%`;
           bar.append(done, review);
-          name.append(document.createTextNode(group.name));
-          if (group.is_sensitive) name.append(document.createElement("small"));
-          if (group.is_sensitive) name.lastChild.textContent = fill.include_sensitive ? "Sensitive · included" : "Sensitive · excluded";
-          name.append(bar);
+          const title = spanCls("chapter-group-title", group.name);
+          if (group.is_sensitive) {
+            const tag = spanCls(`chapter-group-sensitive${fill.include_sensitive ? "" : " is-excluded"}`);
+            tag.innerHTML = sensitiveIconSvg();
+            tag.append(document.createTextNode(fill.include_sensitive ? "Sensitive · included" : "Sensitive · excluded"));
+            title.append(tag);
+          }
+          name.append(title, bar);
           row.append(box, name, spanCls("chapter-group-count", `${group.done}/${group.total}`));
           container.append(row);
         }

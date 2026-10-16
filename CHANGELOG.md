@@ -32,6 +32,7 @@ This project follows a lightweight changelog format inspired by Keep a Changelog
 - Added automatic chapters. The large card in Settings › Chapters now switches a schedule on or off: every 3, 6 or 12 hours, every day at a set time, or on chosen weekdays, in the admin's timezone. Turning it on never fires at once.
 - Added Fill now at the bottom of Settings › Chapters: a progress bar of split sessions, a token estimate (with how it is made), Start, and Pause. Pause lets the session Codex is working on finish and then stops; Resume continues where it stopped and retries sessions that hit a Codex error.
 - Automatic runs and Fill now share one scope: chosen groups in order, an Include sensitive groups switch (off by default) and Accept proposals automatically (on by default; each run stays revertible per session).
+- Group bars under What gets split end at the same point, and sensitive groups show the Bridge sensitive pictogram next to their name.
 - A fill pauses itself after three Codex errors in a row, skips sessions too long for one run, and comes back paused, never running, after a Bridge restart. The last runs are listed under Fill now.
 - Highlights are drawn in solid highlighter yellow so they stay readable on every transcript layout, and the highlight and chapter docks share one tinted card in the rail.
 
