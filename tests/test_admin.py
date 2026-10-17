@@ -614,14 +614,52 @@ def test_admin_viewer_context_visibility_controls_contract() -> None:
     assert 'function maskedResponseNotice()' in viewer
     assert 'spanCls("masked-response-copy", MASKED_MODEL_RESPONSE)' in viewer
     assert viewer.count("if (isMasked) node.append(maskedResponseNotice());") == 1
-    assert viewer.count("if (isMasked) body.append(maskedResponseNotice());") == 1
-    assert viewer.count("if (isMasked) article.append(maskedResponseNotice());") == 1
     assert 'const response = ex.is_masked ? MASKED_MODEL_RESPONSE' in viewer
     assert ".masked-response-notice" in viewer
     assert 'function renderExcludedTurnBar(exchange)' in viewer
     assert '"Excluded turn"' in viewer
     assert 'spanCls("excluded-turn-note", `Note: ${exchange.deleted_reason}`)' in viewer
     assert '.ex-group.is-deleted { opacity' not in viewer
+
+
+@requires_node
+@pytest.mark.parametrize("layout", ["bubbles", "thread", "modern"])
+def test_read_layouts_keep_masked_response_notice(layout: str) -> None:
+    source = (
+        slice_source("function maskedResponseNotice()", "const CONTEXT_ACTION_ICONS")
+        + slice_source("function markdownContent", "function svgNode")
+        + slice_source("function button(text", "function label(className")
+        + slice_source("function tokenLabel", "function renderEditForm")
+    )
+    result = run_js(
+        """
+        const state = { layout: input };
+        const MASKED_MODEL_RESPONSE = "[MODEL RESPONSE MASKED - CONTENT HIDDEN FROM ALL MODELS]";
+        const userDisplayName = () => "Owner";
+        const modelIdentity = () => ({ color: "#aaa" });
+        const avatar = () => document.createElement("span");
+        """
+        + source
+        + """
+        const masked = renderMsg("Claude", "**Private response**", true, "12:30", 20, true);
+        const ordinary = renderMsg("Claude", "Ordinary response", true, "12:30", 20);
+        function notices(node) {
+          return (node.className === "masked-response-notice" ? 1 : 0)
+            + node.children.reduce((sum, child) => sum + notices(child), 0);
+        }
+        emit({
+          masked: masked.classList.contains("is-masked"),
+          maskedText: flatText(masked),
+          maskedNotices: notices(masked),
+          ordinaryNotices: notices(ordinary),
+        });
+        """,
+        payload=layout,
+    )
+    assert result["masked"] is True
+    assert MASKED_MODEL_RESPONSE in result["maskedText"]
+    assert result["maskedNotices"] == 1
+    assert result["ordinaryNotices"] == 0
 
 
 @pytest.mark.skipif(shutil.which("node") is None, reason="Node.js is required for the browser renderer smoke test")

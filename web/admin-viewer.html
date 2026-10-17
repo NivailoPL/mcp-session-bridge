@@ -1475,8 +1475,8 @@
     .seg button.is-active { background: var(--glass-3); color: var(--text); }
 
     .session-group-select { width: auto; min-width: 11rem; max-width: 15rem; }
-    .top-actions .seg { padding: 3px; border-color: rgba(255, 255, 255, .06); border-radius: 10px; background: rgba(0, 0, 0, .25); }
-    .top-actions .seg button { min-height: 30px; padding: 0 12px; border-radius: 7px; }
+    .top-actions .seg { max-width: 100%; overflow-x: auto; padding: 3px; border-color: rgba(255, 255, 255, .06); border-radius: 10px; background: rgba(0, 0, 0, .25); }
+    .top-actions .seg button { flex-shrink: 0; min-height: 30px; padding: 0 12px; border-radius: 7px; }
     .top-actions .seg button.is-active { background: rgba(255, 255, 255, .1); color: #fff; font-weight: 700; }
     .top-actions .session-group-select { min-height: 38px; border-radius: 10px; }
 
@@ -1548,7 +1548,7 @@
     }
     .session-move-note { margin: .7rem 0 0; color: var(--muted); font-size: var(--t-ctrl); line-height: 1.5; }
 
-    /* ---------- alternate read layouts (bubbles / thread) ---------- */
+    /* ---------- alternate read layouts (bubbles / thread / modern) ---------- */
     .chat { display: grid; width: 100%; max-width: 62rem; min-width: 0; margin: 0 auto; }
     .msg-meta { display: flex; align-items: baseline; gap: .5rem; font-size: var(--t-meta); color: var(--faint-ink); font-variant-numeric: tabular-nums; }
     .msg-speaker { font-weight: 700; }
@@ -1630,6 +1630,44 @@
     .chat.thread .message.is-model .msg-content { border-left: 2px solid color-mix(in oklab, var(--m) 30%, transparent); padding-left: .85rem; }
     .chat.thread .message.is-user .msg-content { padding-left: .85rem; border-left: 2px solid var(--accent-soft); }
     .chat.thread .ex-actions { padding-left: calc(36px + .85rem); }
+
+    /* Modern: a quiet reading column, with Bridge's exchange controls tucked below each reply. */
+    .chat.modern { max-width: 52rem; gap: 2.75rem; padding: .5rem 0 2rem; }
+    .chat.modern .ex-group { gap: 1.65rem; }
+    .chat.modern .message { display: grid; min-width: 0; gap: .65rem; }
+    .chat.modern .message.is-user { justify-self: end; max-width: 82%; }
+    .chat.modern .message.is-user .bubble {
+      min-width: 0; padding: .85rem 1.15rem; border-radius: 20px;
+      background: var(--glass-3);
+    }
+    .chat.modern .message.is-model .bubble { min-width: 0; }
+    .chat.modern .msg-content { font-size: 16px; line-height: 1.8; color: var(--text); }
+    .chat.modern .msg-meta { align-items: center; gap: .5rem; color: var(--muted); }
+    .chat.modern .msg-speaker { font-weight: 600; }
+    .chat.modern .avatar { width: 17px; height: 17px; padding: 0; border: 0; border-radius: 0; background: none; }
+    .chat.modern .msg-meta time { margin-left: .15rem; color: var(--faint-ink); }
+    .modern-footer { display: flex; align-items: start; gap: .65rem; margin-top: -.85rem; min-width: 0; }
+    .modern-copy {
+      display: grid; place-items: center; flex: 0 0 auto; width: 28px; min-height: 28px;
+      padding: 5px; border: 0; background: transparent; color: var(--muted);
+    }
+    .modern-copy svg { width: 16px; height: 16px; }
+    .modern-details { min-width: 0; flex: 1; color: var(--muted); font-size: var(--t-meta); }
+    .modern-details > summary {
+      display: flex; align-items: center; gap: .4rem; width: fit-content;
+      min-height: 28px; cursor: pointer; list-style: none;
+    }
+    .modern-details > summary::-webkit-details-marker { display: none; }
+    .modern-details > summary::after {
+      content: ""; width: 5px; height: 5px; margin-left: 2px;
+      border-top: 1px solid currentColor; border-right: 1px solid currentColor; transform: rotate(45deg);
+    }
+    .modern-details[open] > summary::after { transform: rotate(135deg); }
+    .modern-details > summary:hover { color: var(--text); }
+    .modern-details > summary:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 3px; border-radius: 3px; }
+    .modern-details-body { display: grid; gap: .7rem; padding: .85rem 0 .25rem; border-top: 1px solid var(--stroke-soft); margin-top: .5rem; }
+    .modern-token-counts { display: flex; flex-wrap: wrap; gap: .4rem 1.1rem; }
+    .chat.modern .day-divider { margin: 0; }
 
     /* ---------- markdown view ---------- */
     .raw { max-width: 62rem; margin: 0 auto; border: 1px solid var(--stroke); border-radius: var(--r-card); background: rgba(0, 0, 0, .3); }
@@ -1920,8 +1958,12 @@
       .exchange-grid, .field-grid { grid-template-columns: 1fr; }
       .turn + .turn { border-left: 0; border-top: 1px solid var(--stroke-soft); }
       .chat.bubbles .message { max-width: 92%; }
+      .chat.modern { gap: 2rem; }
+      .chat.modern .message.is-user { max-width: 92%; }
     }
     @media (max-width: 520px) {
+      .top-actions .seg button { padding: 0 6px; font-size: var(--t-meta); }
+      .top-actions .seg button svg { display: none; }
       .exchange-head { flex-direction: column; }
       .head-right { width: 100%; justify-content: space-between; }
       .context-visibility-controls { flex-wrap: wrap; }
@@ -2050,6 +2092,10 @@
             <button type="button" data-layout="thread" title="Thread - list with avatars">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="7" x2="20" y2="7"></line><line x1="8" y1="12" x2="20" y2="12"></line><line x1="8" y1="17" x2="16" y2="17"></line><circle cx="4" cy="7" r="1"></circle><circle cx="4" cy="12" r="1"></circle><circle cx="4" cy="17" r="1"></circle></svg>
               Thread
+            </button>
+            <button type="button" data-layout="modern" title="Modern - focused conversation with exchange details">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="10" y="3" width="11" height="5" rx="2.5"></rect><path d="M3 13h18M3 17h18M3 21h12"></path></svg>
+              Modern
             </button>
             <button id="rawToggleButton" type="button" title="Markdown - the transcript as raw Markdown">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"></rect><path d="M7 15V9l2.5 3L12 9v6M16 9v6M14 13l2 2 2-2"></path></svg>
@@ -7924,7 +7970,7 @@
         return notice;
       }
 
-      // bubbles / thread: each exchange becomes a USER + MODEL message pair plus an action row
+      // Each read layout keeps the same exchange IDs and message nodes for navigation and highlights.
       function renderExGroup(exchange) {
         const group = div("ex-group" + (exchange.is_deleted ? " is-deleted" : ""));
         group.dataset.exchangeId = String(exchange.exchange_id);
@@ -7937,7 +7983,7 @@
         group.append(
           renderMsg("USER", exchange.user_message, false, "", exchange.user_message_token_count),
           renderMsg(exchange.model_name || "Model", exchange.assistant_response, true, modelTime, exchange.assistant_response_token_count, exchange.is_masked),
-          renderExActions(exchange)
+          state.layout === "modern" ? renderModernActions(exchange) : renderExActions(exchange)
         );
         return group;
       }
@@ -7948,6 +7994,25 @@
         article.className = "message " + (isModel ? "is-model" : "is-user");
         if (isMasked) article.classList.add("is-masked");
         article.style.setProperty("--m", modelIdentity(isModel ? speakerName : "USER").color);
+        const bubble = div("bubble");
+        bubble.append(markdownContent("msg-content", content || "—"));
+
+        if (state.layout === "modern") {
+          article.setAttribute("aria-label", speaker);
+          if (isModel) {
+            const meta = div("msg-meta");
+            meta.append(avatar(speakerName, true), spanCls("msg-speaker", speaker));
+            if (timeText) {
+              const time = document.createElement("time");
+              time.textContent = timeText;
+              meta.append(time);
+            }
+            article.append(meta);
+          }
+          article.append(bubble);
+          if (isMasked) article.append(maskedResponseNotice());
+          return article;
+        }
 
         if (state.layout === "thread") {
           const body = div("body");
@@ -7955,8 +8020,6 @@
           meta.append(spanCls("msg-speaker", speaker));
           meta.append(spanCls("token-count", tokenLabel(tokenCount)));
           if (timeText) meta.append(spanCls("", timeText));
-          const bubble = div("bubble");
-          bubble.append(markdownContent("msg-content", content || "—"));
           body.append(meta, bubble);
           if (isMasked) body.append(maskedResponseNotice());
           article.append(avatar(isModel ? speakerName : "USER"), body);
@@ -7969,8 +8032,6 @@
         meta.append(spanCls("token-count", tokenLabel(tokenCount)));
         if (timeText) meta.append(spanCls("", timeText));
         const row = div("row");
-        const bubble = div("bubble");
-        bubble.append(markdownContent("msg-content", content || "—"));
         row.append(bubble);
         article.append(meta, row);
         if (isMasked) article.append(maskedResponseNotice());
@@ -8046,6 +8107,37 @@
         }, "ghost"));
         row.append(contextVisibilityControls(exchange));
         return row;
+      }
+
+      function renderModernActions(exchange) {
+        const footer = div("modern-footer");
+        const copy = button("", async () => {
+          try {
+            await navigator.clipboard.writeText(exchange.assistant_response || "");
+            setStatus("Response copied to clipboard.", "ok");
+          } catch (error) {
+            setStatus("Could not copy the response: " + error.message, "error");
+          }
+        }, "modern-copy");
+        copy.title = "Copy response";
+        copy.setAttribute("aria-label", "Copy response");
+        copy.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="3"></rect><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"></path></svg>';
+        const details = document.createElement("details");
+        details.className = "modern-details";
+        const summary = document.createElement("summary");
+        summary.textContent = "Exchange details";
+        const body = div("modern-details-body");
+        const tokens = div("modern-token-counts");
+        tokens.append(
+          spanCls("", `${userDisplayName()}: ${tokenLabel(exchange.user_message_token_count)}`),
+          spanCls("", `${exchange.model_name || "Model"}: ${tokenLabel(exchange.assistant_response_token_count)}`)
+        );
+        body.append(tokens);
+        if (exchange.edited_at_iso) body.append(spanCls("", `Edited ${formatDate(exchange.edited_at_iso)}`));
+        body.append(renderExActions(exchange));
+        details.append(summary, body);
+        footer.append(copy, details);
+        return footer;
       }
 
       function renderMarkdownView() {
