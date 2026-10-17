@@ -13,6 +13,7 @@ from threading import Lock
 from typing import Any
 
 from app.anchor_store import ANCHOR_LATER_COLUMNS, ANCHOR_SCHEMA_SQL, AnchorStoreMixin
+from app.topic_store import TOPIC_SCHEMA_SQL, TopicStoreMixin
 from app.image_files import ValidatedImage
 
 from app.graph_config import (
@@ -268,7 +269,7 @@ class ContextBlockSnapshot:
     token_count: int
 
 
-class Store(AnchorStoreMixin):
+class Store(AnchorStoreMixin, TopicStoreMixin):
     def __init__(
         self,
         db_path: Path,
@@ -723,6 +724,7 @@ class Store(AnchorStoreMixin):
             )
             # Admin-only highlights and strands (app.anchor_store); additive, no schema bump.
             conn.executescript(ANCHOR_SCHEMA_SQL)
+            conn.executescript(TOPIC_SCHEMA_SQL)
             for table, column, declaration in ANCHOR_LATER_COLUMNS:
                 self._ensure_column(conn, table, column, declaration)
             self._ensure_column(conn, "refresh_tokens", "resource", "TEXT")

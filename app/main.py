@@ -23,12 +23,14 @@ from starlette.responses import JSONResponse, Response
 
 from app.admin import AdminHandlers
 from app.admin_anchors import AnchorAdminHandlers
+from app.admin_topics import TopicAdminHandlers
 from app.admin_contexts import ContextAdminHandlers
 from app.codex_app_server import CodexAppServerClient
 from app.graph_runtime import GraphRuntime
 from app.oauth import OAuthHandlers
 from app.chapter_automation import SCHEDULER_TICK_SECONDS, ChapterAutomation
 from app.strand_runtime import StrandRuntime
+from app.topic_runtime import TopicRuntime
 from app.pdf_files import (
     MAX_MCP_PDF_BYTES,
     PdfWorkerBusyError,
@@ -141,6 +143,7 @@ async def app_lifespan(_: Any):
     async with mcp.session_manager.run():
         monitor = asyncio.create_task(_search_index_monitor())
         await asyncio.to_thread(chapter_automation.recover)
+        await asyncio.to_thread(topic_runtime.recover)
         chapter_monitor = asyncio.create_task(_chapter_schedule_monitor())
         graph_monitor = (
             asyncio.create_task(_graph_pipeline_monitor())
@@ -165,6 +168,7 @@ async def app_lifespan(_: Any):
                 with suppress(asyncio.CancelledError):
                     await graph_monitor
             await strand_runtime.close()
+            await topic_runtime.close()
             await codex.close()
 
 
@@ -252,6 +256,9 @@ admin = AdminHandlers(
 )
 contexts_admin = ContextAdminHandlers(admin)
 anchors_admin = AnchorAdminHandlers(admin, strand_runtime, chapter_automation)
+# Topics lab: every Jev run starts from an admin request; there is no scheduler.
+topic_runtime = TopicRuntime(store, key_reader=lambda: topics_admin.read_key())
+topics_admin = TopicAdminHandlers(admin, topic_runtime, ROOT / "web" / "topics-viewer.html")
 
 
 @mcp.custom_route("/healthz", methods=["GET"])
@@ -747,6 +754,76 @@ async def admin_api_get_strand_settings(request: Request) -> Response:
 @mcp.custom_route("/admin/api/settings/strands", methods=["PUT"])
 async def admin_api_update_strand_settings(request: Request) -> Response:
     return await anchors_admin.api_update_strand_settings(request)
+
+
+@mcp.custom_route("/admin/topics", methods=["GET"])
+async def admin_topics_page(request: Request) -> Response:
+    return await topics_admin.page(request)
+
+
+@mcp.custom_route("/admin/api/topics", methods=["GET"])
+async def admin_api_topics_overview(request: Request) -> Response:
+    return await topics_admin.api_overview(request)
+
+
+@mcp.custom_route("/admin/api/topics/versions", methods=["POST"])
+async def admin_api_topics_create_version(request: Request) -> Response:
+    return await topics_admin.api_create_version(request)
+
+
+@mcp.custom_route("/admin/api/topics/versions/{version_id}", methods=["GET"])
+async def admin_api_topics_get_version(request: Request) -> Response:
+    return await topics_admin.api_get_version(request)
+
+
+@mcp.custom_route("/admin/api/topics/versions/{version_id}/activate", methods=["POST"])
+async def admin_api_topics_activate_version(request: Request) -> Response:
+    return await topics_admin.api_activate_version(request)
+
+
+@mcp.custom_route("/admin/api/topics/assignments", methods=["GET"])
+async def admin_api_topics_assignments(request: Request) -> Response:
+    return await topics_admin.api_assignments(request)
+
+
+@mcp.custom_route("/admin/api/topics/estimate", methods=["POST"])
+async def admin_api_topics_estimate(request: Request) -> Response:
+    return await topics_admin.api_estimate(request)
+
+
+@mcp.custom_route("/admin/api/topics/runs", methods=["POST"])
+async def admin_api_topics_start_run(request: Request) -> Response:
+    return await topics_admin.api_start_run(request)
+
+
+@mcp.custom_route("/admin/api/topics/runs/{run_id}", methods=["GET"])
+async def admin_api_topics_get_run(request: Request) -> Response:
+    return await topics_admin.api_get_run(request)
+
+
+@mcp.custom_route("/admin/api/topics/runs/{run_id}/export", methods=["GET"])
+async def admin_api_topics_export_run(request: Request) -> Response:
+    return await topics_admin.api_export_run(request)
+
+
+@mcp.custom_route("/admin/api/topics/runs/{run_id}/{action}", methods=["POST"])
+async def admin_api_topics_run_action(request: Request) -> Response:
+    return await topics_admin.api_run_action(request)
+
+
+@mcp.custom_route("/admin/api/topics/journal", methods=["GET"])
+async def admin_api_topics_journal(request: Request) -> Response:
+    return await topics_admin.api_journal(request)
+
+
+@mcp.custom_route("/admin/api/topics/settings", methods=["PUT"])
+async def admin_api_topics_settings(request: Request) -> Response:
+    return await topics_admin.api_update_settings(request)
+
+
+@mcp.custom_route("/admin/api/topics/key", methods=["PUT"])
+async def admin_api_topics_key(request: Request) -> Response:
+    return await topics_admin.api_update_key(request)
 
 
 @mcp.custom_route("/admin/assets/pdfjs/{asset_name}", methods=["GET"])

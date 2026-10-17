@@ -60,3 +60,7 @@ Sessions are unlisted through MCP, and session-scoped file reads cannot select a
 ## Strand Proposals Read The Whole Session
 
 Propose with Codex sends every included exchange of the session in one Codex turn. A session longer than about 460,000 characters is refused rather than cut, so nothing is proposed for it yet. Masked model responses are left out, the session title is never sent, and each run uses the plan of the OpenAI account signed in under Settings › Codex.
+
+## Topics Send Titles To OpenRouter
+
+Topics › Classify sends, for each chapter, its title, its session title and its group name to Jev on OpenRouter with your own API key; transcript text is never sent. Chapters in sensitive groups are skipped unless Topics › Settings includes them. A classification belongs to one map version: after editing the map, classify again to see results on the new version. Topics never filter sessions and are not shown to models.

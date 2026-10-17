@@ -223,6 +223,8 @@ class AdminHandlers:
             "graph-viewer.js": "text/javascript",
             "contexts-viewer.css": "text/css",
             "contexts-viewer.js": "text/javascript",
+            "topics-viewer.css": "text/css",
+            "topics-viewer.js": "text/javascript",
             "bridge-identity.js": "text/javascript",
         }
         media_type = media_types.get(asset_name)

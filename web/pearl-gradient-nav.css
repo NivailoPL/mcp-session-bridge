@@ -205,6 +205,25 @@
   --sb-nav-hover: #96e9da;
 }
 
+.sb-nav__tab[data-label="TOPICS"],
+.workspace-nav.sb-nav .sb-nav__tab[data-label="TOPICS"] {
+  --sb-nav-grad-top: #fff1fb;
+  --sb-nav-grad-pearl: #f7c8ea;
+  --sb-nav-grad-mid: #e58fcf;
+  --sb-nav-grad-bottom: #b75aa6;
+  --sb-nav-glow: rgba(229, 143, 207, .42);
+  --sb-nav-hover: #f2b3e1;
+}
+
+/* Four workspaces need a tighter nav before the phone breakpoint. */
+@media (max-width: 1180px) {
+  .sb-nav {
+    --sb-nav-size: 15px;
+    --sb-nav-gap: 24px;
+    --sb-nav-tracking: .12em;
+  }
+}
+
 @media (max-width: 760px) {
   .sb-nav {
     --sb-nav-size: 15px;

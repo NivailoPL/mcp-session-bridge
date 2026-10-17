@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MCP Session Bridge · Topics</title>
+  <link rel="icon" type="image/png" sizes="32x32" href="/admin/assets/brand/png/icon-indigo-32.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/admin/assets/pearl-gradient-nav.css">
+  <link rel="stylesheet" href="/admin/assets/admin-confirmation.css">
+  <link rel="stylesheet" href="/admin/assets/topics-viewer.css">
+</head>
+<body>
+  <header class="workspace-bar">
+    <a class="workspace-brand" href="/admin/sessions" aria-label="MCP Session Bridge Sessions">
+      <img src="/admin/assets/brand/svg/lockup-horizontal-dark.svg" alt="MCP Session Bridge">
+    </a>
+    <nav class="workspace-nav sb-nav" role="tablist" aria-label="Admin workspaces">
+      <a class="sb-nav__tab" role="tab" href="/admin/sessions" aria-selected="false" tabindex="-1" data-label="SESSIONS">SESSIONS</a>
+      <a class="sb-nav__tab" role="tab" href="/admin/contexts" aria-selected="false" tabindex="-1" data-label="CONTEXTS">CONTEXTS</a>
+      <a class="sb-nav__tab" role="tab" href="/admin/topics" aria-current="page" aria-selected="true" tabindex="0" data-label="TOPICS">TOPICS</a>
+      <a class="sb-nav__tab" role="tab" href="/admin/lab" aria-selected="false" tabindex="-1" data-label="LAB">LAB</a>
+    </nav>
+    <div class="workspace-actions">
+      <form method="post" action="/admin/logout"><button class="text-button" type="submit">Log out</button></form>
+    </div>
+  </header>
+
+  <main class="tp-shell">
+    <aside class="tp-steps" aria-label="Topics lab steps">
+      <div class="tp-eyebrow">TOPICS · LAB</div>
+      <p class="tp-lead">Every step runs only when you press its button. Each one is written to the journal.</p>
+      <nav id="steps" class="tp-step-list"></nav>
+      <div id="sideNote" class="tp-side-note"></div>
+    </aside>
+    <section id="view" class="tp-view" aria-live="polite"></section>
+  </main>
+
+  <div id="toast" class="tp-toast" role="status" hidden></div>
+
+  <script src="/admin/assets/pearl-gradient-nav.js"></script>
+  <script src="/admin/assets/admin-confirmation.js"></script>
+  <script src="/admin/assets/topics-viewer.js"></script>
+</body>
+</html>

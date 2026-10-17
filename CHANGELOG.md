@@ -10,6 +10,7 @@ This project follows a lightweight changelog format inspired by Keep a Changelog
 
 - Added a Contexts workspace between Sessions and Lab: build a temporary context from any sessions and files in the bridge and hand it to a model by its `ctx_` ID (NIV-25).
 - Added highlights and chapters inside the session view: mark the exact words that matter to you, and split a session into named exchange ranges by hand or with a Codex proposal you start yourself.
+- Added a Topics lab workspace (phase A): keep a versioned map of topics and, when you press Start, let Jev on OpenRouter pin every chapter to one topic or to Unsorted. Every run, request and raw answer is kept and readable in the admin, as JSON, and with `mcp-bridge topics`.
 
 ### New Features
 
@@ -28,6 +29,11 @@ This project follows a lightweight changelog format inspired by Keep a Changelog
 - Update chapters sends only the new exchanges and the existing chapter titles to Codex; it proposes extensions of existing chapters or new ones, which you accept, discard or revert like any proposal. Redo starts over and keeps hand-made chapters.
 - Hovering the Highlights or Chapters dock opens its panel for a quick jump and closes it when the pointer leaves; clicking pins it. Both panels can stay pinned, and the choice is remembered in the browser.
 - Added a fast cyan spinner wherever Bridge waits on something it sent out: on the Chapters dock and in the panel while Codex works, and in Settings › Codex while sign-in waits for the code.
+- Topics: import a map as JSON, edit names and descriptions (each save is a new version; any version can be made active again), and see each topic's chapter count.
+- Topics › Classify shows how many chapters a run would send, how many sensitive chapters it skips and the estimated cost, then classifies with a progress bar, Pause, Resume and Close. Jev sees only the chapter title, the session title and the group name. Three provider errors in a row or a refused key pause the run.
+- Topics › Results lists every chapter with its topic, confidence and second topic; a chapter opens in its session with the Chapters panel focused on it (`/admin/sessions?session=…&chapter=…`).
+- Topics › Journal records every step and decision; Settings holds the OpenRouter key (stored encrypted, never shown again), the Jev model and the sensitive-groups switch.
+- Added `mcp-bridge topics status|versions|version|journal|run|export`, a read-only view of the lab on the server.
 - Codex actions (sign-in, propose, update, redo) carry the OpenAI mark.
 - Added automatic chapters. The large card in Settings › Chapters now switches a schedule on or off: every 3, 6 or 12 hours, every day at a set time, or on chosen weekdays, in the admin's timezone. Turning it on never fires at once.
 - Added Fill now at the bottom of Settings › Chapters: a progress bar of split sessions, a token estimate (with how it is made), Start, and Pause. Pause lets the session Codex is working on finish and then stops; Resume continues where it stopped and retries sessions that hit a Codex error.

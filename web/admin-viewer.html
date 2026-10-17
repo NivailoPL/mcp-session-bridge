@@ -1967,6 +1967,7 @@
     <nav class="workspace-nav sb-nav" role="tablist" aria-label="Admin workspaces">
       <a class="sb-nav__tab" role="tab" href="/admin/sessions" aria-current="page" aria-selected="true" tabindex="0" data-label="SESSIONS">SESSIONS</a>
       <a class="sb-nav__tab" role="tab" href="/admin/contexts" aria-selected="false" tabindex="-1" data-label="CONTEXTS">CONTEXTS</a>
+      <a class="sb-nav__tab" role="tab" href="/admin/topics" aria-selected="false" tabindex="-1" data-label="TOPICS">TOPICS</a>
       <a class="sb-nav__tab" role="tab" href="/admin/lab" aria-selected="false" tabindex="-1" data-label="LAB">LAB</a>
     </nav>
   </header>
@@ -3114,7 +3115,7 @@
       const anchors = {
         sessionId: "", available: false, highlights: [], strands: [], latestRun: null, codexConfigured: false,
         strandsEnabled: true, chapterState: null, pinned: { highlights: false, chapters: false }, peek: "", peekTimer: 0,
-        pollTimer: 0, focusStrandId: null, newStrandOpen: false, pendingHighlight: null,
+        pollTimer: 0, focusStrandId: null, linkedStrandId: null, newStrandOpen: false, pendingHighlight: null,
       };
       const anchorDom = {
         group: document.getElementById("anchorDocks"),
@@ -3716,6 +3717,7 @@
           state.displayTimezone = me.display_timezone || state.displayTimezone;
           dom.identity.textContent = state.userDisplayName;
           populateTimezoneSelect();
+          applySessionLink();
           await loadSettings();
           await loadOperationalStatus();
           await refreshAll();
@@ -3728,6 +3730,17 @@
           const ok = await enableDemo();
           if (!ok) setStatus(error.message, "error");
         }
+      }
+
+      // /admin/sessions?session=<id>&chapter=<strand id> opens that session (Topics links here).
+      function applySessionLink() {
+        const params = new URLSearchParams(window.location.search);
+        const sessionId = params.get("session");
+        if (!sessionId) return;
+        state.selectedSessionId = sessionId;
+        state.activeGroupId = "all";
+        anchors.linkedStrandId = Number(params.get("chapter")) || null;
+        window.history.replaceState(null, "", window.location.pathname);
       }
 
       async function loadSettings() {
@@ -8587,6 +8600,13 @@
           anchors.available = true;
           anchors.highlights = highlightPayload.highlights || [];
           applyStrandPayload(strandPayload);
+          const linked = anchors.linkedStrandId && anchors.strands.find((item) => item.strand_id === anchors.linkedStrandId);
+          anchors.linkedStrandId = null;
+          if (linked) {
+            anchors.pinned.chapters = true;
+            renderAnchors();
+            focusStrand(linked);
+          }
         } catch (_) {
           if (anchors.sessionId !== sessionId) return;
           anchors.available = false;

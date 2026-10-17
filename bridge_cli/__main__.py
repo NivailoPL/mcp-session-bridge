@@ -25,6 +25,7 @@ from bridge_cli.presentation import TerminalTheme
 from bridge_cli.runner import SubprocessRunner
 from bridge_cli.setup_wizard import SetupInspector, SetupWizard, render_setup_dashboard
 from bridge_cli.validation import normalize_domain
+from bridge_cli import topics as topics_cli
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -115,6 +116,7 @@ def build_parser() -> argparse.ArgumentParser:
     update = commands.add_parser("update", help="Check for or install a stable update.")
     update.add_argument("--check", action="store_true")
     commands.add_parser("rollback", help="Restore the previous managed release.")
+    topics_cli.add_parser(commands)
     return parser
 
 
@@ -192,6 +194,9 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "deploy":
             _require_root("deploy")
             return _deploy(args, layout, runner)
+        if args.command == "topics":
+            _require_root("topics")
+            return topics_cli.run_command(args, layout.db_path)
         if args.command in {"update", "rollback"}:
             from bridge_cli.release import run_release_command
             _require_root(args.command)
