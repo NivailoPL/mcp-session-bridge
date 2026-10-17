@@ -184,7 +184,10 @@ class TopicStoreMixin:
             rows = conn.execute(
                 """
                 SELECT s.strand_id, s.title, s.session_id, se.title AS session_title,
-                       COALESCE(g.name, 'Uncategorized') AS group_name, COALESCE(g.is_sensitive, 0) AS sensitive
+                       se.updated_at AS session_updated_at, se.group_id,
+                       COALESCE(g.name, 'Uncategorized') AS group_name, COALESCE(g.is_sensitive, 0) AS sensitive,
+                       COALESCE(g.color, '#8e93a8') AS group_color, COALESCE(g.icon_key, 'folder') AS group_icon,
+                       (SELECT MIN(r.start_exchange_id) FROM strand_ranges r WHERE r.strand_id = s.strand_id) AS first_exchange_id
                 FROM strands s
                 JOIN sessions se ON se.session_id = s.session_id
                 LEFT JOIN session_groups g ON g.group_id = se.group_id AND g.deleted_at IS NULL
@@ -200,6 +203,11 @@ class TopicStoreMixin:
                 "session_title": row["session_title"],
                 "group_name": row["group_name"],
                 "sensitive": bool(row["sensitive"]),
+                "group_id": row["group_id"],
+                "group_color": row["group_color"],
+                "group_icon": row["group_icon"],
+                "session_updated_at": row["session_updated_at"],
+                "first_exchange_id": row["first_exchange_id"],
             }
             for row in rows
         ]

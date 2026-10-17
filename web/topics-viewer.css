@@ -153,6 +153,31 @@ label.tp-field { display: flex; flex-direction: column; gap: 6px; color: var(--t
 .tp-conf span { height: 5px; border-radius: 999px; background: rgba(255, 255, 255, .08); overflow: hidden; }
 .tp-conf span i { display: block; height: 100%; background: var(--accent-ink); }
 
+/* ---------- results tree: sessions lead, chapters follow ---------- */
+.tp-tree { display: flex; flex-direction: column; gap: 2px; }
+.tp-session { width: 100%; display: grid; grid-template-columns: 14px 32px minmax(0, 1fr) auto 34px; align-items: center; gap: 12px; padding: 8px 10px; border: 1px solid transparent; border-radius: 10px; background: none; color: var(--text); text-align: left; cursor: pointer; }
+.tp-session:hover { background: rgba(255, 255, 255, .035); }
+.tp-node.is-open > .tp-session { background: rgba(255, 255, 255, .03); border-color: var(--stroke); }
+.tp-chev { display: inline-flex; color: var(--muted); transition: transform .15s ease; }
+.tp-chev svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.tp-node.is-open .tp-chev { transform: rotate(90deg); }
+.tp-gicon { position: relative; width: 32px; height: 32px; border-radius: 9px; display: inline-flex; align-items: center; justify-content: center; color: var(--g); background: color-mix(in oklab, var(--g) 10%, transparent); border: 1px solid color-mix(in oklab, var(--g) 34%, transparent); }
+.tp-gicon svg { width: 17px; height: 17px; }
+.tp-eye { position: absolute; right: -5px; bottom: -5px; width: 16px; height: 16px; border-radius: 999px; background: #2a2410; border: 1.5px solid var(--sensitive); color: var(--sensitive); display: flex; align-items: center; justify-content: center; }
+.tp-eye svg { width: 9px; height: 9px; stroke-width: 2.4; }
+.tp-session-title { font-size: 14.5px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tp-dots { display: inline-flex; gap: 3px; }
+.tp-dots i { width: 8px; height: 8px; border-radius: 999px; }
+.tp-session-count { font: 500 12px "Geist Mono", monospace; color: var(--muted); text-align: right; }
+.tp-children { position: relative; margin: 2px 0 10px 32px; padding-left: 22px; border-left: 1px solid var(--stroke-strong); }
+.tp-leaf { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr) 96px minmax(0, 1fr); gap: 12px; align-items: center; padding: 5px 8px; border-radius: 7px; font-size: 12.5px; }
+.tp-leaf:hover { background: rgba(255, 255, 255, .025); }
+.tp-leaf-title { color: var(--text-2); text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tp-leaf-title:hover { color: var(--text); text-decoration: underline; }
+.tp-renamed { color: var(--warn); font-size: 11px; }
+.tp-leaf .tp-topic-pill { font-size: 12px; overflow: hidden; text-overflow: ellipsis; }
+.tp-second { color: var(--muted); }
+
 /* ---------- journal ---------- */
 .tp-journal { display: flex; flex-direction: column; }
 .tp-entry { display: grid; grid-template-columns: 120px 70px minmax(0, 1fr); gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--stroke); font-size: 13px; line-height: 1.5; }
@@ -175,4 +200,6 @@ label.tp-field { display: flex; flex-direction: column; gap: 6px; color: var(--t
   .tp-grid { grid-template-columns: minmax(0, 1fr); }
   .tp-form-2 { grid-template-columns: minmax(0, 1fr); }
   .tp-entry { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+  .tp-leaf { grid-template-columns: minmax(0, 1fr) auto; }
+  .tp-leaf > span:nth-child(n+3) { display: none; }
 }

@@ -31,7 +31,7 @@ This project follows a lightweight changelog format inspired by Keep a Changelog
 - Added a fast cyan spinner wherever Bridge waits on something it sent out: on the Chapters dock and in the panel while Codex works, and in Settings › Codex while sign-in waits for the code.
 - Topics: import a map as JSON, edit names and descriptions (each save is a new version; any version can be made active again), and see each topic's chapter count.
 - Topics › Classify shows how many chapters a run would send, how many sensitive chapters it skips and the estimated cost, then classifies with a progress bar, Pause, Resume and Close. Jev sees only the chapter title, the session title and the group name. Three provider errors in a row or a refused key pause the run.
-- Topics › Results lists every chapter with its topic, confidence and second topic; a chapter opens in its session with the Chapters panel focused on it (`/admin/sessions?session=…&chapter=…`).
+- Topics › Results is a session tree, newest first: each session with its group pictogram, the topics it touches and its chapters underneath with topic, confidence and second topic. Picking a topic shows which sessions it is made of; a chapter opens in its session with the Chapters panel focused on it (`/admin/sessions?session=…&chapter=…`).
 - Topics › Journal records every step and decision; Settings holds the OpenRouter key (stored encrypted, never shown again), the Jev model and the sensitive-groups switch.
 - Added `mcp-bridge topics status|versions|version|journal|run|export`, a read-only view of the lab on the server.
 - Codex actions (sign-in, propose, update, redo) carry the OpenAI mark.

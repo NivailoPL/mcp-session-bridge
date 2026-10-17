@@ -31,6 +31,7 @@
     estimate: null,
     estimateError: "",
     filters: { topic: "", minConf: 0, query: "", sensitive: true },
+    tree: { open: new Set(), closed: new Set() },
     pollTimer: 0,
     busy: false,
   };
@@ -545,74 +546,154 @@
 
   // ---------- 3. results ----------
 
-  function renderResults() {
-    const data = state.assignments;
-    if (!data?.version) return '<h1>Results</h1><p class="tp-sub">Import a map and classify first.</p>';
-    const rows = data.chapters;
-    const counts = topicCounts();
+  // Sessions lead: chapter titles are synthetic and only make sense under the session they belong to.
+  function filteredChapters() {
     const f = state.filters;
     const query = f.query.trim().toLowerCase();
-    const shown = rows.filter((row) => {
+    return (state.assignments?.chapters || []).filter((row) => {
       if (f.topic === "__none") { if (row.topic_key) return false; }
       else if (f.topic && row.topic_key !== f.topic) return false;
       if (!f.sensitive && row.sensitive) return false;
       if (f.minConf && (row.confidence == null || row.confidence < f.minConf)) return false;
       if (query && !`${row.title} ${row.session_title}`.toLowerCase().includes(query)) return false;
       return true;
-    }).sort((a, b) => (a.topic_key || "~").localeCompare(b.topic_key || "~") || (b.confidence ?? 0) - (a.confidence ?? 0));
+    });
+  }
+
+  function sessionTree(rows) {
+    const sessions = new Map();
+    for (const row of rows) {
+      let session = sessions.get(row.session_id);
+      if (!session) {
+        session = { id: row.session_id, title: row.session_title, group: row.group_name, color: row.group_color,
+          icon: row.group_icon, sensitive: row.sensitive, updated: row.session_updated_at || 0, chapters: [] };
+        sessions.set(row.session_id, session);
+      }
+      session.chapters.push(row);
+    }
+    for (const session of sessions.values()) {
+      session.chapters.sort((a, b) => (a.first_exchange_id ?? 0) - (b.first_exchange_id ?? 0));
+    }
+    return [...sessions.values()].sort((a, b) => b.updated - a.updated);
+  }
+
+  function filtersActive() {
+    return Boolean(state.filters.topic || state.filters.query.trim() || state.filters.minConf);
+  }
+
+  function sessionOpen(id) {
+    if (state.tree.open.has(id)) return true;
+    if (state.tree.closed.has(id)) return false;
+    return filtersActive();
+  }
+
+  function resetTree() {
+    state.tree = { open: new Set(), closed: new Set() };
+  }
+
+  function renderResults() {
+    const data = state.assignments;
+    if (!data?.version) return '<h1>Results</h1><p class="tp-sub">Import a map and classify first.</p>';
+    const rows = data.chapters;
+    const counts = topicCounts();
+    const f = state.filters;
+    const shown = filteredChapters();
+    const tree = sessionTree(shown);
     const unclassified = rows.filter((row) => !row.topic_key).length;
     const chips = topics().filter((t) => counts[t.key]).map((t) => `
       <button class="tp-chip" type="button" data-chip="${esc(t.key)}" aria-pressed="${f.topic === t.key}"><i style="background:${esc(t.color)}"></i>${esc(t.name)} <small>${counts[t.key]}</small></button>`).join("");
     return `
       <h1>Results <span class="tp-tag">map v${data.version.version_id}</span></h1>
-      <p class="tp-sub">The latest answer for every chapter on the active map. "Also" is the second topic when Jev gave it at least 20%.
-      Click a chapter to open it in its session.</p>
+      <p class="tp-sub">Sessions, newest first, with the chapters Jev placed. Pick a topic to see which sessions it is made of.</p>
       <div class="tp-chips">
         <button class="tp-chip" type="button" data-chip="" aria-pressed="${!f.topic}">All <small>${rows.length}</small></button>
         ${chips}
         ${unclassified ? `<button class="tp-chip" type="button" data-chip="__none" aria-pressed="${f.topic === "__none"}">Not classified <small>${unclassified}</small></button>` : ""}
       </div>
       <div class="tp-filters">
-        <input class="tp-input" data-query type="search" placeholder="Search chapter or session titles" value="${esc(f.query)}" style="min-width:260px">
+        <input class="tp-input" data-query type="search" placeholder="Search session or chapter titles" value="${esc(f.query)}" style="min-width:260px">
         <label class="tp-check">Min. confidence
           <select class="tp-select" data-minconf>${[0, 0.4, 0.6, 0.8].map((v) => `<option value="${v}"${f.minConf === v ? " selected" : ""}>${v ? pct(v) : "any"}</option>`).join("")}</select></label>
         <label class="tp-check"><input type="checkbox" data-sensitive${f.sensitive ? " checked" : ""}>Show sensitive groups</label>
-        <span class="tp-spacer"></span><span class="tp-muted tp-small">${shown.length} shown</span>
+        <span class="tp-spacer"></span>
+        <span class="tp-muted tp-small">${tree.length} sessions · ${shown.length} chapters</span>
+        <button class="tp-link" type="button" data-tree="open">Expand all</button>
+        <button class="tp-link" type="button" data-tree="close">Collapse all</button>
       </div>
-      <table class="tp-table">
-        <thead><tr><th>Chapter</th><th>Topic</th><th>Confidence</th><th>Also</th></tr></thead>
-        <tbody>${shown.map(resultRow).join("") || '<tr><td colspan="4" class="tp-empty">Nothing matches.</td></tr>'}</tbody>
-      </table>`;
+      <div class="tp-tree" role="tree">
+        ${tree.map(sessionNode).join("") || '<p class="tp-empty">Nothing matches.</p>'}
+      </div>`;
   }
 
-  function resultRow(row) {
+  function sessionNode(session) {
+    const open = sessionOpen(session.id);
+    const topicKeys = [...new Set(session.chapters.map((c) => c.topic_key).filter(Boolean))];
+    const dots = topicKeys.map((key) => {
+      const topic = topicByKey(key);
+      return `<i title="${esc(topic.name)}" style="background:${esc(topic.color)}"></i>`;
+    }).join("");
+    const icon = window.BridgeIdentity ? window.BridgeIdentity.groupIconSvg(session.icon) : "";
+    const eye = session.sensitive && window.BridgeIdentity ? `<span class="tp-eye">${window.BridgeIdentity.sensitiveIconSvg()}</span>` : "";
+    return `
+      <div class="tp-node${open ? " is-open" : ""}" role="treeitem" aria-expanded="${open}">
+        <button class="tp-session" type="button" data-session="${esc(session.id)}">
+          <span class="tp-chev" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"></path></svg></span>
+          <span class="tp-gicon" style="--g:${esc(session.color)}" title="${esc(session.group)}">${icon}${eye}</span>
+          <span class="tp-session-title">${esc(session.title)}</span>
+          <span class="tp-dots">${dots}</span>
+          <span class="tp-session-count">${session.chapters.length}</span>
+        </button>
+        ${open ? `<div class="tp-children" role="group">${session.chapters.map(chapterLeaf).join("")}</div>` : ""}
+      </div>`;
+  }
+
+  function chapterLeaf(row) {
     const topic = row.topic_key ? topicByKey(row.topic_key) : null;
     const second = row.second ? topicByKey(row.second.key) : null;
     const link = `/admin/sessions?session=${encodeURIComponent(row.session_id)}&chapter=${row.strand_id}`;
-    return `<tr>
-      <td class="tp-chapter"><a href="${link}">${esc(row.title)}</a>
-        <div>${esc(row.session_title)} · ${esc(row.group_name)}${row.sensitive ? ' · <span class="tp-tag sensitive">sensitive</span>' : ""}${row.changed ? ' · <span style="color:var(--warn)">renamed since run</span>' : ""}</div></td>
-      <td>${topic ? `<span class="tp-topic-pill"><i style="background:${esc(topic.color)}"></i>${esc(topic.name)}</span>` : '<span class="tp-muted">not classified</span>'}</td>
-      <td>${row.confidence != null ? `<div class="tp-conf"><span><i style="width:${pct(row.confidence)}"></i></span>${pct(row.confidence)}</div>` : ""}</td>
-      <td>${second ? `<span class="tp-topic-pill"><i style="background:${esc(second.color)}"></i>${esc(second.name)} <span class="tp-muted mono">${pct(row.second.p)}</span></span>` : ""}</td>
-    </tr>`;
+    return `
+      <div class="tp-leaf" role="treeitem">
+        <a class="tp-leaf-title" href="${link}" title="Open in the session">${esc(row.title)}${row.changed ? ' <span class="tp-renamed">renamed</span>' : ""}</a>
+        <span>${topic ? `<span class="tp-topic-pill"><i style="background:${esc(topic.color)}"></i>${esc(topic.name)}</span>` : '<span class="tp-muted">not classified</span>'}</span>
+        <span>${row.confidence != null ? `<span class="tp-conf"><span><i style="width:${pct(row.confidence)}"></i></span>${pct(row.confidence)}</span>` : ""}</span>
+        <span>${second ? `<span class="tp-topic-pill tp-second"><i style="background:${esc(second.color)}"></i>${esc(second.name)} ${pct(row.second.p)}</span>` : ""}</span>
+      </div>`;
   }
 
   function bindResults() {
     for (const chip of dom.view.querySelectorAll("[data-chip]")) {
-      chip.addEventListener("click", () => { state.filters.topic = chip.dataset.chip; render(); });
+      chip.addEventListener("click", () => { state.filters.topic = chip.dataset.chip; resetTree(); render(); });
     }
     const query = dom.view.querySelector("[data-query]");
     query?.addEventListener("input", () => {
       state.filters.query = query.value;
+      resetTree();
       const caret = query.selectionStart;
       render();
       const again = dom.view.querySelector("[data-query]");
       again.focus();
       again.setSelectionRange(caret, caret);
     });
-    dom.view.querySelector("[data-minconf]")?.addEventListener("change", (event) => { state.filters.minConf = Number(event.target.value); render(); });
+    dom.view.querySelector("[data-minconf]")?.addEventListener("change", (event) => { state.filters.minConf = Number(event.target.value); resetTree(); render(); });
     dom.view.querySelector("[data-sensitive]")?.addEventListener("change", (event) => { state.filters.sensitive = event.target.checked; render(); });
+    for (const button of dom.view.querySelectorAll("[data-session]")) {
+      button.addEventListener("click", () => {
+        const id = button.dataset.session;
+        const open = sessionOpen(id);
+        state.tree.open.delete(id);
+        state.tree.closed.delete(id);
+        (open ? state.tree.closed : state.tree.open).add(id);
+        render();
+      });
+    }
+    for (const button of dom.view.querySelectorAll("[data-tree]")) {
+      button.addEventListener("click", () => {
+        const ids = sessionTree(filteredChapters()).map((session) => session.id);
+        resetTree();
+        for (const id of ids) (button.dataset.tree === "open" ? state.tree.open : state.tree.closed).add(id);
+        render();
+      });
+    }
   }
 
   // ---------- journal ----------
