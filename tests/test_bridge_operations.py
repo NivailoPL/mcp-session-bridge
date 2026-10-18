@@ -216,7 +216,7 @@ def test_status_keeps_bridge_checks_independent_when_codex_needs_attention(
     layout = Layout.for_root(tmp_path)
     layout.codex_status_file.parent.mkdir(parents=True)
     layout.codex_status_file.write_text(
-        '{"desired_enabled":true,"version":"0.163.0"}', encoding="utf-8"
+        '{"desired_enabled":true,"version":"0.147.0"}', encoding="utf-8"
     )
     layout.codex_service_unit.parent.mkdir(parents=True)
     layout.codex_service_unit.write_text("unit", encoding="utf-8")

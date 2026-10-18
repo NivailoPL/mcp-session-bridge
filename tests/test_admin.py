@@ -1408,7 +1408,7 @@ def test_codex_admin_api_auth_csrf_and_chat_contract(admin_client, load_main) ->
             return {
                 "available": True,
                 "authenticated": True,
-                "version": "0.163.0",
+                "version": "0.147.0",
                 "account": {"type": "chatgpt", "email": "owner@example.com", "plan_type": "plus"},
             }
 
@@ -1442,7 +1442,7 @@ def test_codex_admin_api_auth_csrf_and_chat_contract(admin_client, load_main) ->
     status = client.get("/admin/api/codex/status")
     assert status.status_code == 200
     assert status.headers["cache-control"] == "no-store"
-    assert status.json()["codex"]["version"] == "0.163.0"
+    assert status.json()["codex"]["version"] == "0.147.0"
 
     assert client.post("/admin/api/codex/auth/device/start").status_code == 403
     started = client.post("/admin/api/codex/auth/device/start", headers={"x-csrf-token": csrf})

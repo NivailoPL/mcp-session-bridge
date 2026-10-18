@@ -16,7 +16,7 @@ from app.codex_app_server import (
 
 
 class FakeWebSocket:
-    def __init__(self, *, version: str = "0.163.0", account: dict[str, Any] | None = None):
+    def __init__(self, *, version: str = "0.147.0", account: dict[str, Any] | None = None):
         self.version = version
         self.account = account
         self.sent: list[dict[str, Any]] = []
@@ -108,7 +108,7 @@ def _client(tmp_path: Path, socket: FakeWebSocket) -> CodexAppServerClient:
     return CodexAppServerClient(
         socket_path=tmp_path / "codex.sock",
         workspace_dir=tmp_path / "workspace",
-        expected_version="0.163.0",
+        expected_version="0.147.0",
         connect_factory=connect,
     )
 
@@ -121,7 +121,7 @@ def test_status_and_device_login_expose_no_credentials(tmp_path: Path) -> None:
             "available": True,
             "authenticated": False,
             "account": None,
-            "version": "0.163.0",
+            "version": "0.147.0",
         }
         login = await client.start_device_login()
         assert login == {
@@ -250,7 +250,7 @@ def test_structured_extraction_passes_model_effort_and_output_schema(tmp_path: P
 def test_incompatible_runtime_is_rejected(tmp_path: Path) -> None:
     async def scenario() -> None:
         client = _client(tmp_path, FakeWebSocket(version="0.146.0"))
-        with pytest.raises(CodexIncompatibleVersionError, match="expected 0.163.0"):
+        with pytest.raises(CodexIncompatibleVersionError, match="expected 0.147.0"):
             await client.status()
         await client.close()
 
