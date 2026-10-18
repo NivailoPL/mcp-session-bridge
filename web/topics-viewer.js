@@ -952,7 +952,7 @@
               <input type="checkbox" data-keep="${esc(x.key)}" ${x.keep ? "checked" : ""} aria-label="Keep ${esc(x.name)}">
               <span class="name"><i class="tp-dot" style="background:${esc(x.color)}"></i><span>${esc(x.name)}</span></span>
               <span class="num">${sessions}</span>
-              <span class="num ${cls}">${pt ? (pt.verdict === "ok" ? pct(pt.landed / Math.max(1, pt.intended)) : "!") : "–"}</span></div>`;
+              <span class="num ${cls}" title="${pt ? esc(`${pt.landed} of ${pt.intended} chapters land here in the test${pt.pulled ? `, ${pt.pulled} come from elsewhere` : ""}${pt.verdict === "spreads" ? " (pulls in too many)" : pt.verdict === "weak" ? " (fewer than three quarters land)" : ""}`) : ""}">${pt ? pct(pt.landed / Math.max(1, pt.intended)) : "–"}</span></div>`;
           }).join("")}</div>`).join("")}
           ${p.landing ? `<div class="tp-family"><div class="tp-family-name">Not in a topic</div>
             <div class="tp-review-row" data-focus="${POOL}" aria-current="${poolFocus}">
