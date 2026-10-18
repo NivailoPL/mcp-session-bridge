@@ -57,6 +57,7 @@ def default_topic_settings() -> dict[str, Any]:
         "include_sensitive": False,
         "weak_threshold": 0.0,
         "pool_hint": 15,
+        "codex_timeout_minutes": 10,
     }
 
 
@@ -80,6 +81,9 @@ def validate_topic_settings(payload: Any, current: dict[str, Any] | None = None)
     if isinstance(threshold, bool) or not isinstance(threshold, (int, float)) or not 0 <= threshold < 1:
         raise TopicError("weak_threshold must be between 0 and 1 (0 turns it off).", code="settings_invalid")
     merged["weak_threshold"] = float(threshold)
+    minutes = merged["codex_timeout_minutes"]
+    if isinstance(minutes, bool) or not isinstance(minutes, int) or not 2 <= minutes <= 30:
+        raise TopicError("The proposing time limit is a whole number of minutes from 2 to 30.", code="settings_invalid")
     hint = merged["pool_hint"]
     if isinstance(hint, bool) or not isinstance(hint, int) or not 1 <= hint <= 500:
         raise TopicError("pool_hint must be a whole number from 1 to 500.", code="settings_invalid")

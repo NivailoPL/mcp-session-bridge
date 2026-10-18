@@ -473,6 +473,14 @@ class TopicStoreMixin:
             ).fetchone()
         return _run_payload(row) if row else None
 
+    def latest_proposing_run(self) -> dict[str, Any] | None:
+        """The newest Find or Refine run in any state, so a failure is not silent."""
+        with self._lock, self._connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM topic_runs WHERE kind IN ('find', 'refine') ORDER BY run_id DESC LIMIT 1"
+            ).fetchone()
+        return _run_payload(row) if row else None
+
     # ---------- proposals ----------
 
     def create_topic_proposal(

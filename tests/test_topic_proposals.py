@@ -5,7 +5,7 @@ import asyncio
 
 import pytest
 
-from app.codex_app_server import CodexUnavailableError
+from app.codex_app_server import CodexTimeoutError, CodexUnavailableError
 from app.storage import Store
 from app.topic_runtime import TopicRuntime
 from app.topics import POOL_KEY, TopicError
@@ -36,8 +36,9 @@ class ScriptedCodex:
         self.results = list(results)
         self.prompts: list[str] = []
 
-    async def extract_structured(self, message, *, model, effort, output_schema):
+    async def extract_structured(self, message, *, model, effort, output_schema, timeout_seconds=None):
         self.prompts.append(message)
+        self.timeouts = getattr(self, "timeouts", []) + [timeout_seconds]
         result = self.results.pop(0)
         if isinstance(result, Exception):
             raise result
@@ -249,3 +250,25 @@ def test_codex_failure_leaves_no_proposal(lab) -> None:
     run_row = store.list_topic_runs()[0]
     assert run_row["kind"] == "find" and run_row["status"] == "failed"
     assert store.active_topic_run() is None
+
+
+def test_codex_timeout_uses_the_time_limit_setting_and_is_reported(lab) -> None:
+    store, _ = lab
+    codex = ScriptedCodex(CodexTimeoutError("slow"))
+    rt = runtime_with(store, codex)
+    store.set_topic_settings({"codex_timeout_minutes": 12})
+    find_and_wait(rt)
+    assert codex.timeouts == [720]
+    latest = store.latest_proposing_run()
+    assert latest["status"] == "failed" and latest["error_code"] == "codex_timeout"
+    assert "12 minutes" in latest["error_message"]
+
+
+def test_time_limit_setting_is_validated() -> None:
+    from app.topics import validate_topic_settings
+
+    assert validate_topic_settings({})["codex_timeout_minutes"] == 10
+    with pytest.raises(TopicError):
+        validate_topic_settings({"codex_timeout_minutes": 1})
+    with pytest.raises(TopicError):
+        validate_topic_settings({"codex_timeout_minutes": 45})

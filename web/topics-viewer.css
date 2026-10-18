@@ -246,3 +246,5 @@ details.tp-more[open] summary { margin-bottom: 8px; }
   .tp-manage-nav, .tp-review-list, .tp-edit-list { flex: none; border-right: 0; border-bottom: 1px solid var(--stroke); }
   .tp-form-3 { grid-template-columns: minmax(0, 1fr); }
 }
+.tp-inline { display: flex; align-items: center; gap: 8px; }
+.tp-num { width: 4.5rem; }

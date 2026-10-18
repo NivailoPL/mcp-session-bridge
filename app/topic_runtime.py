@@ -66,7 +66,8 @@ class Classifier(Protocol):
 
 class StructuredCodex(Protocol):
     async def extract_structured(
-        self, message: str, *, model: str, effort: str, output_schema: dict[str, Any]
+        self, message: str, *, model: str, effort: str, output_schema: dict[str, Any],
+        timeout_seconds: float | None = None,
     ) -> dict[str, Any]: ...
 
 
@@ -492,10 +493,18 @@ class TopicRuntime:
             self.job["step"] = "proposing"
         try:
             raw = await self.codex.extract_structured(
-                prompt, model=settings["codex_model"], effort=settings["codex_effort"], output_schema=copy.deepcopy(schema)
+                prompt, model=settings["codex_model"], effort=settings["codex_effort"], output_schema=copy.deepcopy(schema),
+                timeout_seconds=settings["codex_timeout_minutes"] * 60,
             )
-        except (CodexUnavailableError, CodexTimeoutError):
-            await self._fail_run(run_id, "codex_unavailable", "Codex is unavailable or timed out. Nothing changed.")
+        except CodexTimeoutError:
+            await self._fail_run(
+                run_id, "codex_timeout",
+                f"Codex did not answer within {settings['codex_timeout_minutes']} minutes. Raise the time limit or lower "
+                "the reasoning effort, then try again. Nothing changed.",
+            )
+            return None
+        except CodexUnavailableError:
+            await self._fail_run(run_id, "codex_unavailable", "Codex is unavailable. Check Settings › Codex. Nothing changed.")
             return None
         except (CodexAppServerError, ValueError) as exc:
             await self._fail_run(run_id, "codex_failed", f"Codex returned no usable result: {exc}")

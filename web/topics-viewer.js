@@ -588,6 +588,8 @@
       <div class="tp-options">
         <label>Detail
           <select class="tp-select" data-opt="detail">${["broad", "balanced", "fine"].map((d) => `<option value="${d}" ${m.detail === d ? "selected" : ""}>${d[0].toUpperCase() + d.slice(1)}</option>`).join("")}</select></label>
+        <label>Time limit
+          <span class="tp-inline"><input class="tp-input tp-num" type="number" min="2" max="30" step="1" data-opt="timeout" value="${esc(o.settings.codex_timeout_minutes || 10)}"> min <span class="tp-muted" data-opt="timeout-state"></span></span></label>
         <label>Note for the proposal
           <textarea class="tp-textarea" data-opt="note" maxlength="1000" placeholder="e.g. keep health topics together">${esc(m.note)}</textarea></label>
       </div>
@@ -600,6 +602,7 @@
       <span style="display:flex;gap:14px;padding:0 4px"><button type="button" class="tp-link" data-act="import">Import</button>${v ? '<button type="button" class="tp-link" data-act="export">Export</button>' : ""}</span>`;
     dom.manageNav.querySelector('[data-opt="detail"]').addEventListener("change", (e) => { m.detail = e.target.value; });
     dom.manageNav.querySelector('[data-opt="note"]').addEventListener("input", (e) => { m.note = e.target.value; });
+    dom.manageNav.querySelector('[data-opt="timeout"]').addEventListener("change", (e) => saveTimeout(e.target));
     dom.manageNav.querySelector('[data-act="find"]').addEventListener("click", () => startProposing("find"));
     dom.manageNav.querySelector('[data-act="refine"]').addEventListener("click", () => startProposing("refine"));
     dom.manageNav.querySelector('[data-act="import"]').addEventListener("click", () => { m.section = "versions"; m.importOpen = true; renderManage(); });
@@ -616,6 +619,26 @@
       const node = dom.manageMain.querySelector(`.${cls}`);
       if (node) node.scrollTop = top;
     }
+  }
+
+  async function saveTimeout(input) {
+    const stateNode = dom.manageNav.querySelector('[data-opt="timeout-state"]');
+    const minutes = Number(input.value);
+    try {
+      const payload = await request("/admin/api/topics/settings", { method: "PUT", body: { codex_timeout_minutes: minutes } });
+      state.overview.settings = payload.settings || { ...state.overview.settings, codex_timeout_minutes: minutes };
+      stateNode.textContent = "saved";
+    } catch (error) {
+      input.value = state.overview.settings.codex_timeout_minutes || 10;
+      stateNode.textContent = error.message;
+    }
+  }
+
+  function failedNote() {
+    const run = state.overview.last_proposing;
+    if (!run || run.status !== "failed" || jobRunning()) return "";
+    const what = run.kind === "refine" ? "Refine topics" : "Find topics";
+    return `<div class="tp-banner warn">${esc(what)} stopped ${esc(ago(run.finished_at))}: ${esc(run.error_message || "the run failed")}</div>`;
   }
 
   function startProposing(kind) {
@@ -649,7 +672,7 @@
     if (!job || job.kind === "classify") return "";
     const text = job.step === "testing"
       ? `Testing a proposal: sorting every chapter on the candidate map${job.progress ? ` (${job.progress.done} / ${job.progress.total})` : ""}…`
-      : "The proposing model is reading your chapters. This takes a minute or two…";
+      : `The proposing model is reading your chapters. This can take several minutes (time limit ${state.overview.settings.codex_timeout_minutes || 10} min)…`;
     return `<div class="tp-banner info" style="display:flex;gap:10px;align-items:center"><span class="tp-spinner"></span>${esc(text)}</div>`;
   }
 
@@ -661,6 +684,7 @@
     if (first && !jobRunning()) { renderFirstMap(first); return; }
     dom.manageMain.innerHTML = `<div class="tp-pane">
       ${jobBanner()}
+      ${failedNote()}
       <div class="tp-pane-head"><b>${proposals.length ? `${proposals.length} open proposal${proposals.length === 1 ? "" : "s"}` : "Nothing to decide"}</b>
         <span class="tp-muted">${proposals.length ? "Each was tested on all chapters before you see it. Nothing changes until you accept." : version() ? "Find topics looks in Unsorted; Refine topics reviews the whole map." : "Press Find topics to build the first map from Unsorted."}</span></div>
       ${proposals.map(proposalCard).join("")}

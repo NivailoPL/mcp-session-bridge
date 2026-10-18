@@ -448,6 +448,7 @@ class CodexAppServerClient:
         model: str,
         effort: str,
         output_schema: dict[str, Any],
+        timeout_seconds: float | None = None,
     ) -> dict[str, Any]:
         normalized = message.strip()
         if not normalized:
@@ -459,6 +460,7 @@ class CodexAppServerClient:
             thread_id,
             normalized,
             {"model": model, "effort": effort, "outputSchema": output_schema},
+            timeout_seconds=timeout_seconds,
         )
         try:
             result = json.loads(response)
@@ -499,6 +501,7 @@ class CodexAppServerClient:
         thread_id: str,
         message: str,
         options: dict[str, Any],
+        timeout_seconds: float | None = None,
     ) -> str:
         if thread_id not in self._thread_locks:
             raise ValueError("Unknown or expired Codex conversation.")
@@ -522,7 +525,7 @@ class CodexAppServerClient:
                 raise CodexProtocolError("Codex failed to start a turn.")
             state = self._turn_state(turn_id)
             try:
-                await asyncio.wait_for(state.future, timeout=self.turn_timeout_seconds)
+                await asyncio.wait_for(state.future, timeout=timeout_seconds or self.turn_timeout_seconds)
             except TimeoutError as exc:
                 self._schedule_interrupt(thread_id, turn_id)
                 raise CodexTimeoutError("Codex response timed out.") from exc

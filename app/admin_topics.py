@@ -90,6 +90,7 @@ class TopicAdminHandlers:
             "open_proposals": len(open_proposals),
             "last_find": self.store.last_topic_run("find"),
             "last_refine": self.store.last_topic_run("refine"),
+            "last_proposing": self.store.latest_proposing_run(),
             "active_run": self.store.active_topic_run(),
             "running": self.runtime.running(),
             "job": self.runtime.job,

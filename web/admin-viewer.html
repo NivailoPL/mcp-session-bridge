@@ -2929,6 +2929,10 @@
               <div class="settings-item-label"><span class="settings-item-title"><label for="topicCodexEffort">Reasoning effort</label></span></div>
               <div class="settings-item-control"><select id="topicCodexEffort"><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="xhigh">Extra high</option></select></div>
             </div>
+            <div class="settings-item">
+              <div class="settings-item-label"><span class="settings-item-title"><label for="topicCodexTimeout">Time limit</label></span></div>
+              <div class="settings-item-control"><input id="topicCodexTimeout" class="settings-input-mono" type="number" min="2" max="30" step="1" style="width: 5.5rem"> <span class="settings-value-muted">minutes</span></div>
+            </div>
           </section>
           <section class="settings-group">
             <div class="settings-group-head"><h5>Sort and test</h5><span class="settings-value-muted">OpenRouter</span></div>
@@ -9721,6 +9725,7 @@
         topicSettingsDomCache = {
         codexModel: document.getElementById("topicCodexModel"),
         codexEffort: document.getElementById("topicCodexEffort"),
+        codexTimeout: document.getElementById("topicCodexTimeout"),
         jevModel: document.getElementById("topicJevModel"),
         keyInput: document.getElementById("topicKeyInput"),
         keyState: document.getElementById("topicKeyState"),
@@ -9755,6 +9760,7 @@
           const settings = payload.settings;
           topicSettingsDom.codexModel.value = settings.codex_model;
           topicSettingsDom.codexEffort.value = settings.codex_effort;
+          topicSettingsDom.codexTimeout.value = settings.codex_timeout_minutes;
           topicSettingsDom.jevModel.value = settings.jev_model;
           topicSettingsDom.sensitive.checked = settings.include_sensitive;
           topicSettingsDom.poolHint.value = settings.pool_hint;
@@ -9774,6 +9780,7 @@
             body: JSON.stringify({
               codex_model: topicSettingsDom.codexModel.value.trim(),
               codex_effort: topicSettingsDom.codexEffort.value,
+              codex_timeout_minutes: Number(topicSettingsDom.codexTimeout.value),
               jev_model: topicSettingsDom.jevModel.value.trim(),
               include_sensitive: topicSettingsDom.sensitive.checked,
               pool_hint: Number(topicSettingsDom.poolHint.value),
