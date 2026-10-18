@@ -605,8 +605,17 @@
     dom.manageNav.querySelector('[data-act="import"]').addEventListener("click", () => { m.section = "versions"; m.importOpen = true; renderManage(); });
     dom.manageNav.querySelector('[data-act="export"]')?.addEventListener("click", exportMap);
     for (const b of dom.manageNav.querySelectorAll("[data-section]")) b.addEventListener("click", () => { m.section = b.dataset.section; renderManage(); });
+    // Re-rendering replaces the scrolling lists; keep where the owner was (the detail pane starts at the top).
+    const kept = m.section === m.lastSection
+      ? ["tp-review-list", "tp-edit-list", "tp-pane"].map((cls) => [cls, dom.manageMain.querySelector(`.${cls}`)?.scrollTop || 0])
+      : [];
+    m.lastSection = m.section;
     const renderers = { proposals: renderProposals, topics: renderTopicsEditor, versions: renderVersions, journal: renderJournal };
     renderers[m.section]();
+    for (const [cls, top] of kept) {
+      const node = dom.manageMain.querySelector(`.${cls}`);
+      if (node) node.scrollTop = top;
+    }
   }
 
   function startProposing(kind) {
