@@ -65,6 +65,9 @@ def add_parser(commands: argparse._SubParsersAction) -> None:
     run = actions.add_parser("run", help="One run: summary, failures and, with --json, every request and answer.")
     run.add_argument("run_id", type=int)
     run.add_argument("--json", action="store_true", dest="as_json")
+    proposals = actions.add_parser("proposals", help="Proposals with their test results, newest first.")
+    proposals.add_argument("--all", action="store_true", help="Include accepted and rejected ones.")
+    proposals.add_argument("--json", action="store_true", dest="as_json")
     export = actions.add_parser("export", help="Write the whole lab (maps, runs, journal, assignments) to a JSON file.")
     export.add_argument("--out", type=Path, required=True)
 
@@ -89,11 +92,15 @@ def run_command(args: argparse.Namespace, db_path: Path) -> int:
         if export is None:
             raise RuntimeError(f"Unknown run {args.run_id}.")
         return _emit(export, args.as_json, _print_run)
+    if action == "proposals":
+        statuses = None if args.all else ("testing", "pending", "outdated", "failed")
+        return _emit({"proposals": store.list_topic_proposals(statuses)}, args.as_json, _print_proposals)
     if action == "export":
         data = _status(store)
         data["versions"] = [store.get_topic_version(v["version_id"]) for v in store.list_topic_versions()]
         data["runs"] = [run_export(store, r["run_id"]) for r in store.list_topic_runs(limit=1000)]
         data["journal"] = store.list_topic_journal(limit=100_000)
+        data["proposals"] = store.list_topic_proposals(limit=10_000)
         args.out.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
         args.out.chmod(0o600)
         print(f"Wrote {args.out}")
@@ -195,3 +202,19 @@ def _print_run(data: dict[str, Any]) -> None:
         if item["status"] == "failed":
             print(f"  failed: #{item['strand_id']} {item['chapter_title']}: {item['error']}")
     print("Use --json for every request and raw answer.")
+
+
+def _print_proposals(data: dict[str, Any]) -> None:
+    if not data["proposals"]:
+        print("No open proposals.")
+    for p in data["proposals"]:
+        test = p["test"] or {}
+        verdict = test.get("verdict") or test.get("error") or "-"
+        detail = (
+            f"landed {test.get('landed')}/{test.get('intended')}, pulled {test.get('pulled_count')}, "
+            f"confidence {test.get('confidence_before')} -> {test.get('confidence_after')}, "
+            f"unsorted {test.get('pool_before')} -> {test.get('pool_after')}"
+            if "landed" in test else ""
+        )
+        print(f"#{p['proposal_id']} {p['status']:<8} {p['op']:<10} {p['summary']}")
+        print(f"    from {p['source']} · test: {verdict}" + (f" · {detail}" if detail else ""))

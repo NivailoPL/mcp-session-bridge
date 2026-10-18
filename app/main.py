@@ -257,7 +257,7 @@ admin = AdminHandlers(
 contexts_admin = ContextAdminHandlers(admin)
 anchors_admin = AnchorAdminHandlers(admin, strand_runtime, chapter_automation)
 # Topics lab: every Jev run starts from an admin request; there is no scheduler.
-topic_runtime = TopicRuntime(store, key_reader=lambda: topics_admin.read_key())
+topic_runtime = TopicRuntime(store, key_reader=lambda: topics_admin.read_key(), codex=codex)
 topics_admin = TopicAdminHandlers(admin, topic_runtime, ROOT / "web" / "topics-viewer.html")
 
 
@@ -809,6 +809,31 @@ async def admin_api_topics_export_run(request: Request) -> Response:
 @mcp.custom_route("/admin/api/topics/runs/{run_id}/{action}", methods=["POST"])
 async def admin_api_topics_run_action(request: Request) -> Response:
     return await topics_admin.api_run_action(request)
+
+
+@mcp.custom_route("/admin/api/topics/find", methods=["POST"])
+async def admin_api_topics_find(request: Request) -> Response:
+    return await topics_admin.api_find(request)
+
+
+@mcp.custom_route("/admin/api/topics/refine", methods=["POST"])
+async def admin_api_topics_refine(request: Request) -> Response:
+    return await topics_admin.api_refine(request)
+
+
+@mcp.custom_route("/admin/api/topics/test", methods=["POST"])
+async def admin_api_topics_test(request: Request) -> Response:
+    return await topics_admin.api_test_edit(request)
+
+
+@mcp.custom_route("/admin/api/topics/proposals", methods=["GET"])
+async def admin_api_topics_proposals(request: Request) -> Response:
+    return await topics_admin.api_proposals(request)
+
+
+@mcp.custom_route("/admin/api/topics/proposals/{proposal_id}/{action}", methods=["POST"])
+async def admin_api_topics_proposal_action(request: Request) -> Response:
+    return await topics_admin.api_proposal_action(request)
 
 
 @mcp.custom_route("/admin/api/topics/journal", methods=["GET"])

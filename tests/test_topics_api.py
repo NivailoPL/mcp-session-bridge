@@ -112,3 +112,18 @@ def test_settings_validation_and_version_activation(load_main, admin_client) -> 
     assert client.get("/admin/api/topics/versions/999").status_code == 404
     bad_map = client.post("/admin/api/topics/versions", json={"topics": [{"key": "X"}]}, headers=headers)
     assert bad_map.status_code == 422
+
+
+def test_find_and_proposal_routes(load_main, admin_client) -> None:
+    main, client, headers, _ = _setup(load_main, admin_client)
+    assert client.post("/admin/api/topics/find", json={}, headers=headers).json()["code"] == "key_missing"
+    client.put("/admin/api/topics/key", json={"api_key": "sk-or-secret"}, headers=headers)
+    main.topic_runtime.codex = None
+    refused = client.post("/admin/api/topics/find", json={"detail": "fine"}, headers=headers)
+    assert refused.status_code == 409 and refused.json()["code"] == "codex_unavailable"
+    bad = client.post("/admin/api/topics/find", json={"detail": "huge"}, headers=headers)
+    assert bad.status_code in (409, 422)
+    assert client.get("/admin/api/topics/proposals").json()["proposals"] == []
+    assert client.post("/admin/api/topics/proposals/99/accept", json={}, headers=headers).status_code == 404
+    overview = client.get("/admin/api/topics").json()
+    assert overview["pool_count"] == 2 and overview["pending_proposals"] == 0 and overview["job"] is None

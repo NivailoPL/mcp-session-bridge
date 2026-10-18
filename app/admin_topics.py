@@ -22,10 +22,10 @@ if TYPE_CHECKING:
     from app.admin import AdminHandlers
     from app.topic_runtime import TopicRuntime
 
-_NOT_FOUND_CODES = {"version_unknown", "run_unknown"}
+_NOT_FOUND_CODES = {"version_unknown", "run_unknown", "proposal_unknown"}
 _CONFLICT_CODES = {
     "run_active", "run_paused", "run_not_paused", "run_not_running", "map_changed", "feature_off",
-    "key_missing", "map_missing", "nothing_to_do",
+    "key_missing", "map_missing", "nothing_to_do", "proposal_closed", "proposal_outdated", "codex_unavailable",
 }
 SECOND_TOPIC_MIN = 0.2
 OPENROUTER_KEY_MAX_CHARS = 300
@@ -73,9 +73,11 @@ class TopicAdminHandlers:
     def _overview(self) -> dict[str, Any]:
         settings = self.store.get_topic_settings()
         version = self.store.active_topic_version()
+        open_proposals = self.store.list_topic_proposals(("testing", "pending", "outdated", "failed"))
         return {
             "enabled": self.store.topics_enabled(),
             "key_set": bool(self.read_key()),
+            "codex_configured": self.runtime.codex is not None,
             "settings": settings,
             "defaults": default_topic_settings(),
             "active_version": version,
@@ -83,8 +85,15 @@ class TopicAdminHandlers:
             "counts": self.store.topic_overview_counts(
                 version["version_id"] if version else None, settings["include_sensitive"]
             ),
+            "pool_count": len(self.runtime.pool_chapters()),
+            "pending_proposals": sum(1 for p in open_proposals if p["status"] == "pending"),
+            "open_proposals": len(open_proposals),
+            "last_find": self.store.last_topic_run("find"),
+            "last_refine": self.store.last_topic_run("refine"),
             "active_run": self.store.active_topic_run(),
             "running": self.runtime.running(),
+            "job": self.runtime.job,
+            "cost_per_chapter_usd": round(self.runtime.cost_per_chapter(), 6),
             "runs": self.store.list_topic_runs(10),
         }
 
@@ -139,14 +148,7 @@ class TopicAdminHandlers:
         if self.runtime.running():
             return self._error("Wait for the running classification before changing the map.", 409, "run_active")
 
-        def activate() -> dict[str, Any]:
-            version = self.store.activate_topic_version(version_id)
-            self.store.add_topic_journal(
-                "owner", "map.activate", f"Made map v{version_id} active again.", version_id=version_id
-            )
-            return {"version": version}
-
-        return self._call(activate)
+        return self._call(lambda: {"version": self.runtime.restore(version_id, actor="owner")})
 
     async def api_assignments(self, request: Request) -> Response:
         _, error = self.admin._require_admin(request)
@@ -247,6 +249,68 @@ class TopicAdminHandlers:
         except TopicError as exc:
             return self._domain_error(exc)
         return self._ok({"run": run})
+
+    # ---------- find, refine, proposals ----------
+
+    async def api_find(self, request: Request) -> Response:
+        return await self._start(request, "find")
+
+    async def api_refine(self, request: Request) -> Response:
+        return await self._start(request, "refine")
+
+    async def _start(self, request: Request, kind: str) -> Response:
+        payload, session, error = await self._mutation(request, allowed={"detail", "note"}, allow_empty=True)
+        if error:
+            return error
+        starter = self.runtime.start_find if kind == "find" else self.runtime.start_refine
+        try:
+            run = await starter(payload, actor=session["username"])
+        except TopicError as exc:
+            return self._domain_error(exc)
+        return JSONResponse({"ok": True, "run": run}, status_code=202, headers=self.admin._no_store_headers())
+
+    async def api_test_edit(self, request: Request) -> Response:
+        payload, session, error = await self._mutation(request, allowed={"topics", "note"})
+        if error:
+            return error
+        try:
+            proposal = await self.runtime.start_test_edit(payload.get("topics"), note=payload.get("note"),
+                                                          actor=session["username"])
+        except TopicError as exc:
+            return self._domain_error(exc)
+        return JSONResponse({"ok": True, "proposal": proposal}, status_code=202, headers=self.admin._no_store_headers())
+
+    async def api_proposals(self, request: Request) -> Response:
+        _, error = self.admin._require_admin(request)
+        if error:
+            return error
+        statuses = None if request.query_params.get("all") == "1" else ("testing", "pending", "outdated", "failed")
+        return self._ok({"proposals": self.store.list_topic_proposals(statuses), "job": self.runtime.job})
+
+    async def api_proposal_action(self, request: Request) -> Response:
+        payload, session, error = await self._mutation(request, allowed={"note", "topics"}, allow_empty=True)
+        if error:
+            return error
+        proposal_id, id_error = _int_param(request, "proposal_id")
+        if id_error:
+            return id_error
+        action = request.path_params.get("action")
+        actor = session["username"]
+        note = payload.get("note") or ""
+        try:
+            if action == "accept":
+                body = await asyncio.to_thread(self.runtime.accept, proposal_id, actor=actor, note=note)
+            elif action == "reject":
+                body = await asyncio.to_thread(self.runtime.reject, proposal_id, actor=actor, note=note)
+            elif action == "retest":
+                body = {"proposal": await self.runtime.retest(proposal_id, actor=actor)}
+            elif action == "revise":
+                body = {"proposal": await self.runtime.revise(proposal_id, payload.get("topics"), actor=actor)}
+            else:
+                return self._error("Unknown action.", 404, "action_unknown")
+        except TopicError as exc:
+            return self._domain_error(exc)
+        return self._ok(body)
 
     async def api_journal(self, request: Request) -> Response:
         _, error = self.admin._require_admin(request)

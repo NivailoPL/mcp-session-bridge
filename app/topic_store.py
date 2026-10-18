@@ -86,6 +86,25 @@ CREATE TABLE IF NOT EXISTS topic_run_items (
 
 CREATE INDEX IF NOT EXISTS idx_topic_run_items_strand ON topic_run_items(strand_id, run_id DESC);
 
+CREATE TABLE IF NOT EXISTS topic_proposals (
+    proposal_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_id INTEGER,
+    base_version_id INTEGER,
+    candidate_version_id INTEGER,
+    test_run_id INTEGER,
+    op TEXT NOT NULL,
+    source TEXT NOT NULL,
+    status TEXT NOT NULL CHECK (status IN ('testing', 'pending', 'accepted', 'rejected', 'outdated', 'failed')),
+    summary TEXT NOT NULL,
+    payload_json TEXT NOT NULL,
+    test_json TEXT,
+    decision_note TEXT,
+    created_at INTEGER NOT NULL,
+    decided_at INTEGER
+);
+
+CREATE INDEX IF NOT EXISTS idx_topic_proposals_status ON topic_proposals(status, proposal_id DESC);
+
 CREATE TABLE IF NOT EXISTS topic_journal (
     event_id INTEGER PRIMARY KEY AUTOINCREMENT,
     created_at INTEGER NOT NULL,
@@ -97,6 +116,16 @@ CREATE TABLE IF NOT EXISTS topic_journal (
     data_json TEXT
 );
 """
+
+# Columns added after the first release of these tables. (table, column, declaration)
+TOPIC_LATER_COLUMNS = (
+    ("topic_map_versions", "is_candidate", "INTEGER NOT NULL DEFAULT 0"),
+    ("topic_runs", "adopted", "INTEGER NOT NULL DEFAULT 0"),
+    ("topic_runs", "proposal_id", "INTEGER"),
+)
+
+PROPOSAL_OPS = ("first_map", "new_topic", "split", "redescribe", "edit")
+PROPOSAL_STATUSES = ("testing", "pending", "accepted", "rejected", "outdated", "failed")
 
 
 class TopicStoreMixin:
@@ -128,9 +157,16 @@ class TopicStoreMixin:
     # ---------- map versions ----------
 
     def create_topic_version(
-        self, topics: Any, *, origin: str, actor: str, note: Any = None, parent_id: int | None = None
+        self,
+        topics: Any,
+        *,
+        origin: str,
+        actor: str,
+        note: Any = None,
+        parent_id: int | None = None,
+        candidate: bool = False,
     ) -> dict[str, Any]:
-        """Store a new map version and make it the active one."""
+        """Store a new map version and make it active, or keep it as an untested candidate."""
         normalized = validate_topic_map(topics)
         note_text = validate_note(note)
         now = int(time.time())
@@ -139,25 +175,31 @@ class TopicStoreMixin:
                 "SELECT 1 FROM topic_map_versions WHERE version_id = ?", (parent_id,)
             ).fetchone() is None:
                 raise TopicError("Unknown parent map version.", code="version_unknown")
-            conn.execute("UPDATE topic_map_versions SET is_active = 0 WHERE is_active = 1")
+            if not candidate:
+                conn.execute("UPDATE topic_map_versions SET is_active = 0 WHERE is_active = 1")
             cursor = conn.execute(
                 """
-                INSERT INTO topic_map_versions (parent_id, origin, note, topics_json, is_active, created_by, created_at)
-                VALUES (?, ?, ?, ?, 1, ?, ?)
+                INSERT INTO topic_map_versions (parent_id, origin, note, topics_json, is_active, is_candidate,
+                                                created_by, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (parent_id, origin, note_text, json.dumps(normalized, ensure_ascii=False), actor, now),
+                (parent_id, origin, note_text, json.dumps(normalized, ensure_ascii=False),
+                 0 if candidate else 1, 1 if candidate else 0, actor, now),
             )
             version_id = int(cursor.lastrowid)
             row = conn.execute("SELECT * FROM topic_map_versions WHERE version_id = ?", (version_id,)).fetchone()
         return _version_payload(row)
 
     def activate_topic_version(self, version_id: int) -> dict[str, Any]:
+        """Make a version active; a tested candidate becomes a saved version on the way."""
         with self._lock, self._connect() as conn:
             row = conn.execute("SELECT * FROM topic_map_versions WHERE version_id = ?", (version_id,)).fetchone()
             if row is None:
                 raise TopicError("Unknown map version.", code="version_unknown")
             conn.execute("UPDATE topic_map_versions SET is_active = 0 WHERE is_active = 1")
-            conn.execute("UPDATE topic_map_versions SET is_active = 1 WHERE version_id = ?", (version_id,))
+            conn.execute(
+                "UPDATE topic_map_versions SET is_active = 1, is_candidate = 0 WHERE version_id = ?", (version_id,)
+            )
             row = conn.execute("SELECT * FROM topic_map_versions WHERE version_id = ?", (version_id,)).fetchone()
         return _version_payload(row)
 
@@ -173,7 +215,9 @@ class TopicStoreMixin:
 
     def list_topic_versions(self) -> list[dict[str, Any]]:
         with self._lock, self._connect() as conn:
-            rows = conn.execute("SELECT * FROM topic_map_versions ORDER BY version_id DESC").fetchall()
+            rows = conn.execute(
+                "SELECT * FROM topic_map_versions WHERE is_candidate = 0 ORDER BY version_id DESC"
+            ).fetchall()
         return [_version_payload(row, with_topics=False) for row in rows]
 
     # ---------- chapters and assignments ----------
@@ -187,7 +231,9 @@ class TopicStoreMixin:
                        se.updated_at AS session_updated_at, se.group_id,
                        COALESCE(g.name, 'Uncategorized') AS group_name, COALESCE(g.is_sensitive, 0) AS sensitive,
                        COALESCE(g.color, '#8e93a8') AS group_color, COALESCE(g.icon_key, 'folder') AS group_icon,
-                       (SELECT MIN(r.start_exchange_id) FROM strand_ranges r WHERE r.strand_id = s.strand_id) AS first_exchange_id
+                       (SELECT MIN(r.start_exchange_id) FROM strand_ranges r WHERE r.strand_id = s.strand_id) AS first_exchange_id,
+                       (SELECT MIN(e.created_at) FROM strand_ranges r JOIN exchanges e ON e.exchange_id = r.start_exchange_id
+                        WHERE r.strand_id = s.strand_id) AS first_at
                 FROM strands s
                 JOIN sessions se ON se.session_id = s.session_id
                 LEFT JOIN session_groups g ON g.group_id = se.group_id AND g.deleted_at IS NULL
@@ -208,6 +254,7 @@ class TopicStoreMixin:
                 "group_icon": row["group_icon"],
                 "session_updated_at": row["session_updated_at"],
                 "first_exchange_id": row["first_exchange_id"],
+                "first_at": row["first_at"],
             }
             for row in rows
         ]
@@ -219,7 +266,7 @@ class TopicStoreMixin:
                 """
                 SELECT i.* FROM topic_run_items i
                 JOIN topic_runs r ON r.run_id = i.run_id
-                WHERE r.version_id = ? AND r.kind = 'classify' AND i.status = 'done'
+                WHERE r.version_id = ? AND (r.kind = 'classify' OR r.adopted = 1) AND i.status = 'done'
                 ORDER BY i.run_id
                 """,
                 (version_id,),
@@ -255,26 +302,32 @@ class TopicStoreMixin:
         self,
         *,
         kind: str,
-        version_id: int,
+        version_id: int | None,
         scope: dict[str, Any],
         settings: dict[str, Any],
         chapters: list[dict[str, Any]],
         skipped: list[dict[str, Any]],
         input_data: dict[str, Any],
         actor: str,
+        proposal_id: int | None = None,
+        exclusive: bool = True,
     ) -> dict[str, Any]:
         now = int(time.time())
         with self._lock, self._connect() as conn:
-            if conn.execute("SELECT 1 FROM topic_runs WHERE status IN ('queued', 'running')").fetchone():
+            if version_id is None:
+                # Find topics on an empty map has no version yet; 0 marks "no map".
+                conn.execute("PRAGMA foreign_keys=OFF")
+                version_id = 0
+            if exclusive and conn.execute("SELECT 1 FROM topic_runs WHERE status IN ('queued', 'running')").fetchone():
                 raise TopicError("Another topics run is in progress.", code="run_active")
             cursor = conn.execute(
                 """
                 INSERT INTO topic_runs (kind, version_id, status, scope_json, settings_json, input_json,
-                                        total_count, skipped_count, created_by, created_at)
-                VALUES (?, ?, 'queued', ?, ?, ?, ?, ?, ?, ?)
+                                        total_count, skipped_count, created_by, created_at, proposal_id)
+                VALUES (?, ?, 'queued', ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (kind, version_id, json.dumps(scope), json.dumps(settings), json.dumps(input_data, ensure_ascii=False),
-                 len(chapters), len(skipped), actor, now),
+                 len(chapters), len(skipped), actor, now, proposal_id),
             )
             run_id = int(cursor.lastrowid)
             conn.executemany(
@@ -389,6 +442,120 @@ class TopicStoreMixin:
             row = conn.execute("SELECT * FROM topic_runs WHERE run_id = ?", (run_id,)).fetchone()
         return _run_payload(row) if row else None
 
+    def set_topic_run_output(self, run_id: int, output: Any) -> None:
+        with self._lock, self._connect() as conn:
+            conn.execute(
+                "UPDATE topic_runs SET output_json = ? WHERE run_id = ?",
+                (json.dumps(output, ensure_ascii=False), run_id),
+            )
+
+    def adopt_topic_run(self, run_id: int) -> None:
+        """A test run whose candidate was accepted becomes the classification of that version."""
+        with self._lock, self._connect() as conn:
+            conn.execute("UPDATE topic_runs SET adopted = 1 WHERE run_id = ?", (run_id,))
+
+    def get_topic_run_output(self, run_id: int) -> Any:
+        with self._lock, self._connect() as conn:
+            row = conn.execute("SELECT output_json FROM topic_runs WHERE run_id = ?", (run_id,)).fetchone()
+        return json.loads(row["output_json"]) if row and row["output_json"] else None
+
+    def topic_run_assignments(self, run_id: int) -> dict[int, dict[str, Any]]:
+        with self._lock, self._connect() as conn:
+            rows = conn.execute(
+                "SELECT * FROM topic_run_items WHERE run_id = ? AND status = 'done'", (run_id,)
+            ).fetchall()
+        return {row["strand_id"]: _item_payload(row) for row in rows}
+
+    def last_topic_run(self, kind: str) -> dict[str, Any] | None:
+        with self._lock, self._connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM topic_runs WHERE kind = ? AND status = 'completed' ORDER BY run_id DESC LIMIT 1", (kind,)
+            ).fetchone()
+        return _run_payload(row) if row else None
+
+    # ---------- proposals ----------
+
+    def create_topic_proposal(
+        self,
+        *,
+        run_id: int | None,
+        base_version_id: int | None,
+        op: str,
+        source: str,
+        summary: str,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        if op not in PROPOSAL_OPS:
+            raise ValueError(f"Unknown proposal op {op}")
+        now = int(time.time())
+        with self._lock, self._connect() as conn:
+            cursor = conn.execute(
+                """
+                INSERT INTO topic_proposals (run_id, base_version_id, op, source, status, summary, payload_json, created_at)
+                VALUES (?, ?, ?, ?, 'testing', ?, ?, ?)
+                """,
+                (run_id, base_version_id, op, source, summary[:300], json.dumps(payload, ensure_ascii=False), now),
+            )
+            row = conn.execute("SELECT * FROM topic_proposals WHERE proposal_id = ?", (cursor.lastrowid,)).fetchone()
+        return _proposal_payload(row)
+
+    def update_topic_proposal(self, proposal_id: int, **fields: Any) -> dict[str, Any]:
+        allowed = {"status", "candidate_version_id", "test_run_id", "test", "payload", "decision_note", "decided_at",
+                   "summary", "base_version_id"}
+        if not set(fields) <= allowed:
+            raise ValueError(f"Unknown proposal fields: {set(fields) - allowed}")
+        columns = {
+            "test": ("test_json", lambda v: json.dumps(v, ensure_ascii=False) if v is not None else None),
+            "payload": ("payload_json", lambda v: json.dumps(v, ensure_ascii=False)),
+        }
+        sets, params = [], []
+        for key, value in fields.items():
+            column, convert = columns.get(key, (key, lambda v: v))
+            sets.append(f"{column} = ?")
+            params.append(convert(value))
+        with self._lock, self._connect() as conn:
+            conn.execute(f"UPDATE topic_proposals SET {', '.join(sets)} WHERE proposal_id = ?", (*params, proposal_id))
+            row = conn.execute("SELECT * FROM topic_proposals WHERE proposal_id = ?", (proposal_id,)).fetchone()
+        if row is None:
+            raise TopicError("Unknown proposal.", code="proposal_unknown")
+        return _proposal_payload(row)
+
+    def get_topic_proposal(self, proposal_id: int) -> dict[str, Any] | None:
+        with self._lock, self._connect() as conn:
+            row = conn.execute("SELECT * FROM topic_proposals WHERE proposal_id = ?", (proposal_id,)).fetchone()
+        return _proposal_payload(row) if row else None
+
+    def list_topic_proposals(self, statuses: tuple[str, ...] | None = None, limit: int = 100) -> list[dict[str, Any]]:
+        with self._lock, self._connect() as conn:
+            if statuses:
+                marks = ",".join("?" for _ in statuses)
+                rows = conn.execute(
+                    f"SELECT * FROM topic_proposals WHERE status IN ({marks}) ORDER BY proposal_id DESC LIMIT ?",
+                    (*statuses, limit),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    "SELECT * FROM topic_proposals ORDER BY proposal_id DESC LIMIT ?", (limit,)
+                ).fetchall()
+        return [_proposal_payload(row) for row in rows]
+
+    def outdate_topic_proposals(self, active_version_id: int | None) -> int:
+        """Proposals built on another map version can no longer be accepted as they are."""
+        with self._lock, self._connect() as conn:
+            return conn.execute(
+                """
+                UPDATE topic_proposals SET status = 'outdated'
+                WHERE status IN ('pending', 'testing') AND COALESCE(base_version_id, -1) != COALESCE(?, -1)
+                """,
+                (active_version_id,),
+            ).rowcount
+
+    def rejected_topic_proposals(self, limit: int = 30) -> list[dict[str, Any]]:
+        return [
+            {"summary": item["summary"], "note": item["decision_note"]}
+            for item in self.list_topic_proposals(("rejected",), limit=limit)
+        ]
+
     def get_topic_run_input(self, run_id: int) -> dict[str, Any] | None:
         with self._lock, self._connect() as conn:
             row = conn.execute("SELECT input_json FROM topic_runs WHERE run_id = ?", (run_id,)).fetchone()
@@ -404,7 +571,11 @@ class TopicStoreMixin:
     def active_topic_run(self) -> dict[str, Any] | None:
         with self._lock, self._connect() as conn:
             row = conn.execute(
-                "SELECT * FROM topic_runs WHERE status IN ('queued', 'running', 'paused') ORDER BY run_id DESC LIMIT 1"
+                """
+                SELECT * FROM topic_runs
+                WHERE status IN ('queued', 'running') OR (status = 'paused' AND kind = 'classify')
+                ORDER BY run_id DESC LIMIT 1
+                """
             ).fetchone()
         return _run_payload(row) if row else None
 
@@ -417,6 +588,14 @@ class TopicStoreMixin:
                 """
                 UPDATE topic_runs SET status = 'paused', finished_at = ?, error_code = 'interrupted',
                        error_message = 'Bridge restarted during the run. Resume to finish it.'
+                WHERE status IN ('queued', 'running') AND kind = 'classify'
+                """,
+                (now,),
+            )
+            conn.execute(
+                """
+                UPDATE topic_runs SET status = 'failed', finished_at = ?, error_code = 'interrupted',
+                       error_message = 'Bridge restarted during the run. Start it again.'
                 WHERE status IN ('queued', 'running')
                 """,
                 (now,),
@@ -482,6 +661,7 @@ def _version_payload(row: sqlite3.Row, *, with_topics: bool = True) -> dict[str,
         "created_by": row["created_by"],
         "created_at": row["created_at"],
         "topic_count": sum(1 for topic in topics if topic["key"] != POOL_KEY),
+        "is_candidate": bool(row["is_candidate"]) if "is_candidate" in row.keys() else False,
     }
     if with_topics:
         payload["topics"] = topics
@@ -508,6 +688,8 @@ def _run_payload(row: sqlite3.Row) -> dict[str, Any]:
         "created_at": row["created_at"],
         "started_at": row["started_at"],
         "finished_at": row["finished_at"],
+        "adopted": bool(row["adopted"]) if "adopted" in row.keys() else False,
+        "proposal_id": row["proposal_id"] if "proposal_id" in row.keys() else None,
     }
 
 
@@ -527,6 +709,25 @@ def _item_payload(row: sqlite3.Row, *, raw: bool = False) -> dict[str, Any]:
         payload["request"] = json.loads(row["request_json"]) if row["request_json"] else None
         payload["response"] = json.loads(row["response_json"]) if row["response_json"] else None
     return payload
+
+
+def _proposal_payload(row: sqlite3.Row) -> dict[str, Any]:
+    return {
+        "proposal_id": row["proposal_id"],
+        "run_id": row["run_id"],
+        "base_version_id": row["base_version_id"],
+        "candidate_version_id": row["candidate_version_id"],
+        "test_run_id": row["test_run_id"],
+        "op": row["op"],
+        "source": row["source"],
+        "status": row["status"],
+        "summary": row["summary"],
+        "payload": json.loads(row["payload_json"]),
+        "test": json.loads(row["test_json"]) if row["test_json"] else None,
+        "decision_note": row["decision_note"],
+        "created_at": row["created_at"],
+        "decided_at": row["decided_at"],
+    }
 
 
 def _journal_payload(row: sqlite3.Row) -> dict[str, Any]:
