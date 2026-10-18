@@ -27,7 +27,7 @@ from typing import Any, Protocol
 from app.codex_app_server import CodexAppServerError, CodexTimeoutError, CodexUnavailableError
 from app.jev_client import JevClient, JevError
 from app.storage import Store
-from app.topic_changes import build_candidate, evaluate_test
+from app.topic_changes import build_candidate, evaluate_test, family_colors
 from app.topic_prompts import (
     DETAIL_LEVELS,
     FIND_SCHEMA,
@@ -766,6 +766,34 @@ class TopicRuntime:
             data={"proposal_id": proposal_id},
         )
         return {"proposal": rejected}
+
+    def recolor(self, *, actor: str) -> dict[str, Any]:
+        version = self.store.active_topic_version()
+        if version is None:
+            raise TopicError("There is no map to recolor.", code="map_missing")
+        updated = self.store.set_topic_version_colors(version["version_id"], family_colors(version["topics"]))
+        self.store.add_topic_journal(
+            "owner", "map.recolor", f"Colored map v{version['version_id']} by family.", version_id=version["version_id"]
+        )
+        return updated
+
+    def start_over(self, *, actor: str) -> dict[str, Any]:
+        """Switch the map off: every chapter is Unsorted again. Versions stay and can be restored."""
+        if self.running():
+            raise TopicError("Wait for the running step to finish.", code="run_active")
+        version = self.store.active_topic_version()
+        if version is None:
+            raise TopicError("There is no active map.", code="map_missing")
+        self.store.deactivate_topic_versions()
+        outdated = self.store.outdate_topic_proposals(None)
+        self.store.add_topic_journal(
+            "owner", "map.start_over",
+            f"Switched map v{version['version_id']} off to start over; every chapter is Unsorted. "
+            "The version stays in Versions and can be restored"
+            + (f"; {outdated} proposals need a new test." if outdated else "."),
+            version_id=version["version_id"],
+        )
+        return {"previous_version_id": version["version_id"], "outdated": outdated}
 
     def restore(self, version_id: int, *, actor: str) -> dict[str, Any]:
         if self.running():

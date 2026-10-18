@@ -28,6 +28,41 @@ MOVES_SHOWN = 80
 SPREAD = [PALETTE[(index * 5) % len(PALETTE)] for index in range(len(PALETTE))]
 
 
+def _hsl_hex(h: float, s: float, l: float) -> str:
+    import colorsys
+
+    r, g, b = colorsys.hls_to_rgb((h % 360) / 360, l, s)
+    return "#{:02x}{:02x}{:02x}".format(round(r * 255), round(g * 255), round(b * 255))
+
+
+def family_colors(topics: list[dict[str, Any]]) -> dict[str, str]:
+    """One hue per family, spread around the wheel; topics of a family are close shades of it.
+
+    Deterministic: the same families in the same order always give the same colors.
+    """
+    families: list[str] = []
+    members: dict[str, list[str]] = {}
+    for t in topics:
+        if t["key"] == POOL_KEY:
+            continue
+        family = t.get("family") or "Other"
+        if family not in members:
+            families.append(family)
+            members[family] = []
+        members[family].append(t["key"])
+    colors: dict[str, str] = {}
+    count = max(1, len(families))
+    for index, family in enumerate(families):
+        hue = 235 + index * 360 / count
+        keys = members[family]
+        n = len(keys)
+        spread = min(26.0, 300 / count / 2)
+        for j, key in enumerate(keys):
+            step = j / (n - 1) if n > 1 else 0.5
+            colors[key] = _hsl_hex(hue - spread / 2 + spread * step, 0.72, 0.72 - 0.2 * step)
+    return colors
+
+
 def _next_colors(used: set[str]) -> list[str]:
     free = [color for color in SPREAD if color not in used]
     return free or SPREAD[:]
@@ -49,13 +84,15 @@ def build_candidate(active_topics: list[dict[str, str]], op: str, payload: dict[
         }
 
     if op == "first_map":
-        return [topic(item) for item in payload["topics"] if item.get("keep", True)]
+        kept = [topic(item) for item in payload["topics"] if item.get("keep", True)]
+        shades = family_colors(kept)
+        return [dict(t, color=shades[t["key"]]) for t in kept]
     if op == "edit":
         return [topic(item) for item in payload["topics"]]
     if op == "new_topic":
         source = next((t for t in base if t["key"] == payload.get("target")), None)
         family = payload.get("family") or (source["family"] if source else None)
-        return base + [topic(payload["parts"][0], family=family)]
+        return _shade_new(base + [topic(payload["parts"][0], family=family)], {payload["parts"][0]["key"]})
     if op == "split":
         out = []
         for t in base:
@@ -64,10 +101,16 @@ def build_candidate(active_topics: list[dict[str, str]], op: str, payload: dict[
                 continue
             for index, part in enumerate(payload["parts"]):
                 out.append(topic(part, family=t["family"], color=t["color"] if index == 0 else None))
-        return out
+        return _shade_new(out, {part["key"] for part in payload["parts"][1:]})
     if op == "redescribe":
         return [dict(t, description=payload["new_description"]) if t["key"] == payload["target"] else t for t in base]
     raise ValueError(f"Unknown proposal op {op}")
+
+
+def _shade_new(topics: list[dict[str, str]], new_keys: set[str]) -> list[dict[str, str]]:
+    """New topics take their family's shade; existing topics keep the color they have."""
+    shades = family_colors(topics)
+    return [dict(t, color=shades[t["key"]]) if t["key"] in new_keys else t for t in topics]
 
 
 def intended_assignments(op: str, payload: dict[str, Any], before: dict[int, dict[str, Any]]) -> dict[int, str]:

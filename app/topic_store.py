@@ -203,6 +203,23 @@ class TopicStoreMixin:
             row = conn.execute("SELECT * FROM topic_map_versions WHERE version_id = ?", (version_id,)).fetchone()
         return _version_payload(row)
 
+    def set_topic_version_colors(self, version_id: int, colors: dict[str, str]) -> dict[str, Any]:
+        """Colors are display only (sorting never reads them), so they change in place, not as a new version."""
+        with self._lock, self._connect() as conn:
+            row = conn.execute("SELECT * FROM topic_map_versions WHERE version_id = ?", (version_id,)).fetchone()
+            if row is None:
+                raise TopicError("Unknown map version.", code="version_unknown")
+            topics = [dict(t, color=colors.get(t["key"], t.get("color"))) for t in json.loads(row["topics_json"])]
+            conn.execute(
+                "UPDATE topic_map_versions SET topics_json = ? WHERE version_id = ?", (json.dumps(topics), version_id)
+            )
+            row = conn.execute("SELECT * FROM topic_map_versions WHERE version_id = ?", (version_id,)).fetchone()
+        return _version_payload(row)
+
+    def deactivate_topic_versions(self) -> int:
+        with self._lock, self._connect() as conn:
+            return conn.execute("UPDATE topic_map_versions SET is_active = 0 WHERE is_active = 1").rowcount
+
     def get_topic_version(self, version_id: int) -> dict[str, Any] | None:
         with self._lock, self._connect() as conn:
             row = conn.execute("SELECT * FROM topic_map_versions WHERE version_id = ?", (version_id,)).fetchone()

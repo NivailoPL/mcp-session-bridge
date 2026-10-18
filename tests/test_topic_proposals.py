@@ -295,3 +295,45 @@ def test_one_session_topic_counts_only_inside_a_group_the_owner_made(lab) -> Non
     assert validate_first_map(raw, chapters)["topics"][0]["chapter_ids"] == boat
     prompt = build_find_prompt([], chapters, detail="balanced", note="", rejected=[])
     assert "group: Łódka" in prompt and "catch-all" in prompt and '"Subject: facet"' in prompt
+
+
+def test_family_colors_share_a_hue_per_family_and_are_stable() -> None:
+    import colorsys
+
+    from app.topic_changes import family_colors
+
+    topics = [{"key": k, "family": f} for k, f in
+              [("a1", "A"), ("b1", "B"), ("a2", "A"), ("c1", "C"), ("a3", "A"), ("b2", "B")]]
+    colors = family_colors(topics)
+    assert colors == family_colors(topics) and len(set(colors.values())) == 6
+
+    def hue(hex_color):
+        r, g, b = (int(hex_color[i:i + 2], 16) / 255 for i in (1, 3, 5))
+        return colorsys.rgb_to_hls(r, g, b)[0] * 360
+
+    def gap(x, y):
+        return min(abs(x - y), 360 - abs(x - y))
+
+    assert gap(hue(colors["a1"]), hue(colors["a3"])) < 30
+    assert gap(hue(colors["a1"]), hue(colors["b1"])) > 60
+
+
+def test_start_over_switches_the_map_off_and_restore_brings_it_back(lab) -> None:
+    store, ids = lab
+    rt = runtime_with(store, ScriptedCodex(first_map(ids)))
+    find_and_wait(rt)
+    proposal = store.list_topic_proposals()[0]
+    version = rt.accept(proposal["proposal_id"], actor="owner", note="")["version"]
+    recolored = rt.recolor(actor="owner")
+    assert recolored["version_id"] == version["version_id"]
+    assert {t["key"] for t in recolored["topics"]} == {t["key"] for t in version["topics"]}
+
+    rt.start_over(actor="owner")
+    assert store.active_topic_version() is None
+    assert len(rt.pool_chapters()) == sum(len(v) for v in SESSIONS.values())
+    with pytest.raises(TopicError):
+        rt.start_over(actor="owner")
+
+    rt.restore(version["version_id"], actor="owner")
+    assert store.active_topic_version()["version_id"] == version["version_id"]
+    assert len(rt.pool_chapters()) < sum(len(v) for v in SESSIONS.values())

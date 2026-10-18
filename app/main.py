@@ -781,6 +781,16 @@ async def admin_api_topics_activate_version(request: Request) -> Response:
     return await topics_admin.api_activate_version(request)
 
 
+@mcp.custom_route("/admin/api/topics/recolor", methods=["POST"])
+async def admin_api_topics_recolor(request: Request) -> Response:
+    return await topics_admin.api_recolor(request)
+
+
+@mcp.custom_route("/admin/api/topics/start-over", methods=["POST"])
+async def admin_api_topics_start_over(request: Request) -> Response:
+    return await topics_admin.api_start_over(request)
+
+
 @mcp.custom_route("/admin/api/topics/assignments", methods=["GET"])
 async def admin_api_topics_assignments(request: Request) -> Response:
     return await topics_admin.api_assignments(request)

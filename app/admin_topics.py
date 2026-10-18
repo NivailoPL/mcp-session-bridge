@@ -139,6 +139,18 @@ class TopicAdminHandlers:
 
         return self._call(create)
 
+    async def api_recolor(self, request: Request) -> Response:
+        _, session, error = await self._mutation(request, allowed=set(), allow_empty=True)
+        if error:
+            return error
+        return self._call(lambda: {"version": self.runtime.recolor(actor=session["username"])})
+
+    async def api_start_over(self, request: Request) -> Response:
+        _, session, error = await self._mutation(request, allowed=set(), allow_empty=True)
+        if error:
+            return error
+        return self._call(lambda: self.runtime.start_over(actor=session["username"]))
+
     async def api_activate_version(self, request: Request) -> Response:
         _, _, error = await self._mutation(request, allowed=set(), allow_empty=True)
         if error:

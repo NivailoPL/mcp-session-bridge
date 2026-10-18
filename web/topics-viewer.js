@@ -264,16 +264,17 @@
     const manageClass = v ? "tp-btn" : "tp-btn primary glow";
     const sortDisabled = !v || n === 0 || jobRunning() || (run && run.status === "paused");
     dom.strip.innerHTML = `
-      <span class="status">${esc(status)}</span>
+      <span class="tp-strip-side">
       <button type="button" class="${manageClass}" data-act="manage">${v ? "" : '<span class="step">1</span>'}Manage topics${pending ? `<span class="tp-badge">${pending}</span>` : ""}</button>
       ${ARROW}
       <button type="button" class="tp-btn ${n && v ? "cyan" : ""}" data-act="sort" ${sortDisabled ? "disabled" : ""}>${v ? "" : '<span class="step">2</span>'}Sort new${n && v ? ` · ${n}` : ""} <span class="model">(${esc(jevModel())})</span></button>
       ${live}
-      <span class="tp-spacer"></span>
+      </span>
       <span class="tp-seg" role="group" aria-label="View">
         <button type="button" data-view="list" aria-pressed="${state.view !== "graph" || !v}">List</button>
         <button type="button" data-view="graph" aria-pressed="${state.view === "graph" && Boolean(v)}" ${v ? "" : "disabled"}>Graph</button>
-      </span>`;
+      </span>
+      <span class="tp-strip-side end"><span class="status">${esc(status)}</span></span>`;
     dom.strip.querySelector('[data-act="manage"]').addEventListener("click", () => openManage());
     dom.strip.querySelector('[data-act="sort"]').addEventListener("click", sortNew);
     dom.strip.querySelector('[data-act="pause"]')?.addEventListener("click", () => act(async () => {
@@ -898,11 +899,48 @@
     </div>`;
   }
 
+  // Same rule as the server (app/topic_changes.family_colors): one hue per family, close shades inside it.
+  function familyColors(list) {
+    const families = [];
+    const members = {};
+    for (const t of list) {
+      if (t.key === POOL) continue;
+      const f = t.family || "Other";
+      if (!members[f]) { families.push(f); members[f] = []; }
+      members[f].push(t.key);
+    }
+    const out = {};
+    const count = Math.max(1, families.length);
+    families.forEach((f, i) => {
+      const hue = 235 + (i * 360) / count;
+      const keys = members[f];
+      const spread = Math.min(26, 300 / count / 2);
+      keys.forEach((key, j) => {
+        const step = keys.length > 1 ? j / (keys.length - 1) : 0.5;
+        out[key] = hslHex(hue - spread / 2 + spread * step, 0.72, 0.72 - 0.2 * step);
+      });
+    });
+    return out;
+  }
+
+  function hslHex(h, s, l) {
+    h = ((h % 360) + 360) % 360 / 360;
+    const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+    const p = 2 * l - q;
+    const channel = (t) => {
+      t = (t + 1) % 1;
+      const v = t < 1 / 6 ? p + (q - p) * 6 * t : t < 1 / 2 ? q : t < 2 / 3 ? p + (q - p) * (2 / 3 - t) * 6 : p;
+      return Math.round(v * 255).toString(16).padStart(2, "0");
+    };
+    return `#${channel(h + 1 / 3)}${channel(h)}${channel(h - 1 / 3)}`;
+  }
+
   function draftFor(p) {
     const drafts = state.manage.drafts;
     const stamp = `${p.status}:${p.summary}:${p.test?.sorted || 0}`;
     if (!drafts[p.proposal_id] || drafts[p.proposal_id].stamp !== stamp) {
-      drafts[p.proposal_id] = { stamp, topics: p.payload.topics.map((t, i) => ({ ...t, keep: t.keep !== false, color: t.color || PALETTE[(i * 5) % PALETTE.length] })) };
+      const shades = familyColors(p.payload.topics);
+      drafts[p.proposal_id] = { stamp, topics: p.payload.topics.map((t) => ({ ...t, keep: t.keep !== false, color: shades[t.key] })) };
     }
     return drafts[p.proposal_id];
   }
@@ -1064,6 +1102,11 @@
           </div>` : editProposal && editProposal.status === "testing" ? '<div class="tp-banner info" style="display:flex;gap:10px;align-items:center"><span class="tp-spinner"></span>Testing your changes…</div>' : ""}
           <div style="display:flex;gap:8px;flex-wrap:wrap">
             <button type="button" class="tp-btn small" data-act="split" ${jobRunning() || !original ? "disabled" : ""}>Propose a split ${MARK}</button>
+            ${original && draft.length > 1 ? `<span class="tp-merge"><select class="tp-select" data-merge-into aria-label="Merge into">
+              <option value="">Merge into…</option>
+              ${draft.filter((x) => x.key !== t.key).map((x) => `<option value="${esc(x.key)}">${esc(x.name)}</option>`).join("")}
+            </select></span>` : ""}
+            <button type="button" class="tp-btn small" data-act="recolor" ${jobRunning() || changed ? "disabled" : ""} title="${changed ? "Save or discard your changes first" : "Colors only; sorting never reads them, so no test is needed"}">Color by family</button>
             <button type="button" class="tp-btn small danger" data-act="remove" ${rows.length ? "disabled" : ""} title="${rows.length ? "Only a topic without chapters can be removed" : ""}">Remove topic</button>
           </div>
           ${weakest.length ? `<div class="tp-family-name" style="margin-top:6px">WEAKEST HERE</div>${weakest.map((r) => `<div class="tp-leaf"><a href="/admin/sessions?session=${encodeURIComponent(r.session_id)}&chapter=${r.strand_id}">${esc(r.title)}</a><span class="tp-conf"><span><i style="width:${pct(r.confidence)}"></i></span>${pct(r.confidence)}</span><span class="tp-muted">${esc(r.session_title)}</span></div>`).join("")}` : ""}
@@ -1089,7 +1132,9 @@
     dom.manageMain.querySelector('[data-act="add"]').addEventListener("click", () => {
       let i = 1;
       while (draft.some((x) => x.key === `new_topic_${i}`)) i += 1;
-      draft.push({ key: `new_topic_${i}`, name: "New topic", family: t?.family || "Other", description: "Describe what belongs here as a concrete list.", color: PALETTE[(draft.length * 5) % PALETTE.length] });
+      draft.push({ key: `new_topic_${i}`, name: "New topic", family: t?.family || "Other", description: "Describe what belongs here as a concrete list.", color: "#7a7df0" });
+      const added = draft[draft.length - 1];
+      added.color = familyColors(draft)[added.key];
       m.editKey = `new_topic_${i}`;
       m.editProposal = null;
       renderManage();
@@ -1097,6 +1142,22 @@
     dom.manageMain.querySelector('[data-act="test"]')?.addEventListener("click", () => act(async () => {
       const body = await request("/admin/api/topics/test", { method: "POST", body: { topics: draft, note: `Edited ${t.name}` } });
       m.editProposal = body.proposal.proposal_id;
+      await refresh();
+    }));
+    dom.manageMain.querySelector("[data-merge-into]")?.addEventListener("change", (e) => {
+      const into = draft.find((x) => x.key === e.target.value);
+      if (!into) return;
+      // The target takes over the merged topic's description; the test then shows where its chapters land.
+      into.description = `${into.description} ${t.description}`.trim().slice(0, 600);
+      m.editDraft.topics = draft.filter((x) => x.key !== t.key);
+      m.editKey = into.key;
+      m.editProposal = null;
+      toast(`${t.name} merged into ${into.name} in the draft. Check the description, then Test taxonomy.`);
+      renderManage();
+    });
+    dom.manageMain.querySelector('[data-act="recolor"]')?.addEventListener("click", () => act(async () => {
+      await request("/admin/api/topics/recolor", { method: "POST", body: {} });
+      m.editDraft = null;
       await refresh();
     }));
     dom.manageMain.querySelector('[data-act="remove"]')?.addEventListener("click", () => {
@@ -1132,7 +1193,8 @@
     const m = state.manage;
     const versions = state.overview.versions;
     dom.manageMain.innerHTML = `<div class="tp-pane">
-      <div class="tp-pane-head"><b>Versions</b><span class="tp-muted">Restoring brings back that map and the sorting made on it.</span></div>
+      <div class="tp-pane-head"><b>Versions</b><span class="tp-muted">Restoring brings back that map and the sorting made on it.</span>
+        ${version() ? `<span class="tp-spacer"></span><button type="button" class="tp-btn small danger" data-act="start-over" ${jobRunning() ? "disabled" : ""}>Start over</button>` : ""}</div>
       <div>${versions.map((v) => `<div class="tp-version"><b>v${v.version_id}</b><div><div style="font-size:13px">${esc(v.note || v.origin)}</div><div class="tp-faint tp-small">${esc(when(v.created_at))} · ${v.topic_count} topics · ${esc(v.origin)}</div></div>${v.is_active ? '<span class="tp-verdict ok">active</span>' : `<button type="button" class="tp-btn small" data-restore="${v.version_id}">Restore</button>`}</div>`).join("") || '<p class="tp-muted">No versions yet.</p>'}</div>
       <details class="tp-more" ${m.importOpen ? "open" : ""}><summary>Import a map (JSON)</summary>
         <p class="tp-muted">A list of topics (key, name, description, family, color). It becomes the active map as is, without a test; sort the chapters afterwards.</p>
@@ -1140,6 +1202,20 @@
         <div style="display:flex;gap:10px;margin-top:8px"><input class="tp-input" type="file" accept=".json,application/json" data-import-file><span class="tp-spacer"></span><button type="button" class="tp-btn primary" data-act="import-go">Import</button></div>
       </details>
     </div>`;
+    dom.manageMain.querySelector('[data-act="start-over"]')?.addEventListener("click", () => act(async () => {
+      const ok = await confirm({
+        title: "Start over with an empty map?",
+        message: "The active map is switched off and every chapter goes back to Unsorted. Nothing is deleted: this version stays here and Restore brings it back with its sorting.",
+        confirmLabel: "Start over", tone: "danger",
+      });
+      if (!ok) return;
+      await request("/admin/api/topics/start-over", { method: "POST", body: {} });
+      state.openSessions = {};
+      state.selected = null;
+      m.editDraft = null;
+      m.section = "proposals";
+      await refresh();
+    }));
     for (const b of dom.manageMain.querySelectorAll("[data-restore]")) {
       b.addEventListener("click", () => act(async () => {
         if (!(await confirm({ title: `Restore map v${b.dataset.restore}?`, message: "Open proposals will need a new test.", confirmLabel: "Restore" }))) return;
