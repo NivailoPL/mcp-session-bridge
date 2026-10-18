@@ -175,3 +175,8 @@
   color: #fff;
   font-weight: 800;
 }
+
+/* The dialog shows or hides parts with the hidden attribute; keep it stronger than the display rules above. */
+.admin-confirmation [hidden] {
+  display: none !important;
+}

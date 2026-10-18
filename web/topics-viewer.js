@@ -650,18 +650,74 @@
   function startProposing(kind) {
     act(async () => {
       const m = state.manage;
-      const perTest = state.overview.cost_per_chapter_usd * state.overview.counts.chapters;
-      const ok = await confirm({
-        title: kind === "find" ? (version() ? "Find topics in Unsorted?" : "Build the first map?") : "Refine the topics?",
-        message: `${kind === "find" ? "The proposing model reads the titles in Unsorted" : "The proposing model reviews every sorted chapter"} once, on your Codex plan. Each proposal is then tested by sorting all chapters (about ${usd(perTest, 3)} per proposal on OpenRouter) before you decide.`,
-        confirmLabel: kind === "find" ? "Find topics" : "Refine",
-      });
-      if (!ok) return;
+      if (!(await runDialog(kind))) return;
       await request(`/admin/api/topics/${kind}`, { method: "POST", body: { detail: m.detail, note: m.note } });
       m.section = "proposals";
       m.showList = false;
       m.reviewId = null;
       await refresh();
+    });
+  }
+
+  // What is about to run, with which models and what it may cost; the owner starts it from here.
+  function runDialog(kind) {
+    const o = state.overview;
+    const s = o.settings;
+    const m = state.manage;
+    const v = version();
+    const first = kind === "find" && !v;
+    const sent = state.chapters.filter((r) => s.include_sensitive || !r.sensitive);
+    const rows = kind === "find" ? sent.filter((r) => !v || r.topic_key === POOL) : sent.filter((r) => r.topic_key && r.topic_key !== POOL);
+    const skipped = state.chapters.length - sent.length;
+    const sessions = new Set(rows.map((r) => r.session_id)).size;
+    const perTest = o.cost_per_chapter_usd * o.counts.chapters;
+    const proposals = first ? "one proposal" : kind === "refine" ? "up to 5 proposals" : "one proposal per new topic";
+    const cost = first ? usd(perTest, 3) : kind === "refine" ? `up to ${usd(perTest * 5, 2)}` : `${usd(perTest, 3)} per proposal`;
+    const title = first ? "Build the first map" : kind === "find" ? "Find topics in Unsorted" : "Refine the topics";
+    const what = first
+      ? `Codex reads the titles of all ${rows.length} chapters from ${sessions} sessions and proposes the first map.`
+      : kind === "find"
+        ? `Codex reads the ${rows.length} chapters in Unsorted (${sessions} sessions) and proposes new topics.`
+        : `Codex reviews the ${rows.length} sorted chapters topic by topic and proposes splits, new topics or better descriptions.`;
+    const dialog = document.createElement("dialog");
+    dialog.className = "tp-run-dialog";
+    dialog.innerHTML = `
+      <form method="dialog">
+        <h3>${esc(title)}</h3>
+        <p class="tp-muted">${esc(what)} Nothing changes until you accept a proposal.</p>
+        <dl class="tp-run-grid">
+          <dt>Proposing</dt><dd><b>${esc(s.codex_model)}</b> · ${esc(EFFORT[s.codex_effort] || s.codex_effort)} thinking <span class="tp-muted">· Codex plan, no extra charge</span></dd>
+          <dt>Timeout</dt><dd>${esc(s.codex_timeout_minutes)} min</dd>
+          <dt>Testing</dt><dd><b>${esc(jevModel())}</b> sorts every chapter for each proposal <span class="tp-muted">· OpenRouter</span></dd>
+          <dt>Estimated cost</dt><dd><b>${esc(cost)}</b> <span class="tp-muted">· ${esc(proposals)}</span></dd>
+          <dt>Detail</dt><dd>${esc(m.detail[0].toUpperCase() + m.detail.slice(1))}</dd>
+          <dt>Note</dt><dd>${m.note ? esc(m.note) : '<span class="tp-muted">none</span>'}</dd>
+          <dt>Sensitive groups</dt><dd>${s.include_sensitive ? '<span class="tp-warn-text">included</span>' : `left out${skipped ? ` · ${skipped} chapters not sent` : ""}`}</dd>
+        </dl>
+        <p class="tp-faint tp-small">Models and timeout are set in Settings › Topics; detail and note in the panel on the left.</p>
+        <div class="tp-run-actions">
+          <button type="submit" class="tp-btn" value="cancel">Cancel</button>
+          <button type="submit" class="tp-btn primary" value="start">${kind === "refine" ? "Refine topics" : "Find topics"} ${MARK}</button>
+        </div>
+      </form>`;
+    document.body.appendChild(dialog);
+    return new Promise((resolve) => {
+      let done = false;
+      const finish = (start) => {
+        if (done) return;
+        done = true;
+        if (dialog.open) dialog.close();
+        dialog.remove();
+        resolve(start);
+      };
+      dialog.querySelector("form").addEventListener("submit", (event) => {
+        event.preventDefault();
+        finish(event.submitter?.value === "start");
+      });
+      dialog.addEventListener("cancel", (event) => { event.preventDefault(); finish(false); });
+      dialog.addEventListener("close", () => finish(false));
+      dialog.showModal();
+      dialog.querySelector('[value="start"]').focus();
     });
   }
 
