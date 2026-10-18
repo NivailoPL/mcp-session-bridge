@@ -24,11 +24,19 @@ MIN_REFINE_CHAPTERS = 4
 MAX_REFINE_OPERATIONS = 5
 NOTE_MAX_CHARS = 1000
 
+GROUP_RULES = f"""Groups were made by the owner, who moves sessions into them by hand; sessions marked "default group" were never filed. A group whose chapters are mostly about one subject is the owner's own statement that this subject matters: treat it as a recurring subject even if it is a single long session (it still needs at least {MIN_TOPIC_CHAPTERS} chapters), and let the topic's description name what the group holds. A group that collects many unrelated subjects is a catch-all and says nothing about topics: ignore it and sort its chapters on their own merits. A group is evidence, not a topic: one group may need several topics, and a topic may span several groups."""
+
+NAMING_RULES = """Names are short (one to three words), in everyday words of the owner's language. When two or more topics are facets of the same concrete subject (one workplace, one project, one hobby, one part of health), name them "Subject: facet", for example "Sailing: boat repairs" and "Sailing: regattas", and when the subject needs a home for its remaining chapters add "Subject: other". A topic with no siblings gets a plain name and never a prefix. A family is a broader area of life that holds several topics; it is shown above the names, so a name does not repeat it. A prefix and a family may coincide but need not: "Sailing: boat repairs" may sit in a family about free time. Use 4–8 families."""
+
 COMMON_RULES = f"""The topics are not a quality judgement; they are a picture of what this person writes about. Housekeeping chapters (starting a session, asking for a summary) are normal content: they get a topic only if they keep coming back.
 
 Write every name and description in the language of the chapter titles. A description is read by a separate, simpler sorting model that sees only chapter titles, session titles and group names, so write it as a concrete list of recognisable things (people, places, tools, symptoms, projects), not as an abstract summary. A topic must not overlap another topic; when two topics could both claim a chapter, make their descriptions draw the line.
 
-A topic needs at least {MIN_TOPIC_CHAPTERS} chapters from at least {MIN_TOPIC_SESSIONS} different sessions: one long conversation is not yet a recurring subject. Keys are snake_case English (letters, digits, underscore). Families group related topics (for example Work and money, Health, Inner life); use 4–8 families."""
+A topic needs at least {MIN_TOPIC_CHAPTERS} chapters from at least {MIN_TOPIC_SESSIONS} different sessions: one long conversation is not yet a recurring subject. The one exception is an owner's group, below. Keys are snake_case English (letters, digits, underscore).
+
+{GROUP_RULES}
+
+{NAMING_RULES}"""
 
 
 def _chapter_lines(chapters: list[dict[str, Any]]) -> str:
@@ -38,10 +46,26 @@ def _chapter_lines(chapters: list[dict[str, Any]]) -> str:
     blocks = []
     for items in sessions.values():
         head = items[0]
-        lines = [f'Session "{head["session_title"]}" (group: {head["group_name"]})']
+        lines = [f'Session "{head["session_title"]}" ({_group_label(head)})']
         lines += [f'  - id {c["strand_id"]}: {c["title"]}' for c in items]
         blocks.append("\n".join(lines))
     return "\n".join(blocks)
+
+
+def _group_label(chapter: dict[str, Any]) -> str:
+    if chapter.get("owner_group", True):
+        return f'group: {chapter["group_name"]}'
+    return "default group"
+
+
+def _topic_sessions_ok(ids: list[int], known: dict[int, dict[str, Any]], min_chapters: int) -> bool:
+    """Enough chapters from enough sessions, or all of them in one group the owner made."""
+    if len(ids) < min_chapters:
+        return False
+    if len({known[i]["session_id"] for i in ids}) >= MIN_TOPIC_SESSIONS:
+        return True
+    groups = {(known[i].get("group_id"), known[i].get("owner_group", False)) for i in ids}
+    return len(groups) == 1 and next(iter(groups))[1] and next(iter(groups))[0] is not None
 
 
 def _rejected_lines(rejected: list[dict[str, Any]]) -> str:
@@ -123,7 +147,7 @@ def validate_first_map(raw: Any, chapters: list[dict[str, Any]]) -> dict[str, An
         ids = [i for i in item.get("chapter_ids", []) if isinstance(i, int) and i in known and i not in used]
         sessions = {known[i]["session_id"] for i in ids}
         name = str(item.get("name", "")).strip()[:60] or key
-        if len(ids) < MIN_TOPIC_CHAPTERS or len(sessions) < MIN_TOPIC_SESSIONS:
+        if not _topic_sessions_ok(ids, known, MIN_TOPIC_CHAPTERS):
             dropped.append({"key": key, "name": name, "chapters": len(ids), "sessions": len(sessions)})
             continue
         keys.add(key)
@@ -185,7 +209,7 @@ def build_find_prompt(
 ) -> str:
     return f"""You maintain the topic map of a personal archive of conversations with AI models. Chapters that fit no topic wait in Unsorted. Review Unsorted.
 
-Propose a new topic only for a subject that meets the rules below and does not belong to an existing topic. Everything else goes to "waiting" in groups with a short label and a one-sentence reason (for example: only one session so far). Never propose a topic that duplicates or overlaps an existing one.
+Propose a new topic only for a subject that meets the rules below and does not belong to an existing topic. Everything else goes to "waiting" in groups with a short label and a one-sentence reason (for example: only one session so far, outside any group of the owner). Never propose a topic that duplicates or overlaps an existing one.
 
 {COMMON_RULES}
 
@@ -211,8 +235,7 @@ def validate_find(raw: Any, pool: list[dict[str, Any]], existing_keys: set[str])
         if not TOPIC_KEY_PATTERN.match(key or "") or key in existing_keys or key == POOL_KEY:
             continue
         ids = [i for i in item.get("chapter_ids", []) if isinstance(i, int) and i in known and i not in used]
-        sessions = {known[i]["session_id"] for i in ids}
-        if len(ids) < MIN_TOPIC_CHAPTERS or len(sessions) < MIN_TOPIC_SESSIONS:
+        if not _topic_sessions_ok(ids, known, MIN_TOPIC_CHAPTERS):
             continue
         used.update(ids)
         existing_keys = existing_keys | {key}
@@ -280,7 +303,7 @@ def build_refine_prompt(
         items = by_topic[topic["key"]]
         lines = [f"### {topic['key']} | {topic['name']} ({len(items)} chapters): {topic['description']}"]
         lines += [
-            f'- id {c["strand_id"]}: {c["title"]} | session "{c["session_title"]}" | confidence {c["confidence"]:.2f}'
+            f'- id {c["strand_id"]}: {c["title"]} | session "{c["session_title"]}" | {_group_label(c)} | confidence {c["confidence"]:.2f}'
             for c in items
         ]
         blocks.append("\n".join(lines))
@@ -291,7 +314,11 @@ Allowed operations (merging is not allowed):
 - "new_topic": a subject has grown inside an existing topic (target) and deserves its own topic; parts holds exactly one new topic with the chapter ids that would move there.
 - "redescribe": target's description misleads the sorting model; give new_description and the evidence in reason. parts stays empty.
 
-Each new topic or part needs at least {MIN_REFINE_CHAPTERS} chapters from at least {MIN_TOPIC_SESSIONS} sessions. At most {MAX_REFINE_OPERATIONS} operations; prefer a few strong ones. Return an empty list if the map is fine. Keys are snake_case English. Names, descriptions and reasons in the language of the chapter titles; descriptions are concrete lists for the sorting model.
+Each new topic or part needs at least {MIN_REFINE_CHAPTERS} chapters from at least {MIN_TOPIC_SESSIONS} sessions, or all of its chapters in one group the owner made. At most {MAX_REFINE_OPERATIONS} operations; prefer a few strong ones. Return an empty list if the map is fine. Keys are snake_case English. Descriptions and reasons in the language of the chapter titles; descriptions are concrete lists for the sorting model. When a split or a new topic creates siblings of one subject, name them all "Subject: facet"; existing topic names may stay as they are.
+
+{GROUP_RULES}
+
+{NAMING_RULES}
 
 {_guidance(detail, note)}
 
@@ -308,7 +335,7 @@ def validate_refine(
     if not isinstance(raw, dict):
         raise TopicError("The proposing model returned nothing usable.", code="proposal_invalid")
     keys = {t["key"] for t in topics}
-    sessions_of = {c["strand_id"]: c["session_id"] for items in by_topic.values() for c in items}
+    known = {c["strand_id"]: c for items in by_topic.values() for c in items}
     out: list[dict[str, Any]] = []
     taken: set[str] = set()
     for item in (raw.get("operations") or [])[:MAX_REFINE_OPERATIONS]:
@@ -330,7 +357,7 @@ def validate_refine(
             if not TOPIC_KEY_PATTERN.match(key or "") or (key in keys and key != target) or key == POOL_KEY:
                 ok = False
                 break
-            if len(ids) < MIN_REFINE_CHAPTERS or len({sessions_of[i] for i in ids}) < MIN_TOPIC_SESSIONS:
+            if not _topic_sessions_ok(ids, known, MIN_REFINE_CHAPTERS):
                 ok = False
                 break
             used.update(ids)

@@ -230,6 +230,7 @@ class TopicStoreMixin:
                 SELECT s.strand_id, s.title, s.session_id, se.title AS session_title,
                        se.updated_at AS session_updated_at, se.group_id,
                        COALESCE(g.name, 'Uncategorized') AS group_name, COALESCE(g.is_sensitive, 0) AS sensitive,
+                       CASE WHEN g.group_id IS NOT NULL AND g.is_system = 0 THEN 1 ELSE 0 END AS owner_group,
                        COALESCE(g.color, '#8e93a8') AS group_color, COALESCE(g.icon_key, 'folder') AS group_icon,
                        (SELECT MIN(r.start_exchange_id) FROM strand_ranges r WHERE r.strand_id = s.strand_id) AS first_exchange_id,
                        (SELECT MIN(e.created_at) FROM strand_ranges r JOIN exchanges e ON e.exchange_id = r.start_exchange_id
@@ -250,6 +251,7 @@ class TopicStoreMixin:
                 "group_name": row["group_name"],
                 "sensitive": bool(row["sensitive"]),
                 "group_id": row["group_id"],
+                "owner_group": bool(row["owner_group"]),
                 "group_color": row["group_color"],
                 "group_icon": row["group_icon"],
                 "session_updated_at": row["session_updated_at"],

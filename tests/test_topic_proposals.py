@@ -272,3 +272,26 @@ def test_time_limit_setting_is_validated() -> None:
         validate_topic_settings({"codex_timeout_minutes": 1})
     with pytest.raises(TopicError):
         validate_topic_settings({"codex_timeout_minutes": 45})
+
+
+def test_one_session_topic_counts_only_inside_a_group_the_owner_made(lab) -> None:
+    from app.topic_prompts import build_find_prompt, validate_first_map
+
+    store, ids = lab
+    session = "20261018-140000-boat-e"
+    store.create_session(session, "boat")
+    boat = [store.create_strand(session, title, [[e, e]])["strand_id"]
+            for title in ("łódź kadłub", "łódź żagiel", "łódź silnik")
+            for e in [store.save_exchange(session, "Claude", title, "ok").exchange_id]]
+    raw = {"reason": "", "topics": [{"key": "boat", "name": "Łódź", "family": "Wolny czas", "description": "łódź",
+                                     "chapter_ids": boat}]}
+    with pytest.raises(TopicError):
+        validate_first_map(raw, store.topic_chapters())
+    assert "default group" in build_find_prompt([], store.topic_chapters(), detail="balanced", note="", rejected=[])
+
+    group = store.create_session_group("Łódka", "#7a7df0", "folder")
+    store.set_session_group(session, group.group_id)
+    chapters = store.topic_chapters()
+    assert validate_first_map(raw, chapters)["topics"][0]["chapter_ids"] == boat
+    prompt = build_find_prompt([], chapters, detail="balanced", note="", rejected=[])
+    assert "group: Łódka" in prompt and "catch-all" in prompt and '"Subject: facet"' in prompt
