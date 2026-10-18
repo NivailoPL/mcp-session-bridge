@@ -19,7 +19,7 @@
     .codex-message a { color: #b8b1ff; }
   </style>
 </head>
-<body>
+<body data-workspace="lab" data-settings-tab="general">
   <header class="workspace-bar">
     <a class="workspace-brand" href="/admin/sessions" aria-label="MCP Session Bridge Sessions">
       <img src="/admin/assets/brand/svg/lockup-horizontal-dark.svg" alt="MCP Session Bridge">
@@ -32,7 +32,10 @@
     </nav>
     <div class="workspace-actions">
       <button id="codexOpenButton" type="button" class="secondary" aria-haspopup="dialog" aria-controls="codexDialog">Codex</button>
-      <form method="post" action="/admin/logout"><button class="text-button" type="submit">Log out</button></form>
+      <button type="button" class="wa-btn" data-header-action="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>Search<kbd>⌘K</kbd></button>
+      <button type="button" class="wa-icon" data-header-action="settings" aria-label="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z"></path><path d="M19.4 15a1.8 1.8 0 0 0 .36 2l.05.05a2.2 2.2 0 1 1-3.11 3.11l-.05-.05a1.8 1.8 0 0 0-2-.36 1.8 1.8 0 0 0-1.1 1.66V21.5a2.2 2.2 0 1 1-4.4 0v-.09A1.8 1.8 0 0 0 8.05 19.75a1.8 1.8 0 0 0-2 .36l-.05.05a2.2 2.2 0 1 1-3.11-3.11l.05-.05a1.8 1.8 0 0 0 .36-2A1.8 1.8 0 0 0 1.64 13.9H1.5a2.2 2.2 0 1 1 0-4.4h.14A1.8 1.8 0 0 0 3.3 8.4a1.8 1.8 0 0 0-.36-2l-.05-.05A2.2 2.2 0 1 1 6 3.24l.05.05a1.8 1.8 0 0 0 2 .36A1.8 1.8 0 0 0 9.15 2V1.9a2.2 2.2 0 1 1 4.4 0V2a1.8 1.8 0 0 0 1.1 1.65 1.8 1.8 0 0 0 2-.36l.05-.05a2.2 2.2 0 1 1 3.11 3.11l-.05.05a1.8 1.8 0 0 0-.36 2A1.8 1.8 0 0 0 21.1 9.5h.1a2.2 2.2 0 1 1 0 4.4h-.1A1.8 1.8 0 0 0 19.4 15z"></path></svg><span class="wa-dot" data-header-dot hidden></span></button>
+      <span class="wa-sep" aria-hidden="true"></span>
+      <span class="wa-user" data-header-user></span>
     </div>
   </header>
 
@@ -157,5 +160,6 @@
   <script src="/admin/assets/pearl-gradient-nav.js" defer></script>
   <script src="/admin/assets/admin-confirmation.js" defer></script>
   <script src="/admin/assets/graph-viewer.js" defer></script>
+  <script src="/admin/assets/admin-header.js"></script>
 </body>
 </html>

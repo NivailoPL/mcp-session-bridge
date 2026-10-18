@@ -55,9 +55,64 @@
 
 .workspace-actions form { margin: 0; }
 
+/* Search, Settings and the owner sit on the right of every workspace bar. */
+.workspace-actions .wa-btn,
+.workspace-actions .wa-icon {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: .5rem;
+  height: 34px;
+  padding: 0 .55rem 0 .7rem;
+  border-radius: 9px;
+  border: 1px solid rgba(255, 255, 255, .12);
+  background: transparent;
+  color: #b6bccb;
+  font: 700 12.5px Manrope, ui-sans-serif, system-ui, sans-serif;
+  cursor: pointer;
+}
+.workspace-actions .wa-icon { width: 34px; padding: 0; justify-content: center; }
+.workspace-actions .wa-btn:hover,
+.workspace-actions .wa-icon:hover { color: #e6e8f0; border-color: rgba(255, 255, 255, .26); }
+.workspace-actions .wa-btn svg,
+.workspace-actions .wa-icon svg { width: 15px; height: 15px; flex: none; }
+.workspace-actions kbd {
+  font: 500 10.5px "Geist Mono", ui-monospace, monospace;
+  color: #6d7386;
+  padding: 1px 5px;
+  border-radius: 5px;
+  border: 1px solid rgba(255, 255, 255, .1);
+}
+.workspace-actions .wa-dot {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: #f59e0b;
+}
+.workspace-actions .wa-sep { width: 1px; height: 22px; margin: 0 .25rem; background: rgba(255, 255, 255, .1); }
+.workspace-actions .wa-user { color: #8e93a8; font: 600 13px Manrope, ui-sans-serif, system-ui, sans-serif; white-space: nowrap; }
+
+/* Settings opened from another workspace: the Sessions settings overlay in a frame. */
+.wa-settings-frame {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  width: 100vw;
+  height: 100vh;
+  border: 0;
+  background: transparent;
+  color-scheme: dark;
+}
+
 @media (max-width: 800px) {
   .workspace-brand { width: 180px; }
   .workspace-actions form { display: none; }
+  .workspace-actions .wa-btn kbd,
+  .workspace-actions .wa-sep,
+  .workspace-actions .wa-user { display: none; }
 }
 
 @media (max-width: 520px) {

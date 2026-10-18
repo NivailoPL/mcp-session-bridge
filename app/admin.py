@@ -181,7 +181,12 @@ class AdminHandlers:
             body = self.html_path.read_text(encoding="utf-8")
         except OSError:
             return HTMLResponse("Admin viewer is not installed.", status_code=500, headers=self._no_store_headers())
-        return HTMLResponse(body, headers=self._admin_headers())
+        headers = self._admin_headers()
+        if request.query_params.get("embed") == "settings":
+            # Other workspaces show the Settings overlay by framing this page; only same-origin framing.
+            headers["X-Frame-Options"] = "SAMEORIGIN"
+            headers["Content-Security-Policy"] = "frame-ancestors 'self'"
+        return HTMLResponse(body, headers=headers)
 
     async def contexts_page(self, request: Request) -> Response:
         _, error = self._require_admin(request)
@@ -226,6 +231,7 @@ class AdminHandlers:
             "topics-viewer.css": "text/css",
             "topics-viewer.js": "text/javascript",
             "bridge-identity.js": "text/javascript",
+            "admin-header.js": "text/javascript",
         }
         media_type = media_types.get(asset_name)
         if media_type is None:

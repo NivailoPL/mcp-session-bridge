@@ -1999,9 +1999,13 @@
     @media (prefers-reduced-motion: reduce) {
       * { animation-duration: .01ms !important; transition-duration: .01ms !important; }
     }
+    /* Settings opened from another workspace: only the dialog, over that page. */
+    html:has(body.embed-settings), body.embed-settings { background: transparent; }
+    body.embed-settings > .workspace-bar,
+    body.embed-settings > main.shell { display: none; }
   </style>
 </head>
-<body>
+<body data-workspace="sessions" data-settings-tab="general">
   <header class="workspace-bar">
     <a class="workspace-brand" href="/admin/sessions" aria-label="MCP Session Bridge Sessions">
       <img src="/admin/assets/brand/svg/lockup-horizontal-dark.svg" alt="MCP Session Bridge">
@@ -2012,21 +2016,15 @@
       <a class="sb-nav__tab" role="tab" href="/admin/topics" aria-selected="false" tabindex="-1" data-label="TOPICS">TOPICS</a>
       <a class="sb-nav__tab" role="tab" href="/admin/lab" aria-selected="false" tabindex="-1" data-label="LAB">LAB</a>
     </nav>
+    <div class="workspace-actions">
+      <button type="button" class="wa-btn" data-header-action="search" id="searchOpenButton" aria-haspopup="dialog" aria-controls="searchDialog"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>Search<kbd>⌘K</kbd></button>
+      <button type="button" class="wa-icon" data-header-action="settings" aria-label="Settings" id="aiSettingsButton"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z"></path><path d="M19.4 15a1.8 1.8 0 0 0 .36 2l.05.05a2.2 2.2 0 1 1-3.11 3.11l-.05-.05a1.8 1.8 0 0 0-2-.36 1.8 1.8 0 0 0-1.1 1.66V21.5a2.2 2.2 0 1 1-4.4 0v-.09A1.8 1.8 0 0 0 8.05 19.75a1.8 1.8 0 0 0-2 .36l-.05.05a2.2 2.2 0 1 1-3.11-3.11l.05-.05a1.8 1.8 0 0 0 .36-2A1.8 1.8 0 0 0 1.64 13.9H1.5a2.2 2.2 0 1 1 0-4.4h.14A1.8 1.8 0 0 0 3.3 8.4a1.8 1.8 0 0 0-.36-2l-.05-.05A2.2 2.2 0 1 1 6 3.24l.05.05a1.8 1.8 0 0 0 2 .36A1.8 1.8 0 0 0 9.15 2V1.9a2.2 2.2 0 1 1 4.4 0V2a1.8 1.8 0 0 0 1.1 1.65 1.8 1.8 0 0 0 2-.36l.05-.05a2.2 2.2 0 1 1 3.11 3.11l-.05.05a1.8 1.8 0 0 0-.36 2A1.8 1.8 0 0 0 21.1 9.5h.1a2.2 2.2 0 1 1 0 4.4h-.1A1.8 1.8 0 0 0 19.4 15z"></path></svg><span class="wa-dot" data-header-dot id="settingsUpdateDot" hidden></span></button>
+      <span class="wa-sep" aria-hidden="true"></span>
+      <span class="wa-user" data-header-user></span>
+    </div>
   </header>
   <main class="shell">
     <aside class="sidebar">
-      <div class="settings-row" aria-label="Admin menu">
-        <button id="searchOpenButton" type="button" class="ghost search-launcher" aria-haspopup="dialog" aria-controls="searchDialog">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
-          Search
-        </button>
-        <button id="aiSettingsButton" type="button" class="ghost settings-button">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z"></path><path d="M19.4 15a1.8 1.8 0 0 0 .36 2l.05.05a2.2 2.2 0 1 1-3.11 3.11l-.05-.05a1.8 1.8 0 0 0-2-.36 1.8 1.8 0 0 0-1.1 1.66V21.5a2.2 2.2 0 1 1-4.4 0v-.09A1.8 1.8 0 0 0 8.05 19.75a1.8 1.8 0 0 0-2 .36l-.05.05a2.2 2.2 0 1 1-3.11-3.11l.05-.05a1.8 1.8 0 0 0 .36-2A1.8 1.8 0 0 0 1.64 13.9H1.5a2.2 2.2 0 1 1 0-4.4h.14A1.8 1.8 0 0 0 3.3 8.4a1.8 1.8 0 0 0-.36-2l-.05-.05A2.2 2.2 0 1 1 6 3.24l.05.05a1.8 1.8 0 0 0 2 .36A1.8 1.8 0 0 0 9.15 2V1.9a2.2 2.2 0 1 1 4.4 0V2a1.8 1.8 0 0 0 1.1 1.65 1.8 1.8 0 0 0 2-.36l.05-.05a2.2 2.2 0 1 1 3.11 3.11l-.05.05a1.8 1.8 0 0 0-.36 2A1.8 1.8 0 0 0 21.1 9.5h.1a2.2 2.2 0 1 1 0 4.4h-.1A1.8 1.8 0 0 0 19.4 15z"></path></svg>
-          Settings
-          <span id="settingsUpdateDot" class="update-dot" hidden aria-hidden="true"></span>
-        </button>
-      </div>
-
       <section class="group-panel" aria-label="Session groups">
         <div class="group-head">
           <span>Groups</span>
@@ -2529,6 +2527,7 @@
           <input id="tokenFeaturesMaster" class="settings-switch-input is-green" type="checkbox" role="switch" aria-labelledby="tokenFeaturesTitle" title="Turn every feature that spends tokens on or off" hidden>
         </div>
         <button type="button" data-settings-tab="strands"><span>Chapters</span><span class="settings-tab-meta"><span id="settingsHintStrands" class="settings-tab-hint"></span></span></button>
+        <button type="button" data-settings-tab="topics"><span>Topics</span><span class="settings-tab-meta"><span id="settingsHintTopics" class="settings-tab-hint"></span></span></button>
       </nav>
       <div class="settings-body">
       <div class="settings-content">
@@ -2910,6 +2909,55 @@
                 <button type="button" class="settings-quiet-danger settings-compact" id="chapterFillPause" hidden>Pause</button>
               </div>
               <ol id="chapterFillHistory" class="chapter-fill-history"></ol>
+            </div>
+          </section>
+        </section>
+
+        <section data-settings-panel="topics" class="settings-panel" hidden>
+          <div class="settings-panel-head">
+            <h4>Topics</h4>
+            <span class="context-help"><button type="button" class="context-help-trigger" aria-label="About Topics" aria-describedby="settingsHelpTopics">?</button><span id="settingsHelpTopics" class="context-help-box" role="tooltip">Find topics and Refine topics read chapter and session titles with the model below. Sort new and Test taxonomy send each chapter's title, its session title and its group name to the sorting model on OpenRouter. Transcript text is never sent.</span></span>
+          </div>
+          <p class="settings-feature-note">Buttons in Topics show the model set here. Nothing runs until you press it.</p>
+          <section class="settings-group">
+            <div class="settings-group-head"><h5>Find and refine topics</h5><span class="settings-value-muted">Codex App Server</span></div>
+            <div class="settings-item">
+              <div class="settings-item-label"><span class="settings-item-title"><label for="topicCodexModel">Model</label></span></div>
+              <div class="settings-item-control"><input id="topicCodexModel" class="settings-input-mono settings-input-medium" list="strandModelOptions" spellcheck="false" autocomplete="off"></div>
+            </div>
+            <div class="settings-item">
+              <div class="settings-item-label"><span class="settings-item-title"><label for="topicCodexEffort">Reasoning effort</label></span></div>
+              <div class="settings-item-control"><select id="topicCodexEffort"><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="xhigh">Extra high</option></select></div>
+            </div>
+          </section>
+          <section class="settings-group">
+            <div class="settings-group-head"><h5>Sort and test</h5><span class="settings-value-muted">OpenRouter</span></div>
+            <div class="settings-item">
+              <div class="settings-item-label"><span class="settings-item-title"><label for="topicJevModel">Model</label></span></div>
+              <div class="settings-item-control"><input id="topicJevModel" class="settings-input-mono settings-input-medium" spellcheck="false" autocomplete="off"></div>
+            </div>
+            <div class="settings-item">
+              <div class="settings-item-label"><span class="settings-item-title"><label for="topicKeyInput">OpenRouter key</label></span><span id="topicKeyState" class="settings-value-muted"></span></div>
+              <div class="settings-item-control">
+                <input id="topicKeyInput" class="settings-input-mono settings-input-key" type="password" placeholder="sk-or-…" autocomplete="off" spellcheck="false">
+                <button type="button" class="ghost settings-compact" id="topicKeySave">Save key</button>
+                <button type="button" class="settings-quiet-danger settings-compact" id="topicKeyRemove" hidden>Remove</button>
+              </div>
+            </div>
+          </section>
+          <section class="settings-group">
+            <div class="settings-group-head"><h5>What gets sent</h5></div>
+            <div class="settings-item">
+              <div class="settings-item-label"><span class="settings-item-title"><label for="topicSensitive">Include sensitive groups</label></span></div>
+              <div class="settings-item-control"><input id="topicSensitive" class="settings-switch-input" type="checkbox" role="switch"></div>
+            </div>
+            <div class="settings-item">
+              <div class="settings-item-label"><span class="settings-item-title"><label for="topicPoolHint">Suggest Find topics when Unsorted reaches</label></span></div>
+              <div class="settings-item-control"><input id="topicPoolHint" class="settings-input-mono" type="number" min="1" max="500" step="1" style="width: 5.5rem"> <span class="settings-value-muted">chapters</span></div>
+            </div>
+            <div class="settings-item">
+              <span id="topicSettingsStatus" class="settings-inline-status" aria-live="polite"></span>
+              <div class="settings-item-control"><button type="button" class="primary settings-compact" id="topicSettingsSave">Save</button></div>
             </div>
           </section>
         </section>
@@ -3430,6 +3478,7 @@
         renderExchanges();
       });
       dom.aiSettingsClose.addEventListener("click", () => dom.aiSettingsDialog.close());
+      bindTopicSettings();
       bindSettingsEvents();
       bindAnchorEvents();
       bindCodexSettingsEvents();
@@ -3763,10 +3812,19 @@
           state.displayTimezone = me.display_timezone || state.displayTimezone;
           dom.identity.textContent = state.userDisplayName;
           populateTimezoneSelect();
+          const params = new URLSearchParams(window.location.search);
+          if (params.get("embed") === "settings") {
+            await openEmbeddedSettings(params.get("tab") || "general");
+            return;
+          }
           applySessionLink();
           await loadSettings();
           await loadOperationalStatus();
           await refreshAll();
+          if (params.get("search") === "1") {
+            window.history.replaceState(null, "", window.location.pathname);
+            openContextSearch();
+          }
         } catch (error) {
           if (error.status === 401) {
             redirectToLogin();
@@ -3776,6 +3834,18 @@
           const ok = await enableDemo();
           if (!ok) setStatus(error.message, "error");
         }
+      }
+
+      // Other workspaces open Settings as this page in a frame (?embed=settings&tab=…):
+      // only the dialog shows, and closing it tells the parent to remove the frame.
+      async function openEmbeddedSettings(tab) {
+        document.body.classList.add("embed-settings");
+        let changed = false;
+        dom.aiSettingsDialog.addEventListener("change", () => { changed = true; });
+        dom.aiSettingsDialog.addEventListener("close", () => {
+          window.parent.postMessage({ type: "bridge-settings-closed", changed }, window.location.origin);
+        });
+        await openAiSettingsDialog(tab);
       }
 
       // /admin/sessions?session=<id>&chapter=<strand id> opens that session (Topics links here).
@@ -4013,6 +4083,7 @@
         }
         if (name === "codex") refreshCodexSettings();
         if (name === "strands") { loadStrandSettings(); loadTokenFeatures(); loadChapterAutomation(); }
+        if (name === "topics") loadTopicSettings();
         renderSettingsDirty();
       }
 
@@ -4088,11 +4159,12 @@
         if (saved && modeChanged && !settingsDom.toolOutputOptimized.disabled) await saveToolOutputSettings(mode);
       }
 
-      async function openAiSettingsDialog() {
+      async function openAiSettingsDialog(tab = "") {
         state.settingsDirty.clear();
         setProviderKeyEditing("openai", false);
         setProviderKeyEditing("cohere", false);
-        selectSettingsTab(state.operationalStatus?.update?.state === "available" ? "system" : "general");
+        const known = tab && document.querySelector(`[data-settings-tab="${CSS.escape(tab)}"]`);
+        selectSettingsTab(known ? tab : state.operationalStatus?.update?.state === "available" ? "system" : "general");
         loadTokenFeatures();
         dom.aiSettingsStatus.textContent = "Loading settings...";
         dom.aiSettingsStatus.classList.remove("is-error", "is-ok");
@@ -9642,6 +9714,107 @@
         }
       }
 
+      // ---------- Topics settings ----------
+      var topicSettingsDomCache = null; // var: bound before this line runs
+      function topicDom() {
+        if (topicSettingsDomCache) return topicSettingsDomCache;
+        topicSettingsDomCache = {
+        codexModel: document.getElementById("topicCodexModel"),
+        codexEffort: document.getElementById("topicCodexEffort"),
+        jevModel: document.getElementById("topicJevModel"),
+        keyInput: document.getElementById("topicKeyInput"),
+        keyState: document.getElementById("topicKeyState"),
+        keySave: document.getElementById("topicKeySave"),
+        keyRemove: document.getElementById("topicKeyRemove"),
+        sensitive: document.getElementById("topicSensitive"),
+        poolHint: document.getElementById("topicPoolHint"),
+        status: document.getElementById("topicSettingsStatus"),
+        save: document.getElementById("topicSettingsSave"),
+        };
+        return topicSettingsDomCache;
+      }
+
+      function setTopicSettingsMessage(message, tone = "") {
+        const topicSettingsDom = topicDom();
+        topicSettingsDom.status.textContent = message;
+        topicSettingsDom.status.classList.toggle("is-error", tone === "error");
+        topicSettingsDom.status.classList.toggle("is-ok", tone === "ok");
+      }
+
+      function renderTopicKey(keySet) {
+        const topicSettingsDom = topicDom();
+        topicSettingsDom.keyState.textContent = keySet ? "saved" : "not set";
+        topicSettingsDom.keyRemove.hidden = !keySet;
+        topicSettingsDom.keySave.textContent = keySet ? "Replace key" : "Save key";
+      }
+
+      async function loadTopicSettings() {
+        const topicSettingsDom = topicDom();
+        try {
+          const payload = await api("/admin/api/topics");
+          const settings = payload.settings;
+          topicSettingsDom.codexModel.value = settings.codex_model;
+          topicSettingsDom.codexEffort.value = settings.codex_effort;
+          topicSettingsDom.jevModel.value = settings.jev_model;
+          topicSettingsDom.sensitive.checked = settings.include_sensitive;
+          topicSettingsDom.poolHint.value = settings.pool_hint;
+          renderTopicKey(payload.key_set);
+          setTopicSettingsMessage("");
+        } catch (error) {
+          setTopicSettingsMessage(`Could not load Topics settings: ${error.message}`, "error");
+        }
+      }
+
+      async function saveTopicSettings() {
+        const topicSettingsDom = topicDom();
+        topicSettingsDom.save.disabled = true;
+        try {
+          await api("/admin/api/topics/settings", {
+            method: "PUT",
+            body: JSON.stringify({
+              codex_model: topicSettingsDom.codexModel.value.trim(),
+              codex_effort: topicSettingsDom.codexEffort.value,
+              jev_model: topicSettingsDom.jevModel.value.trim(),
+              include_sensitive: topicSettingsDom.sensitive.checked,
+              pool_hint: Number(topicSettingsDom.poolHint.value),
+            }),
+          });
+          setTopicSettingsMessage("Saved. Topics uses these settings from the next run.", "ok");
+        } catch (error) {
+          setTopicSettingsMessage(error.message, "error");
+        } finally {
+          topicSettingsDom.save.disabled = false;
+        }
+      }
+
+      async function saveTopicKey(remove) {
+        const topicSettingsDom = topicDom();
+        const value = remove ? "" : topicSettingsDom.keyInput.value.trim();
+        if (!remove && !value) {
+          setTopicSettingsMessage("Paste the OpenRouter key first.", "error");
+          return;
+        }
+        if (remove && !(await window.adminConfirmation.confirm({
+          title: "Remove the OpenRouter key?", message: "Sorting and testing stop until you add a key again.",
+          confirmLabel: "Remove", tone: "danger",
+        }))) return;
+        try {
+          const payload = await api("/admin/api/topics/key", { method: "PUT", body: JSON.stringify({ api_key: value }) });
+          topicSettingsDom.keyInput.value = "";
+          renderTopicKey(payload.key_set);
+          setTopicSettingsMessage(payload.key_set ? "Key saved." : "Key removed.", "ok");
+        } catch (error) {
+          setTopicSettingsMessage(error.message, "error");
+        }
+      }
+
+      function bindTopicSettings() {
+        const topicSettingsDom = topicDom();
+        topicSettingsDom.save.addEventListener("click", saveTopicSettings);
+        topicSettingsDom.keySave.addEventListener("click", () => saveTopicKey(false));
+        topicSettingsDom.keyRemove.addEventListener("click", () => saveTopicKey(true));
+      }
+
       function renderTokenFeatures(features) {
         codexSettingsDom.tokenMaster.checked = features.enabled;
         anchors.strandsEnabled = features.strands_active;
@@ -10772,5 +10945,6 @@
       }
     })();
   </script>
+  <script src="/admin/assets/admin-header.js"></script>
 </body>
 </html>

@@ -970,7 +970,7 @@ def test_admin_database_export_button_sends_only_a_trigger_and_renders_vps_path(
 def test_mcp_settings_save_keeps_the_chosen_result_format() -> None:
     """Saving chunk limits refills the form; the format choice must survive it."""
     source = slice_source(
-        "async function saveDeliverySettings()", "async function openAiSettingsDialog()"
+        "async function saveDeliverySettings()", "async function openAiSettingsDialog("
     )
 
     def save(chosen: str, configured: str) -> list[str]:
