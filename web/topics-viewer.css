@@ -266,8 +266,13 @@ details.tp-more[open] summary { margin-bottom: 8px; }
 .tp-review-detail .tp-tree { gap: 4px; }
 .tp-spinner.big { width: 26px; height: 26px; border-width: 3px; }
 .tp-dots-anim { display: inline-flex; margin-left: 1px; }
-.tp-dots-anim i { font-style: normal; display: inline-block; animation: tp-dot-jump 1.2s ease-in-out infinite; }
-.tp-dots-anim i:nth-child(2) { animation-delay: .15s; }
-.tp-dots-anim i:nth-child(3) { animation-delay: .3s; }
+.tp-dots-anim i { font-style: normal; display: inline-block; animation: tp-dot-jump 1.2s ease-in-out infinite; animation-delay: var(--phase, 0ms); }
+.tp-dots-anim i:nth-child(2) { animation-delay: calc(var(--phase, 0ms) + 150ms); }
+.tp-dots-anim i:nth-child(3) { animation-delay: calc(var(--phase, 0ms) + 300ms); }
 @keyframes tp-dot-jump { 0%, 60%, 100% { transform: translateY(0); opacity: .45; } 30% { transform: translateY(-3px); opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .tp-dots-anim i { animation: none; opacity: 1; } }
+.tp-card-toggle { width: 100%; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.tp-card-toggle .tp-chev { transition: transform .15s ease; }
+.tp-card.is-open .tp-card-toggle .tp-chev { transform: rotate(90deg); }
+.tp-card.is-collapsed { padding: 10px 18px; }
+.tp-card.is-collapsed b { font-size: 14px; }

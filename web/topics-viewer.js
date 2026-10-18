@@ -19,7 +19,9 @@
   const CHEV = '<span class="tp-chev" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"></path></svg></span>';
   const ARROW = '<span class="arrow" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"></path></svg></span>';
   const SOURCE = { find: "from Find topics", refine: "from Refine topics", owner: "your edit" };
-  const DOTS = '<span class="tp-dots-anim" aria-hidden="true"><i>.</i><i>.</i><i>.</i></span>';
+  const DOT_CYCLE_MS = 1200;
+  // The pane re-renders on every poll; a negative delay keeps the animation's phase so it never restarts mid-cycle.
+  const dots = () => `<span class="tp-dots-anim" aria-hidden="true" style="--phase:-${Date.now() % DOT_CYCLE_MS}ms"><i>.</i><i>.</i><i>.</i></span>`;
   const EFFORT = { low: "low", medium: "medium", high: "high", xhigh: "extra high" };
   const KIND = { first_map: "First map", new_topic: "New topic", split: "Split", redescribe: "Description", edit: "Your edit" };
 
@@ -32,7 +34,7 @@
     view: readPref("view", "list"),
     selected: null,
     openSessions: {},
-    manage: { section: "proposals", detail: "balanced", note: "", focus: {}, drafts: {}, openReview: new Set(), editKey: null, editDraft: null, editProposal: null, importOpen: false },
+    manage: { section: "proposals", detail: "balanced", note: "", focus: {}, drafts: {}, openReview: new Set(), cardOpen: {}, reviewId: null, showList: false, editKey: null, editDraft: null, editProposal: null, importOpen: false },
     graph: { second: true, sensitive: true, query: "", focus: null },
     pollTimer: 0,
     busy: false,
@@ -250,7 +252,7 @@
     const status = v ? `map v${v.version_id} · ${v.topic_count} topics · ${o.counts.chapters} chapters` : `no topics yet · ${o.counts.chapters} chapters`;
     let live = "";
     if (job && job.kind !== "classify") {
-      const label = (job.step === "testing" ? "Testing a proposal" : "Proposing topics") + DOTS;
+      const label = (job.step === "testing" ? "Testing a proposal" : "Proposing topics") + dots();
       const progress = job.progress ? ` ${job.progress.done} / ${job.progress.total}` : "";
       live = `<span class="tp-progress-pill"><span class="tp-spinner"></span>${label}${progress}<span class="tp-clock small" data-since="${esc(job.started_at)}">${clock(job.started_at)}</span></span>`;
     } else if (run && ["queued", "running"].includes(run.status)) {
@@ -655,6 +657,8 @@
       if (!ok) return;
       await request(`/admin/api/topics/${kind}`, { method: "POST", body: { detail: m.detail, note: m.note } });
       m.section = "proposals";
+      m.showList = false;
+      m.reviewId = null;
       await refresh();
     });
   }
@@ -681,7 +685,7 @@
     return `<div class="tp-job">
       <span class="tp-spinner big"></span>
       <span class="tp-clock" data-since="${esc(since)}">${clock(since)}</span>
-      <span class="tp-job-text"><b>${testing ? "Testing" : "Proposing"}${DOTS}${model ? ` <span class="tp-job-model">${esc(model)}</span>` : ""}</b><span class="tp-muted">${esc(text)}</span></span>
+      <span class="tp-job-text"><b>${testing ? "Testing" : "Proposing"}${dots()}${model ? ` <span class="tp-job-model">${esc(model)}</span>` : ""}</b><span class="tp-muted">${esc(text)}</span></span>
       ${job.started_at && since !== job.started_at ? `<span class="tp-muted tp-small">whole run ${clock(job.started_at)}</span>` : ""}
     </div>`;
   }
@@ -706,17 +710,36 @@
 
   function renderProposals() {
     const proposals = state.proposals;
-    const first = proposals.find((p) => p.op === "first_map" && p.status !== "testing") || null;
-    if (first && !jobRunning()) { renderFirstMap(first); return; }
+    const m = state.manage;
+    const reviewable = proposals.filter((p) => p.op === "first_map" && p.status !== "testing");
+    const first = reviewable.find((p) => p.proposal_id === m.reviewId) || reviewable[0] || null;
+    if (first && !jobRunning() && !m.showList) { renderFirstMap(first); return; }
     dom.manageMain.innerHTML = `<div class="tp-pane">
       ${jobBanner()}
       ${failedNote()}
       <div class="tp-pane-head"><b>${proposals.length ? `${proposals.length} open proposal${proposals.length === 1 ? "" : "s"}` : "Nothing to decide"}</b>
         <span class="tp-muted">${proposals.length ? "Each was tested on all chapters before you see it. Nothing changes until you accept." : version() ? "Find topics looks in Unsorted; Refine topics reviews the whole map." : "Press Find topics to build the first map from Unsorted."}</span></div>
-      ${proposals.map(proposalCard).join("")}
+      ${proposals.map((p, index) => proposalCard(p, index)).join("")}
       ${waitingNote()}
     </div>`;
     bindProposalButtons(dom.manageMain);
+    for (const b of dom.manageMain.querySelectorAll("[data-review]")) {
+      b.addEventListener("click", () => { m.reviewId = Number(b.dataset.review); m.showList = false; renderManage(); });
+    }
+    for (const head of dom.manageMain.querySelectorAll("[data-card-toggle]")) {
+      head.addEventListener("click", (e) => {
+        if (e.target.closest("button:not([data-card-toggle])")) return;
+        const id = Number(head.dataset.cardToggle);
+        state.manage.cardOpen[id] = !cardIsOpen(id, Number(head.dataset.index));
+        renderManage();
+      });
+    }
+  }
+
+  // The newest proposal starts open; older ones start as a one-line summary.
+  function cardIsOpen(id, index) {
+    const choice = state.manage.cardOpen[id];
+    return choice === undefined ? index === 0 : choice;
   }
 
   function waitingNote() {
@@ -734,7 +757,8 @@
     if (p.op === "edit") return `<span class="tp-verdict ${t.moves_count > 0 ? "ok" : "off"}">Test: ${t.moves_count} chapter${t.moves_count === 1 ? "" : "s"} move · ${pct(t.confidence_before)} → ${pct(t.confidence_after)}</span>`;
     if (t.verdict === "spreads") return `<span class="tp-verdict warn">Test: spreads, pulls ${t.pulled_count} chapters from elsewhere</span>`;
     if (t.verdict === "weak") return `<span class="tp-verdict warn">Test: only ${t.landed} of ${t.intended} land as proposed</span>`;
-    return `<span class="tp-verdict ok">Test: ${t.landed} of ${t.intended} land as proposed · ${pct(t.confidence_before)} → ${pct(t.confidence_after)}</span>`;
+    const confidence = t.confidence_before == null ? `avg ${pct(t.confidence_after)}` : `${pct(t.confidence_before)} → ${pct(t.confidence_after)}`;
+    return `<span class="tp-verdict ok">Test: ${t.landed} of ${t.intended} land as proposed · ${confidence}</span>`;
   }
 
   function moveLines(t, focusKey = null) {
@@ -745,24 +769,28 @@
     }).join("");
   }
 
-  function proposalCard(p) {
+  function proposalCard(p, index = 0) {
     const t = p.test || {};
+    const open = cardIsOpen(p.proposal_id, index);
     const warn = t.verdict === "spreads" || t.verdict === "weak";
     const parts = (p.payload.parts || []).map((part) => `<span class="tp-part"><b>${esc(part.name)}</b><span class="tp-muted">${part.chapter_ids.length} chapters</span></span>`).join("");
     const moves = moveLines(t);
     const actions = p.status === "pending"
       ? (warn
         ? `<button type="button" class="tp-btn" data-proposal="${p.proposal_id}" data-do="accept">Accept anyway</button><button type="button" class="tp-btn light" data-proposal="${p.proposal_id}" data-do="reject">Reject, don’t propose again</button>`
-        : `<button type="button" class="tp-btn" data-proposal="${p.proposal_id}" data-do="reject">Reject</button><button type="button" class="tp-btn primary" data-proposal="${p.proposal_id}" data-do="accept">Accept</button>`)
+        : `<button type="button" class="tp-btn" data-proposal="${p.proposal_id}" data-do="reject">Reject</button>${p.op === "first_map" ? `<button type="button" class="tp-btn" data-review="${p.proposal_id}" ${jobRunning() ? "disabled" : ""}>Review topics</button>` : ""}<button type="button" class="tp-btn primary" data-proposal="${p.proposal_id}" data-do="accept">Accept</button>`)
       : p.status === "testing" ? "" : `<button type="button" class="tp-btn" data-proposal="${p.proposal_id}" data-do="reject">Reject</button><button type="button" class="tp-btn cyan" data-proposal="${p.proposal_id}" data-do="retest" ${jobRunning() ? "disabled" : ""}>Test again <span class="model">(${esc(jevModel())})</span></button>`;
-    return `<article class="tp-card ${warn ? "warn" : ""}">
-      <div class="tp-card-head"><span class="tp-kind">${esc(KIND[p.op] || p.op)}</span><b>${esc(p.summary)}</b><span class="tp-faint tp-small">${esc(SOURCE[p.source] || p.source)}</span><span class="tp-spacer"></span>${verdictChip(p)}</div>
+    const head = `<button type="button" class="tp-card-head tp-card-toggle" data-card-toggle="${p.proposal_id}" data-index="${index}" aria-expanded="${open}">
+        ${CHEV}<span class="tp-kind">${esc(KIND[p.op] || p.op)}</span><b>${esc(p.summary)}</b><span class="tp-faint tp-small">${esc(SOURCE[p.source] || p.source)}${p.status === "pending" && p.op === "first_map" ? ` · Unsorted ${t.pool_after}` : ""}</span><span class="tp-spacer"></span>${verdictChip(p)}</button>`;
+    if (!open) return `<article class="tp-card is-collapsed ${warn ? "warn" : ""}">${head}</article>`;
+    return `<article class="tp-card is-open ${warn ? "warn" : ""}">
+      ${head}
       ${p.payload.reason ? commentary(p.payload.reason) : ""}
       ${timingLine(p)}
       ${p.op === "redescribe" ? `<p><span class="tp-muted">New description:</span> ${esc(p.payload.new_description)}</p>` : ""}
       ${parts ? `<div class="tp-parts">${parts}</div>` : ""}
-      ${p.status === "pending" ? `<div class="tp-stats"><span>Unsorted <b>${t.pool_before}</b> → <b>${t.pool_after}</b></span><span>Moving <b>${t.moves_count}</b></span>${t.pulled_count ? `<span>Pulled from elsewhere <b>${t.pulled_count}</b></span>` : ""}${t.cost_usd != null ? `<span>Test cost <b>${usd(t.cost_usd, 4)}</b></span>` : ""}</div>` : ""}
-      ${moves ? `<details class="tp-more"><summary>Chapters that move (${t.moves_count})</summary><div class="tp-moves">${moves}</div></details>` : ""}
+      ${p.status === "pending" ? `<div class="tp-stats"><span>Unsorted <b>${t.pool_before}</b> → <b>${t.pool_after}</b></span>${p.op === "first_map" ? "" : `<span>Moving <b>${t.moves_count}</b></span>`}${t.pulled_count ? `<span>Pulled from elsewhere <b>${t.pulled_count}</b></span>` : ""}${t.cost_usd != null ? `<span>Test cost <b>${usd(t.cost_usd, 4)}</b></span>` : ""}</div>` : ""}
+      ${moves && p.op !== "first_map" ? `<details class="tp-more"><summary>Chapters that move (${t.moves_count})</summary><div class="tp-moves">${moves}</div></details>` : ""}
       <div style="display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap">${actions}</div>
     </article>`;
   }
@@ -908,6 +936,7 @@
     const fp = per[focus.key] || {};
     dom.manageMain.innerHTML = `
       <div style="padding:14px 20px;border-bottom:1px solid var(--stroke);display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        ${state.proposals.length > 1 ? `<button type="button" class="tp-link" data-act="all-proposals">← All proposals (${state.proposals.length})</button>` : ""}
         <span class="tp-kind">First map</span><b style="font-size:15px">${kept} topics proposed</b>
         <span class="tp-muted">${p.status === "pending" ? `Tested on ${t.sorted} chapters: ${t.sorted - t.pool_after} land in a topic, ${t.pool_after} stay in Unsorted` : esc(p.status === "outdated" ? "The map changed since this test." : p.test?.error || "")}</span>
         ${p.payload.reason ? `<div style="flex-basis:100%">${commentary(p.payload.reason)}</div>` : ""}
@@ -955,6 +984,7 @@
           ? `<button type="button" class="tp-btn cyan" data-act="revise" ${jobRunning() ? "disabled" : ""}>Test again <span class="model">(${esc(jevModel())})</span></button>`
           : `<button type="button" class="tp-btn primary" data-proposal="${p.proposal_id}" data-do="accept">Accept ${kept} topics</button>`}
       </div>`;
+    dom.manageMain.querySelector('[data-act="all-proposals"]')?.addEventListener("click", () => { state.manage.showList = true; renderManage(); });
     for (const b of dom.manageMain.querySelectorAll("[data-review-session]")) {
       b.addEventListener("click", () => {
         const open = state.manage.openReview;
