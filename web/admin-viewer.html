@@ -1764,6 +1764,16 @@
     .settings-dialog button.settings-compact { min-height: var(--h-compact); padding: 0 11px; }
     .settings-input-number { width: 8rem; text-align: right; font-family: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; }
     .settings-input-medium { width: 13rem; }
+    .model-picker { position: relative; display: inline-flex; }
+    .model-picker-menu { position: absolute; z-index: 30; top: calc(100% + 6px); right: 0; width: min(24rem, 80vw); max-height: 18rem; overflow: auto; padding: .35rem; border: 1px solid var(--stroke-strong, rgba(255, 255, 255, .16)); border-radius: 10px; background: var(--panel, #15171c); box-shadow: 0 18px 40px rgba(0, 0, 0, .45); }
+    .model-picker-head { display: flex; align-items: center; gap: .5rem; padding: .3rem .5rem .45rem; font-size: 11.5px; color: var(--muted, #8e93a8); }
+    .model-picker-head .spin { width: 11px; height: 11px; border-radius: 999px; border: 2px solid rgba(34, 211, 238, .25); border-top-color: #22d3ee; animation: model-picker-spin .8s linear infinite; }
+    @keyframes model-picker-spin { to { transform: rotate(360deg); } }
+    .model-picker-menu .model-picker-item { display: grid; justify-items: start; gap: 2px; width: 100%; margin: 0; min-height: 0; height: auto; padding: .45rem .55rem; border: 0; border-radius: 7px; background: none; color: var(--text, #e6e8f0); text-align: left; cursor: pointer; }
+    .model-picker-menu .model-picker-item:hover, .model-picker-menu .model-picker-item[aria-selected="true"] { background: rgba(122, 125, 240, .14); }
+    .model-picker-item b { font: 600 12.5px "Geist Mono", monospace; }
+    .model-picker-item span { font-size: 11.5px; color: var(--muted, #8e93a8); }
+    .model-picker-empty { padding: .5rem .55rem; font-size: 12px; color: var(--muted, #8e93a8); }
     .settings-input-wide { width: 17rem; }
     .settings-input-key { width: 17rem; }
     .settings-input-mono { font-family: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; }
@@ -2876,14 +2886,13 @@
             <div class="settings-item">
               <div class="settings-item-label"><span class="settings-item-title"><label for="strandModelInput">Model</label></span></div>
               <div class="settings-item-control">
-                <input id="strandModelInput" class="settings-input-mono settings-input-medium" list="strandModelOptions" spellcheck="false" autocomplete="off">
-                <datalist id="strandModelOptions"><option value="gpt-5.6-sol"></option></datalist>
+                <input id="strandModelInput" class="settings-input-mono settings-input-medium" data-model-picker="strandEffortSelect" spellcheck="false" autocomplete="off">
               </div>
             </div>
             <div class="settings-item">
               <div class="settings-item-label"><span class="settings-item-title"><label for="strandEffortSelect">Reasoning effort</label></span></div>
               <div class="settings-item-control">
-                <select id="strandEffortSelect"><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="xhigh">Extra high</option></select>
+                <select id="strandEffortSelect"><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="xhigh">Extra high</option><option value="max">Max</option><option value="ultra">Ultra</option></select>
               </div>
             </div>
             <div class="settings-item settings-item-stack">
@@ -2923,11 +2932,11 @@
             <div class="settings-group-head"><h5>Find and refine topics</h5><span class="settings-value-muted">Codex App Server</span></div>
             <div class="settings-item">
               <div class="settings-item-label"><span class="settings-item-title"><label for="topicCodexModel">Model</label></span></div>
-              <div class="settings-item-control"><input id="topicCodexModel" class="settings-input-mono settings-input-medium" list="strandModelOptions" spellcheck="false" autocomplete="off"></div>
+              <div class="settings-item-control"><input id="topicCodexModel" class="settings-input-mono settings-input-medium" data-model-picker="topicCodexEffort" spellcheck="false" autocomplete="off"></div>
             </div>
             <div class="settings-item">
               <div class="settings-item-label"><span class="settings-item-title"><label for="topicCodexEffort">Reasoning effort</label></span></div>
-              <div class="settings-item-control"><select id="topicCodexEffort"><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="xhigh">Extra high</option></select></div>
+              <div class="settings-item-control"><select id="topicCodexEffort"><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="xhigh">Extra high</option><option value="max">Max</option><option value="ultra">Ultra</option></select></div>
             </div>
             <div class="settings-item">
               <div class="settings-item-label"><span class="settings-item-title"><label for="topicCodexTimeout">Timeout limit</label></span></div>
@@ -3483,6 +3492,7 @@
       });
       dom.aiSettingsClose.addEventListener("click", () => dom.aiSettingsDialog.close());
       bindTopicSettings();
+      bindModelPickers();
       bindSettingsEvents();
       bindAnchorEvents();
       bindCodexSettingsEvents();
@@ -9693,6 +9703,7 @@
           codexSettingsDom.effort.value = payload.settings.effort;
           codexSettingsDom.prompt.value = payload.settings.prompt;
           setStrandSettingsMessage("");
+          syncModelPickers();
         } catch (error) {
           setStrandSettingsMessage(`Could not load strand settings: ${error.message}`, "error");
         }
@@ -9761,6 +9772,7 @@
           topicSettingsDom.codexModel.value = settings.codex_model;
           topicSettingsDom.codexEffort.value = settings.codex_effort;
           topicSettingsDom.codexTimeout.value = settings.codex_timeout_minutes;
+          syncModelPickers();
           topicSettingsDom.jevModel.value = settings.jev_model;
           topicSettingsDom.sensitive.checked = settings.include_sensitive;
           topicSettingsDom.poolHint.value = settings.pool_hint;
@@ -9812,6 +9824,106 @@
           setTopicSettingsMessage(payload.key_set ? "Key saved." : "Key removed.", "ok");
         } catch (error) {
           setTopicSettingsMessage(error.message, "error");
+        }
+      }
+
+      // ---------- Codex model picker ----------
+      // Shows the last scanned list at once, asks Codex for a fresh one on every open, then updates in place.
+      var codexModelCatalog = null; // var: read before this line runs in tests
+      var codexModelRefresh = null;
+      const EFFORT_LABELS = { low: "Low", medium: "Medium", high: "High", xhigh: "Extra high", max: "Max", ultra: "Ultra" };
+
+      async function loadCodexModels() {
+        if (codexModelCatalog) return codexModelCatalog;
+        try {
+          codexModelCatalog = (await api("/admin/api/codex/models")).catalog;
+        } catch (_) {
+          codexModelCatalog = { models: [], scanned_at: null };
+        }
+        return codexModelCatalog;
+      }
+
+      function refreshCodexModels() {
+        if (!codexModelRefresh) {
+          codexModelRefresh = api("/admin/api/codex/models/refresh", { method: "POST", body: "{}" })
+            .then((payload) => { codexModelCatalog = payload.catalog; return { ok: true }; })
+            .catch((error) => ({ ok: false, error: error.message }))
+            .finally(() => { codexModelRefresh = null; });
+        }
+        return codexModelRefresh;
+      }
+
+      function syncModelEfforts(input) {
+        const select = document.getElementById(input.dataset.modelPicker);
+        if (!select) return;
+        const model = (codexModelCatalog?.models || []).find((m) => m.model === input.value.trim());
+        const efforts = model && model.efforts.length ? model.efforts : Object.keys(EFFORT_LABELS);
+        const current = select.value;
+        const keep = efforts.includes(current) ? current : (model?.default_effort && efforts.includes(model.default_effort) ? model.default_effort : current);
+        const values = efforts.includes(keep) ? efforts : [...efforts, keep];
+        select.innerHTML = values.map((value) => `<option value="${escapeHtml(value)}">${escapeHtml(EFFORT_LABELS[value] || value)}</option>`).join("");
+        select.value = keep;
+      }
+
+      async function syncModelPickers() {
+        await loadCodexModels();
+        for (const input of document.querySelectorAll("[data-model-picker]")) syncModelEfforts(input);
+      }
+
+      function bindModelPickers() {
+        for (const input of document.querySelectorAll("[data-model-picker]")) {
+          const wrap = document.createElement("span");
+          wrap.className = "model-picker";
+          input.parentNode.insertBefore(wrap, input);
+          wrap.appendChild(input);
+          const menu = document.createElement("div");
+          menu.className = "model-picker-menu";
+          menu.hidden = true;
+          wrap.appendChild(menu);
+          let state = { refreshing: false, error: "" };
+          let typed = false; // filter only once the owner types; on open the whole list shows
+
+          const ago = (at) => {
+            if (!at) return "never scanned";
+            const minutes = Math.round((Date.now() / 1000 - at) / 60);
+            return minutes < 1 ? "scanned just now" : minutes < 60 ? `scanned ${minutes} min ago` : `scanned ${Math.round(minutes / 60)} h ago`;
+          };
+          const draw = () => {
+            const models = codexModelCatalog?.models || [];
+            const query = typed ? input.value.trim().toLowerCase() : "";
+            const shown = models.filter((m) => !query || m.model.toLowerCase().includes(query));
+            menu.innerHTML = `<div class="model-picker-head">${state.refreshing ? '<span class="spin"></span>Refreshing…' : escapeHtml(state.error ? `Could not refresh: ${state.error}` : `Codex models · ${ago(codexModelCatalog?.scanned_at)}`)}</div>`
+              + (shown.length ? shown.map((m) => `<button type="button" class="model-picker-item" data-model="${escapeHtml(m.model)}" aria-selected="${m.model === input.value.trim()}"><b>${escapeHtml(m.model)}${m.is_default ? " · default" : ""}</b><span>${escapeHtml(m.description || m.display_name)}${m.efforts.length ? ` · ${escapeHtml(m.efforts.map((e) => EFFORT_LABELS[e] || e).join(", "))}` : ""}</span></button>`).join("")
+                : `<div class="model-picker-empty">${state.refreshing ? "Asking Codex for its models…" : "No models listed yet. You can still type a model name."}</div>`);
+          };
+          const open = async () => {
+            if (!menu.hidden) return;
+            menu.hidden = false;
+            typed = false;
+            await loadCodexModels();
+            state = { refreshing: true, error: "" };
+            draw();
+            const result = await refreshCodexModels();
+            state = { refreshing: false, error: result.ok ? "" : result.error };
+            if (!menu.hidden) draw();
+            syncModelEfforts(input);
+          };
+          const close = () => { menu.hidden = true; };
+          input.addEventListener("focus", open);
+          input.addEventListener("click", open);
+          input.addEventListener("input", () => { typed = true; if (!menu.hidden) draw(); });
+          input.addEventListener("change", () => syncModelEfforts(input));
+          input.addEventListener("keydown", (event) => { if (event.key === "Escape" && !menu.hidden) { event.stopPropagation(); close(); } });
+          menu.addEventListener("mousedown", (event) => event.preventDefault());
+          menu.addEventListener("click", (event) => {
+            const item = event.target.closest("[data-model]");
+            if (!item) return;
+            input.value = item.dataset.model;
+            input.dispatchEvent(new Event("input", { bubbles: true }));
+            syncModelEfforts(input);
+            close();
+          });
+          input.addEventListener("blur", close);
         }
       }
 

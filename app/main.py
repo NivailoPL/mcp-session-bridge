@@ -380,6 +380,16 @@ async def admin_api_operational_status(request: Request) -> Response:
     return await admin.api_operational_status(request)
 
 
+@mcp.custom_route("/admin/api/codex/models", methods=["GET"])
+async def admin_api_codex_models(request: Request) -> Response:
+    return await admin.api_codex_models(request)
+
+
+@mcp.custom_route("/admin/api/codex/models/refresh", methods=["POST"])
+async def admin_api_codex_models_refresh(request: Request) -> Response:
+    return await admin.api_codex_models_refresh(request)
+
+
 @mcp.custom_route("/admin/api/codex/status", methods=["GET"])
 async def admin_api_codex_status(request: Request) -> Response:
     return await admin.api_codex_status(request)

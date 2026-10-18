@@ -27,7 +27,7 @@ DEFAULT_TOPIC_COLOR = "#7a7df0"
 
 TOPIC_SETTINGS_KEY = "topics.settings"
 TOPIC_OPENROUTER_KEY_SETTING = "topics.openrouter.api_key"
-TOPIC_EFFORTS = ("low", "medium", "high", "xhigh")
+TOPIC_EFFORTS = ("low", "medium", "high", "xhigh", "max", "ultra")
 TOPIC_MODEL_MAX_CHARS = 96
 
 JEV_INSTRUCTIONS = (
@@ -74,7 +74,7 @@ def validate_topic_settings(payload: Any, current: dict[str, Any] | None = None)
             raise TopicError(f"{key} must be a model name.", code="settings_invalid")
         merged[key] = value.strip()
     if merged["codex_effort"] not in TOPIC_EFFORTS:
-        raise TopicError("codex_effort must be one of low, medium, high, xhigh.", code="settings_invalid")
+        raise TopicError("codex_effort must be one of low, medium, high, xhigh, max, ultra.", code="settings_invalid")
     if not isinstance(merged["include_sensitive"], bool):
         raise TopicError("include_sensitive must be true or false.", code="settings_invalid")
     threshold = merged["weak_threshold"]

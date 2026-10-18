@@ -22,7 +22,7 @@
   const DOT_CYCLE_MS = 1200;
   // The pane re-renders on every poll; a negative delay keeps the animation's phase so it never restarts mid-cycle.
   const dots = () => `<span class="tp-dots-anim" aria-hidden="true" style="--phase:-${Date.now() % DOT_CYCLE_MS}ms"><i>.</i><i>.</i><i>.</i></span>`;
-  const EFFORT = { low: "low", medium: "medium", high: "high", xhigh: "extra high" };
+  const EFFORT = { low: "low", medium: "medium", high: "high", xhigh: "extra high", max: "max", ultra: "ultra" };
   const KIND = { first_map: "First map", new_topic: "New topic", split: "Split", redescribe: "Description", edit: "Your edit" };
 
   const state = {

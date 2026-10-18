@@ -104,9 +104,9 @@ def test_runtime_lock_is_exact_and_integrity_pinned() -> None:
     lock = load_runtime_lock(Path(__file__).parents[1])
 
     assert lock.package == "@openai/codex"
-    assert lock.version == "0.147.0"
+    assert lock.version == "0.163.0"
     assert lock.integrity.startswith("sha512-")
-    assert lock.resolved.endswith("/codex-0.147.0.tgz")
+    assert lock.resolved.endswith("/codex-0.163.0.tgz")
 
 
 def test_layout_keeps_codex_runtime_and_state_isolated(tmp_path: Path) -> None:

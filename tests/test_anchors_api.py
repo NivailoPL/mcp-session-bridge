@@ -121,7 +121,7 @@ def test_strand_settings_round_trip(load_main, admin_client) -> None:
     assert saved.status_code == 200 and saved.json()["settings"]["effort"] == "low"
     rejected = client.put(
         "/admin/api/settings/strands",
-        json={"model": "gpt-5.6-sol", "effort": "max", "prompt": "Podziel."},
+        json={"model": "gpt-5.6-sol", "effort": "extreme", "prompt": "Podziel."},
         headers={"x-csrf-token": csrf},
     )
     assert rejected.status_code == 422

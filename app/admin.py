@@ -115,6 +115,7 @@ ADMIN_FILE_UPLOAD_MAX_BODY_BYTES = ((MAX_ADMIN_PDF_BYTES + 2) // 3 * 4) + 16_384
 ADMIN_FILE_EDIT_MAX_BODY_BYTES = (MAX_SESSION_FILE_BYTES * 6) + 16_384
 THUMBNAIL_CACHE_ENTRIES = 64
 CODEX_CHAT_MAX_BODY_BYTES = MAX_CHAT_MESSAGE_CHARS * 4 + 1_024
+CODEX_MODELS_SETTING_KEY = "codex.models.catalog"
 CodexAppServerErrorTypes = (
     CodexUnavailableError,
     CodexProtocolError,
@@ -344,6 +345,34 @@ class AdminHandlers:
         except CodexAppServerErrorTypes as exc:
             return self._codex_error(exc)
         return JSONResponse({"ok": True, "codex": status}, headers=self._no_store_headers())
+
+    async def api_codex_models(self, request: Request) -> Response:
+        """The last scanned model list; the picker shows it at once and refreshes in the background."""
+        _, error = self._require_admin(request)
+        if error:
+            return error
+        raw = self.store.get_app_setting(CODEX_MODELS_SETTING_KEY)
+        try:
+            catalog = json.loads(raw) if raw else None
+        except json.JSONDecodeError:
+            catalog = None
+        return JSONResponse(
+            {"ok": True, "catalog": catalog or {"models": [], "scanned_at": None}}, headers=self._no_store_headers()
+        )
+
+    async def api_codex_models_refresh(self, request: Request) -> Response:
+        _, error = self._require_admin_mutation(request)
+        if error:
+            return error
+        if self.codex is None:
+            return self._codex_unavailable()
+        try:
+            models = await self.codex.list_models()
+        except CodexAppServerErrorTypes as exc:
+            return self._codex_error(exc)
+        catalog = {"models": models, "scanned_at": int(time.time())}
+        self.store.set_app_setting(CODEX_MODELS_SETTING_KEY, json.dumps(catalog))
+        return JSONResponse({"ok": True, "catalog": catalog}, headers=self._no_store_headers())
 
     async def api_codex_device_login_start(self, request: Request) -> Response:
         _, error = self._require_admin_mutation(request)

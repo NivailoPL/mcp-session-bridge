@@ -24,7 +24,7 @@ STRAND_SETTINGS_KEY = "strands.settings"
 # default to on so turning the feature into an opt-in never hides existing data.
 TOKEN_FEATURES_MASTER_KEY = "features.token_spend.enabled"
 TOKEN_FEATURES_STRANDS_KEY = "features.strands.enabled"
-STRAND_EFFORTS = ("low", "medium", "high", "xhigh")
+STRAND_EFFORTS = ("low", "medium", "high", "xhigh", "max", "ultra")
 STRAND_MODEL_MAX_CHARS = 96
 STRAND_PROMPT_MAX_CHARS = 24_000
 # The whole transcript goes to Codex in one turn; this leaves room for the
@@ -96,7 +96,7 @@ def validate_strand_settings(payload: Any) -> dict[str, str]:
         raise StrandError("model must be a valid model identifier.", code="model_invalid")
     effort = payload.get("effort")
     if effort not in STRAND_EFFORTS:
-        raise StrandError("effort must be low, medium, high, or xhigh.", code="effort_invalid")
+        raise StrandError("effort must be low, medium, high, xhigh, max or ultra.", code="effort_invalid")
     prompt = payload.get("prompt")
     if not isinstance(prompt, str) or not prompt.strip():
         raise StrandError("prompt must not be empty.", code="prompt_invalid")

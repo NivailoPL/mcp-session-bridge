@@ -16,7 +16,7 @@ from app.codex_app_server import (
 
 
 class FakeWebSocket:
-    def __init__(self, *, version: str = "0.147.0", account: dict[str, Any] | None = None):
+    def __init__(self, *, version: str = "0.163.0", account: dict[str, Any] | None = None):
         self.version = version
         self.account = account
         self.sent: list[dict[str, Any]] = []
@@ -108,7 +108,7 @@ def _client(tmp_path: Path, socket: FakeWebSocket) -> CodexAppServerClient:
     return CodexAppServerClient(
         socket_path=tmp_path / "codex.sock",
         workspace_dir=tmp_path / "workspace",
-        expected_version="0.147.0",
+        expected_version="0.163.0",
         connect_factory=connect,
     )
 
@@ -121,7 +121,7 @@ def test_status_and_device_login_expose_no_credentials(tmp_path: Path) -> None:
             "available": True,
             "authenticated": False,
             "account": None,
-            "version": "0.147.0",
+            "version": "0.163.0",
         }
         login = await client.start_device_login()
         assert login == {
@@ -250,7 +250,7 @@ def test_structured_extraction_passes_model_effort_and_output_schema(tmp_path: P
 def test_incompatible_runtime_is_rejected(tmp_path: Path) -> None:
     async def scenario() -> None:
         client = _client(tmp_path, FakeWebSocket(version="0.146.0"))
-        with pytest.raises(CodexIncompatibleVersionError, match="expected 0.147.0"):
+        with pytest.raises(CodexIncompatibleVersionError, match="expected 0.163.0"):
             await client.status()
         await client.close()
 
@@ -338,3 +338,27 @@ def test_server_tool_requests_are_denied_and_fail_turn(tmp_path: Path, method: s
         await client.close()
 
     asyncio.run(scenario())
+
+
+def test_list_models_pages_and_skips_hidden_models() -> None:
+    from app.codex_app_server import CodexAppServerClient
+
+    pages = [
+        {"data": [{"model": "gpt-a", "displayName": "A", "description": "fast", "isDefault": True,
+                   "supportedReasoningEfforts": [{"reasoningEffort": "low"}, {"reasoningEffort": "ultra"}],
+                   "defaultReasoningEffort": "low"},
+                  {"model": "gpt-hidden", "hidden": True}], "nextCursor": "c1"},
+        {"data": [{"model": "gpt-b", "supportedReasoningEfforts": []}], "nextCursor": None},
+    ]
+    calls = []
+
+    class Fake(CodexAppServerClient):
+        async def _rpc(self, method, params, **kwargs):
+            calls.append((method, params))
+            return pages.pop(0)
+
+    client = Fake(socket_path=Path("/nonexistent"), workspace_dir=Path("/nonexistent"))
+    models = asyncio.run(client.list_models())
+    assert [m["model"] for m in models] == ["gpt-a", "gpt-b"]
+    assert models[0]["efforts"] == ["low", "ultra"] and models[0]["is_default"]
+    assert calls == [("model/list", {}), ("model/list", {"cursor": "c1"})]

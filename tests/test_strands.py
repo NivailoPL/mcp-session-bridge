@@ -172,7 +172,7 @@ def test_settings_validation_and_defaults(store):
     assert saved["prompt"] == "Podziel."
     assert store.get_strand_settings() == saved
     for payload in ({"model": "bad model", "effort": "low", "prompt": "p"},
-                    {"model": "m", "effort": "max", "prompt": "p"},
+                    {"model": "m", "effort": "extreme", "prompt": "p"},
                     {"model": "m", "effort": "low", "prompt": ""},
                     {"model": "m", "effort": "low", "prompt": "p", "extra": 1}):
         with pytest.raises(StrandError):

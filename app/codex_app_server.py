@@ -368,6 +368,33 @@ class CodexAppServerClient:
                 state.future.set_exception(CodexUnavailableError("Codex App Server disconnected."))
         self._turns.clear()
 
+    async def list_models(self) -> list[dict[str, Any]]:
+        """Models the signed-in account can use, as the app-server's picker lists them."""
+        models: list[dict[str, Any]] = []
+        cursor: str | None = None
+        for _ in range(20):
+            result = await self._rpc("model/list", {"cursor": cursor} if cursor else {})
+            for item in (result or {}).get("data") or []:
+                if not isinstance(item, dict) or item.get("hidden"):
+                    continue
+                efforts = [
+                    str(option.get("reasoningEffort"))
+                    for option in item.get("supportedReasoningEfforts") or []
+                    if isinstance(option, dict) and option.get("reasoningEffort")
+                ]
+                models.append({
+                    "model": str(item.get("model") or item.get("id") or ""),
+                    "display_name": str(item.get("displayName") or item.get("model") or ""),
+                    "description": str(item.get("description") or ""),
+                    "efforts": efforts,
+                    "default_effort": item.get("defaultReasoningEffort"),
+                    "is_default": bool(item.get("isDefault")),
+                })
+            cursor = (result or {}).get("nextCursor")
+            if not cursor:
+                break
+        return [model for model in models if model["model"]]
+
     async def status(self) -> dict[str, Any]:
         await self._ensure_connected()
         result = await self._rpc("account/read", {"refreshToken": False})
