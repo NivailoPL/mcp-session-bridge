@@ -4,6 +4,7 @@ import hashlib
 import asyncio
 import json
 import os
+import pwd
 import shutil
 import stat
 import time
@@ -514,6 +515,13 @@ class CodexRuntimeManager:
                 return False
             time.sleep(0.25)
 
+    def _codex_uid(self) -> int:
+        # App-server keeps its real socket in /tmp/codex-daemon-<uid>, which the
+        # unit maps onto the shared runtime directory.
+        if self.layout.root != Path("/"):
+            return os.getuid()
+        return pwd.getpwnam(CODEX_SERVICE_USER).pw_uid
+
     def _unit_text(self) -> str:
         runtime = self.layout.codex_runtime_current
         state = self.layout.codex_state_root
@@ -533,11 +541,12 @@ Environment=CODEX_HOME={self.layout.codex_home}
 ExecStart={runtime}/run-app-server.sh {socket} {CODEX_SOCKET_GROUP} {runtime}/node_modules/.bin/codex
 Restart=on-failure
 RestartSec=5
-RuntimeDirectory=mcp-session-bridge-codex
+RuntimeDirectory=mcp-session-bridge-codex mcp-session-bridge-codex/daemon
 RuntimeDirectoryMode=0750
 UMask=0077
 NoNewPrivileges=true
 PrivateTmp=true
+BindPaths={socket.parent}/daemon:/tmp/codex-daemon-{self._codex_uid()}
 PrivateDevices=true
 ProtectSystem=strict
 ProtectHome=true

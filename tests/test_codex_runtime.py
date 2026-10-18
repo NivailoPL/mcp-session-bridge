@@ -104,9 +104,9 @@ def test_runtime_lock_is_exact_and_integrity_pinned() -> None:
     lock = load_runtime_lock(Path(__file__).parents[1])
 
     assert lock.package == "@openai/codex"
-    assert lock.version == "0.147.0"
+    assert lock.version == "0.163.0"
     assert lock.integrity.startswith("sha512-")
-    assert lock.resolved.endswith("/codex-0.147.0.tgz")
+    assert lock.resolved.endswith("/codex-0.163.0.tgz")
 
 
 def test_layout_keeps_codex_runtime_and_state_isolated(tmp_path: Path) -> None:
@@ -132,10 +132,15 @@ def test_enable_stages_locked_runtime_and_hardened_unit(tmp_path: Path) -> None:
     assert "Group=mcp-session-bridge-codex" in unit
     assert "SupplementaryGroups=mcp-session-bridge-codex-socket" in unit
     assert "RuntimeDirectoryMode=0750" in unit
+    assert "RuntimeDirectory=mcp-session-bridge-codex mcp-session-bridge-codex/daemon" in unit
+    assert "PrivateTmp=true" in unit
+    assert (
+        f"BindPaths={layout.codex_socket.parent}/daemon:/tmp/codex-daemon-{os.getuid()}" in unit
+    )
     assert "UMask=0077" in unit
     assert "run-app-server.sh" in unit
     wrapper = layout.codex_runtime_current / "run-app-server.sh"
-    assert '--listen "unix://$socket_path"' in wrapper.read_text(encoding="utf-8")
+    assert '--listen "unix://$listen_path"' in wrapper.read_text(encoding="utf-8")
     assert "NoNewPrivileges=true" in unit
     assert "ProtectSystem=strict" in unit
     assert "PrivateDevices=true" in unit
@@ -267,6 +272,59 @@ def test_runtime_wrapper_sets_socket_group_mode(short_tmp_path: Path) -> None:
         process.terminate()
         process.wait(timeout=5)
     assert process.returncode == 0
+
+
+def test_runtime_wrapper_exposes_daemon_socket_behind_listen_symlink(
+    short_tmp_path: Path,
+) -> None:
+    # App-server 0.163+ binds its real socket in /tmp/codex-daemon-<uid> (mapped onto
+    # <runtime>/daemon by the unit) and leaves only a symlink at the --listen path.
+    tmp_path = short_tmp_path
+    wrapper = Path(__file__).parents[1] / "deploy/codex-runtime/run-app-server.sh"
+    fake = tmp_path / "fake-codex"
+    fake.write_text(
+        "#!/usr/bin/env python3\n"
+        "import os, signal, socket, stat, sys, time\n"
+        "path = next(x[7:] for x in sys.argv if x.startswith('unix://'))\n"
+        "daemon = os.path.join(os.path.dirname(path), 'daemon')\n"
+        "if stat.S_IMODE(os.stat(daemon).st_mode) != 0o700: sys.exit('daemon dir not 0700')\n"
+        "real = os.path.join(daemon, 'abc123')\n"
+        "sock = socket.socket(socket.AF_UNIX)\n"
+        "sock.bind(real)\n"
+        "os.chmod(real, 0o600)\n"
+        "sock.listen(1)\n"
+        "os.symlink(real, path)\n"
+        "signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))\n"
+        "while True: time.sleep(1)\n",
+        encoding="utf-8",
+    )
+    fake.chmod(0o755)
+    runtime_dir = tmp_path / "run"
+    daemon_dir = runtime_dir / "daemon"
+    daemon_dir.mkdir(parents=True, mode=0o750)
+    socket_path = runtime_dir / "app.sock"
+    group = grp.getgrgid(os.getgid()).gr_name
+    process = subprocess.Popen(
+        ["sh", str(wrapper), str(socket_path), group, str(fake)],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    try:
+        for _ in range(100):
+            if socket_path.is_symlink() and socket_path.exists():
+                break
+            time.sleep(0.05)
+        assert os.readlink(socket_path) == "daemon/abc123"
+        assert stat.S_IMODE(socket_path.stat().st_mode) == 0o660
+        assert stat.S_IMODE(daemon_dir.stat().st_mode) == 0o750
+        probe = socket.socket(socket.AF_UNIX)
+        probe.connect(str(socket_path))
+        probe.close()
+    finally:
+        process.terminate()
+        _out, err = process.communicate(timeout=5)
+    assert process.returncode == 0, err
 
 
 def test_bridge_health_probe_retries_during_startup(

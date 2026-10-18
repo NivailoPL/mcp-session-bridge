@@ -110,7 +110,8 @@ The Codex binary is deliberately outside the application release and the reposit
 | `/opt/mcp-session-bridge/codex-runtime/current` | Active Codex runtime symlink |
 | `/var/lib/mcp-session-bridge-codex/codex-home` | Private Codex-owned authentication state |
 | `/var/lib/mcp-session-bridge-codex/workspace` | Empty, isolated v1 workspace |
-| `/run/mcp-session-bridge-codex/app-server.sock` | Private local transport to the Bridge |
+| `/run/mcp-session-bridge-codex/app-server.sock` | Private local transport to the Bridge (a relative link to the socket in `daemon/`) |
+| `/run/mcp-session-bridge-codex/daemon` | App-server's socket directory, bind-mounted as `/tmp/codex-daemon-<uid>` inside the companion's private `/tmp` |
 
 Each Bridge release declares one exact compatible `@openai/codex` version and npm integrity hash. This repository ships only the lock metadata and service integration; setup downloads the Apache-2.0-licensed package from npm. Updates reconcile the companion only when it was enabled, and a Codex reconciliation failure leaves the healthy Bridge running. Deploy, update, and rollback preserve `CODEX_HOME`.
 
