@@ -36,7 +36,7 @@ class ScriptedCodex:
         self.results = list(results)
         self.prompts: list[str] = []
 
-    async def extract_structured(self, message, *, model, effort, output_schema, timeout_seconds=None):
+    async def extract_structured(self, message, *, model, effort, output_schema, timeout_seconds=None, on_reasoning=None):
         self.prompts.append(message)
         self.timeouts = getattr(self, "timeouts", []) + [timeout_seconds]
         result = self.results.pop(0)
@@ -337,3 +337,58 @@ def test_start_over_switches_the_map_off_and_restore_brings_it_back(lab) -> None
     rt.restore(version["version_id"], actor="owner")
     assert store.active_topic_version()["version_id"] == version["version_id"]
     assert len(rt.pool_chapters()) < sum(len(v) for v in SESSIONS.values())
+
+
+class SlowCodex:
+    """Streams two reasoning parts, then waits until it is cancelled."""
+
+    def __init__(self):
+        self.cancelled = False
+
+    async def extract_structured(self, message, *, model, effort, output_schema, timeout_seconds=None, on_reasoning=None):
+        on_reasoning("**Grouping** chapters by session")
+        on_reasoning("**Naming** the topics")
+        try:
+            await asyncio.sleep(30)
+        except asyncio.CancelledError:
+            self.cancelled = True
+            raise
+        return {}
+
+
+def test_stop_interrupts_find_and_shows_thinking_meanwhile(lab) -> None:
+    store, _ = lab
+    codex = SlowCodex()
+    rt = runtime_with(store, codex)
+
+    async def go():
+        await rt.start_find({}, actor="owner")
+        for _ in range(50):
+            await asyncio.sleep(0.01)
+            if (rt.job or {}).get("thinking"):
+                break
+        assert rt.job["thinking"] == "**Naming** the topics"
+        rt.stop(actor="owner")
+        await rt.wait()
+
+    run(go())
+    assert codex.cancelled and rt.job is None
+    find = store.list_topic_runs()[0]
+    assert find["kind"] == "find" and find["status"] == "failed" and find["error_code"] == "stopped"
+    assert store.list_topic_proposals() == []
+    with pytest.raises(TopicError):
+        rt.stop(actor="owner")
+
+
+def test_reasoning_summary_deltas_reach_the_callback() -> None:
+    from app.codex_app_server import _TurnState
+
+    seen = []
+    loop = asyncio.new_event_loop()
+    state = _TurnState(future=loop.create_future(), on_reasoning=seen.append)
+    state.add_reasoning("**Plan**")
+    state.add_reasoning(" first", new_part=False)
+    state.add_reasoning("", new_part=True)
+    state.add_reasoning("**Next**")
+    loop.close()
+    assert seen[-1] == "**Next**" and state.reasoning == ["**Plan** first", "**Next**"]

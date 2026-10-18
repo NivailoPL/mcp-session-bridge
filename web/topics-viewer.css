@@ -280,3 +280,8 @@ details.tp-more[open] summary { margin-bottom: 8px; }
 .tp-strip-side.end { justify-content: flex-end; }
 .tp-strip-side.end .status { margin-right: 0; }
 .tp-merge .tp-select { height: 28px; font-size: 12px; }
+.tp-stop { margin-left: auto; flex: none; height: 40px; padding: 0 20px; border-radius: 10px; border: 1px solid #ef4444; background: #dc2626; color: #fff; font-weight: 800; font-size: 14px; letter-spacing: .02em; cursor: pointer; }
+.tp-stop:hover { background: #b91c1c; }
+.tp-stop.small { height: 26px; padding: 0 10px; margin-left: 4px; font-size: 12px; border-radius: 7px; }
+.tp-thinking { display: block; margin-top: 4px; font-size: 12.5px; line-height: 1.45; color: var(--text-2); font-style: italic; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.tp-thinking b { font-style: normal; color: var(--text); }

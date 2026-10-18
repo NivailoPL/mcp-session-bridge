@@ -791,6 +791,11 @@ async def admin_api_topics_activate_version(request: Request) -> Response:
     return await topics_admin.api_activate_version(request)
 
 
+@mcp.custom_route("/admin/api/topics/stop", methods=["POST"])
+async def admin_api_topics_stop(request: Request) -> Response:
+    return await topics_admin.api_stop(request)
+
+
 @mcp.custom_route("/admin/api/topics/recolor", methods=["POST"])
 async def admin_api_topics_recolor(request: Request) -> Response:
     return await topics_admin.api_recolor(request)

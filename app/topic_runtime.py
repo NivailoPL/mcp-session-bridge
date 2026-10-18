@@ -67,7 +67,7 @@ class Classifier(Protocol):
 class StructuredCodex(Protocol):
     async def extract_structured(
         self, message: str, *, model: str, effort: str, output_schema: dict[str, Any],
-        timeout_seconds: float | None = None,
+        timeout_seconds: float | None = None, on_reasoning: Callable[[str], None] | None = None,
     ) -> dict[str, Any]: ...
 
 
@@ -85,6 +85,7 @@ class TopicRuntime:
         self.codex = codex
         self._task: asyncio.Task[None] | None = None
         self._pause_requested = False
+        self._stop_requested = False
         self.job: dict[str, Any] | None = None
 
     # ---------- planning ----------
@@ -239,6 +240,33 @@ class TopicRuntime:
         self._pause_requested = True
         return run
 
+    def stop(self, *, actor: str) -> dict[str, Any]:
+        """Stop Find, Refine or a test now. The Codex turn is interrupted; nothing is saved from it."""
+        job = self.job
+        if not self.running() or job is None:
+            raise TopicError("Nothing is running.", code="run_not_running")
+        if job["kind"] == "classify":
+            raise TopicError("Pause sorting instead; it can be resumed.", code="run_not_stoppable")
+        self._stop_requested = True
+        assert self._task is not None
+        self._task.cancel()
+        return {"stopped": job["kind"]}
+
+    def _record_stop(self, job: dict[str, Any]) -> None:
+        message = "Stopped by the owner. Nothing changed."
+        run_id = job.get("run_id")
+        if run_id:
+            run = self.store.get_topic_run(run_id)
+            if run and run["status"] in ("queued", "running"):
+                self.store.set_topic_run_status(run_id, "failed", error_code="stopped", error_message=message)
+        if job.get("proposal_id"):
+            proposal = self.store.get_topic_proposal(job["proposal_id"])
+            if proposal and proposal["status"] == "testing":
+                self.store.update_topic_proposal(job["proposal_id"], status="failed", test={"error": "stopped"})
+        what = {"find": "Find topics", "refine": "Refine topics", "test": "The test"}.get(job.get("kind", ""), "The run")
+        self.store.add_topic_journal("owner", f"{job.get('kind', 'run')}.stop", f"{what} was stopped. Nothing changed.",
+                                     run_id=run_id)
+
     def running(self) -> bool:
         return self._task is not None and not self._task.done()
 
@@ -261,13 +289,16 @@ class TopicRuntime:
 
     def _launch(self, kind: str, factory: Callable[[], Awaitable[None]]) -> None:
         self._pause_requested = False
+        self._stop_requested = False
         self.job = {"kind": kind, "started_at": int(time.time()), "step": "starting"}
 
         async def runner() -> None:
             try:
                 await factory()
             except asyncio.CancelledError:
-                raise
+                if not self._stop_requested:
+                    raise
+                await asyncio.to_thread(self._record_stop, dict(self.job or {}))
             except Exception:
                 logger.exception("Topics job %s failed", kind)
             finally:
@@ -493,11 +524,18 @@ class TopicRuntime:
             self.job.update({
                 "step": "proposing", "step_started_at": int(time.time()), "model": settings["codex_model"],
                 "effort": settings["codex_effort"], "timeout_minutes": settings["codex_timeout_minutes"],
+                "run_id": run_id, "thinking": "",
             })
+        job = self.job
+
+        def show_thinking(text: str) -> None:
+            if job is not None:
+                job["thinking"] = text.strip()[-600:]
+
         try:
             raw = await self.codex.extract_structured(
                 prompt, model=settings["codex_model"], effort=settings["codex_effort"], output_schema=copy.deepcopy(schema),
-                timeout_seconds=settings["codex_timeout_minutes"] * 60,
+                timeout_seconds=settings["codex_timeout_minutes"] * 60, on_reasoning=show_thinking,
             )
         except CodexTimeoutError:
             await self._fail_run(
@@ -691,6 +729,8 @@ class TopicRuntime:
             proposal_id, status="testing", candidate_version_id=candidate["version_id"], test_run_id=run["run_id"],
             base_version_id=active["version_id"] if active else None,
         ))
+        if self.job is not None:
+            self.job["run_id"] = run["run_id"]
         stop = await self._sort(run["run_id"], key)
         if stop is not None:
             await asyncio.to_thread(

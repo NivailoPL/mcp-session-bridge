@@ -26,6 +26,7 @@ _NOT_FOUND_CODES = {"version_unknown", "run_unknown", "proposal_unknown"}
 _CONFLICT_CODES = {
     "run_active", "run_paused", "run_not_paused", "run_not_running", "map_changed", "feature_off",
     "key_missing", "map_missing", "nothing_to_do", "proposal_closed", "proposal_outdated", "codex_unavailable",
+    "run_not_stoppable",
 }
 SECOND_TOPIC_MIN = 0.2
 OPENROUTER_KEY_MAX_CHARS = 300
@@ -138,6 +139,12 @@ class TopicAdminHandlers:
             return {"version": version}
 
         return self._call(create)
+
+    async def api_stop(self, request: Request) -> Response:
+        _, session, error = await self._mutation(request, allowed=set(), allow_empty=True)
+        if error:
+            return error
+        return self._call(lambda: self.runtime.stop(actor=session["username"]))
 
     async def api_recolor(self, request: Request) -> Response:
         _, session, error = await self._mutation(request, allowed=set(), allow_empty=True)

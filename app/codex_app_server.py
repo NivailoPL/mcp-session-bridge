@@ -81,6 +81,20 @@ class _WebSocket(Protocol):
 class _TurnState:
     future: asyncio.Future[dict[str, Any]]
     fragments: list[str] = field(default_factory=list)
+    reasoning: list[str] = field(default_factory=list)
+    on_reasoning: Callable[[str], None] | None = None
+
+    def add_reasoning(self, text: str, *, new_part: bool = False) -> None:
+        if new_part and self.reasoning and self.reasoning[-1]:
+            self.reasoning.append("")
+        if not self.reasoning:
+            self.reasoning.append("")
+        self.reasoning[-1] += text
+        if self.on_reasoning is not None:
+            try:
+                self.on_reasoning(self.reasoning[-1])
+            except Exception:  # a display callback must never break the turn
+                pass
 
 
 class CodexAppServerClient:
@@ -294,6 +308,14 @@ class CodexAppServerClient:
             if isinstance(turn_id, str) and isinstance(delta, str):
                 self._turn_state(turn_id).fragments.append(delta)
             return
+        if method in {"item/reasoning/summaryTextDelta", "item/reasoning/summaryPartAdded"}:
+            turn_id = params.get("turnId")
+            if isinstance(turn_id, str):
+                delta = params.get("delta")
+                self._turn_state(turn_id).add_reasoning(
+                    delta if isinstance(delta, str) else "", new_part=method.endswith("PartAdded")
+                )
+            return
         if method in {"item/started", "item/completed"}:
             turn_id = params.get("turnId")
             item = params.get("item")
@@ -476,7 +498,9 @@ class CodexAppServerClient:
         effort: str,
         output_schema: dict[str, Any],
         timeout_seconds: float | None = None,
+        on_reasoning: Callable[[str], None] | None = None,
     ) -> dict[str, Any]:
+        """One structured turn. With on_reasoning, the model's reasoning summary streams to it part by part."""
         normalized = message.strip()
         if not normalized:
             raise ValueError("message must not be empty.")
@@ -486,8 +510,10 @@ class CodexAppServerClient:
         response = await self._run_text_turn(
             thread_id,
             normalized,
-            {"model": model, "effort": effort, "outputSchema": output_schema},
+            {"model": model, "effort": effort, "outputSchema": output_schema,
+             **({"summary": "concise"} if on_reasoning else {})},
             timeout_seconds=timeout_seconds,
+            on_reasoning=on_reasoning,
         )
         try:
             result = json.loads(response)
@@ -529,6 +555,7 @@ class CodexAppServerClient:
         message: str,
         options: dict[str, Any],
         timeout_seconds: float | None = None,
+        on_reasoning: Callable[[str], None] | None = None,
     ) -> str:
         if thread_id not in self._thread_locks:
             raise ValueError("Unknown or expired Codex conversation.")
@@ -551,6 +578,10 @@ class CodexAppServerClient:
             if not isinstance(turn_id, str):
                 raise CodexProtocolError("Codex failed to start a turn.")
             state = self._turn_state(turn_id)
+            if on_reasoning is not None:
+                state.on_reasoning = on_reasoning
+                if state.reasoning:
+                    on_reasoning(state.reasoning[-1])
             try:
                 await asyncio.wait_for(state.future, timeout=timeout_seconds or self.turn_timeout_seconds)
             except TimeoutError as exc:

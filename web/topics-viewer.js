@@ -234,6 +234,7 @@
 
   function render() {
     if (!state.overview) return;
+    syncFavicon();
     renderStrip();
     const graph = state.view === "graph" && version();
     dom.listView.hidden = Boolean(graph);
@@ -254,7 +255,7 @@
     if (job && job.kind !== "classify") {
       const label = (job.step === "testing" ? "Testing a proposal" : "Proposing topics") + dots();
       const progress = job.progress ? ` ${job.progress.done} / ${job.progress.total}` : "";
-      live = `<span class="tp-progress-pill"><span class="tp-spinner"></span>${label}${progress}<span class="tp-clock small" data-since="${esc(job.started_at)}">${clock(job.started_at)}</span></span>`;
+      live = `<span class="tp-progress-pill"><span class="tp-spinner"></span>${label}${progress}<span class="tp-clock small" data-since="${esc(job.started_at)}">${clock(job.started_at)}</span><button type="button" class="tp-stop small" data-act="stop-job">Stop</button></span>`;
     } else if (run && ["queued", "running"].includes(run.status)) {
       const done = run.total_count ? Math.round((run.done_count / run.total_count) * 100) : 0;
       live = `<span class="tp-progress-pill"><span class="tp-spinner"></span>Sorting ${run.done_count} / ${run.total_count}<span class="bar"><i style="width:${done}%"></i></span><span class="cost">${usd(run.cost_usd, 4)}</span><button type="button" class="tp-btn small" data-act="pause">Pause</button></span>`;
@@ -686,9 +687,66 @@
     return `<div class="tp-job">
       <span class="tp-spinner big"></span>
       <span class="tp-clock" data-since="${esc(since)}">${clock(since)}</span>
-      <span class="tp-job-text"><b>${testing ? "Testing" : "Proposing"}${dots()}${model ? ` <span class="tp-job-model">${esc(model)}</span>` : ""}</b><span class="tp-muted">${esc(text)}</span></span>
+      <span class="tp-job-text"><b>${testing ? "Testing" : "Proposing"}${dots()}${model ? ` <span class="tp-job-model">${esc(model)}</span>` : ""}</b><span class="tp-muted">${esc(text)}</span>
+        ${!testing && job.thinking ? thinkingLine(job.thinking) : ""}</span>
       ${job.started_at && since !== job.started_at ? `<span class="tp-muted tp-small">whole run ${clock(job.started_at)}</span>` : ""}
+      <button type="button" class="tp-stop" data-act="stop-job" title="Stop now. ${testing ? "The test is dropped" : "Codex stops thinking"}; nothing is saved.">Stop</button>
     </div>`;
+  }
+
+  // Codex streams a short summary of its reasoning; show the newest part: its bold heading, then the text.
+  function thinkingLine(text) {
+    const match = text.match(/^\*\*(.+?)\*\*\s*([\s\S]*)$/);
+    const head = match ? match[1] : "";
+    const body = (match ? match[2] : text).replace(/\s+/g, " ").trim();
+    return `<span class="tp-thinking">${head ? `<b>${esc(head)}</b> ` : ""}${esc(body.length > 220 ? `${body.slice(0, 220)}…` : body)}</span>`;
+  }
+
+  function stopJob() {
+    act(async () => {
+      await request("/admin/api/topics/stop", { method: "POST", body: {} });
+      toast("Stopped. Nothing changed.");
+      await refresh();
+    });
+  }
+
+  document.addEventListener("click", (event) => {
+    if (event.target.closest('[data-act="stop-job"]')) stopJob();
+  });
+
+  // While a job runs the tab icon becomes moving bars, so the work shows from another tab.
+  const favicon = document.querySelector('link[rel="icon"]');
+  const faviconIdle = favicon?.href || "";
+  let faviconTimer = null;
+  let faviconFrame = 0;
+
+  function drawBusyIcon() {
+    const canvas = document.createElement("canvas");
+    canvas.width = 32;
+    canvas.height = 32;
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#7a7df0";
+    for (let i = 0; i < 4; i += 1) {
+      const level = 0.3 + 0.7 * Math.abs(Math.sin((faviconFrame / 4) + i * 0.9));
+      const h = Math.round(6 + 22 * level);
+      ctx.beginPath();
+      ctx.roundRect ? ctx.roundRect(2 + i * 8, 30 - h, 5, h, 2) : ctx.rect(2 + i * 8, 30 - h, 5, h);
+      ctx.fill();
+    }
+    faviconFrame += 1;
+    return canvas.toDataURL("image/png");
+  }
+
+  function syncFavicon() {
+    if (!favicon) return;
+    const busy = jobRunning();
+    if (busy && !faviconTimer) {
+      faviconTimer = window.setInterval(() => { favicon.href = drawBusyIcon(); }, 140);
+    } else if (!busy && faviconTimer) {
+      window.clearInterval(faviconTimer);
+      faviconTimer = null;
+      favicon.href = faviconIdle;
+    }
   }
 
   function clock(since, until = null) {
