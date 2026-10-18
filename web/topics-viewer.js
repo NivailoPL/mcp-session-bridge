@@ -19,6 +19,7 @@
   const CHEV = '<span class="tp-chev" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"></path></svg></span>';
   const ARROW = '<span class="arrow" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"></path></svg></span>';
   const SOURCE = { find: "from Find topics", refine: "from Refine topics", owner: "your edit" };
+  const DOTS = '<span class="tp-dots-anim" aria-hidden="true"><i>.</i><i>.</i><i>.</i></span>';
   const EFFORT = { low: "low", medium: "medium", high: "high", xhigh: "extra high" };
   const KIND = { first_map: "First map", new_topic: "New topic", split: "Split", redescribe: "Description", edit: "Your edit" };
 
@@ -249,7 +250,7 @@
     const status = v ? `map v${v.version_id} · ${v.topic_count} topics · ${o.counts.chapters} chapters` : `no topics yet · ${o.counts.chapters} chapters`;
     let live = "";
     if (job && job.kind !== "classify") {
-      const label = job.step === "testing" ? "Testing a proposal" : "Proposing topics";
+      const label = (job.step === "testing" ? "Testing a proposal" : "Proposing topics") + DOTS;
       const progress = job.progress ? ` ${job.progress.done} / ${job.progress.total}` : "";
       live = `<span class="tp-progress-pill"><span class="tp-spinner"></span>${label}${progress}<span class="tp-clock small" data-since="${esc(job.started_at)}">${clock(job.started_at)}</span></span>`;
     } else if (run && ["queued", "running"].includes(run.status)) {
@@ -678,8 +679,9 @@
       ? `Testing the proposal: sorting every chapter on the candidate map${job.progress ? ` (${job.progress.done} / ${job.progress.total})` : ""}.`
       : `The proposing model is reading your chapters. Timeout limit ${job.timeout_minutes || state.overview.settings.codex_timeout_minutes || 10} min.`;
     return `<div class="tp-job">
+      <span class="tp-spinner big"></span>
       <span class="tp-clock" data-since="${esc(since)}">${clock(since)}</span>
-      <span class="tp-job-text"><b>${testing ? "Testing" : "Proposing"}${model ? ` <span class="tp-job-model">${esc(model)}</span>` : ""}</b><span class="tp-muted">${esc(text)}</span></span>
+      <span class="tp-job-text"><b>${testing ? "Testing" : "Proposing"}${DOTS}${model ? ` <span class="tp-job-model">${esc(model)}</span>` : ""}</b><span class="tp-muted">${esc(text)}</span></span>
       ${job.started_at && since !== job.started_at ? `<span class="tp-muted tp-small">whole run ${clock(job.started_at)}</span>` : ""}
     </div>`;
   }
@@ -693,7 +695,7 @@
 
   function duration(seconds) {
     if (seconds == null) return "–";
-    return seconds < 60 ? `${seconds} s` : `${Math.floor(seconds / 60)} min ${String(seconds % 60).padStart(2, "0")} s`;
+    return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
   }
 
   window.setInterval(() => {
@@ -791,6 +793,37 @@
 
   // ----- first map review -----
 
+  function poolDetail(p, draft, poolIds, chaptersById) {
+    const rows = poolIds.map((id) => chaptersById.get(id)).filter(Boolean);
+    const intended = new Map();
+    for (const t of draft.topics) for (const id of t.chapter_ids) intended.set(id, t);
+    const meant = rows.filter((r) => intended.has(r.strand_id)).length;
+    const sessions = sessionsOf(rows);
+    const open = state.manage.openReview;
+    return `<div class="tp-review-detail">
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <i class="tp-dot" style="background:#4b5563;width:12px;height:12px"></i><b style="font-size:15px">Unsorted after the test</b>
+        <span class="tp-muted">${sessions.length} sessions · ${rows.length} chapters</span>
+      </div>
+      <p class="tp-muted" style="margin:0;line-height:1.5">${rows.length - meant} the model left out on purpose; ${meant} it put in a topic, but sorting sent them here.</p>
+      <div class="tp-tree">${sessions.map((s) => {
+        const isOpen = open.has(`pool:${s.id}`);
+        return `<div class="tp-node${isOpen ? " is-open" : ""}">
+          <button type="button" class="tp-session" data-review-session="pool:${esc(s.id)}" aria-expanded="${isOpen}">
+            ${CHEV}${groupIcon(s)}<span class="tp-session-title">${esc(s.title)}</span><span class="tp-dots"></span>
+            <span class="tp-when">${esc(ago(s.updated))}</span><span class="tp-count">${s.rows.length}</span>
+          </button>
+          ${isOpen ? `<div class="tp-children">${s.rows.map((row) => {
+            const meantFor = intended.get(row.strand_id);
+            const link = `/admin/sessions?session=${encodeURIComponent(row.session_id)}&chapter=${row.strand_id}`;
+            return `<div class="tp-leaf"><a href="${link}" target="_blank" rel="noopener" title="Open in its session">${esc(row.title)}</a>
+              ${meantFor ? `<span class="tp-landed-else">meant for ${esc(meantFor.name)}</span>` : '<span class="tp-faint tp-small">left out</span>'}<span></span></div>`;
+          }).join("")}</div>` : ""}
+        </div>`;
+      }).join("")}</div>
+    </div>`;
+  }
+
   function commentary(text) {
     return `<div class="tp-commentary"><span class="tp-commentary-label">Model commentary</span><p>${esc(text)}</p></div>`;
   }
@@ -858,7 +891,9 @@
     const t = p.test || {};
     const per = t.per_topic || {};
     const focusKey = state.manage.focus[p.proposal_id] || draft.topics[0].key;
+    const poolFocus = focusKey === POOL && Boolean(p.landing);
     const focus = draft.topics.find((x) => x.key === focusKey) || draft.topics[0];
+    const poolIds = Object.entries(p.landing || {}).filter(([, v]) => v[0] === POOL).map(([id]) => Number(id));
     const chaptersById = new Map(state.chapters.map((r) => [r.strand_id, r]));
     const families = [];
     for (const x of draft.topics) {
@@ -890,9 +925,15 @@
               <span class="num">${sessions}</span>
               <span class="num ${cls}">${pt ? (pt.verdict === "ok" ? pct(pt.landed / Math.max(1, pt.intended)) : "!") : "–"}</span></div>`;
           }).join("")}</div>`).join("")}
+          ${p.landing ? `<div class="tp-family"><div class="tp-family-name">Not in a topic</div>
+            <div class="tp-review-row" data-focus="${POOL}" aria-current="${poolFocus}">
+              <span></span>
+              <span class="name"><i class="tp-dot" style="background:#4b5563"></i><span>Unsorted</span></span>
+              <span class="num">${new Set(poolIds.map((id) => chaptersById.get(id)?.session_id).filter(Boolean)).size}</span>
+              <span class="num">${poolIds.length}</span></div></div>` : ""}
           ${(p.payload.dropped || []).length ? `<p class="tp-muted" style="margin:6px 8px 0;line-height:1.5">Left out (fewer than 3 chapters or 2 sessions): ${p.payload.dropped.map((d) => esc(d.name)).join(", ")}</p>` : ""}
         </div>
-        <div class="tp-review-detail">
+        ${poolFocus ? poolDetail(p, draft, poolIds, chaptersById) : `<div class="tp-review-detail">
           <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
             <i class="tp-dot" style="background:${esc(focus.color)};width:12px;height:12px"></i>
             <input class="tp-input" data-field="name" value="${esc(focus.name)}" maxlength="60" aria-label="Topic name" style="font-weight:800;width:220px">
@@ -904,7 +945,7 @@
           <label class="tp-field">Description (what sorting reads)<textarea class="tp-textarea" data-field="description" maxlength="600">${esc(focus.description)}</textarea></label>
           <div class="tp-tree">${focusSessions.map((s) => reviewSession(p, focus, s)).join("")}</div>
           ${fp.verdict && fp.verdict !== "ok" ? `<div class="tp-banner">${fp.verdict === "spreads" ? `In the test this topic also pulled ${fp.pulled} chapters from other topics. Consider unchecking it so they stay in Unsorted.` : "In the test fewer than three quarters of its chapters landed here. A clearer description may help."}</div>` : ""}
-        </div>
+        </div>`}
       </div>
       <div class="tp-footer">
         <span class="tp-muted">${changed ? "You changed the proposal. Test it again before accepting." : "Uncheck a topic to keep its chapters in Unsorted; edit names and descriptions here."}</span>
