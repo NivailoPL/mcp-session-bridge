@@ -150,3 +150,28 @@
     width: 100%;
   }
 }
+
+/* Fallback button look for pages without the Sessions button styles (zero specificity). */
+:where(.admin-confirmation__actions button) {
+  min-height: 2.25rem;
+  padding: 0 .9rem;
+  border: 1px solid var(--stroke-strong, rgba(255, 255, 255, .16));
+  border-radius: var(--r-ctrl, 9px);
+  background: transparent;
+  color: var(--text, #e6e8f0);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+:where(.admin-confirmation__actions button:hover) {
+  border-color: rgba(255, 255, 255, .3);
+}
+
+:where(.admin-confirmation__actions button.primary) {
+  border-color: var(--accent, #5457e5);
+  background: var(--accent, #5457e5);
+  color: #fff;
+  font-weight: 800;
+}

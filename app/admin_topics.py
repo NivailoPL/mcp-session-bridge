@@ -286,7 +286,35 @@ class TopicAdminHandlers:
         if error:
             return error
         statuses = None if request.query_params.get("all") == "1" else ("testing", "pending", "outdated", "failed")
-        return self._ok({"proposals": self.store.list_topic_proposals(statuses), "job": self.runtime.job})
+        proposals = await asyncio.to_thread(self._with_timing, self.store.list_topic_proposals(statuses))
+        return self._ok({"proposals": proposals, "job": self.runtime.job})
+
+    def _with_timing(self, proposals: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """How long the proposing and the test took, and where each chapter landed in a first-map test."""
+        for proposal in proposals:
+            source = self.store.get_topic_run(proposal["run_id"]) if proposal.get("run_id") else None
+            test = self.store.get_topic_run(proposal["test_run_id"]) if proposal.get("test_run_id") else None
+
+            def took(run: dict[str, Any] | None) -> int | None:
+                if not run or not run.get("finished_at"):
+                    return None
+                return max(0, run["finished_at"] - (run.get("started_at") or run["created_at"]))
+
+            proposing, testing = took(source), took(test)
+            proposal["timing"] = {
+                "proposing_seconds": proposing,
+                "testing_seconds": testing,
+                "total_seconds": (proposing or 0) + (testing or 0) if proposing is not None or testing is not None else None,
+                "proposing_model": (source or {}).get("settings", {}).get("codex_model"),
+                "proposing_effort": (source or {}).get("settings", {}).get("codex_effort"),
+                "testing_model": (test or {}).get("settings", {}).get("jev_model"),
+            }
+            if proposal["op"] == "first_map" and proposal["status"] == "pending" and test:
+                proposal["landing"] = {
+                    str(cid): [item["topic_key"], item["confidence"]]
+                    for cid, item in self.store.topic_run_assignments(test["run_id"]).items()
+                }
+        return proposals
 
     async def api_proposal_action(self, request: Request) -> Response:
         payload, session, error = await self._mutation(request, allowed={"note", "topics"}, allow_empty=True)

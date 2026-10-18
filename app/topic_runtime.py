@@ -490,7 +490,10 @@ class TopicRuntime:
         assert self.codex is not None
         await asyncio.to_thread(self.store.set_topic_run_status, run_id, "running")
         if self.job is not None:
-            self.job["step"] = "proposing"
+            self.job.update({
+                "step": "proposing", "step_started_at": int(time.time()), "model": settings["codex_model"],
+                "effort": settings["codex_effort"], "timeout_minutes": settings["codex_timeout_minutes"],
+            })
         try:
             raw = await self.codex.extract_structured(
                 prompt, model=settings["codex_model"], effort=settings["codex_effort"], output_schema=copy.deepcopy(schema),
@@ -655,8 +658,10 @@ class TopicRuntime:
 
     async def _test_proposal(self, proposal_id: int, key: str) -> None:
         if self.job is not None:
-            self.job["step"] = "testing"
-            self.job["proposal_id"] = proposal_id
+            self.job.update({
+                "step": "testing", "proposal_id": proposal_id, "step_started_at": int(time.time()),
+                "model": self.store.get_topic_settings()["jev_model"], "effort": None,
+            })
         proposal = await asyncio.to_thread(self.store.get_topic_proposal, proposal_id)
         assert proposal is not None
         active = await asyncio.to_thread(self.store.active_topic_version)

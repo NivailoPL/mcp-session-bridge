@@ -19,6 +19,7 @@
   const CHEV = '<span class="tp-chev" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"></path></svg></span>';
   const ARROW = '<span class="arrow" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"></path></svg></span>';
   const SOURCE = { find: "from Find topics", refine: "from Refine topics", owner: "your edit" };
+  const EFFORT = { low: "low", medium: "medium", high: "high", xhigh: "extra high" };
   const KIND = { first_map: "First map", new_topic: "New topic", split: "Split", redescribe: "Description", edit: "Your edit" };
 
   const state = {
@@ -30,7 +31,7 @@
     view: readPref("view", "list"),
     selected: null,
     openSessions: {},
-    manage: { section: "proposals", detail: "balanced", note: "", focus: {}, drafts: {}, editKey: null, editDraft: null, editProposal: null, importOpen: false },
+    manage: { section: "proposals", detail: "balanced", note: "", focus: {}, drafts: {}, openReview: new Set(), editKey: null, editDraft: null, editProposal: null, importOpen: false },
     graph: { second: true, sensitive: true, query: "", focus: null },
     pollTimer: 0,
     busy: false,
@@ -250,7 +251,7 @@
     if (job && job.kind !== "classify") {
       const label = job.step === "testing" ? "Testing a proposal" : "Proposing topics";
       const progress = job.progress ? ` ${job.progress.done} / ${job.progress.total}` : "";
-      live = `<span class="tp-progress-pill"><span class="tp-spinner"></span>${label}${progress}</span>`;
+      live = `<span class="tp-progress-pill"><span class="tp-spinner"></span>${label}${progress}<span class="tp-clock small" data-since="${esc(job.started_at)}">${clock(job.started_at)}</span></span>`;
     } else if (run && ["queued", "running"].includes(run.status)) {
       const done = run.total_count ? Math.round((run.done_count / run.total_count) * 100) : 0;
       live = `<span class="tp-progress-pill"><span class="tp-spinner"></span>Sorting ${run.done_count} / ${run.total_count}<span class="bar"><i style="width:${done}%"></i></span><span class="cost">${usd(run.cost_usd, 4)}</span><button type="button" class="tp-btn small" data-act="pause">Pause</button></span>`;
@@ -588,8 +589,8 @@
       <div class="tp-options">
         <label>Detail
           <select class="tp-select" data-opt="detail">${["broad", "balanced", "fine"].map((d) => `<option value="${d}" ${m.detail === d ? "selected" : ""}>${d[0].toUpperCase() + d.slice(1)}</option>`).join("")}</select></label>
-        <label>Time limit
-          <span class="tp-inline"><input class="tp-input tp-num" type="number" min="2" max="30" step="1" data-opt="timeout" value="${esc(o.settings.codex_timeout_minutes || 10)}"> min <span class="tp-muted" data-opt="timeout-state"></span></span></label>
+        <label>Timeout limit
+          <span class="tp-inline"><input class="tp-input tp-num" type="number" inputmode="numeric" min="2" max="30" step="1" data-opt="timeout" value="${esc(o.settings.codex_timeout_minutes || 10)}"> min <span class="tp-muted" data-opt="timeout-state"></span></span></label>
         <label>Note for the proposal
           <textarea class="tp-textarea" data-opt="note" maxlength="1000" placeholder="e.g. keep health topics together">${esc(m.note)}</textarea></label>
       </div>
@@ -670,11 +671,34 @@
   function jobBanner() {
     const job = state.overview.job;
     if (!job || job.kind === "classify") return "";
-    const text = job.step === "testing"
-      ? `Testing a proposal: sorting every chapter on the candidate map${job.progress ? ` (${job.progress.done} / ${job.progress.total})` : ""}…`
-      : `The proposing model is reading your chapters. This can take several minutes (time limit ${state.overview.settings.codex_timeout_minutes || 10} min)…`;
-    return `<div class="tp-banner info" style="display:flex;gap:10px;align-items:center"><span class="tp-spinner"></span>${esc(text)}</div>`;
+    const testing = job.step === "testing";
+    const since = job.step_started_at || job.started_at;
+    const model = job.model ? `${job.model}${job.effort ? ` · ${EFFORT[job.effort] || job.effort} thinking` : ""}` : "";
+    const text = testing
+      ? `Testing the proposal: sorting every chapter on the candidate map${job.progress ? ` (${job.progress.done} / ${job.progress.total})` : ""}.`
+      : `The proposing model is reading your chapters. Timeout limit ${job.timeout_minutes || state.overview.settings.codex_timeout_minutes || 10} min.`;
+    return `<div class="tp-job">
+      <span class="tp-clock" data-since="${esc(since)}">${clock(since)}</span>
+      <span class="tp-job-text"><b>${testing ? "Testing" : "Proposing"}${model ? ` <span class="tp-job-model">${esc(model)}</span>` : ""}</b><span class="tp-muted">${esc(text)}</span></span>
+      ${job.started_at && since !== job.started_at ? `<span class="tp-muted tp-small">whole run ${clock(job.started_at)}</span>` : ""}
+    </div>`;
   }
+
+  function clock(since, until = null) {
+    const total = Math.max(0, Math.round((until ?? Date.now() / 1000) - Number(since || 0)));
+    const m = Math.floor(total / 60);
+    const s = String(total % 60).padStart(2, "0");
+    return `${m}:${s}`;
+  }
+
+  function duration(seconds) {
+    if (seconds == null) return "–";
+    return seconds < 60 ? `${seconds} s` : `${Math.floor(seconds / 60)} min ${String(seconds % 60).padStart(2, "0")} s`;
+  }
+
+  window.setInterval(() => {
+    for (const node of document.querySelectorAll(".tp-clock[data-since]")) node.textContent = clock(node.dataset.since);
+  }, 1000);
 
   // ----- proposals -----
 
@@ -731,7 +755,8 @@
       : p.status === "testing" ? "" : `<button type="button" class="tp-btn" data-proposal="${p.proposal_id}" data-do="reject">Reject</button><button type="button" class="tp-btn cyan" data-proposal="${p.proposal_id}" data-do="retest" ${jobRunning() ? "disabled" : ""}>Test again <span class="model">(${esc(jevModel())})</span></button>`;
     return `<article class="tp-card ${warn ? "warn" : ""}">
       <div class="tp-card-head"><span class="tp-kind">${esc(KIND[p.op] || p.op)}</span><b>${esc(p.summary)}</b><span class="tp-faint tp-small">${esc(SOURCE[p.source] || p.source)}</span><span class="tp-spacer"></span>${verdictChip(p)}</div>
-      ${p.payload.reason ? `<p>${esc(p.payload.reason)}</p>` : ""}
+      ${p.payload.reason ? commentary(p.payload.reason) : ""}
+      ${timingLine(p)}
       ${p.op === "redescribe" ? `<p><span class="tp-muted">New description:</span> ${esc(p.payload.new_description)}</p>` : ""}
       ${parts ? `<div class="tp-parts">${parts}</div>` : ""}
       ${p.status === "pending" ? `<div class="tp-stats"><span>Unsorted <b>${t.pool_before}</b> → <b>${t.pool_after}</b></span><span>Moving <b>${t.moves_count}</b></span>${t.pulled_count ? `<span>Pulled from elsewhere <b>${t.pulled_count}</b></span>` : ""}${t.cost_usd != null ? `<span>Test cost <b>${usd(t.cost_usd, 4)}</b></span>` : ""}</div>` : ""}
@@ -765,6 +790,52 @@
   }
 
   // ----- first map review -----
+
+  function commentary(text) {
+    return `<div class="tp-commentary"><span class="tp-commentary-label">Model commentary</span><p>${esc(text)}</p></div>`;
+  }
+
+  function timingLine(p) {
+    const t = p.timing;
+    if (!t || t.total_seconds == null) return "";
+    const effort = t.proposing_effort ? ` · ${EFFORT[t.proposing_effort] || t.proposing_effort}` : "";
+    return `<div class="tp-timing">
+      <span>Run <b>${duration(t.total_seconds)}</b></span>
+      <span>${esc(t.proposing_model || "Codex")}${esc(effort)} <b>${duration(t.proposing_seconds)}</b></span>
+      <span>${esc((t.testing_model || jevModel()).split("/").pop())} test <b>${duration(t.testing_seconds)}</b></span>
+    </div>`;
+  }
+
+  function reviewSession(p, focus, session) {
+    const open = state.manage.openReview.has(session.id);
+    const landing = p.landing || {};
+    const missed = session.rows.filter((row) => landing[row.strand_id] && landing[row.strand_id][0] !== focus.key).length;
+    return `<div class="tp-node${open ? " is-open" : ""}">
+      <button type="button" class="tp-session" data-review-session="${esc(session.id)}" aria-expanded="${open}">
+        ${CHEV}${groupIcon(session)}
+        <span class="tp-session-title">${esc(session.title)}</span>
+        <span class="tp-dots">${missed ? `<span class="tp-missed" title="Chapters the test sorted elsewhere">${missed} elsewhere</span>` : ""}</span>
+        <span class="tp-when">${esc(ago(session.updated))}</span>
+        <span class="tp-count">${session.rows.length}</span>
+      </button>
+      ${open ? `<div class="tp-children">${session.rows.map((row) => reviewLeaf(row, focus, landing[row.strand_id])).join("")}</div>` : ""}
+    </div>`;
+  }
+
+  function reviewLeaf(row, focus, landed) {
+    const link = `/admin/sessions?session=${encodeURIComponent(row.session_id)}&chapter=${row.strand_id}`;
+    let where = "<span></span>";
+    if (landed && landed[0] === focus.key) {
+      where = `<span class="tp-conf"><span><i style="width:${pct(landed[1])}"></i></span>${pct(landed[1])}</span>`;
+    } else if (landed) {
+      const name = landed[0] === POOL ? "Unsorted" : (state.manage.drafts && Object.values(state.manage.drafts).flatMap((d) => d.topics).find((x) => x.key === landed[0])?.name) || landed[0];
+      where = `<span class="tp-landed-else">→ ${esc(name)} ${pct(landed[1])}</span>`;
+    }
+    return `<div class="tp-leaf">
+      <a href="${link}" target="_blank" rel="noopener" title="Open in its session">${esc(row.title)}</a>
+      ${where}<span></span>
+    </div>`;
+  }
 
   function draftFor(p) {
     const drafts = state.manage.drafts;
@@ -804,7 +875,8 @@
       <div style="padding:14px 20px;border-bottom:1px solid var(--stroke);display:flex;align-items:center;gap:10px;flex-wrap:wrap">
         <span class="tp-kind">First map</span><b style="font-size:15px">${kept} topics proposed</b>
         <span class="tp-muted">${p.status === "pending" ? `Tested on ${t.sorted} chapters: ${t.sorted - t.pool_after} land in a topic, ${t.pool_after} stay in Unsorted` : esc(p.status === "outdated" ? "The map changed since this test." : p.test?.error || "")}</span>
-        ${p.payload.reason ? `<span class="tp-faint tp-small" style="flex-basis:100%">${esc(p.payload.reason)}</span>` : ""}
+        ${p.payload.reason ? `<div style="flex-basis:100%">${commentary(p.payload.reason)}</div>` : ""}
+        <div style="flex-basis:100%">${timingLine(p)}</div>
       </div>
       <div class="tp-review">
         <div class="tp-review-list">
@@ -830,7 +902,7 @@
             ${fp.intended ? `<span class="tp-verdict ${fp.verdict === "ok" ? "ok" : "warn"}">Test: ${fp.landed} of ${fp.intended} land here${fp.pulled ? ` · +${fp.pulled} from elsewhere` : ""} · avg ${pct(fp.confidence)}</span>` : ""}
           </div>
           <label class="tp-field">Description (what sorting reads)<textarea class="tp-textarea" data-field="description" maxlength="600">${esc(focus.description)}</textarea></label>
-          ${focusSessions.map((s) => `<div class="tp-row-session">${groupIcon(s)}<b>${esc(s.title)}</b><span class="tp-count">${s.rows.length}</span></div>`).join("")}
+          <div class="tp-tree">${focusSessions.map((s) => reviewSession(p, focus, s)).join("")}</div>
           ${fp.verdict && fp.verdict !== "ok" ? `<div class="tp-banner">${fp.verdict === "spreads" ? `In the test this topic also pulled ${fp.pulled} chapters from other topics. Consider unchecking it so they stay in Unsorted.` : "In the test fewer than three quarters of its chapters landed here. A clearer description may help."}</div>` : ""}
         </div>
       </div>
@@ -842,6 +914,14 @@
           ? `<button type="button" class="tp-btn cyan" data-act="revise" ${jobRunning() ? "disabled" : ""}>Test again <span class="model">(${esc(jevModel())})</span></button>`
           : `<button type="button" class="tp-btn primary" data-proposal="${p.proposal_id}" data-do="accept">Accept ${kept} topics</button>`}
       </div>`;
+    for (const b of dom.manageMain.querySelectorAll("[data-review-session]")) {
+      b.addEventListener("click", () => {
+        const open = state.manage.openReview;
+        const id = b.dataset.reviewSession;
+        if (open.has(id)) open.delete(id); else open.add(id);
+        renderManage();
+      });
+    }
     for (const row of dom.manageMain.querySelectorAll("[data-focus]")) {
       row.addEventListener("click", (e) => { if (e.target.matches("input")) return; state.manage.focus[p.proposal_id] = row.dataset.focus; renderManage(); });
     }

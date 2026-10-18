@@ -248,3 +248,19 @@ details.tp-more[open] summary { margin-bottom: 8px; }
 }
 .tp-inline { display: flex; align-items: center; gap: 8px; }
 .tp-num { width: 4.5rem; }
+.tp-num { -moz-appearance: textfield; appearance: textfield; text-align: center; }
+.tp-num::-webkit-outer-spin-button, .tp-num::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.tp-job { display: flex; align-items: center; gap: 16px; padding: 14px 16px; border-radius: 12px; border: 1px solid rgba(122, 125, 240, .35); background: rgba(122, 125, 240, .08); }
+.tp-clock { font: 600 30px/1 "Geist Mono", monospace; color: var(--text); font-variant-numeric: tabular-nums; min-width: 4.2ch; }
+.tp-clock.small { font-size: 12px; color: var(--text-2); min-width: 0; }
+.tp-job-text { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1; }
+.tp-job-text b { font-size: 14px; }
+.tp-job-model { margin-left: 6px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--stroke-strong); font: 500 11.5px "Geist Mono", monospace; color: var(--text-2); }
+.tp-commentary { margin: 4px 0 0; padding: 10px 12px; border-left: 3px solid var(--accent); border-radius: 0 8px 8px 0; background: rgba(122, 125, 240, .07); }
+.tp-commentary-label { display: block; margin-bottom: 4px; font-size: 10.5px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--accent-ink); }
+.tp-commentary p { margin: 0; font-size: 13px; line-height: 1.55; color: var(--text-2); }
+.tp-timing { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 6px; font-size: 12px; color: var(--muted); }
+.tp-timing b { color: var(--text-2); font: 600 12px "Geist Mono", monospace; margin-left: 4px; }
+.tp-missed { font-size: 11.5px; color: #fcd34d; white-space: nowrap; }
+.tp-landed-else { font-size: 12px; color: #fcd34d; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tp-review-detail .tp-tree { gap: 4px; }
