@@ -37,7 +37,7 @@ JEV_INSTRUCTIONS = (
 # Observed in the October 2026 experiments: only input is billed.
 JEV_DEFAULT_COST_PER_CHAPTER = 0.00008
 
-RUN_KINDS = ("classify",)
+RUN_KINDS = ("classify", "test", "find", "refine")
 RUN_STATUSES = ("queued", "running", "paused", "completed", "failed")
 SCOPE_MODES = ("unclassified", "all", "topic")
 JOURNAL_ACTORS = ("owner", "jev", "codex", "system")

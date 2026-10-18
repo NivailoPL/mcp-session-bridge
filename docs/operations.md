@@ -126,6 +126,18 @@ mcp-bridge database reset --yes                   # replace with an empty databa
 count on both sides before asking. Both are recoverable only from the safety
 backup they just took, so verify that backup exists before relying on it.
 
+## Topics
+
+Read what the Topics workspace did, without changing anything:
+
+```bash
+mcp-bridge topics status          # active map, chapters per topic, recent runs
+mcp-bridge topics journal         # every step and decision, newest first
+mcp-bridge topics proposals --all # proposals with their test results
+mcp-bridge topics run 12 --json   # one run: input, every request and raw answer
+mcp-bridge topics export --out /root/topics.json
+```
+
 ## Service control
 
 ```bash

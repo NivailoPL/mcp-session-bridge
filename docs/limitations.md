@@ -61,6 +61,6 @@ Sessions are unlisted through MCP, and session-scoped file reads cannot select a
 
 Propose with Codex sends every included exchange of the session in one Codex turn. A session longer than about 460,000 characters is refused rather than cut, so nothing is proposed for it yet. Masked model responses are left out, the session title is never sent, and each run uses the plan of the OpenAI account signed in under Settings › Codex.
 
-## Topics Send Titles To OpenRouter
+## Topics Send Titles To Codex And OpenRouter
 
-Topics › Classify sends, for each chapter, its title, its session title and its group name to Jev on OpenRouter with your own API key; transcript text is never sent. Chapters in sensitive groups are skipped unless Topics › Settings includes them. A classification belongs to one map version: after editing the map, classify again to see results on the new version. Topics never filter sessions and are not shown to models.
+Find topics and Refine topics send chapter titles, session titles and group names to the proposing model (the Codex plan signed in under Settings › Codex). Sort new and every test send, for each chapter, its title, its session title and its group name to the sorting model on OpenRouter with your own key; transcript text is never sent. Chapters in sensitive groups are skipped unless Settings › Topics includes them. A test sorts every chapter once (about $0.04 for 500 chapters with Jev), so each proposal costs that much before you decide. Topics never filter sessions and are not shown to models.

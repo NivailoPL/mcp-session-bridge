@@ -19,6 +19,10 @@ execution: code
 - **Stop conditions:** ask before changing `SCHEMA_VERSION`, adding any unattended run, exposing topics over MCP, sending transcript text (not titles) to Jev, or deleting chapters.
 - **Tail:** commits on `release/*-beta`; each phase deployed and checked on production before the next; production DB backup before the reset.
 
+## Progress
+
+- 2026-10-18: phases 1, 2, 3 and 5 implemented and committed (31cf3d1, cb50477, c9e5565 and the docs commit). Settings opens on other workspaces as the Sessions overlay in a same-origin frame instead of a separate shared module (lower risk than moving ~200 settings handlers). A real Find topics run on the live chapter titles proposed 24 topics placing 449 of 490 chapters. Phase 4 (reset and live test) follows the deploy.
+
 ## Phases
 
 ### Phase 1 · Shared header with Search and Settings (whole Bridge)
