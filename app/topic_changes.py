@@ -24,9 +24,13 @@ WEAK_SHARE = 0.75
 MOVES_SHOWN = 80
 
 
+# Neighbouring topics get distant colors: step through the palette by 5 (coprime with its length).
+SPREAD = [PALETTE[(index * 5) % len(PALETTE)] for index in range(len(PALETTE))]
+
+
 def _next_colors(used: set[str]) -> list[str]:
-    free = [color for color in PALETTE if color not in used]
-    return free or PALETTE[:]
+    free = [color for color in SPREAD if color not in used]
+    return free or SPREAD[:]
 
 
 def build_candidate(active_topics: list[dict[str, str]], op: str, payload: dict[str, Any]) -> list[dict[str, str]]:

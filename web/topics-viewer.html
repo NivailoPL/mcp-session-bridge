@@ -31,18 +31,36 @@
     </div>
   </header>
 
-  <main class="tp-shell">
-    <aside class="tp-steps" aria-label="Topics lab steps">
-      <div class="tp-eyebrow">TOPICS · LAB</div>
-      <p class="tp-lead">Every step runs only when you press its button. Each one is written to the journal.</p>
-      <nav id="steps" class="tp-step-list"></nav>
-      <div id="sideNote" class="tp-side-note"></div>
-    </aside>
-    <section id="view" class="tp-view" aria-live="polite"></section>
+  <div id="strip" class="tp-strip" aria-label="Topics actions"></div>
+
+  <main id="listView" class="tp-main">
+    <aside id="topicList" class="tp-topics" aria-label="Topics"></aside>
+    <section id="topicDetail" class="tp-detail" aria-live="polite"></section>
   </main>
 
+  <main id="graphView" class="tp-graph-view" hidden>
+    <aside id="graphSide" class="tp-graph-side" aria-label="Graph filters"></aside>
+    <div class="tp-graph-stage"><svg id="graph" aria-label="Topics graph"></svg><div id="graphLegend" class="tp-graph-legend"></div></div>
+    <aside id="graphInfo" class="tp-graph-info" aria-live="polite"></aside>
+  </main>
+
+  <dialog id="manage" class="tp-manage" aria-labelledby="manageTitle">
+    <div class="tp-manage-head">
+      <h2 id="manageTitle">Manage topics</h2>
+      <span id="manageMeta" class="tp-muted"></span>
+      <span class="tp-spacer"></span>
+      <button type="button" class="tp-icon-btn" id="manageClose" aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button>
+    </div>
+    <div class="tp-manage-body">
+      <nav id="manageNav" class="tp-manage-nav" aria-label="Manage topics sections"></nav>
+      <section id="manageMain" class="tp-manage-main"></section>
+    </div>
+  </dialog>
+
+  <div id="tip" class="tp-tip" hidden></div>
   <div id="toast" class="tp-toast" role="status" hidden></div>
 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
   <script src="/admin/assets/pearl-gradient-nav.js"></script>
   <script src="/admin/assets/admin-confirmation.js"></script>
   <script src="/admin/assets/bridge-identity.js"></script>
