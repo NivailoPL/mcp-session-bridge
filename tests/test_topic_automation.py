@@ -52,6 +52,7 @@ def bike(ids):
 
 
 def with_map(store, ids, *finds, sort=True, **settings):
+    settings.setdefault("auto_enabled", True)
     """A runtime whose active map holds only the radio topic; the rest waits in Unsorted, never seen by Find."""
     codex = ScriptedCodex(*finds)
     rt = TopicRuntime(store, key_reader=lambda: "sk", jev_factory=lambda key, model: WordJev(), codex=codex)
@@ -86,11 +87,19 @@ def journal(store):
 
 def test_settings_default_to_a_reminder_and_validate() -> None:
     settings = validate_topic_settings({})
-    assert settings["auto_sort"] is False and settings["auto_find"] == "remind"
+    assert settings["auto_enabled"] is False and settings["auto_find"] == "remind"
+    assert validate_topic_settings({"auto_sort": True})["auto_enabled"] is True  # stored by the first beta
     with pytest.raises(TopicError):
         validate_topic_settings({"auto_find": "always"})
     with pytest.raises(TopicError):
-        validate_topic_settings({"auto_sort": "yes"})
+        validate_topic_settings({"auto_enabled": "yes"})
+
+
+def test_propose_and_accept_wait_while_automatic_topics_are_off(lab) -> None:
+    store, ids = lab
+    rt, codex = with_map(store, ids, auto_enabled=False, auto_find="accept", pool_hint=1)
+    settle(rt, rt.maybe_find(cause="sorting"))
+    assert codex.prompts == []
 
 
 def test_full_unsorted_is_found_and_both_clean_topics_are_accepted_together(lab) -> None:
@@ -141,7 +150,7 @@ def test_chapters_the_last_find_left_waiting_do_not_start_it_again(lab) -> None:
 def test_after_a_chapter_fill_new_chapters_are_sorted_then_found(lab) -> None:
     store, ids = lab
     rt, codex = with_map(store, ids, {"new_topics": [bread(ids)], "waiting": []}, sort=False,
-                         auto_sort=True, auto_find="accept", pool_hint=3)
+                         auto_enabled=True, auto_find="accept", pool_hint=3)
 
     settle(rt, rt.after_chapters())
 
@@ -154,7 +163,7 @@ def test_automation_off_or_without_a_map_does_nothing(lab) -> None:
     store, ids = lab
     rt = TopicRuntime(store, key_reader=lambda: "sk", jev_factory=lambda key, model: WordJev(),
                       codex=ScriptedCodex())
-    store.set_topic_settings({"auto_sort": True, "auto_find": "accept", "pool_hint": 1})
+    store.set_topic_settings({"auto_enabled": True, "auto_find": "accept", "pool_hint": 1})
     settle(rt, rt.after_chapters())
     settle(rt, rt.maybe_find(cause="sorting"))
     assert store.list_topic_runs() == []

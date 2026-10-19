@@ -71,18 +71,19 @@ def default_title_settings() -> dict[str, Any]:
         "codex_effort": "low",
         "api_fallback": False,
         "show_ai_button": True,
+        "include_sensitive": False,
     }
 
 
 def validate_title_settings(payload: Any, current: dict[str, Any], *, now: int) -> dict[str, Any]:
-    allowed = {"auto_enabled", "codex_model", "codex_effort", "api_fallback", "show_ai_button"}
+    allowed = {"auto_enabled", "codex_model", "codex_effort", "api_fallback", "show_ai_button", "include_sensitive"}
     if not isinstance(payload, dict) or not payload or not set(payload) <= allowed:
         raise TitleError(
-            "Send auto_enabled, codex_model, codex_effort, api_fallback and/or show_ai_button.",
+            "Send auto_enabled, codex_model, codex_effort, api_fallback, show_ai_button and/or include_sensitive.",
             code="settings_invalid",
         )
     result = dict(current)
-    for key in ("auto_enabled", "api_fallback", "show_ai_button"):
+    for key in ("auto_enabled", "api_fallback", "show_ai_button", "include_sensitive"):
         if key in payload:
             if not isinstance(payload[key], bool):
                 raise TitleError(f"{key} must be true or false.", code="settings_invalid")
@@ -349,7 +350,7 @@ class SessionTitleRuntime:
         if session is None or session.title_source != "derived" or session.created_at < settings["enabled_since"]:
             return None
         group = self.store.get_session_group(session.group_id)
-        if group is not None and group.is_sensitive:
+        if group is not None and group.is_sensitive and not settings["include_sensitive"]:
             return None
         exchanges = self.store.list_exchanges(session_id)
         if not exchanges or len(exchanges) > AUTO_TITLE_MAX_EXCHANGES:

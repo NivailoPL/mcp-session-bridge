@@ -60,7 +60,7 @@ def default_topic_settings() -> dict[str, Any]:
         "weak_threshold": 0.0,
         "pool_hint": 15,
         "codex_timeout_minutes": 10,
-        "auto_sort": False,
+        "auto_enabled": False,
         "auto_find": "remind",
     }
 
@@ -68,7 +68,7 @@ def default_topic_settings() -> dict[str, Any]:
 def validate_topic_settings(payload: Any, current: dict[str, Any] | None = None) -> dict[str, Any]:
     if not isinstance(payload, dict):
         raise TopicError("Settings must be an object.", code="settings_invalid")
-    merged = {**(current or default_topic_settings()), **payload}
+    merged = {**_legacy(current or default_topic_settings()), **_legacy(payload)}
     unknown = set(merged) - set(default_topic_settings())
     if unknown:
         raise TopicError(f"Unknown settings: {', '.join(sorted(unknown))}.", code="settings_invalid")
@@ -91,11 +91,21 @@ def validate_topic_settings(payload: Any, current: dict[str, Any] | None = None)
     hint = merged["pool_hint"]
     if isinstance(hint, bool) or not isinstance(hint, int) or not 1 <= hint <= 500:
         raise TopicError("pool_hint must be a whole number from 1 to 500.", code="settings_invalid")
-    if not isinstance(merged["auto_sort"], bool):
-        raise TopicError("auto_sort must be true or false.", code="settings_invalid")
+    if not isinstance(merged["auto_enabled"], bool):
+        raise TopicError("auto_enabled must be true or false.", code="settings_invalid")
     if merged["auto_find"] not in AUTO_FIND_MODES:
         raise TopicError("auto_find must be off, remind, propose or accept.", code="settings_invalid")
     return merged
+
+
+def _legacy(settings: dict[str, Any]) -> dict[str, Any]:
+    """The 2026.10.2 beta stored the automation switch as auto_sort."""
+    if "auto_sort" not in settings:
+        return settings
+    out = dict(settings)
+    out.setdefault("auto_enabled", out.pop("auto_sort"))
+    out.pop("auto_sort", None)
+    return out
 
 
 def validate_topic_map(payload: Any) -> list[dict[str, str]]:

@@ -13,7 +13,7 @@ There is no scheduler here; automation rides on the chapter fill. One job runs a
 Every run keeps its input and raw output; accepting a tested proposal makes its
 candidate the active map and adopts the test's sorting, so nothing is sorted twice.
 
-Automation (Settings › Topics): after a chapter fill the sorting model sorts the new
+Automatic topics (Settings › Topics): after a chapter fill the sorting model sorts the new
 chapters; when enough chapters reached Unsorted since the last Find, the proposing
 model looks for topics and, in "accept" mode, proposals whose test is clean become the
 map. The first map and Refine stay with the owner. Every automatic step is journaled
@@ -342,7 +342,7 @@ class TopicRuntime:
     async def after_chapters(self) -> None:
         """Called when a chapter fill ends: sort what is new, then maybe find topics."""
         settings = await asyncio.to_thread(self.store.get_topic_settings)
-        if not settings["auto_sort"] or self.running():
+        if not settings["auto_enabled"] or self.running():
             return
         if await asyncio.to_thread(self.store.active_topic_version) is None:
             return
@@ -357,7 +357,7 @@ class TopicRuntime:
     async def maybe_find(self, *, cause: str) -> None:
         """Start Find on its own when enough new chapters wait in Unsorted."""
         settings = await asyncio.to_thread(self.store.get_topic_settings)
-        if settings["auto_find"] not in ("propose", "accept") or self.running():
+        if not settings["auto_enabled"] or settings["auto_find"] not in ("propose", "accept") or self.running():
             return
         if await asyncio.to_thread(self.store.active_topic_version) is None:
             return  # the first map is the owner's call

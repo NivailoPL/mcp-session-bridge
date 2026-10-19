@@ -128,6 +128,9 @@ def test_off_master_switch_sensitive_group_and_named_sessions_are_skipped(tmp_pa
     new_session(store, "secret", group_id=private.group_id)
     store.save_exchange("secret", "Claude", "Tajne", "OK")
     assert runtime.auto_candidate("secret") is None
+    runtime.save_settings({"include_sensitive": True})
+    assert runtime.auto_candidate("secret") == "Tajne"
+    runtime.save_settings({"include_sensitive": False})
 
     store.create_session("named", "Mój tytuł")
     store.save_exchange("named", "Claude", "Coś", "OK")

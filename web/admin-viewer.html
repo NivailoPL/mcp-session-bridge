@@ -2815,7 +2815,7 @@
         <section data-settings-panel="titles" class="settings-panel" hidden>
           <div class="settings-panel-head">
             <h4>Titles</h4>
-            <span class="context-help"><button type="button" class="context-help-trigger" aria-label="About Titles" aria-describedby="settingsHelpTitles">?</button><span id="settingsHelpTitles" class="context-help-box" role="tooltip">Codex names a session from its first user message. If Codex fails, the OpenAI API can step in. Only the first message is sent, never the rest of the transcript. Sessions in sensitive groups are never named automatically.</span></span>
+            <span class="context-help"><button type="button" class="context-help-trigger" aria-label="About Titles" aria-describedby="settingsHelpTitles">?</button><span id="settingsHelpTitles" class="context-help-box" role="tooltip">Codex names a session from its first user message. If Codex fails, the OpenAI API can step in. Only the first message is sent, never the rest of the transcript. Sessions in sensitive groups are named only when Include sensitive groups is on.</span></span>
           </div>
           <p class="settings-feature-note">Automatic titles name each new session right after its first exchange. The AI rename button in the session list always works when you press it.</p>
           <label id="titlesFeatureCard" class="feature-switch-card" data-settings-instant>
@@ -2871,6 +2871,12 @@
                 <span class="settings-item-title"><label for="titleShowAiButton">AI rename button in the session list</label><span class="context-help"><button type="button" class="context-help-trigger" aria-label="About the AI rename button" aria-describedby="settingsHelpTitleButton">?</button><span id="settingsHelpTitleButton" class="context-help-box" role="tooltip">Turn it off to keep the hover menu short once titles are automatic. It still shows on sessions whose title was cut from the first message, so a failed automatic title can be fixed in one click.</span></span></span>
               </div>
               <div class="settings-item-control"><input id="titleShowAiButton" class="settings-switch-input" type="checkbox" role="switch"></div>
+            </div>
+            <div class="settings-item">
+              <div class="settings-item-label">
+                <span class="settings-item-title"><label for="titleIncludeSensitive">Include sensitive groups</label><span class="context-help"><button type="button" class="context-help-trigger" aria-label="About including sensitive groups" aria-describedby="settingsHelpTitleSensitive">?</button><span id="settingsHelpTitleSensitive" class="context-help-box" role="tooltip">For automatic titles only. When on, sessions in sensitive groups are named too, so their first user message goes to Codex or, as a fallback, the OpenAI API. A session moved into a sensitive group after its first exchange may already have been named. AI rename always works when you press it.</span></span></span>
+              </div>
+              <div class="settings-item-control"><input id="titleIncludeSensitive" class="settings-switch-input" type="checkbox" role="switch"></div>
             </div>
           </section>
         </section>
@@ -2970,9 +2976,16 @@
         <section data-settings-panel="topics" class="settings-panel" hidden>
           <div class="settings-panel-head">
             <h4>Topics</h4>
-            <span class="context-help"><button type="button" class="context-help-trigger" aria-label="About Topics" aria-describedby="settingsHelpTopics">?</button><span id="settingsHelpTopics" class="context-help-box" role="tooltip">Find topics and Refine topics read chapter and session titles with the model below. Sort new and Test taxonomy send each chapter's title, its session title and its group name to the sorting model on OpenRouter. Transcript text is never sent.</span></span>
+            <span class="context-help"><button type="button" class="context-help-trigger" aria-label="About Topics" aria-describedby="settingsHelpTopics">?</button><span id="settingsHelpTopics" class="context-help-box" role="tooltip">Find topics and Refine topics send chapter and session titles to Codex. Sort new and every test send each chapter's title, its session title and its group name to the sorting model on OpenRouter. Transcript text is never sent. Sorting and tests are billed per chapter on OpenRouter; Find and Refine use the Codex plan.</span></span>
           </div>
-          <p class="settings-feature-note">Buttons in Topics show the model set here.</p>
+          <p class="settings-feature-note">Automatic topics follow every chapter fill. Sort new, Find topics and Refine topics always work when you press them.</p>
+          <label id="topicsFeatureCard" class="feature-switch-card" data-settings-instant>
+            <input id="topicAutoEnabled" class="settings-switch-input is-green" type="checkbox" role="switch" aria-describedby="topicAutoNote">
+            <span class="feature-switch-text">
+              <span id="topicAutoLabel" class="feature-switch-state">Automatic topics are off</span>
+              <span id="topicAutoNote" class="feature-switch-detail"></span>
+            </span>
+          </label>
           <section class="settings-group">
             <div class="settings-group-head"><h5>Find and refine topics</h5><span class="settings-value-muted">Codex App Server</span></div>
             <div class="settings-item">
@@ -3011,13 +3024,9 @@
             </div>
           </section>
           <section class="settings-group">
-            <div class="settings-group-head"><h5>Automation</h5></div>
+            <div class="settings-group-head"><h5>Unsorted</h5></div>
             <div class="settings-item">
-              <div class="settings-item-label"><span class="settings-item-title"><label for="topicAutoSort">Sort new chapters</label><span class="context-help"><button type="button" class="context-help-trigger" aria-label="About Sort new chapters" aria-describedby="settingsHelpTopicAutoSort">?</button><span id="settingsHelpTopicAutoSort" class="context-help-box" role="tooltip">When a chapter fill ends (Fill now or the schedule), the sorting model places the new chapters on the active map. Chapters that fit no topic go to Unsorted. Needs a map: the first one is always yours to accept.</span></span></span></div>
-              <div class="settings-item-control"><input id="topicAutoSort" class="settings-switch-input" type="checkbox" role="switch"></div>
-            </div>
-            <div class="settings-item">
-              <div class="settings-item-label"><span class="settings-item-title"><label for="topicAutoFind">When Unsorted is full</label><span class="context-help"><button type="button" class="context-help-trigger" aria-label="About When Unsorted is full" aria-describedby="settingsHelpTopicAutoFind">?</button><span id="settingsHelpTopicAutoFind" class="context-help-box" role="tooltip">Remind: Find topics lights up in Topics. Propose: Find topics runs by itself and every proposal is tested; you decide. Accept clean ones: proposals whose test is clean become the map, the rest wait for you. Several clean topics are tested together once more before they are accepted. Refine topics always stays with you. Every automatic step is in the Journal, and Versions restores the previous map.</span></span></span></div>
+              <div class="settings-item-label"><span class="settings-item-title"><label for="topicAutoFind">When Unsorted is full</label><span class="context-help"><button type="button" class="context-help-trigger" aria-label="About When Unsorted is full" aria-describedby="settingsHelpTopicAutoFind">?</button><span id="settingsHelpTopicAutoFind" class="context-help-box" role="tooltip">Remind: a dot on Manage topics, nothing runs. Propose: Find topics runs by itself and every proposal is tested; you decide. Accept clean ones: proposals whose test is clean become the map, the rest wait for you; several clean topics are tested together once more first. Propose and Accept need Automatic topics on. Refine topics stays with you. Every automatic step is in the Journal, and Versions restores the previous map.</span></span></span></div>
               <div class="settings-item-control"><select id="topicAutoFind"><option value="off">Off</option><option value="remind">Remind</option><option value="propose">Propose</option><option value="accept">Accept clean ones</option></select></div>
             </div>
             <div class="settings-item">
@@ -3304,6 +3313,7 @@
         resolved: document.getElementById("titleCodexResolved"),
         apiFallback: document.getElementById("titleApiFallback"),
         showAiButton: document.getElementById("titleShowAiButton"),
+        includeSensitive: document.getElementById("titleIncludeSensitive"),
       };
       const codexSettingsDom = {
         pill: document.getElementById("codexSettingsPill"),
@@ -4259,6 +4269,7 @@
         const opened = activeSettingsTab();
         if (opened !== "codex") refreshCodexSettings();
         if (opened !== "strands") loadChapterAutomation();
+        if (opened !== "topics") loadTopicSettings();
         dom.aiSettingsStatus.textContent = "Loading settings...";
         dom.aiSettingsStatus.classList.remove("is-error", "is-ok");
         dom.aiSettingsDialog.showModal();
@@ -4321,6 +4332,7 @@
           titlesDom.codexEffort.value = settings.titles.codex_effort || "low";
           titlesDom.apiFallback.checked = Boolean(settings.titles.api_fallback);
           titlesDom.showAiButton.checked = settings.titles.show_ai_button !== false;
+          titlesDom.includeSensitive.checked = Boolean(settings.titles.include_sensitive);
           renderTitlesCard();
         }
         const [minWords, maxWords] = settings.general.rename_max_words_range || [2, 10];
@@ -4628,6 +4640,7 @@
           codex_effort: titlesDom.codexEffort.value,
           api_fallback: titlesDom.apiFallback.checked,
           show_ai_button: titlesDom.showAiButton.checked,
+          include_sensitive: titlesDom.includeSensitive.checked,
         }, "Title settings saved.", "titles");
       }
 
@@ -4649,7 +4662,7 @@
         titlesDom.label.textContent = on ? "Automatic titles are on" : "Automatic titles are off";
         const fallback = titles.api_fallback && titles.api_configured ? " If Codex fails, the OpenAI API names it instead." : "";
         titlesDom.note.textContent = on
-          ? `Each new session is named by Codex after its first exchange.${fallback} Sessions from before you switched this on keep their titles.`
+          ? `Each new session is named by Codex after its first exchange.${fallback}${titles.include_sensitive ? " Sensitive groups too." : ""} Sessions from before you switched this on keep their titles.`
           : "Nothing is named in the background and no tokens are spent. Use AI rename in the session list whenever you want.";
         titlesDom.hint.textContent = on ? "Auto" : "Off";
         titlesDom.hint.dataset.tone = on ? "ok" : "off";
@@ -9858,7 +9871,11 @@
         keyRemove: document.getElementById("topicKeyRemove"),
         sensitive: document.getElementById("topicSensitive"),
         poolHint: document.getElementById("topicPoolHint"),
-        autoSort: document.getElementById("topicAutoSort"),
+        autoEnabled: document.getElementById("topicAutoEnabled"),
+        card: document.getElementById("topicsFeatureCard"),
+        label: document.getElementById("topicAutoLabel"),
+        note: document.getElementById("topicAutoNote"),
+        hint: document.getElementById("settingsHintTopics"),
         autoFind: document.getElementById("topicAutoFind"),
         status: document.getElementById("topicSettingsStatus"),
         save: document.getElementById("topicSettingsSave"),
@@ -9892,13 +9909,54 @@
           topicSettingsDom.jevModel.value = settings.jev_model;
           topicSettingsDom.sensitive.checked = settings.include_sensitive;
           topicSettingsDom.poolHint.value = settings.pool_hint;
-          topicSettingsDom.autoSort.checked = settings.auto_sort;
+          topicSettings = settings;
+          topicSettingsDom.autoEnabled.checked = settings.auto_enabled;
           topicSettingsDom.autoFind.value = settings.auto_find;
+          renderTopicsCard();
           renderTopicKey(payload.key_set);
           setTopicSettingsMessage("");
         } catch (error) {
           setTopicSettingsMessage(`Could not load Topics settings: ${error.message}`, "error");
         }
+      }
+
+      var topicSettings = null; // var: renderChapterAutomation may read it before this line runs
+
+      // the big card saves at once, like Automatic chapters and titles
+      async function saveTopicsAutoEnabled() {
+        const topicSettingsDom = topicDom();
+        const enabled = topicSettingsDom.autoEnabled.checked;
+        try {
+          const result = await api("/admin/api/topics/settings", { method: "PUT", body: JSON.stringify({ auto_enabled: enabled }) });
+          topicSettings = result.settings || { ...topicSettings, auto_enabled: enabled };
+          setTopicSettingsMessage(enabled ? "Automatic topics are on." : "Automatic topics are off.", "ok");
+        } catch (error) {
+          topicSettingsDom.autoEnabled.checked = !enabled;
+          setTopicSettingsMessage(error.message, "error");
+        }
+        renderTopicsCard();
+      }
+
+      function renderTopicsCard() {
+        if (!topicSettings) return;
+        const topicSettingsDom = topicDom();
+        const on = Boolean(topicSettings.auto_enabled);
+        topicSettingsDom.autoEnabled.checked = on;
+        topicSettingsDom.card.classList.toggle("is-on", on);
+        topicSettingsDom.label.textContent = on ? "Automatic topics are on" : "Automatic topics are off";
+        const full = {
+          off: "",
+          remind: " When Unsorted is full, Manage topics shows a dot.",
+          propose: " When Unsorted is full, Codex proposes topics for you to decide.",
+          accept: " When Unsorted is full, Codex proposes topics and clean ones become the map.",
+        }[topicSettings.auto_find] || "";
+        const chaptersOff = codexSettings.automation && !codexSettings.automation.schedule?.enabled
+          ? " Automatic chapters are off, so this follows Fill now only." : "";
+        topicSettingsDom.note.textContent = on
+          ? `After each chapter fill the sorting model sorts the new chapters.${full}${chaptersOff}`
+          : "Nothing runs on its own and no tokens are spent. Sort new and Find topics work when you press them.";
+        topicSettingsDom.hint.textContent = on ? "Auto" : "Off";
+        topicSettingsDom.hint.dataset.tone = on ? "ok" : "off";
       }
 
       async function saveTopicSettings() {
@@ -9914,10 +9972,11 @@
               jev_model: topicSettingsDom.jevModel.value.trim(),
               include_sensitive: topicSettingsDom.sensitive.checked,
               pool_hint: Number(topicSettingsDom.poolHint.value),
-              auto_sort: topicSettingsDom.autoSort.checked,
               auto_find: topicSettingsDom.autoFind.value,
             }),
           });
+          topicSettings = { ...topicSettings, auto_find: topicSettingsDom.autoFind.value };
+          renderTopicsCard();
           setTopicSettingsMessage("Saved. Topics uses these settings from the next run.", "ok");
         } catch (error) {
           setTopicSettingsMessage(error.message, "error");
@@ -10050,6 +10109,7 @@
       function bindTopicSettings() {
         const topicSettingsDom = topicDom();
         topicSettingsDom.save.addEventListener("click", saveTopicSettings);
+        topicSettingsDom.autoEnabled.addEventListener("change", saveTopicsAutoEnabled);
         topicSettingsDom.keySave.addEventListener("click", () => saveTopicKey(false));
         topicSettingsDom.keyRemove.addEventListener("click", () => saveTopicKey(true));
       }
@@ -10127,6 +10187,7 @@
           : "Nothing runs on its own and no tokens are spent in the background. Use Fill now below whenever you want.";
         codexSettingsDom.strandsHint.textContent = on ? "Auto" : "Off";
         codexSettingsDom.strandsHint.dataset.tone = on ? "ok" : "off";
+        renderTopicsCard(); // its note says whether chapters run on their own
         codexSettingsDom.nextRun.textContent = on && data.next_run_at ? `Next: ${formatAutomationTime(data.next_run_at, data.timezone)}` : "";
 
         codexSettingsDom.scheduleMode.value = schedule.mode === "interval" ? `interval:${schedule.interval_hours}` : schedule.mode;
