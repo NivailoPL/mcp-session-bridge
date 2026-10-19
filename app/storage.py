@@ -7,7 +7,7 @@ import secrets
 import sqlite3
 import time
 import hashlib
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from threading import Lock
 from typing import Any
@@ -119,8 +119,9 @@ CONTEXT_ID_ALPHABET = "abcdefghijkmnpqrstuvwxyz23456789"
 CONTEXT_ID_LENGTH = 16
 CONTEXT_BLOCK_COLUMNS = (
     "block_id, context_id, position, source_type, source_key, source_session_id, "
-    "source_file_id, title, source_hash, found_ids, token_count, snapshot_at, created_at"
+    "source_file_id, title, source_hash, found_ids, token_count, snapshot_at, created_at, source_meta"
 )
+CONTEXT_SOURCE_TYPES = ("session", "file", "topic")
 FILE_PREVIEW_CHARS = 600
 
 
@@ -267,6 +268,8 @@ class ContextBlockSnapshot:
     source_hash: str
     found_ids: dict[str, list[str]]
     token_count: int
+    # Topic blocks only: which turns came from which session, the map version and options.
+    meta: dict[str, Any] = field(default_factory=dict)
 
 
 class Store(AnchorStoreMixin, TopicStoreMixin):
@@ -567,7 +570,7 @@ class Store(AnchorStoreMixin, TopicStoreMixin):
                     block_id INTEGER PRIMARY KEY AUTOINCREMENT,
                     context_id TEXT NOT NULL,
                     position INTEGER NOT NULL,
-                    source_type TEXT NOT NULL CHECK (source_type IN ('session', 'file')),
+                    source_type TEXT NOT NULL CHECK (source_type IN ('session', 'file', 'topic')),
                     source_key TEXT NOT NULL,
                     source_session_id TEXT,
                     source_file_id INTEGER,
@@ -578,6 +581,7 @@ class Store(AnchorStoreMixin, TopicStoreMixin):
                     token_count INTEGER NOT NULL DEFAULT 0,
                     snapshot_at INTEGER NOT NULL,
                     created_at INTEGER NOT NULL,
+                    source_meta TEXT NOT NULL DEFAULT '{{}}',
                     FOREIGN KEY(context_id) REFERENCES contexts(context_id) ON DELETE CASCADE
                 );
 
@@ -725,6 +729,7 @@ class Store(AnchorStoreMixin, TopicStoreMixin):
             # Admin-only highlights and strands (app.anchor_store); additive, no schema bump.
             conn.executescript(ANCHOR_SCHEMA_SQL)
             conn.executescript(TOPIC_SCHEMA_SQL)
+            self._allow_topic_context_blocks(conn)
             for table, column, declaration in TOPIC_LATER_COLUMNS:
                 self._ensure_column(conn, table, column, declaration)
             for table, column, declaration in ANCHOR_LATER_COLUMNS:
@@ -868,6 +873,46 @@ class Store(AnchorStoreMixin, TopicStoreMixin):
               AND attempts >= max_attempts
             """,
             (now, now),
+        )
+
+    @staticmethod
+    def _allow_topic_context_blocks(conn: sqlite3.Connection) -> None:
+        """Older databases limit context blocks to sessions and files with a CHECK, which
+        SQLite cannot alter; rebuild the table once with topics allowed. Additive: every
+        row and index is kept, so no schema bump."""
+        row = conn.execute("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'context_blocks'").fetchone()
+        if row is None or "'topic'" in row[0]:
+            return
+        columns = [info["name"] for info in conn.execute("PRAGMA table_info(context_blocks)")]
+        keep = ", ".join(column for column in columns if column != "source_meta")
+        conn.executescript(
+            f"""
+            BEGIN;
+            CREATE TABLE context_blocks_rebuilt (
+                block_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                context_id TEXT NOT NULL,
+                position INTEGER NOT NULL,
+                source_type TEXT NOT NULL CHECK (source_type IN ('session', 'file', 'topic')),
+                source_key TEXT NOT NULL,
+                source_session_id TEXT,
+                source_file_id INTEGER,
+                title TEXT NOT NULL,
+                content TEXT NOT NULL,
+                source_hash TEXT NOT NULL,
+                found_ids TEXT NOT NULL DEFAULT '{{}}',
+                token_count INTEGER NOT NULL DEFAULT 0,
+                snapshot_at INTEGER NOT NULL,
+                created_at INTEGER NOT NULL,
+                source_meta TEXT NOT NULL DEFAULT '{{}}',
+                FOREIGN KEY(context_id) REFERENCES contexts(context_id) ON DELETE CASCADE
+            );
+            INSERT INTO context_blocks_rebuilt ({keep}) SELECT {keep} FROM context_blocks;
+            DROP TABLE context_blocks;
+            ALTER TABLE context_blocks_rebuilt RENAME TO context_blocks;
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_context_blocks_source ON context_blocks(context_id, source_key);
+            CREATE INDEX IF NOT EXISTS idx_context_blocks_position ON context_blocks(context_id, position);
+            COMMIT;
+            """
         )
 
     @staticmethod
@@ -3329,7 +3374,8 @@ class Store(AnchorStoreMixin, TopicStoreMixin):
             conn.execute(
                 """
                 UPDATE context_blocks
-                SET title = ?, content = ?, source_hash = ?, found_ids = ?, token_count = ?, snapshot_at = ?
+                SET title = ?, content = ?, source_hash = ?, found_ids = ?, token_count = ?, snapshot_at = ?,
+                    source_meta = ?
                 WHERE block_id = ?
                 """,
                 (
@@ -3339,6 +3385,7 @@ class Store(AnchorStoreMixin, TopicStoreMixin):
                     json.dumps(snapshot.found_ids, sort_keys=True),
                     snapshot.token_count,
                     now,
+                    json.dumps(snapshot.meta, sort_keys=True),
                     block_id,
                 ),
             )
@@ -3412,15 +3459,15 @@ class Store(AnchorStoreMixin, TopicStoreMixin):
         *,
         snapshot_at: int,
     ) -> int:
-        if snapshot.source_type not in {"session", "file"}:
-            raise ValueError("A context block comes from a session or a file")
+        if snapshot.source_type not in CONTEXT_SOURCE_TYPES:
+            raise ValueError("A context block comes from a session, a file or a topic")
         try:
             cursor = conn.execute(
                 """
                 INSERT INTO context_blocks (
                     context_id, position, source_type, source_key, source_session_id, source_file_id,
-                    title, content, source_hash, found_ids, token_count, snapshot_at, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    title, content, source_hash, found_ids, token_count, snapshot_at, created_at, source_meta
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     context_id,
@@ -3436,6 +3483,7 @@ class Store(AnchorStoreMixin, TopicStoreMixin):
                     snapshot.token_count,
                     snapshot_at,
                     int(time.time()),
+                    json.dumps(snapshot.meta, sort_keys=True),
                 ),
             )
         except sqlite3.IntegrityError as exc:
@@ -4454,6 +4502,7 @@ def _context_block_from_row(row: sqlite3.Row) -> dict[str, Any]:
         "token_count": row["token_count"],
         "snapshot_at": row["snapshot_at"],
         "created_at": row["created_at"],
+        "meta": json.loads(row["source_meta"] or "{}") if "source_meta" in row.keys() else {},
     }
     if "content" in row.keys():
         payload["content"] = row["content"]
@@ -4471,4 +4520,5 @@ def _context_snapshot_from_row(row: sqlite3.Row) -> ContextBlockSnapshot:
         source_hash=row["source_hash"],
         found_ids=json.loads(row["found_ids"] or "{}"),
         token_count=row["token_count"],
+        meta=json.loads(row["source_meta"] or "{}") if "source_meta" in row.keys() else {},
     )

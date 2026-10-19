@@ -272,3 +272,47 @@ body.is-dragging .cx-chev svg:nth-child(3) { animation-delay: .24s; }
   .cx-rail { display: none; }
   .cx-manager { padding: 22px 0 0 16px; }
 }
+
+/* ---------- sessions: the heaviest source, a thick solid frame ---------- */
+.cx-card.is-session { padding: 3.5px; background: var(--g); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .28); }
+.cx-card.is-session .cx-card-in { border-radius: 10.5px; }
+.cx-blk.is-session { padding: 3px; background: var(--g); }
+.cx-blk.is-session .cx-blk-in { border-radius: 9.5px; }
+
+/* ---------- topics: a stack of cards in the topic's color ---------- */
+.cx-family { grid-column: 1 / -1; margin: 6px 0 -4px; font: 500 10.5px "Geist Mono", monospace; letter-spacing: .16em; }
+.cx-grid .cx-family:first-child { margin-top: 0; }
+.cx-fchip { display: inline-flex; align-items: center; gap: 7px; height: 32px; padding: 0 12px; border-radius: 999px; border: 1px solid rgba(255, 255, 255, .1); background: rgba(255, 255, 255, .03); color: var(--text-2); font: 600 12.5px Manrope, sans-serif; cursor: pointer; }
+.cx-fchip i { width: 8px; height: 8px; border-radius: 999px; }
+.cx-fchip:hover { color: var(--text); border-color: rgba(255, 255, 255, .2); }
+.cx-fchip[aria-pressed="true"] { background: rgba(255, 255, 255, .09); color: var(--text); border-color: rgba(255, 255, 255, .24); }
+
+.cx-card.is-topic { margin-top: 12px; background: linear-gradient(160deg, var(--g) 0%, color-mix(in oklab, var(--g) 35%, transparent) 45%, var(--g) 100%); }
+.cx-card.is-topic .cx-card-in { background: linear-gradient(180deg, color-mix(in oklab, var(--g) 17%, transparent) 0%, rgba(21, 24, 33, 0) 60%), var(--card); }
+.cx-stack { position: absolute; height: 20px; border-radius: 12px; border: 1px solid; pointer-events: none; }
+.cx-stack.s1 { top: -7px; left: 8px; right: 8px; border-color: color-mix(in oklab, var(--g) 55%, transparent); background: #141720; }
+.cx-stack.s2 { top: -13px; left: 16px; right: 16px; border-color: color-mix(in oklab, var(--g) 35%, transparent); background: #12141b; }
+.cx-tfamily { font: 500 9.5px "Geist Mono", monospace; letter-spacing: .14em; color: color-mix(in oklab, var(--g) 70%, white); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.cx-art.is-topic { background: var(--well); box-shadow: inset 0 2px 7px rgba(0, 0, 0, .7), inset 0 -1px 0 rgba(255, 255, 255, .05); }
+.cx-core { position: absolute; left: 50%; top: 50%; width: 22px; height: 22px; margin: -11px 0 0 -11px; border-radius: 999px; background: var(--g); box-shadow: 0 0 16px color-mix(in oklab, var(--g) 55%, transparent); }
+.cx-cdot { position: absolute; border-radius: 999px; background: var(--g); transform: translate(-50%, -50%); }
+.cx-ticons { display: inline-flex; }
+.cx-ticons .cx-gicon { width: 20px; height: 20px; border-radius: 6px; box-shadow: 0 0 0 2px var(--card); }
+.cx-ticons .cx-gicon + .cx-gicon { margin-left: -6px; }
+.cx-ticons .cx-gicon svg { width: 12px; height: 12px; }
+.cx-ticons .cx-eye { display: none; }
+
+.cx-blk.is-topic { margin-bottom: 8px; }
+.cx-bstack { position: absolute; height: 8px; border-radius: 0 0 11px 11px; border: 1px solid; border-top: 0; pointer-events: none; }
+.cx-bstack.b1 { bottom: -5px; left: 5px; right: 5px; border-color: color-mix(in oklab, var(--g) 55%, transparent); }
+.cx-bstack.b2 { bottom: -9px; left: 10px; right: 10px; border-color: color-mix(in oklab, var(--g) 35%, transparent); }
+.cx-hub { width: 30px; height: 30px; border-radius: 8px; flex: none; display: inline-flex; align-items: center; justify-content: center; background: color-mix(in oklab, var(--g) 12%, transparent); border: 1px solid color-mix(in oklab, var(--g) 45%, transparent); }
+.cx-hub i { width: 12px; height: 12px; border-radius: 999px; background: var(--g); box-shadow: 0 0 0 3px color-mix(in oklab, var(--g) 25%, transparent); }
+.cx-blk .cx-ticons .cx-gicon { width: 18px; height: 18px; box-shadow: 0 0 0 2px var(--block); }
+
+/* Status pills always fit one line; a row may wrap between a pill and its action. */
+.cx-flag { flex-wrap: wrap; margin-top: 7px; }
+.cx-pill { white-space: nowrap; flex: none; }
+.cx-pill.is-info { background: rgba(255, 255, 255, .05); border-color: rgba(255, 255, 255, .16); color: var(--text-2); }
+.cx-pill.is-sensitive { background: rgba(217, 185, 106, .08); border-color: rgba(217, 185, 106, .4); color: #d9b96a; }
+.cx-blk-row { white-space: nowrap; overflow: hidden; }

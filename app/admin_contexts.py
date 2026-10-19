@@ -12,10 +12,12 @@ from typing import TYPE_CHECKING, Any
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
+from app.context_topics import library_topics, snapshot_topic, topic_source_key
 from app.contexts import (
     assemble_context,
-    block_status,
+    block_status_detail,
     build_redactor,
+    effective_blocks,
     snapshot_file,
     snapshot_session,
 )
@@ -41,6 +43,7 @@ RESTORE_FIELDS = {
     "found_ids",
     "token_count",
 }
+RESTORE_OPTIONAL_FIELDS = {"meta"}
 
 
 class ContextAdminHandlers:
@@ -59,8 +62,10 @@ class ContextAdminHandlers:
             items = self.store.list_context_library_sessions()
         elif kind == "files":
             items = self.store.list_context_library_files()
+        elif kind == "topics":
+            items = library_topics(self.store)
         else:
-            return self._error("kind must be sessions or files.", 400)
+            return self._error("kind must be sessions, files or topics.", 400)
         return self._ok({"kind": kind, "items": items, "groups": self.store.list_session_groups()})
 
     # ---------- contexts ----------
@@ -126,7 +131,7 @@ class ContextAdminHandlers:
 
     async def api_add_block(self, request: Request) -> Response:
         payload, error = await self._mutation(
-            request, allowed={"source_type", "session_id", "file_id", "position", "restore"}
+            request, allowed={"source_type", "session_id", "file_id", "topic_key", "position", "restore"}
         )
         if error:
             return error
@@ -176,7 +181,7 @@ class ContextAdminHandlers:
         return self._run(move)
 
     async def api_refresh_block(self, request: Request) -> Response:
-        _, error = await self._mutation(request, allowed=set(), allow_empty=True)
+        payload, error = await self._mutation(request, allowed={"include_sensitive"}, allow_empty=True)
         if error:
             return error
         block_id, path_error = self._block_id(request)
@@ -188,6 +193,13 @@ class ContextAdminHandlers:
             source = {"source_type": current["source_type"]}
             if current["source_type"] == "session":
                 source["session_id"] = current["source_session_id"]
+            elif current["source_type"] == "topic":
+                meta = current.get("meta") or {}
+                source["topic_key"] = meta.get("topic_key") or current["source_key"].split(":", 1)[-1]
+                include = payload.get("include_sensitive", meta.get("include_sensitive", False))
+                if not isinstance(include, bool):
+                    raise ValueError("include_sensitive must be true or false.")
+                source["include_sensitive"] = include
             else:
                 source["file_id"] = current["source_file_id"]
             block = self.store.refresh_context_block(block_id, self._snapshot(source))
@@ -226,7 +238,15 @@ class ContextAdminHandlers:
             if not isinstance(file_id, int) or isinstance(file_id, bool):
                 raise ValueError("file_id is required for a file block")
             return snapshot_file(self.store, file_id, redactor=redactor)
-        raise ValueError("source_type must be session or file")
+        if source_type == "topic":
+            topic_key = payload.get("topic_key")
+            if not isinstance(topic_key, str) or not topic_key:
+                raise ValueError("topic_key is required for a topic block")
+            return snapshot_topic(
+                self.store, topic_key, include_sensitive=bool(payload.get("include_sensitive", False)),
+                timezone_name=self.admin._display_timezone_name(), redactor=redactor,
+            )
+        raise ValueError("source_type must be session, file or topic")
 
     def _context(self, context_id: str) -> dict[str, Any] | None:
         context = self.store.get_context(context_id)
@@ -234,10 +254,22 @@ class ContextAdminHandlers:
 
     def _with_status(self, context: dict[str, Any]) -> dict[str, Any]:
         context["blocks"] = [self._block_with_status(block) for block in context["blocks"]]
+        if any(block["source_type"] == "topic" for block in context["blocks"]):
+            # Turns a block above already gives are left out of a topic block; say how many.
+            full = self.store.get_context(context["context_id"], include_content=True) or {"blocks": []}
+            skipped = {block["block_id"]: count for block, _, count in effective_blocks(full["blocks"])}
+            for block in context["blocks"]:
+                block["duplicate_turns"] = skipped.get(block["block_id"], 0)
         return context
 
     def _block_with_status(self, block: dict[str, Any]) -> dict[str, Any]:
-        block["status"] = block_status(self.store, block)
+        block["status"], block["status_detail"] = block_status_detail(self.store, block)
+        if block["source_type"] == "topic":
+            # The turn map is for assembly; the page only needs the counts.
+            meta = dict(block.get("meta") or {})
+            meta.pop("parts", None)
+            meta.pop("strand_ids", None)
+            block["meta"] = meta
         return block
 
     async def _mutation(
@@ -287,6 +319,9 @@ def _restore_snapshot(value: Any) -> ContextBlockSnapshot | None:
     """Rebuild the snapshot of a block the admin just deleted, for Undo."""
     if not isinstance(value, dict) or not RESTORE_FIELDS <= set(value):
         return None
+    meta = value.get("meta") or {}
+    if not isinstance(meta, dict):
+        return None
     try:
         snapshot = ContextBlockSnapshot(
             source_type=str(value["source_type"]),
@@ -298,12 +333,16 @@ def _restore_snapshot(value: Any) -> ContextBlockSnapshot | None:
             source_hash=str(value["source_hash"]),
             found_ids={str(k): [str(i) for i in v] for k, v in dict(value["found_ids"]).items()},
             token_count=int(value["token_count"]),
+            meta=meta,
         )
     except (TypeError, ValueError):
         return None
-    expected_key = (
-        f"session:{snapshot.source_session_id}" if snapshot.source_type == "session" else f"file:{snapshot.source_file_id}"
-    )
+    if snapshot.source_type == "topic":
+        expected_key = topic_source_key(str(meta.get("topic_key", "")))
+    else:
+        expected_key = (
+            f"session:{snapshot.source_session_id}" if snapshot.source_type == "session" else f"file:{snapshot.source_file_id}"
+        )
     if snapshot.source_key != expected_key:
         return None
     return snapshot

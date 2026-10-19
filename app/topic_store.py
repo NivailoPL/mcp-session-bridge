@@ -278,6 +278,39 @@ class TopicStoreMixin:
             for row in rows
         ]
 
+    def topic_strand_ranges(self, strand_ids: list[int]) -> dict[int, list[tuple[int, int]]]:
+        """Accepted exchange ranges of the given chapters, in order."""
+        if not strand_ids:
+            return {}
+        out: dict[int, list[tuple[int, int]]] = {}
+        with self._lock, self._connect() as conn:
+            for start in range(0, len(strand_ids), 500):
+                chunk = strand_ids[start:start + 500]
+                marks = ",".join("?" * len(chunk))
+                for row in conn.execute(
+                    f"""SELECT strand_id, start_exchange_id, end_exchange_id FROM strand_ranges
+                        WHERE strand_id IN ({marks}) AND status = 'accepted' ORDER BY strand_id, ordinal""",
+                    chunk,
+                ):
+                    out.setdefault(row["strand_id"], []).append((row["start_exchange_id"], row["end_exchange_id"]))
+        return out
+
+    def topic_strand_sizes(self) -> dict[int, int]:
+        """Characters of user and model text per accepted chapter, for a quick token estimate."""
+        with self._lock, self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT r.strand_id, SUM(length(e.user_message) + length(COALESCE(e.assistant_response, ''))) AS chars
+                FROM strand_ranges r
+                JOIN strands s ON s.strand_id = r.strand_id
+                JOIN exchanges e ON e.session_id = s.session_id
+                    AND e.exchange_id BETWEEN r.start_exchange_id AND r.end_exchange_id AND e.deleted_at IS NULL
+                WHERE r.status = 'accepted' AND s.status = 'accepted'
+                GROUP BY r.strand_id
+                """
+            ).fetchall()
+        return {row["strand_id"]: int(row["chars"] or 0) for row in rows}
+
     def topic_current_assignments(self, version_id: int) -> dict[int, dict[str, Any]]:
         """Latest finished answer per chapter on one map version."""
         with self._lock, self._connect() as conn:

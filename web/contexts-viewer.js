@@ -33,6 +33,7 @@
     close: '<svg class="i sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>',
     drop: '<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v12M7 11l5 5 5-5M5 20h14"></path></svg>',
     session: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" aria-hidden="true"><path d="M4 6h11"></path><path d="M9 12h11"></path><path d="M4 18h11"></path></svg>',
+    topic: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><circle cx="5" cy="6" r="1.5"></circle><circle cx="19" cy="7" r="1.5"></circle><circle cx="17" cy="19" r="1.5"></circle></svg>',
   };
 
   const state = {
@@ -41,6 +42,8 @@
     groupOrder: [],
     sessions: [],
     files: [],
+    topics: [],
+    family: null,
     contexts: [],
     tab: "sessions",
     query: "",
@@ -56,6 +59,8 @@
   const dom = {
     tabSessions: document.getElementById("tabSessions"),
     tabFiles: document.getElementById("tabFiles"),
+    tabTopics: document.getElementById("tabTopics"),
+    countTopics: document.getElementById("countTopics"),
     countSessions: document.getElementById("countSessions"),
     countFiles: document.getElementById("countFiles"),
     search: document.getElementById("librarySearch"),
@@ -204,12 +209,40 @@
   // ---------- library ----------
 
   function renderTabs() {
-    const sessions = state.tab === "sessions";
-    dom.tabSessions.setAttribute("aria-selected", String(sessions));
-    dom.tabFiles.setAttribute("aria-selected", String(!sessions));
+    dom.tabSessions.setAttribute("aria-selected", String(state.tab === "sessions"));
+    dom.tabFiles.setAttribute("aria-selected", String(state.tab === "files"));
+    dom.tabTopics.setAttribute("aria-selected", String(state.tab === "topics"));
     dom.countSessions.textContent = state.sessions.length;
     dom.countFiles.textContent = state.files.length;
-    dom.search.placeholder = sessions ? "Search sessions by title…" : "Search files by name…";
+    dom.countTopics.textContent = state.topics.length;
+    dom.search.placeholder = { sessions: "Search sessions by title…", files: "Search files by name…", topics: "Search topics…" }[state.tab];
+  }
+
+  function families() {
+    const out = [];
+    for (const topic of state.topics) {
+      if (!out.some((f) => f.name === topic.family)) out.push({ name: topic.family, color: topic.color });
+    }
+    return out;
+  }
+
+  // Topics filter by family instead of group: a topic spans many groups.
+  function renderFamilyChips() {
+    const chips = [{ name: null, label: "All" }, ...families().map((f) => ({ name: f.name, label: f.name, color: f.color }))];
+    dom.groupTiles.replaceChildren(...chips.map((chip) => {
+      const node = button("cx-fchip", "", "", () => {
+        state.family = chip.name;
+        renderLibrary();
+      });
+      if (chip.color) {
+        const dot = el("i");
+        dot.style.background = chip.color;
+        node.append(dot);
+      }
+      node.append(document.createTextNode(chip.label));
+      node.setAttribute("aria-pressed", String(state.family === chip.name));
+      return node;
+    }));
   }
 
   function renderGroupTiles() {
@@ -228,6 +261,9 @@
 
   function libraryItems() {
     const query = state.query.trim().toLowerCase();
+    if (state.tab === "topics") {
+      return state.topics.filter((topic) => (!state.family || topic.family === state.family) && (!query || topic.name.toLowerCase().includes(query)));
+    }
     const items = state.tab === "sessions" ? state.sessions : state.files;
     return items.filter((item) => {
       const group = state.tab === "sessions" ? item.group_id : item.effective_group_id;
@@ -238,6 +274,27 @@
 
   function renderLibrary() {
     renderTabs();
+    if (state.tab === "topics") {
+      renderFamilyChips();
+      const items = libraryItems();
+      dom.filterLabel.textContent = `${(state.family || "All families").toUpperCase()} · ${items.length} TOPICS`;
+      const nodes = [];
+      let family = null;
+      for (const topic of items) {
+        if (topic.family !== family) {
+          family = topic.family;
+          const head = text("div", "cx-family", family.toUpperCase());
+          head.style.color = topic.color;
+          nodes.push(head);
+        }
+        nodes.push(topicCard(topic));
+      }
+      dom.grid.replaceChildren(...nodes);
+      dom.empty.hidden = items.length > 0;
+      dom.empty.textContent = state.topics.length ? "Nothing matches this search." : "No topics yet. Build a map in Topics first.";
+      return;
+    }
+    dom.empty.textContent = "Nothing matches this search.";
     renderGroupTiles();
     const items = libraryItems();
     const groupName = state.group ? groupOf(state.group).name : "All groups";
@@ -286,6 +343,54 @@
     );
     card.append(inner);
     card.addEventListener("dragstart", (event) => startDrag(event, card, { kind: "library", sourceType: "session", id: session.session_id, key: `session:${session.session_id}` }));
+    card.addEventListener("dragend", endDrag);
+    return card;
+  }
+
+  function topicCard(topic) {
+    const card = el("div", "cx-card is-topic");
+    card.style.setProperty("--g", topic.color);
+    card.style.setProperty("--edge", shade(topic.color, 0.42));
+    const empty = !topic.chapter_count;
+    card.draggable = !empty;
+    if (empty) card.classList.add("is-disabled");
+    card.title = empty ? "No chapters are sorted into this topic yet" : `${topic.family} · drag into a context`;
+    card.append(el("span", "cx-stack s2"), el("span", "cx-stack s1"));
+    const inner = el("div", "cx-card-in");
+    const top = el("div", "cx-card-top");
+    top.append(text("span", "cx-tfamily", topic.family.toUpperCase()), el("span", "cx-kind", `${ICON.topic}TOPIC`));
+    const art = el("div", "cx-art is-topic");
+    const core = el("i", "cx-core");
+    art.append(core);
+    (topic.confidences || []).forEach((confidence, index) => {
+      // A small constellation: surer chapters sit closer and brighter, like in the graph.
+      const angle = index * 2.39996;
+      const radius = 16 + (1 - confidence) * 30;
+      const dot = el("i", "cx-cdot");
+      dot.style.left = `${50 + Math.cos(angle) * radius * 1.25}%`;
+      dot.style.top = `${50 + Math.sin(angle) * radius}%`;
+      dot.style.opacity = String(0.3 + confidence * 0.7);
+      dot.style.width = dot.style.height = `${3 + confidence * 2.5}px`;
+      art.append(dot);
+    });
+    const foot = el("div", "cx-foot");
+    const icons = el("span", "cx-ticons");
+    for (const groupId of topic.group_ids || []) icons.append(groupIcon(groupOf(groupId || null), true));
+    foot.append(icons);
+    const used = el("span", "cx-used");
+    for (const color of usageColors(`topic:${topic.topic_key}`)) {
+      const dot = el("span");
+      dot.style.background = color;
+      used.append(dot);
+    }
+    foot.append(used);
+    const stat = el("span", "cx-stat");
+    stat.append(document.createTextNode(formatTokens(topic.token_estimate)), text("small", "", "TOK"));
+    foot.append(stat);
+    const sessions = topic.session_count === 1 ? "1 SESSION" : `${topic.session_count} SESSIONS`;
+    inner.append(top, art, text("div", "cx-title", topic.name), text("div", "cx-type-line", `${sessions} · ${topic.chapter_count} CHAPTERS`), foot);
+    card.append(inner);
+    card.addEventListener("dragstart", (event) => startDrag(event, card, { kind: "library", sourceType: "topic", id: topic.topic_key, key: `topic:${topic.topic_key}` }));
     card.addEventListener("dragend", endDrag);
     return card;
   }
@@ -400,6 +505,7 @@
   // ---------- board ----------
 
   function sourceItem(block) {
+    if (block.source_type === "topic") return state.topics.find((t) => `topic:${t.topic_key}` === block.source_key) || null;
     if (block.source_type === "session") return state.sessions.find((s) => s.session_id === block.source_session_id) || null;
     return state.files.find((f) => f.file_id === block.source_file_id) || null;
   }
@@ -470,7 +576,7 @@
       const item = sourceItem(block);
       const group = groupOf(item ? (item.group_id || item.effective_group_id) : null);
       segment.style.flex = `${Math.max(block.token_count, 1)} 1 0`;
-      segment.style.background = group.color;
+      segment.style.background = block.source_type === "topic" ? (block.meta?.color || "#7a7df0") : group.color;
       segment.title = `${block.title} · ${Number(block.token_count).toLocaleString("en-US")} tokens`;
       segbar.append(segment);
     }
@@ -497,7 +603,7 @@
   function slot(context, mode) {
     const node = el("div", "cx-slot");
     node.dataset.mode = mode || "idle";
-    let label = context.blocks.length ? "Drop the next block here" : "Drop sessions or files here";
+    let label = context.blocks.length ? "Drop the next block here" : "Drop sessions, files or topics here";
     let hint = "Cards are added in order, top to bottom";
     if (mode === "accept") {
       node.classList.add("is-accept");
@@ -517,7 +623,60 @@
     return node;
   }
 
+  function topicBlockNode(context, block) {
+    const meta = block.meta || {};
+    const color = meta.color || "#7a7df0";
+    const node = el("div", "cx-blk is-topic");
+    node.dataset.blockId = block.block_id;
+    node.style.setProperty("--g", color);
+    node.style.setProperty("--edge", shade(color, 0.42));
+    if (state.flash === block.block_id) node.classList.add("is-new");
+    node.draggable = !context.is_locked;
+    node.append(el("span", "cx-bstack b2"), el("span", "cx-bstack b1"));
+    const inner = el("div", "cx-blk-in");
+    inner.append(el("span", "cx-hub", "<i></i>"));
+    const main = el("div", "cx-blk-main");
+    const sessions = meta.session_count === 1 ? "1 SESSION" : `${meta.session_count || 0} SESSIONS`;
+    main.append(text("div", "cx-blk-title", block.title), text("div", "cx-blk-meta", `TOPIC · ${formatTokens(block.token_count)} TOK · ${sessions}`));
+    const row = el("div", "cx-blk-row");
+    const icons = el("span", "cx-ticons");
+    for (const groupId of meta.group_ids || []) icons.append(groupIcon(groupOf(groupId || null), true));
+    row.append(icons, text("span", "", `snapshot · map v${meta.version_id || "?"} · ${formatDay(block.snapshot_at)}`));
+    main.append(row);
+    const flags = [];
+    if (block.status === "missing") {
+      flags.push([text("span", "cx-pill is-missing", "NOT ON THE MAP")]);
+    } else if (block.status === "outdated") {
+      const added = block.status_detail?.new_chapters || 0;
+      const item = [text("span", "cx-pill", added ? `OUTDATED · +${added} ${added === 1 ? "CHAPTER" : "CHAPTERS"}` : "OUTDATED")];
+      if (!context.is_locked) item.push(button("cx-link", "", "Refresh", () => refreshBlock(block)));
+      flags.push(item);
+    }
+    if (block.duplicate_turns) flags.push([text("span", "cx-pill is-info", `${block.duplicate_turns} ${block.duplicate_turns === 1 ? "TURN" : "TURNS"} ALREADY ABOVE`)]);
+    if (meta.include_sensitive) {
+      const item = [text("span", "cx-pill is-sensitive", "SENSITIVE IN")];
+      if (!context.is_locked) item.push(button("cx-link", "", "Leave out", () => refreshBlock(block, { include_sensitive: false })));
+      flags.push(item);
+    } else if (meta.sensitive_left_out) {
+      const item = [text("span", "cx-pill is-sensitive", `${meta.sensitive_left_out} SENSITIVE OUT`)];
+      if (!context.is_locked) item.push(button("cx-link", "", "Include", () => refreshBlock(block, { include_sensitive: true })));
+      flags.push(item);
+    }
+    for (const parts of flags) {
+      const flag = el("div", "cx-flag");
+      flag.append(...parts);
+      main.append(flag);
+    }
+    inner.append(main);
+    if (!context.is_locked) inner.append(button("cx-icon-btn xs", "Remove from context", ICON.close, () => removeBlock(context, block)));
+    node.append(inner);
+    node.addEventListener("dragstart", (event) => startDrag(event, node, { kind: "block", blockId: block.block_id, fromContext: context.context_id, key: block.source_key }));
+    node.addEventListener("dragend", endDrag);
+    return node;
+  }
+
   function blockNode(context, block) {
+    if (block.source_type === "topic") return topicBlockNode(context, block);
     const item = sourceItem(block);
     const session = block.source_type === "session";
     const group = groupOf(item ? (session ? item.group_id : item.effective_group_id) : null);
@@ -635,7 +794,9 @@
       if (drag.kind === "library") {
         const body = drag.sourceType === "session"
           ? { source_type: "session", session_id: drag.id, position }
-          : { source_type: "file", file_id: drag.id, position };
+          : drag.sourceType === "topic"
+            ? { source_type: "topic", topic_key: drag.id, position }
+            : { source_type: "file", file_id: drag.id, position };
         const result = await request(`/admin/api/contexts/${encodeURIComponent(context.context_id)}/blocks`, { method: "POST", body });
         state.flash = result.block.block_id;
         replaceContexts([result.context]);
@@ -728,9 +889,9 @@
     }
   }
 
-  async function refreshBlock(block) {
+  async function refreshBlock(block, body) {
     try {
-      const result = await request(`/admin/api/context-blocks/${block.block_id}/refresh`, { method: "POST" });
+      const result = await request(`/admin/api/context-blocks/${block.block_id}/refresh`, { method: "POST", body: body || {} });
       replaceContexts([result.context]);
       render();
     } catch (error) {
@@ -856,6 +1017,10 @@
     state.tab = "files";
     renderLibrary();
   });
+  dom.tabTopics.addEventListener("click", () => {
+    state.tab = "topics";
+    renderLibrary();
+  });
   dom.search.addEventListener("input", () => {
     state.query = dom.search.value;
     renderLibrary();
@@ -866,11 +1031,13 @@
     try {
       const me = await request("/admin/api/me");
       state.csrf = me.csrf_token;
-      const [sessions, files, contexts] = await Promise.all([
+      const [sessions, files, topics, contexts] = await Promise.all([
         request("/admin/api/context-library?kind=sessions"),
         request("/admin/api/context-library?kind=files"),
+        request("/admin/api/context-library?kind=topics").catch(() => ({ items: [] })),
         request("/admin/api/contexts"),
       ]);
+      state.topics = topics.items;
       for (const group of sessions.groups) state.groups.set(group.group_id, group);
       state.groupOrder = sessions.groups.map((group) => group.group_id);
       state.sessions = sessions.items;

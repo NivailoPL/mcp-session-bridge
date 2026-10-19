@@ -92,23 +92,26 @@ def render_session_block(exchanges: list[ExchangeRecord], *, timezone_name: str 
     tz = resolve_timezone_name(timezone_name)
     if not exchanges:
         return "_No exchanges were saved in this session._\n"
-    parts: list[str] = []
-    for exchange in exchanges:
-        response = MASKED_MODEL_RESPONSE if exchange.assistant_masked_at is not None else exchange.assistant_response
-        stamp = format_response_timestamp(exchange.assistant_created_at, timezone_name=tz)
-        parts.extend(
-            [
-                "### USER",
-                "",
-                exchange.user_message.strip(),
-                "",
-                f"### {exchange.model_name} - {stamp}" if stamp else f"### {exchange.model_name}",
-                "",
-                response.strip(),
-                "",
-            ]
-        )
-    return "\n".join(parts).strip() + "\n"
+    return "\n".join(render_exchange(exchange, timezone_name=tz) for exchange in exchanges).strip() + "\n"
+
+
+def render_exchange(exchange: ExchangeRecord, *, timezone_name: str | None = None) -> str:
+    """One user turn and the model's answer; a masked answer keeps its mask."""
+    tz = resolve_timezone_name(timezone_name)
+    response = MASKED_MODEL_RESPONSE if exchange.assistant_masked_at is not None else exchange.assistant_response
+    stamp = format_response_timestamp(exchange.assistant_created_at, timezone_name=tz)
+    return "\n".join(
+        [
+            "### USER",
+            "",
+            exchange.user_message.strip(),
+            "",
+            f"### {exchange.model_name} - {stamp}" if stamp else f"### {exchange.model_name}",
+            "",
+            response.strip(),
+            "",
+        ]
+    )
 
 
 def render_file_block(saved: SessionFileRecord) -> str:
@@ -143,6 +146,18 @@ def session_fingerprint(exchanges: list[ExchangeRecord]) -> str:
 
 
 def block_status(store: Store, block: dict[str, Any]) -> str:
+    return block_status_detail(store, block)[0]
+
+
+def block_status_detail(store: Store, block: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+    if block["source_type"] == "topic":
+        from app.context_topics import topic_block_status
+
+        return topic_block_status(store, block)
+    return _source_status(store, block), {}
+
+
+def _source_status(store: Store, block: dict[str, Any]) -> str:
     if block["source_type"] == "session":
         if store.get_session(block["source_session_id"]) is None:
             return BLOCK_STATUS_MISSING
@@ -196,22 +211,46 @@ def render_context_markdown(blocks: list[dict[str, Any]]) -> str:
 
     The context name never appears: it is for the admin only.
     """
+
     parts = ["# Context", "", CONTEXT_FRAMING, ""]
     if not blocks:
         parts.extend(["_This context is empty._", ""])
-    for index, block in enumerate(blocks):
-        label = "Session" if block["source_type"] == "session" else "File"
+    for index, (block, content, _) in enumerate(effective_blocks(blocks)):
+        label = {"session": "Session", "file": "File", "topic": "Topic"}.get(block["source_type"], "Block")
         parts.extend(
             [
                 "---",
                 "",
                 f"## {label} {_block_letter(index)} · {block['title']}",
                 "",
-                block["content"].rstrip(),
+                content.rstrip(),
                 "",
             ]
         )
     return "\n".join(parts).rstrip() + "\n"
+
+
+def effective_blocks(blocks: list[dict[str, Any]]) -> list[tuple[dict[str, Any], str, int]]:
+    """Each block with the text the model gets and how many of its turns were dropped.
+
+    A topic block leaves out turns that a block above already gives: a whole session
+    above, or the same turn in an earlier topic. Session and file blocks are never cut.
+    """
+    from app.context_topics import topic_turn_ids, trim_topic_content
+
+    sessions_above: set[str] = set()
+    turns_above: set[int] = set()
+    out = []
+    for block in blocks:
+        if block["source_type"] == "topic":
+            content, skipped = trim_topic_content(block, sessions_above, turns_above)
+            turns_above |= topic_turn_ids(block)
+        else:
+            content, skipped = block.get("content", ""), 0
+            if block["source_type"] == "session" and block.get("source_session_id"):
+                sessions_above.add(block["source_session_id"])
+        out.append((block, content, skipped))
+    return out
 
 
 def context_chunk(assembled: AssembledContext, chunk_index: int, *, max_lines: int, max_chars: int) -> dict[str, Any]:
