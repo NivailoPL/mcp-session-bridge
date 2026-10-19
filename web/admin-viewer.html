@@ -4244,6 +4244,10 @@
         const known = tab && document.querySelector(`[data-settings-tab="${CSS.escape(tab)}"]`);
         selectSettingsTab(known ? tab : state.operationalStatus?.update?.state === "available" ? "system" : "general");
         loadTokenFeatures();
+        // tab hints (Codex Ready, Chapters Auto) show from the start, not only once their tab is opened
+        const opened = activeSettingsTab();
+        if (opened !== "codex") refreshCodexSettings();
+        if (opened !== "strands") loadChapterAutomation();
         dom.aiSettingsStatus.textContent = "Loading settings...";
         dom.aiSettingsStatus.classList.remove("is-error", "is-ok");
         dom.aiSettingsDialog.showModal();
