@@ -74,7 +74,7 @@ class FakeWebSocket:
                             "threadId": "thread-1",
                             "turnId": "turn-1",
                             "itemId": "item-1",
-                            "delta": "Hello from Codex",
+                            "delta": '{"reply":"Hello from Codex"}',
                         },
                     }
                 )
@@ -99,6 +99,18 @@ class FakeWebSocket:
 
     async def close(self) -> None:
         await self.incoming.put(None)
+
+
+REPLY_SCHEMA = {
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {"reply": {"type": "string"}},
+    "required": ["reply"],
+}
+
+
+async def _ask(client: CodexAppServerClient, message: str) -> dict:
+    return await client.extract_structured(message, model="gpt-5.6", effort="low", output_schema=REPLY_SCHEMA)
 
 
 def _client(tmp_path: Path, socket: FakeWebSocket) -> CodexAppServerClient:
@@ -162,26 +174,26 @@ def test_account_payload_is_sanitized_and_logout_clears_threads(tmp_path: Path) 
             "email": "owner@example.com",
             "plan_type": "plus",
         }
-        response = await client.chat("hello")
-        assert response == {"thread_id": "thread-1", "message": "Hello from Codex"}
+        response = await _ask(client, "hello")
+        assert response == {"reply": "Hello from Codex"}
+        assert "thread-1" in client._thread_locks
         await client.logout()
         logout = next(item for item in socket.sent if item.get("method") == "account/logout")
         assert "params" not in logout
-        with pytest.raises(ValueError, match="Unknown or expired Codex conversation"):
-            await client.chat("continue", thread_id="thread-1")
+        assert client._thread_locks == {}
         await client.close()
 
     asyncio.run(scenario())
 
 
-def test_chat_uses_ephemeral_read_only_tool_free_thread(tmp_path: Path) -> None:
+def test_turns_use_ephemeral_read_only_tool_free_thread(tmp_path: Path) -> None:
     async def scenario() -> None:
         socket = FakeWebSocket(
             account={"type": "chatgpt", "email": None, "planType": "pro"}
         )
         client = _client(tmp_path, socket)
-        response = await client.chat("hello")
-        assert response["message"] == "Hello from Codex"
+        response = await _ask(client, "hello")
+        assert response["reply"] == "Hello from Codex"
         start = next(item for item in socket.sent if item.get("method") == "thread/start")
         params = start["params"]
         assert params["ephemeral"] is True
@@ -297,7 +309,7 @@ def test_tool_event_interrupts_turn_and_fails_closed(tmp_path: Path) -> None:
             socket,
         )
         with pytest.raises(CodexPolicyViolationError, match="disabled"):
-            await client.chat("read the filesystem")
+            await _ask(client, "read the filesystem")
         await asyncio.sleep(0)
         interrupt = next(item for item in socket.sent if item.get("method") == "turn/interrupt")
         assert interrupt["params"] == {"threadId": "thread-1", "turnId": "turn-1"}
@@ -332,7 +344,7 @@ def test_server_tool_requests_are_denied_and_fail_turn(tmp_path: Path, method: s
         socket = RequestingSocket()
         client = _client(tmp_path, socket)
         with pytest.raises(CodexPolicyViolationError, match="disabled"):
-            await client.chat("try a tool")
+            await _ask(client, "try a tool")
         denial = next(item for item in socket.sent if item.get("id") == 900)
         assert denial["error"]["code"] == -32601
         await client.close()

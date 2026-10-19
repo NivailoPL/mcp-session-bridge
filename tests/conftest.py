@@ -41,7 +41,6 @@ def load_main(
         *,
         transcript_max_lines: int = 180,
         transcript_max_chars: int = 12000,
-        graph_experimental: bool | None = False,
         owner_username: str = OWNER_USERNAME,
         owner_password: str = OWNER_PASSWORD,
         env: dict[str, str] | None = None,
@@ -58,11 +57,6 @@ def load_main(
         monkeypatch.setenv(
             "BRIDGE_TRANSCRIPT_CHUNK_MAX_CHARS", str(transcript_max_chars)
         )
-        # None leaves the variable unset so a test can assert the shipped default.
-        if graph_experimental is not None:
-            monkeypatch.setenv(
-                "BRIDGE_GRAPH_EXPERIMENTAL", "true" if graph_experimental else "false"
-            )
         for key, value in (env or {}).items():
             monkeypatch.setenv(key, value)
 

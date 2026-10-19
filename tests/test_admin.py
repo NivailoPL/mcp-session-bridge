@@ -18,7 +18,7 @@ from tests.viewer_harness import requires_node, run_js, slice_source, viewer_sou
 
 
 def test_admin_login_uses_dark_branding_and_inline_lockup(load_main) -> None:
-    main = load_main(graph_experimental=True)
+    main = load_main()
     client = TestClient(main.app, base_url="http://127.0.0.1:8787")
 
     response = client.get("/admin/login?next=/admin/sessions")
@@ -103,7 +103,7 @@ def test_admin_viewer_transcript_owns_vertical_scroll() -> None:
 
 
 def test_admin_brand_assets_require_login_and_serve_png(load_main) -> None:
-    main = load_main(graph_experimental=True)
+    main = load_main()
     anonymous = TestClient(main.app, base_url="http://127.0.0.1:8787")
 
     login_required = anonymous.get(
@@ -804,7 +804,7 @@ def test_admin_viewer_markdown_table_rendering() -> None:
 
 
 def test_admin_api_requires_login_and_csrf_for_mutations(load_main) -> None:
-    main = load_main(graph_experimental=True)
+    main = load_main()
     session = main.store.create_session("s1", "Admin test")
     exchange = main.store.save_exchange("s1", "Claude", "Message.", "Answer to correct.")
 
@@ -882,7 +882,7 @@ def test_admin_api_requires_login_and_csrf_for_mutations(load_main) -> None:
 def test_admin_database_export_requires_csrf_and_keeps_files_on_server(
     load_main, tmp_path: Path
 ) -> None:
-    main = load_main(graph_experimental=True)
+    main = load_main()
     main.store.create_session("export-me", "Export me")
     client = TestClient(main.app, base_url="http://127.0.0.1:8787")
 
@@ -1071,7 +1071,7 @@ def test_ai_rename_cuts_cleanly_when_the_model_overshoots_twice(monkeypatch) -> 
 
 
 def test_admin_can_configure_ai_rename_and_update_session_title(load_main, monkeypatch) -> None:
-    main = load_main(graph_experimental=True)
+    main = load_main()
     main.store.create_session("s1", "Chaotic long title")
     main.store.save_exchange("s1", "Claude", "Pierwsza wiadomość użytkownika o ewaluacji LLM.", "OK")
     client = TestClient(main.app, base_url="http://127.0.0.1:8787")
@@ -1183,7 +1183,7 @@ def test_admin_can_configure_ai_rename_and_update_session_title(load_main, monke
 
 
 def test_admin_can_update_display_timezone(load_main) -> None:
-    main = load_main(graph_experimental=True)
+    main = load_main()
     client = TestClient(main.app, base_url="http://127.0.0.1:8787")
 
     login = client.post(
@@ -1222,7 +1222,7 @@ def test_admin_can_update_display_timezone(load_main) -> None:
 
 
 def test_admin_can_manage_session_groups_and_move_sessions(load_main) -> None:
-    main = load_main(graph_experimental=True)
+    main = load_main()
     main.store.create_session("s1", "Admin group test")
     client = TestClient(main.app, base_url="http://127.0.0.1:8787")
 
@@ -1319,7 +1319,7 @@ def test_admin_can_manage_session_groups_and_move_sessions(load_main) -> None:
 
 
 def test_admin_sensitive_group_prunes_and_blocks_external_rag_scope(load_main, monkeypatch) -> None:
-    main = load_main(graph_experimental=True)
+    main = load_main()
     main.store.create_session_group("Private", "#ef4444", "lock", group_id="private")
     client = TestClient(main.app, base_url="http://127.0.0.1:8787")
     client.post(
@@ -1369,7 +1369,7 @@ def test_admin_sensitive_group_prunes_and_blocks_external_rag_scope(load_main, m
 
 
 def test_admin_can_view_session_and_group_files(load_main) -> None:
-    main = load_main(graph_experimental=True)
+    main = load_main()
     main.store.create_session_group("Tests", "#22c55e", "science")
     main.store.create_session("s1", "File admin test", group_id="tests")
     session_file = main.store.save_session_file("s1", "plan.md", "# Plan")
@@ -1401,7 +1401,7 @@ def test_admin_can_view_session_and_group_files(load_main) -> None:
 
 
 def test_codex_admin_api_auth_csrf_and_chat_contract(admin_client, load_main) -> None:
-    main = load_main(graph_experimental=True)
+    main = load_main()
 
     class FakeCodex:
         async def status(self):
@@ -1428,15 +1428,9 @@ def test_codex_admin_api_auth_csrf_and_chat_contract(admin_client, load_main) ->
         async def logout(self):
             return None
 
-        async def chat(self, message, *, thread_id=None):
-            assert message == "Hello"
-            assert thread_id is None
-            return {"thread_id": "thread-1", "message": "Hi from Codex"}
-
     main.admin.codex = FakeCodex()
     anonymous = TestClient(main.app, base_url="http://127.0.0.1:8787")
     assert anonymous.get("/admin/api/codex/status").status_code == 401
-    assert anonymous.post("/admin/api/codex/chat", json={"message": "Hello"}).status_code == 401
 
     client, csrf = admin_client(main)
     status = client.get("/admin/api/codex/status")
@@ -1456,34 +1450,16 @@ def test_codex_admin_api_auth_csrf_and_chat_contract(admin_client, load_main) ->
         "/admin/api/codex/logout", headers={"x-csrf-token": csrf}
     ).status_code == 200
 
-    chatted = client.post(
-        "/admin/api/codex/chat",
-        json={"message": "Hello", "thread_id": None},
-        headers={"x-csrf-token": csrf},
-    )
-    assert chatted.status_code == 200
-    assert chatted.json() == {
-        "ok": True,
-        "chat": {"thread_id": "thread-1", "message": "Hi from Codex"},
-    }
-    assert chatted.headers["cache-control"] == "no-store"
-
-    assert client.post(
-        "/admin/api/codex/chat",
-        json={"message": "Hello", "unexpected": True},
-        headers={"x-csrf-token": csrf},
-    ).status_code == 400
-
 
 def test_codex_admin_api_sanitizes_unavailable_and_protocol_errors(admin_client, load_main) -> None:
-    main = load_main(graph_experimental=True)
+    main = load_main()
     from app.codex_app_server import CodexProtocolError, CodexUnavailableError
 
     class UnavailableCodex:
         async def status(self):
             raise CodexUnavailableError("secret-token /var/lib/private/auth.json")
 
-        async def chat(self, message, *, thread_id=None):
+        async def list_models(self):
             raise CodexProtocolError("raw frame bearer-secret")
 
     main.admin.codex = UnavailableCodex()
@@ -1495,34 +1471,10 @@ def test_codex_admin_api_sanitizes_unavailable_and_protocol_errors(admin_client,
     assert "secret" not in status.text
     assert status.headers["cache-control"] == "no-store"
 
-    chat = client.post(
-        "/admin/api/codex/chat",
-        json={"message": "Hello"},
-        headers={"x-csrf-token": csrf},
-    )
-    assert chat.status_code == 502
-    assert chat.json() == {"ok": False, "error": "Codex App Server request failed."}
-    assert "bearer" not in chat.text
-
-
-def test_codex_expired_conversation_has_stable_error_code(admin_client, load_main) -> None:
-    main = load_main(graph_experimental=True)
-
-    class ExpiredCodex:
-        async def chat(self, message, *, thread_id=None):
-            raise ValueError("Unknown or expired Codex conversation.")
-
-    main.admin.codex = ExpiredCodex()
-    client, csrf = admin_client(main)
-    response = client.post(
-        "/admin/api/codex/chat",
-        json={"message": "Continue", "thread_id": "old-thread"},
-        headers={"x-csrf-token": csrf},
-    )
-
-    assert response.status_code == 400
-    assert response.json()["code"] == "codex_conversation_expired"
-    assert response.headers["cache-control"] == "no-store"
+    refresh = client.post("/admin/api/codex/models/refresh", headers={"x-csrf-token": csrf})
+    assert refresh.status_code == 502
+    assert refresh.json() == {"ok": False, "error": "Codex App Server request failed."}
+    assert "bearer" not in refresh.text
 
 
 def _encoded_file(content: bytes, *, filename: str = "notes.md", scope_type: str = "session") -> dict:
@@ -1534,7 +1486,7 @@ def _encoded_file(content: bytes, *, filename: str = "notes.md", scope_type: str
 
 
 def test_admin_file_mutations_require_login_and_csrf(admin_client, load_main) -> None:
-    main = load_main(graph_experimental=True)
+    main = load_main()
     main.store.create_session("s1", "File mutations")
     saved = main.store.save_session_file("s1", "existing.md", "old")
     anonymous = TestClient(main.app, base_url="http://127.0.0.1:8787")
@@ -1553,7 +1505,7 @@ def test_admin_file_mutations_require_login_and_csrf(admin_client, load_main) ->
 
 
 def test_admin_uploads_bounded_utf8_files_to_selected_session_or_group(admin_client, load_main) -> None:
-    main = load_main(graph_experimental=True)
+    main = load_main()
     main.store.create_session_group("Tests", "#22c55e", "science")
     main.store.create_session("s1", "File mutations", group_id="tests")
     client, csrf = admin_client(main)
@@ -1617,7 +1569,7 @@ def test_admin_uploads_bounded_utf8_files_to_selected_session_or_group(admin_cli
 
 
 def test_admin_uploads_previews_and_downloads_original_pdf(admin_client, load_main) -> None:
-    main = load_main(graph_experimental=True)
+    main = load_main()
     main.store.create_session("s1", "PDF admin")
     client, csrf = admin_client(main)
     raw = make_pdf("Admin PDF text")
@@ -1659,7 +1611,7 @@ def test_admin_uploads_previews_and_downloads_original_pdf(admin_client, load_ma
 
 
 def test_admin_pdf_raw_requires_login_and_pdf_cannot_be_edited(admin_client, load_main) -> None:
-    main = load_main(graph_experimental=True)
+    main = load_main()
     main.store.create_session("s1", "PDF admin")
     client, csrf = admin_client(main)
     uploaded = client.post(
@@ -1700,7 +1652,7 @@ def test_admin_pdf_raw_requires_login_and_pdf_cannot_be_edited(admin_client, loa
 
 
 def test_admin_group_upload_uses_session_current_group_atomically(admin_client, load_main, monkeypatch) -> None:
-    main = load_main(graph_experimental=True)
+    main = load_main()
     main.store.create_session_group("First", "#22c55e", "science")
     main.store.create_session_group("Second", "#3b82f6", "ideas")
     main.store.create_session("s1", "File mutations", group_id="first")
@@ -1726,7 +1678,7 @@ def test_admin_group_upload_uses_session_current_group_atomically(admin_client, 
 
 
 def test_admin_edits_moves_and_deletes_only_visible_files(admin_client, load_main) -> None:
-    main = load_main(graph_experimental=True)
+    main = load_main()
     main.store.create_session_group("Tests", "#22c55e", "science")
     main.store.create_session_group("Other", "#ef4444", "camera")
     main.store.create_session("s1", "File mutations", group_id="tests")
@@ -1790,7 +1742,7 @@ def test_admin_edits_moves_and_deletes_only_visible_files(admin_client, load_mai
 
 
 def test_admin_file_mutations_conflict_if_file_moves_after_visibility_check(admin_client, load_main, monkeypatch) -> None:
-    main = load_main(graph_experimental=True)
+    main = load_main()
     main.store.create_session_group("First", "#22c55e", "science")
     main.store.create_session_group("Second", "#ef4444", "camera")
     main.store.create_session("s1", "First", group_id="first")
@@ -1836,7 +1788,7 @@ def test_admin_file_mutations_conflict_if_file_moves_after_visibility_check(admi
 
 
 def test_admin_rejects_oversized_or_malformed_patch_lengths_without_mutation(admin_client, load_main) -> None:
-    main = load_main(graph_experimental=True)
+    main = load_main()
     main.store.create_session("s1", "File mutations")
     saved = main.store.save_session_file("s1", "notes.md", "Original")
     client, csrf = admin_client(main)
@@ -1871,7 +1823,7 @@ def test_admin_rejects_oversized_or_malformed_patch_lengths_without_mutation(adm
 
 
 def test_admin_file_workspace_stays_consistent_with_mcp_reads(admin_client, load_main) -> None:
-    main = load_main(graph_experimental=True)
+    main = load_main()
     main.store.create_session_group("Ideas", "#22c55e", "science")
     main.store.create_session("s1", "Owner session", group_id="ideas")
     main.store.create_session("s2", "Peer session", group_id="ideas")
@@ -1960,7 +1912,7 @@ def test_admin_file_workspace_stays_consistent_with_mcp_reads(admin_client, load
 
 
 def test_restart_helper_uses_fixed_systemctl_command(load_main, monkeypatch) -> None:
-    main = load_main(graph_experimental=True)
+    main = load_main()
     invocation = {}
 
     class Process:
@@ -1995,7 +1947,6 @@ def test_managed_restart_writes_runtime_request_file(load_main, tmp_path, monkey
     request_file = tmp_path / "run" / "restart-request"
     request_file.parent.mkdir()
     main = load_main(
-        graph_experimental=True,
         env={"BRIDGE_RESTART_REQUEST_FILE": str(request_file)},
     )
 
@@ -2006,7 +1957,7 @@ def test_managed_restart_writes_runtime_request_file(load_main, tmp_path, monkey
 
 
 def test_restart_helper_surfaces_nonzero_systemctl_result(load_main, monkeypatch) -> None:
-    main = load_main(graph_experimental=True)
+    main = load_main()
 
     class Process:
         returncode = 1
@@ -2024,7 +1975,7 @@ def test_restart_helper_surfaces_nonzero_systemctl_result(load_main, monkeypatch
 
 
 def test_restart_helper_terminates_and_reaps_timed_out_systemctl(load_main, monkeypatch) -> None:
-    main = load_main(graph_experimental=True)
+    main = load_main()
 
     class Process:
         returncode = None
@@ -2065,7 +2016,7 @@ def test_restart_helper_terminates_and_reaps_timed_out_systemctl(load_main, monk
     assert process.wait_calls == 2
 
 def test_admin_search_settings_keys_and_basic_search_api(load_main) -> None:
-    main = load_main(graph_experimental=True)
+    main = load_main()
     main.store.create_session("search-session", "Searchable session")
     main.store.save_exchange(
         "search-session", "Codex", "The admin search contains a kumquat marker.", "Confirmed."
@@ -2298,7 +2249,6 @@ def test_admin_operational_status_is_authenticated_and_secret_free(load_main, tm
     )
     monkeypatch.setattr(admin_module, "BRIDGE_VERSION_LABEL", "2026.8.2-beta")
     main = load_main(
-        graph_experimental=True,
         env={"BRIDGE_OPERATIONAL_STATUS_FILE": str(status_path)},
     )
     anonymous = TestClient(main.app, base_url="http://127.0.0.1:8787")
@@ -2421,7 +2371,7 @@ def test_viewer_startup_script_has_no_use_before_definition() -> None:
 
 def test_admin_page_serves_every_asset_it_references(admin_client) -> None:
     """A reference in the page is worthless if the route behind it is missing."""
-    client, _ = admin_client(graph_experimental=True)
+    client, _ = admin_client()
     page = client.get("/admin/sessions")
     assert page.status_code == 200
 
@@ -2442,19 +2392,14 @@ def test_admin_page_serves_every_asset_it_references(admin_client) -> None:
 
 def test_admin_workspaces_share_styled_confirmation_contract() -> None:
     sessions = Path("web/admin-viewer.html").read_text(encoding="utf-8")
-    graph = Path("web/graph-viewer.html").read_text(encoding="utf-8")
-    graph_script = Path("web/graph-viewer.js").read_text(encoding="utf-8")
     confirmation_script = Path("web/admin-confirmation.js").read_text(encoding="utf-8")
     confirmation_css = Path("web/admin-confirmation.css").read_text(encoding="utf-8")
 
-    for page in (sessions, graph):
-        assert page.count('href="/admin/assets/admin-confirmation.css"') == 1
-        assert page.count('src="/admin/assets/admin-confirmation.js"') == 1
-
-    for source in (sessions, graph_script):
-        assert "window.confirm" not in source
-        assert "window.prompt" not in source
-        assert "window.alert" not in source
+    assert sessions.count('href="/admin/assets/admin-confirmation.css"') == 1
+    assert sessions.count('src="/admin/assets/admin-confirmation.js"') == 1
+    assert "window.confirm" not in sessions
+    assert "window.prompt" not in sessions
+    assert "window.alert" not in sessions
 
     assert "window.adminConfirmation" in confirmation_script
     assert "confirm(options" in confirmation_script
@@ -2600,7 +2545,7 @@ def test_admin_page_exposes_the_controls_each_feature_needs(admin_client, featur
     This deliberately checks ids and nothing about styling or wording: a control
     that disappears breaks the feature, whereas a restyled one does not.
     """
-    client, _ = admin_client(graph_experimental=True)
+    client, _ = admin_client()
     page = client.get("/admin/sessions").text
 
     missing = [name for name in FEATURE_CONTROLS[feature] if f'id="{name}"' not in page]
@@ -2608,7 +2553,7 @@ def test_admin_page_exposes_the_controls_each_feature_needs(admin_client, featur
 
 
 def test_admin_page_does_not_ship_retired_controls(admin_client) -> None:
-    client, _ = admin_client(graph_experimental=True)
+    client, _ = admin_client()
     page = client.get("/admin/sessions").text
 
     # The Codex test chat was removed from the workspace: neither its markup nor its
@@ -2616,6 +2561,13 @@ def test_admin_page_does_not_ship_retired_controls(admin_client) -> None:
     for retired in ('id="codexOpenButton"', 'id="codexDialog"', "/admin/api/codex/chat"):
         assert retired not in page
     assert client.get("/admin/api/codex").status_code == 404
+    assert client.post("/admin/api/codex/chat").status_code == 404
+
+    # Lab and its experimental Graph workspace were removed with their API.
+    for retired in ('href="/admin/lab"', 'href="/admin/graph"'):
+        assert retired not in page
+    for route in ("/admin/lab", "/admin/graph", "/admin/api/graph/config", "/admin/api/graph/lab"):
+        assert client.get(route).status_code == 404, route
 
     # Replaced by the search dialog and the file workspace respectively.
     for retired in ('id="searchInput"', 'id="filesPanel"', 'id="fileDialog"'):

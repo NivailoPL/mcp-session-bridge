@@ -8,7 +8,7 @@ This project follows a lightweight changelog format inspired by Keep a Changelog
 
 ### Highlights
 
-- Added a Contexts workspace between Sessions and Lab: build a temporary context from any sessions and files in the bridge and hand it to a model by its `ctx_` ID (NIV-25).
+- Added a Contexts workspace: build a temporary context from any sessions and files in the bridge and hand it to a model by its `ctx_` ID (NIV-25).
 - Added highlights and chapters inside the session view: mark the exact words that matter to you, and split a session into named exchange ranges by hand or with a Codex proposal you start yourself.
 - Added a Topics workspace: a picture of what you write about, across sessions. Find topics proposes topics from your chapters, every proposal is tested by sorting all chapters before you decide, and Sort new places new chapters. Nothing runs until you press it, and every step is kept in a journal readable in the admin and with `mcp-bridge topics`.
 
@@ -34,7 +34,7 @@ This project follows a lightweight changelog format inspired by Keep a Changelog
 - Sort new sends new or renamed chapters to the sorting model (Jev on OpenRouter) after a confirmation with the cost, with progress, Pause and Resume in the Topics bar. Only chapter titles, session titles and group names leave Bridge; sensitive groups are skipped unless Settings › Topics includes them.
 - Topics › Graph shows topics as circles and chapters as dots pulled toward them, with second-topic links, sensitive rings and the strongest bridges between topics.
 - `mcp-bridge topics status|versions|version|journal|run|proposals|export` reads the Topics data on the server without changing it.
-- Every workspace (Sessions, Contexts, Topics, Lab) now has the same header: Search (⌘K), Settings and the owner name on the right. Search and Settings left the Sessions sidebar, and Log out lives in Settings › General as Sign out. On other workspaces Settings opens the same overlay in place; Search opens on Sessions until its redesign.
+- Every workspace (Sessions, Topics, Contexts) now has the same header: Search (⌘K), Settings and the owner name on the right. Search and Settings left the Sessions sidebar, and Log out lives in Settings › General as Sign out. On other workspaces Settings opens the same overlay in place; Search opens on Sessions until its redesign.
 - Settings has a Topics tab under Uses tokens: the model for finding and refining topics, the sorting model and its OpenRouter key, sensitive groups, and when to suggest Find topics.
 - Codex actions (sign-in, propose, update, redo) carry the OpenAI mark.
 - Added automatic chapters. The large card in Settings › Chapters now switches a schedule on or off: every 3, 6 or 12 hours, every day at a set time, or on chosen weekdays, in the admin's timezone. Turning it on never fires at once.
@@ -43,6 +43,10 @@ This project follows a lightweight changelog format inspired by Keep a Changelog
 - Group bars under What gets split end at the same point, and sensitive groups show the Bridge sensitive pictogram next to their name.
 - A fill pauses itself after three Codex errors in a row, skips sessions too long for one run, and comes back paused, never running, after a Bridge restart. The last runs are listed under Fill now.
 - Highlights are drawn in solid highlighter yellow so they stay readable on every transcript layout, and the highlight and chapter docks share one tinted card in the rail.
+
+### Removed
+
+- Removed Lab and its experimental Graph workspace: the `/admin/lab` and `/admin/graph` pages, the `/admin/api/graph/*` API, the Graph background worker, Lab test runs, the Codex test chat (`/admin/api/codex/chat`) and the `BRIDGE_GRAPH_EXPERIMENTAL` switch. Codex App Server stays for chapters, topics and session titles. Existing `graph_*` tables are left untouched in old databases and are no longer created.
 
 ### Security
 

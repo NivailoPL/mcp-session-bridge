@@ -11,7 +11,7 @@ from tests.image_samples import make_image
 
 
 def _setup(load_main):
-    main = load_main(graph_experimental=True)
+    main = load_main()
     main.store.create_session_group("Brainstorming", "#22c55e", "ideas")
     main.store.create_session_group("Other", "#ef4444", "camera")
     main.store.create_session("s1", "Files", group_id="brainstorming")

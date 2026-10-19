@@ -12,7 +12,6 @@ from urllib.parse import urlparse
 
 from bridge_cli.codex_contract import CODEX_VERSION
 
-MAX_CHAT_MESSAGE_CHARS = 8_000
 MAX_STRUCTURED_INPUT_CHARS = 500_000
 MAX_OWNED_THREADS = 32
 DEFAULT_RPC_TIMEOUT_SECONDS = 15.0
@@ -475,20 +474,6 @@ class CodexAppServerClient:
         self._login_payload = None
         self._login_outcome = None
         self._thread_locks.clear()
-
-    async def chat(self, message: str, *, thread_id: str | None = None) -> dict[str, str]:
-        normalized = message.strip()
-        if not normalized:
-            raise ValueError("message must not be empty.")
-        if len(normalized) > MAX_CHAT_MESSAGE_CHARS:
-            raise ValueError(f"message must be {MAX_CHAT_MESSAGE_CHARS} characters or fewer.")
-        if thread_id is None:
-            thread_id = await self._start_restricted_thread()
-        elif thread_id not in self._thread_locks:
-            raise ValueError("Unknown or expired Codex conversation.")
-
-        response = await self._run_text_turn(thread_id, normalized, {})
-        return {"thread_id": thread_id, "message": response}
 
     async def extract_structured(
         self,

@@ -1,4 +1,4 @@
-"""Admin API and page for the Topics lab.
+"""Admin API and page for the Topics workspace.
 
 It reuses the admin login, CSRF check and JSON helpers of ``AdminHandlers``.
 Every run starts from an explicit admin request; nothing here schedules work.

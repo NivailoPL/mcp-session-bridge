@@ -9,8 +9,6 @@ PAGES = {
     "web/admin-viewer.html": "sessions",
     "web/contexts-viewer.html": "contexts",
     "web/topics-viewer.html": "topics",
-    "web/graph-viewer.html": "lab",
-    "web/graph-wip.html": "lab",
 }
 
 

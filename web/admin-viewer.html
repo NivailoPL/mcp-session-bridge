@@ -94,7 +94,7 @@
       background: var(--chrome);
     }
 
-    /* the sessions page shares the bar's geometry with Lab, but here it is chrome, not a panel */
+    /* the sessions page shares the bar's geometry with the other workspaces, but here it is chrome, not a panel */
     .workspace-bar { border-bottom-color: transparent; background: var(--chrome); }
 
     button, input, textarea, select { font: inherit; color: inherit; }
@@ -2024,7 +2024,6 @@
       <a class="sb-nav__tab" role="tab" href="/admin/sessions" aria-current="page" aria-selected="true" tabindex="0" data-label="SESSIONS">SESSIONS</a>
       <a class="sb-nav__tab" role="tab" href="/admin/topics" aria-selected="false" tabindex="-1" data-label="TOPICS">TOPICS</a>
       <a class="sb-nav__tab" role="tab" href="/admin/contexts" aria-selected="false" tabindex="-1" data-label="CONTEXTS">CONTEXTS</a>
-      <a class="sb-nav__tab" role="tab" href="/admin/lab" aria-selected="false" tabindex="-1" data-label="LAB">LAB</a>
     </nav>
     <div class="workspace-actions">
       <button type="button" class="wa-btn" data-header-action="search" id="searchOpenButton" aria-haspopup="dialog" aria-controls="searchDialog"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>Search<kbd>⌘K</kbd></button>
@@ -9803,7 +9802,7 @@
       async function signOutCodexSettings() {
         const confirmed = await window.adminConfirmation.confirm({
           title: "Sign Codex out?",
-          message: "Chapter proposals and Graph stop working until you sign in again.",
+          message: "Chapters, Topics and session titles can't use Codex until you sign in again.",
           confirmLabel: "Sign out",
           tone: "warning",
         });

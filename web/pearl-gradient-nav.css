@@ -6,7 +6,7 @@
    property changes on hover or selection, so neighboring tabs never move.
 ------------------------------------------------------------------- */
 
-/* Shared workspace shell: Sessions and Graph intentionally use the same
+/* Shared workspace shell: every workspace intentionally uses the same
    header geometry so changing pages does not move the brand or navigation. */
 :root {
   --workspace-bar-height: 4.15rem;
@@ -144,7 +144,7 @@
 }
 
 /* The old workspace shell supplied the pill. The Pearl nav is intentionally
-   transparent, including when it is used inside the Graph page shell. */
+   transparent. */
 .workspace-nav.sb-nav {
   gap: var(--sb-nav-gap);
   padding: 0;
@@ -248,16 +248,6 @@
   color: transparent;
   background: none;
   box-shadow: none;
-}
-
-.sb-nav__tab[data-label="LAB"],
-.workspace-nav.sb-nav .sb-nav__tab[data-label="LAB"] {
-  --sb-nav-grad-top: #eafffa;
-  --sb-nav-grad-pearl: #b6f3e8;
-  --sb-nav-grad-mid: #69d9c7;
-  --sb-nav-grad-bottom: #35a99c;
-  --sb-nav-glow: rgba(84, 218, 192, .45);
-  --sb-nav-hover: #96e9da;
 }
 
 .sb-nav__tab[data-label="TOPICS"],

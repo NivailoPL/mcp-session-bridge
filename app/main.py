@@ -26,7 +26,6 @@ from app.admin_anchors import AnchorAdminHandlers
 from app.admin_topics import TopicAdminHandlers
 from app.admin_contexts import ContextAdminHandlers
 from app.codex_app_server import CodexAppServerClient
-from app.graph_runtime import GraphRuntime
 from app.oauth import OAuthHandlers
 from app.chapter_automation import SCHEDULER_TICK_SECONDS, ChapterAutomation
 from app.strand_runtime import StrandRuntime
@@ -127,17 +126,6 @@ async def _chapter_schedule_monitor() -> None:
             logger.exception("Chapter schedule check failed")
 
 
-async def _graph_pipeline_monitor() -> None:
-    while True:
-        try:
-            await graph_runtime.run_once()
-        except asyncio.CancelledError:
-            raise
-        except Exception:
-            logger.exception("Automatic Graph pipeline check failed")
-        await asyncio.sleep(30)
-
-
 @asynccontextmanager
 async def app_lifespan(_: Any):
     async with mcp.session_manager.run():
@@ -146,11 +134,6 @@ async def app_lifespan(_: Any):
         await asyncio.to_thread(chapter_automation.recover)
         await asyncio.to_thread(topic_runtime.recover)
         chapter_monitor = asyncio.create_task(_chapter_schedule_monitor())
-        graph_monitor = (
-            asyncio.create_task(_graph_pipeline_monitor())
-            if settings.graph_experimental
-            else None
-        )
         try:
             # Reaching this point is the final startup step before the app is ready to serve.
             await asyncio.to_thread(store.clear_tool_output_restart_pending)
@@ -161,13 +144,8 @@ async def app_lifespan(_: Any):
             with suppress(asyncio.CancelledError):
                 await chapter_monitor
             await chapter_automation.close()
-            if graph_monitor is not None:
-                graph_monitor.cancel()
             with suppress(asyncio.CancelledError):
                 await monitor
-            if graph_monitor is not None:
-                with suppress(asyncio.CancelledError):
-                    await graph_monitor
             await strand_runtime.close()
             await admin.titles.close()
             await topic_runtime.close()
@@ -198,7 +176,6 @@ codex = CodexAppServerClient(
     socket_path=CODEX_SOCKET_PATH,
     workspace_dir=CODEX_WORKSPACE_PATH,
 )
-graph_runtime = GraphRuntime(store, codex)
 # Strand runs start only from an admin request; there is no background loop.
 strand_runtime = StrandRuntime(store, codex)
 # Automatic chapters: "Fill now" and the schedule share one batch engine.
@@ -254,7 +231,6 @@ admin = AdminHandlers(
     active_tool_output_mode=ACTIVE_TOOL_OUTPUT_MODE,
     restart_requester=_request_service_restart,
     codex_client=codex,
-    graph_runtime=graph_runtime,
 )
 contexts_admin = ContextAdminHandlers(admin)
 anchors_admin = AnchorAdminHandlers(admin, strand_runtime, chapter_automation)
@@ -317,16 +293,6 @@ async def admin_sessions_page(request: Request) -> Response:
 @mcp.custom_route("/admin/contexts", methods=["GET"])
 async def admin_contexts_page(request: Request) -> Response:
     return await admin.contexts_page(request)
-
-
-@mcp.custom_route("/admin/graph", methods=["GET"])
-async def admin_graph_page(request: Request) -> Response:
-    return await admin.graph_page(request)
-
-
-@mcp.custom_route("/admin/lab", methods=["GET"])
-async def admin_lab_page(request: Request) -> Response:
-    return await admin.graph_page(request)
 
 
 @mcp.custom_route("/admin/login", methods=["GET"])
@@ -398,66 +364,6 @@ async def admin_api_codex_status(request: Request) -> Response:
     return await admin.api_codex_status(request)
 
 
-@mcp.custom_route("/admin/api/graph/config", methods=["GET"])
-async def admin_api_graph_config(request: Request) -> Response:
-    return await admin.api_graph_config(request)
-
-
-@mcp.custom_route("/admin/api/graph/jobs", methods=["GET"])
-async def admin_api_graph_jobs(request: Request) -> Response:
-    return await admin.api_graph_jobs(request)
-
-
-@mcp.custom_route("/admin/api/graph/rescan", methods=["POST"])
-async def admin_api_graph_rescan(request: Request) -> Response:
-    return await admin.api_graph_rescan(request)
-
-
-@mcp.custom_route("/admin/api/graph/analysis", methods=["GET"])
-async def admin_api_graph_analysis_list(request: Request) -> Response:
-    return await admin.api_graph_analysis_list(request)
-
-
-@mcp.custom_route("/admin/api/graph/analysis/{session_id}", methods=["GET"])
-async def admin_api_graph_analysis(request: Request) -> Response:
-    return await admin.api_graph_analysis(request)
-
-
-@mcp.custom_route("/admin/api/graph/lab", methods=["GET"])
-async def admin_api_graph_lab_runs(request: Request) -> Response:
-    return await admin.api_graph_lab_runs(request)
-
-
-@mcp.custom_route("/admin/api/graph/lab", methods=["POST"])
-async def admin_api_graph_lab_start(request: Request) -> Response:
-    return await admin.api_graph_lab_start(request)
-
-
-@mcp.custom_route("/admin/api/graph/config/unlock", methods=["POST"])
-async def admin_api_graph_unlock(request: Request) -> Response:
-    return await admin.api_graph_unlock(request)
-
-
-@mcp.custom_route("/admin/api/graph/config/draft", methods=["PUT"])
-async def admin_api_graph_update_draft(request: Request) -> Response:
-    return await admin.api_graph_update_draft(request)
-
-
-@mcp.custom_route("/admin/api/graph/config/activate", methods=["POST"])
-async def admin_api_graph_activate(request: Request) -> Response:
-    return await admin.api_graph_activate(request)
-
-
-@mcp.custom_route("/admin/api/graph/config/draft", methods=["DELETE"])
-async def admin_api_graph_discard_draft(request: Request) -> Response:
-    return await admin.api_graph_discard_draft(request)
-
-
-@mcp.custom_route("/admin/api/graph/state", methods=["PUT"])
-async def admin_api_graph_state(request: Request) -> Response:
-    return await admin.api_graph_state(request)
-
-
 @mcp.custom_route("/admin/api/codex/auth/device/start", methods=["POST"])
 async def admin_api_codex_device_login_start(request: Request) -> Response:
     return await admin.api_codex_device_login_start(request)
@@ -476,11 +382,6 @@ async def admin_api_codex_device_login_cancel(request: Request) -> Response:
 @mcp.custom_route("/admin/api/codex/logout", methods=["POST"])
 async def admin_api_codex_logout(request: Request) -> Response:
     return await admin.api_codex_logout(request)
-
-
-@mcp.custom_route("/admin/api/codex/chat", methods=["POST"])
-async def admin_api_codex_chat(request: Request) -> Response:
-    return await admin.api_codex_chat(request)
 
 
 @mcp.custom_route("/admin/api/settings/general", methods=["PUT"])
@@ -895,8 +796,8 @@ async def admin_brand_asset(request: Request) -> Response:
 
 
 @mcp.custom_route("/admin/assets/{asset_name}", methods=["GET"])
-async def admin_graph_asset(request: Request) -> Response:
-    return await admin.graph_asset(request)
+async def admin_web_asset(request: Request) -> Response:
+    return await admin.web_asset(request)
 
 
 @mcp.custom_route("/admin/api/sessions/{session_id}/files", methods=["POST"])

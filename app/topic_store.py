@@ -1,4 +1,4 @@
-"""Storage for the Topics lab: map versions, runs, per-chapter results, journal.
+"""Storage for the Topics workspace: map versions, runs, per-chapter results, journal.
 
 These tables are additive (older Bridges ignore them, so the schema stays at
 version 2) and nothing here is shown to models. Every run keeps its full input

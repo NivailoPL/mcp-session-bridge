@@ -240,15 +240,16 @@ def test_contexts_page_and_assets_need_a_login(load_main, admin_client) -> None:
         assert response.headers["content-type"].startswith(media)
 
 
-def test_every_workspace_links_to_contexts_between_sessions_and_lab() -> None:
+def test_every_workspace_links_sessions_topics_contexts_in_order() -> None:
     from pathlib import Path
 
-    for name in ("admin-viewer.html", "graph-viewer.html", "graph-wip.html", "contexts-viewer.html"):
+    for name in ("admin-viewer.html", "topics-viewer.html", "contexts-viewer.html"):
         html = Path("web", name).read_text(encoding="utf-8")
         sessions = html.index('href="/admin/sessions" aria')
+        topics = html.index('href="/admin/topics"')
         contexts = html.index('href="/admin/contexts"')
-        lab = html.index('href="/admin/lab"')
-        assert sessions < contexts < lab, name
+        assert sessions < topics < contexts, name
+        assert 'href="/admin/lab"' not in html, name
 
 
 def test_shared_identity_marks_match_the_sessions_page() -> None:

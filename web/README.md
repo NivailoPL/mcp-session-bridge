@@ -6,8 +6,6 @@ artifact — the files are shipped and read from disk as they are.
 | | |
 | --- | --- |
 | `admin-viewer.html` | The admin UI: sessions, transcripts, files, groups, settings. One file, JavaScript inline. |
-| `graph-viewer.html` `graph-viewer.js` `graph-viewer.css` `graph-data.css` | The experimental Graph area in Lab, served only when `BRIDGE_GRAPH_EXPERIMENTAL` is on. |
-| `graph-wip.html` | What `/admin/lab` and the legacy `/admin/graph` show when the Graph workspace is off. |
 | `admin-confirmation.css` `admin-confirmation.js` | The shared confirm-before-destructive-action dialog. |
 | `pearl-gradient-nav.css` `pearl-gradient-nav.js` | The shared workspace navigation. |
 

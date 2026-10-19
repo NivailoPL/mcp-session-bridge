@@ -32,7 +32,6 @@ class Settings:
     pdf_storage_max_bytes: int = 1_000_000_000
     image_storage_max_bytes: int = 1_000_000_000
     allow_startup_migrations: bool = True
-    graph_experimental: bool = False
     restart_request_file: Path | None = None
     operational_status_file: Path | None = None
 
@@ -96,7 +95,6 @@ def load_settings() -> Settings:
         ),
         allow_startup_migrations=_bool_env("BRIDGE_ALLOW_STARTUP_MIGRATIONS", True),
         image_storage_max_bytes=int(os.getenv("BRIDGE_IMAGE_STORAGE_MAX_BYTES", "1000000000")),
-        graph_experimental=_bool_env("BRIDGE_GRAPH_EXPERIMENTAL", False),
         restart_request_file=(
             Path(value)
             if (value := os.getenv("BRIDGE_RESTART_REQUEST_FILE"))
