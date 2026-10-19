@@ -19,8 +19,8 @@
     </a>
     <nav class="workspace-nav sb-nav" role="tablist" aria-label="Admin workspaces">
       <a class="sb-nav__tab" role="tab" href="/admin/sessions" aria-selected="false" tabindex="-1" data-label="SESSIONS">SESSIONS</a>
-      <a class="sb-nav__tab" role="tab" href="/admin/contexts" aria-selected="false" tabindex="-1" data-label="CONTEXTS">CONTEXTS</a>
       <a class="sb-nav__tab" role="tab" href="/admin/topics" aria-current="page" aria-selected="true" tabindex="0" data-label="TOPICS">TOPICS</a>
+      <a class="sb-nav__tab" role="tab" href="/admin/contexts" aria-selected="false" tabindex="-1" data-label="CONTEXTS">CONTEXTS</a>
       <a class="sb-nav__tab" role="tab" href="/admin/lab" aria-selected="false" tabindex="-1" data-label="LAB">LAB</a>
     </nav>
     <div class="workspace-actions">
@@ -33,15 +33,17 @@
 
   <div id="strip" class="tp-strip" aria-label="Topics actions"></div>
 
-  <main id="listView" class="tp-main">
+  <main class="tp-main">
     <aside id="topicList" class="tp-topics" aria-label="Topics"></aside>
-    <section id="topicDetail" class="tp-detail" aria-live="polite"></section>
-  </main>
-
-  <main id="graphView" class="tp-graph-view" hidden>
-    <aside id="graphSide" class="tp-graph-side" aria-label="Graph filters"></aside>
-    <div class="tp-graph-stage"><svg id="graph" aria-label="Topics graph"></svg><div id="graphLegend" class="tp-graph-legend"></div></div>
-    <aside id="graphInfo" class="tp-graph-info" aria-live="polite"></aside>
+    <section id="listView" class="tp-detail" aria-live="polite"></section>
+    <section id="graphView" class="tp-graph-view" hidden>
+      <div class="tp-graph-stage">
+        <svg id="graph" aria-label="Topics graph"></svg>
+        <div id="graphSide" class="tp-graph-controls" aria-label="Graph filters"></div>
+        <div id="graphLegend" class="tp-graph-legend"></div>
+      </div>
+      <aside id="graphInfo" class="tp-graph-info" aria-live="polite"></aside>
+    </section>
   </main>
 
   <dialog id="manage" class="tp-manage" aria-labelledby="manageTitle">

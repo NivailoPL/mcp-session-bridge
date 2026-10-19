@@ -45,7 +45,7 @@
     strip: document.getElementById("strip"),
     listView: document.getElementById("listView"),
     topicList: document.getElementById("topicList"),
-    detail: document.getElementById("topicDetail"),
+    detail: document.getElementById("listView"),
     graphView: document.getElementById("graphView"),
     graphSide: document.getElementById("graphSide"),
     graphInfo: document.getElementById("graphInfo"),
@@ -239,7 +239,8 @@
     const graph = state.view === "graph" && version();
     dom.listView.hidden = Boolean(graph);
     dom.graphView.hidden = !graph;
-    if (graph) renderGraph(); else { renderTopicList(); renderDetail(); }
+    renderTopicList();
+    if (graph) renderGraph(); else renderDetail();
     if (dom.manage.open) renderManage();
   }
 
@@ -325,12 +326,27 @@
     return best ? best.key : POOL;
   }
 
+  // The left column stays put in both views; only its highlight follows the view (selection or graph focus).
+  function inGraph() { return state.view === "graph" && Boolean(version()); }
+
   function renderTopicList() {
     const groups = byTopic();
     state.selected = currentSelection(groups);
-    dom.topicList.innerHTML = topicListMarkup(groups, state.selected);
+    dom.topicList.innerHTML = topicListMarkup(groups, inGraph() ? state.graph.focus : state.selected);
     for (const button of dom.topicList.querySelectorAll("[data-topic]")) {
-      button.addEventListener("click", () => { state.selected = button.dataset.topic; renderTopicList(); renderDetail(); dom.detail.scrollTop = 0; });
+      button.addEventListener("click", () => {
+        const key = button.dataset.topic;
+        if (inGraph()) {
+          state.graph.focus = state.graph.focus === key ? null : key;
+          if (state.graph.focus) state.selected = key;
+          focusGraph();
+        } else {
+          state.selected = key;
+          renderDetail();
+          dom.detail.scrollTop = 0;
+        }
+        renderTopicList();
+      });
     }
   }
 
@@ -389,11 +405,14 @@
           <span class="tp-muted">${sessions.length} sessions · ${rows.length} chapters${last ? ` · last talked about ${esc(ago(last))}` : ""}</span>
           ${t.description ? `<p>${esc(t.description)}</p>` : ""}
         </div>
+        ${sessions.length > 1 ? `<span class="tp-expand"><button type="button" class="tp-link" data-act="expand-all" ${open.size === sessions.length ? "disabled" : ""}>Expand all</button><button type="button" class="tp-link" data-act="collapse-all" ${open.size ? "" : "disabled"}>Collapse all</button></span>` : ""}
         ${isPool ? `<button type="button" class="tp-btn ${v ? "" : "primary"}" data-act="find">Find topics ${MARK}</button>` : '<button type="button" class="tp-btn" data-act="edit">Edit</button>'}
       </div>
       <div class="tp-tree">
         ${sessions.map((s) => sessionNode(s, open.has(s.id), sTopics.get(s.id), isPool && !v)).join("") || '<p class="tp-muted">Nothing here yet.</p>'}
       </div>`;
+    dom.detail.querySelector('[data-act="expand-all"]')?.addEventListener("click", () => { for (const s of sessions) open.add(s.id); renderDetail(); });
+    dom.detail.querySelector('[data-act="collapse-all"]')?.addEventListener("click", () => { open.clear(); renderDetail(); });
     dom.detail.querySelector('[data-act="edit"]')?.addEventListener("click", () => openManage("topics", key));
     dom.detail.querySelector('[data-act="find"]')?.addEventListener("click", () => openManage("proposals"));
     for (const button of dom.detail.querySelectorAll("[data-session]")) {
@@ -440,15 +459,16 @@
     const counts = new Map();
     for (const r of rows) counts.set(r.topic_key, (counts.get(r.topic_key) || 0) + 1);
     const list = [...topics(), topicInfo(POOL)].filter((t) => counts.get(t.key));
-    dom.graphSide.innerHTML = `
-      <label class="tp-check">Second topics (≥ 20%)<input type="checkbox" data-g="second" ${g.second ? "checked" : ""}></label>
-      <label class="tp-check">Sensitive groups<input type="checkbox" data-g="sensitive" ${g.sensitive ? "checked" : ""}></label>
-      <input class="tp-input" data-g="query" type="search" placeholder="Search chapters" value="${esc(g.query)}">
-      <div class="tp-graph-list">${topicListMarkup(byTopic(), g.focus)}</div>`;
-    dom.graphSide.querySelector('[data-g="second"]').addEventListener("change", (e) => { g.second = e.target.checked; renderGraph(); });
-    dom.graphSide.querySelector('[data-g="sensitive"]').addEventListener("change", (e) => { g.sensitive = e.target.checked; renderGraph(); });
-    dom.graphSide.querySelector('[data-g="query"]').addEventListener("input", (e) => { g.query = e.target.value; highlightGraph(); });
-    for (const b of dom.graphSide.querySelectorAll("[data-topic]")) b.addEventListener("click", () => { g.focus = g.focus === b.dataset.topic ? null : b.dataset.topic; renderGraph(); });
+    if (!dom.graphSide.childElementCount) {
+      // Built once, so typing in the search box survives refreshes.
+      dom.graphSide.innerHTML = `
+        <input class="tp-input" data-g="query" type="search" placeholder="Search chapters" value="${esc(g.query)}">
+        <label class="tp-check">Second topics (≥ 20%)<input type="checkbox" data-g="second" ${g.second ? "checked" : ""}></label>
+        <label class="tp-check">Sensitive groups<input type="checkbox" data-g="sensitive" ${g.sensitive ? "checked" : ""}></label>`;
+      dom.graphSide.querySelector('[data-g="second"]').addEventListener("change", (e) => { g.second = e.target.checked; renderGraph(); });
+      dom.graphSide.querySelector('[data-g="sensitive"]').addEventListener("change", (e) => { g.sensitive = e.target.checked; renderGraph(); });
+      dom.graphSide.querySelector('[data-g="query"]').addEventListener("input", (e) => { g.query = e.target.value; highlightGraph(); });
+    }
     dom.graphLegend.innerHTML = '<span>● topic</span><span>· chapter (closer = more confident)</span><span>- - second topic</span><span style="color:#d9b96a">○ sensitive</span>';
     renderGraphInfo(rows);
     drawGraph(rows, list, counts);
@@ -474,7 +494,7 @@
     dom.graphInfo.innerHTML = `<h3>How to read it</h3><p class="tp-muted" style="margin:0;line-height:1.6">Each dot is a chapter pulled toward its topic; weak ones drift outward. Dashed lines show where a chapter also leans. Click a topic to keep only its chapters; click a chapter to open it in its session.</p>
       <div class="tp-family-name" style="margin-top:8px">STRONGEST BRIDGES</div>
       ${top.map(([id, n]) => { const [a, b] = id.split("|"); return `<button type="button" class="tp-pair" data-gtopic="${esc(a)}"><span>${esc(topicInfo(a).name)} + ${esc(topicInfo(b).name)}</span><b>${n}</b></button>`; }).join("") || '<p class="tp-muted">No chapter leans toward a second topic yet.</p>'}`;
-    for (const b of dom.graphInfo.querySelectorAll("[data-gtopic]")) b.addEventListener("click", () => { state.graph.focus = b.dataset.gtopic; renderGraph(); });
+    for (const b of dom.graphInfo.querySelectorAll("[data-gtopic]")) b.addEventListener("click", () => { state.graph.focus = b.dataset.gtopic; state.selected = b.dataset.gtopic; focusGraph(); renderTopicList(); });
   }
 
   function drawGraph(rows, list, counts) {
@@ -550,7 +570,12 @@
       .on("mouseleave", () => { dom.tip.hidden = true; })
       .on("click", (e, d) => {
         dom.tip.hidden = true;
-        if (d.kind === "topic") { state.graph.focus = state.graph.focus === d.t.key ? null : d.t.key; renderGraph(); }
+        if (d.kind === "topic") {
+          state.graph.focus = state.graph.focus === d.t.key ? null : d.t.key;
+          if (state.graph.focus) state.selected = d.t.key;
+          focusGraph();
+          renderTopicList();
+        }
         else window.location.assign(`/admin/sessions?session=${encodeURIComponent(d.row.session_id)}&chapter=${d.row.strand_id}`);
       });
     const pull = (d) => (d.kind === "topic" ? anchorOf(d.t) : null);
@@ -579,10 +604,19 @@
     if (nodes.length) {
       const xs = nodes.map((d) => d.x), ys = nodes.map((d) => d.y);
       const x0 = Math.min(...xs) - 40, x1 = Math.max(...xs) + 40, y0 = Math.min(...ys) - 40, y1 = Math.max(...ys) + 40;
-      const k = Math.min(width / (x1 - x0 || 1), height / (y1 - y0 || 1), 1.5);
-      sel.call(zoom.transform, d3.zoomIdentity.translate(width / 2 - k * (x0 + x1) / 2, height / 2 - k * (y0 + y1) / 2).scale(k));
+      // Fit into the area right of the floating controls.
+      const left = Math.min(260, width * 0.3);
+      const k = Math.min((width - left) / (x1 - x0 || 1), height / (y1 - y0 || 1), 1.5);
+      sel.call(zoom.transform, d3.zoomIdentity.translate(left + (width - left) / 2 - k * (x0 + x1) / 2, height / 2 - k * (y0 + y1) / 2).scale(k));
     }
     graphParts = { nodeSel, linkSel, labels };
+    highlightGraph();
+  }
+
+  // Focus changes only highlight; the layout stays where it is.
+  function focusGraph() {
+    const g = state.graph;
+    renderGraphInfo(state.chapters.filter((r) => r.topic_key && (g.sensitive || !r.sensitive)));
     highlightGraph();
   }
 
