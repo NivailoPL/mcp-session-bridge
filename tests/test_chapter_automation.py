@@ -108,6 +108,18 @@ def test_fill_splits_every_session_in_scope_and_skips_sensitive_groups(tmp_path)
     assert automation.history()[0]["processed"] == 3
 
 
+def test_a_finished_fill_hands_over_to_topics(tmp_path):
+    store, automation, _ = build(tmp_path, ChapterCodex())
+    calls = []
+
+    async def after():
+        calls.append(automation.batch()["status"])
+    automation.on_done = after
+
+    run_batch(automation)
+    assert calls == ["done"]
+
+
 def test_including_sensitive_groups_and_choosing_groups(tmp_path):
     store, automation, sessions = build(tmp_path, ChapterCodex())
     work, private = list(sessions)

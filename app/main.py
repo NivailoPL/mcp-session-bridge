@@ -258,8 +258,9 @@ admin = AdminHandlers(
 )
 contexts_admin = ContextAdminHandlers(admin)
 anchors_admin = AnchorAdminHandlers(admin, strand_runtime, chapter_automation)
-# Topics lab: every Jev run starts from an admin request; there is no scheduler.
+# Topics: runs start from an admin request, or after a chapter fill when automation is on.
 topic_runtime = TopicRuntime(store, key_reader=lambda: topics_admin.read_key(), codex=codex)
+chapter_automation.on_done = topic_runtime.after_chapters
 topics_admin = TopicAdminHandlers(admin, topic_runtime, ROOT / "web" / "topics-viewer.html")
 
 

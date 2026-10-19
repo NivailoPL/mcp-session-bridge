@@ -54,6 +54,7 @@ a { color: var(--accent-ink); }
 .tp-btn .model { font: 500 11px "Geist Mono", monospace; opacity: .85; }
 .tp-btn .step { font: 500 11px "Geist Mono", monospace; opacity: .75; }
 .tp-badge { min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: var(--accent); color: #fff; font: 500 10.5px "Geist Mono", monospace; display: inline-flex; align-items: center; justify-content: center; }
+.tp-badge.tp-dot { min-width: 8px; width: 8px; height: 8px; padding: 0; }
 .tp-link { background: none; border: 0; padding: 0; color: var(--accent-ink); cursor: pointer; font-weight: 600; font-size: 12.5px; }
 .tp-icon-btn { width: 34px; height: 34px; border-radius: 9px; border: 1px solid var(--stroke-strong); background: none; color: var(--text-2); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
 .tp-seg { display: inline-flex; padding: 3px; border-radius: 9px; background: var(--bg); border: 1px solid var(--stroke); }

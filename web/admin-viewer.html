@@ -2972,7 +2972,7 @@
             <h4>Topics</h4>
             <span class="context-help"><button type="button" class="context-help-trigger" aria-label="About Topics" aria-describedby="settingsHelpTopics">?</button><span id="settingsHelpTopics" class="context-help-box" role="tooltip">Find topics and Refine topics read chapter and session titles with the model below. Sort new and Test taxonomy send each chapter's title, its session title and its group name to the sorting model on OpenRouter. Transcript text is never sent.</span></span>
           </div>
-          <p class="settings-feature-note">Buttons in Topics show the model set here. Nothing runs until you press it.</p>
+          <p class="settings-feature-note">Buttons in Topics show the model set here.</p>
           <section class="settings-group">
             <div class="settings-group-head"><h5>Find and refine topics</h5><span class="settings-value-muted">Codex App Server</span></div>
             <div class="settings-item">
@@ -3009,9 +3009,20 @@
               <div class="settings-item-label"><span class="settings-item-title"><label for="topicSensitive">Include sensitive groups</label></span></div>
               <div class="settings-item-control"><input id="topicSensitive" class="settings-switch-input" type="checkbox" role="switch"></div>
             </div>
+          </section>
+          <section class="settings-group">
+            <div class="settings-group-head"><h5>Automation</h5></div>
             <div class="settings-item">
-              <div class="settings-item-label"><span class="settings-item-title"><label for="topicPoolHint">Suggest Find topics when Unsorted reaches</label></span></div>
-              <div class="settings-item-control"><input id="topicPoolHint" class="settings-input-mono" type="number" min="1" max="500" step="1" style="width: 5.5rem"> <span class="settings-value-muted">chapters</span></div>
+              <div class="settings-item-label"><span class="settings-item-title"><label for="topicAutoSort">Sort new chapters</label><span class="context-help"><button type="button" class="context-help-trigger" aria-label="About Sort new chapters" aria-describedby="settingsHelpTopicAutoSort">?</button><span id="settingsHelpTopicAutoSort" class="context-help-box" role="tooltip">When a chapter fill ends (Fill now or the schedule), the sorting model places the new chapters on the active map. Chapters that fit no topic go to Unsorted. Needs a map: the first one is always yours to accept.</span></span></span></div>
+              <div class="settings-item-control"><input id="topicAutoSort" class="settings-switch-input" type="checkbox" role="switch"></div>
+            </div>
+            <div class="settings-item">
+              <div class="settings-item-label"><span class="settings-item-title"><label for="topicAutoFind">When Unsorted is full</label><span class="context-help"><button type="button" class="context-help-trigger" aria-label="About When Unsorted is full" aria-describedby="settingsHelpTopicAutoFind">?</button><span id="settingsHelpTopicAutoFind" class="context-help-box" role="tooltip">Remind: Find topics lights up in Topics. Propose: Find topics runs by itself and every proposal is tested; you decide. Accept clean ones: proposals whose test is clean become the map, the rest wait for you. Several clean topics are tested together once more before they are accepted. Refine topics always stays with you. Every automatic step is in the Journal, and Versions restores the previous map.</span></span></span></div>
+              <div class="settings-item-control"><select id="topicAutoFind"><option value="off">Off</option><option value="remind">Remind</option><option value="propose">Propose</option><option value="accept">Accept clean ones</option></select></div>
+            </div>
+            <div class="settings-item">
+              <div class="settings-item-label"><span class="settings-item-title"><label for="topicPoolHint">Unsorted is full at</label><span class="context-help"><button type="button" class="context-help-trigger" aria-label="About Unsorted is full at" aria-describedby="settingsHelpTopicPoolHint">?</button><span id="settingsHelpTopicPoolHint" class="context-help-box" role="tooltip">Counts only chapters that reached Unsorted since the last Find topics. Chapters Find has already seen and left waiting do not count again, so they never set it off twice.</span></span></span></div>
+              <div class="settings-item-control"><input id="topicPoolHint" class="settings-input-mono" type="number" min="1" max="500" step="1" style="width: 5.5rem"> <span class="settings-value-muted">new chapters</span></div>
             </div>
             <div class="settings-item">
               <span id="topicSettingsStatus" class="settings-inline-status" aria-live="polite"></span>
@@ -9847,6 +9858,8 @@
         keyRemove: document.getElementById("topicKeyRemove"),
         sensitive: document.getElementById("topicSensitive"),
         poolHint: document.getElementById("topicPoolHint"),
+        autoSort: document.getElementById("topicAutoSort"),
+        autoFind: document.getElementById("topicAutoFind"),
         status: document.getElementById("topicSettingsStatus"),
         save: document.getElementById("topicSettingsSave"),
         };
@@ -9879,6 +9892,8 @@
           topicSettingsDom.jevModel.value = settings.jev_model;
           topicSettingsDom.sensitive.checked = settings.include_sensitive;
           topicSettingsDom.poolHint.value = settings.pool_hint;
+          topicSettingsDom.autoSort.checked = settings.auto_sort;
+          topicSettingsDom.autoFind.value = settings.auto_find;
           renderTopicKey(payload.key_set);
           setTopicSettingsMessage("");
         } catch (error) {
@@ -9899,6 +9914,8 @@
               jev_model: topicSettingsDom.jevModel.value.trim(),
               include_sensitive: topicSettingsDom.sensitive.checked,
               pool_hint: Number(topicSettingsDom.poolHint.value),
+              auto_sort: topicSettingsDom.autoSort.checked,
+              auto_find: topicSettingsDom.autoFind.value,
             }),
           });
           setTopicSettingsMessage("Saved. Topics uses these settings from the next run.", "ok");

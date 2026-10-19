@@ -251,6 +251,7 @@
     const run = o.active_run;
     const job = o.job;
     const pending = o.pending_proposals || 0;
+    const full = Boolean(v) && o.settings.auto_find !== "off" && (o.pool_new_count || 0) >= (o.settings.pool_hint || 15);
     const status = v ? `map v${v.version_id} · ${v.topic_count} topics · ${o.counts.chapters} chapters` : `no topics yet · ${o.counts.chapters} chapters`;
     let live = "";
     if (job && job.kind !== "classify") {
@@ -267,7 +268,7 @@
     const sortDisabled = !v || n === 0 || jobRunning() || (run && run.status === "paused");
     dom.strip.innerHTML = `
       <span class="tp-strip-side">
-      <button type="button" class="${manageClass}" data-act="manage">${v ? "" : '<span class="step">1</span>'}Manage topics${pending ? `<span class="tp-badge">${pending}</span>` : ""}</button>
+      <button type="button" class="${manageClass}" data-act="manage">${v ? "" : '<span class="step">1</span>'}Manage topics${pending ? `<span class="tp-badge">${pending}</span>` : full ? '<span class="tp-badge tp-dot" title="Unsorted is full: Find topics"></span>' : ""}</button>
       ${ARROW}
       <button type="button" class="tp-btn ${n && v ? "cyan" : ""}" data-act="sort" ${sortDisabled ? "disabled" : ""}>${v ? "" : '<span class="step">2</span>'}Sort new${n && v ? ` · ${n}` : ""} <span class="model">(${esc(jevModel())})</span></button>
       ${live}
@@ -656,16 +657,17 @@
     const v = version();
     const m = state.manage;
     const poolN = o.pool_count || 0;
+    const newN = o.pool_new_count || 0;
     const hint = o.settings.pool_hint || 15;
     const running = jobRunning();
     const lastRefine = o.last_refine;
     const sinceRefine = lastRefine ? state.chapters.filter((r) => (r.first_at || 0) > (lastRefine.finished_at || 0)).length : 0;
     dom.manageMeta.textContent = v ? `map v${v.version_id} · ${v.topic_count} topics · ${o.counts.chapters} chapters` : `no map yet · ${poolN} chapters in Unsorted`;
-    const findPrimary = !v || poolN >= hint;
+    const findPrimary = !v || newN >= hint;
     dom.manageNav.innerHTML = `
       <div class="tp-action">
         <button type="button" class="tp-btn ${findPrimary ? "primary" : ""}" data-act="find" ${running || !poolN ? "disabled" : ""}>Find topics ${MARK}</button>
-        <span class="tp-action-state">${v ? `Unsorted ${poolN} / ${hint}<span class="bar"><i style="width:${Math.min(100, (poolN / hint) * 100)}%"></i></span>` : `${poolN} chapters: builds the first map`}</span>
+        <span class="tp-action-state">${v ? `<span title="New in Unsorted since the last Find · ${poolN} in Unsorted">New ${newN} / ${hint}</span><span class="bar"><i style="width:${Math.min(100, (newN / hint) * 100)}%"></i></span>` : `${poolN} chapters: builds the first map`}</span>
         <button type="button" class="tp-btn" data-act="refine" ${running || !v ? "disabled" : ""}>Refine topics ${MARK}</button>
         <span class="tp-action-state">${!v ? "Needs topics first" : lastRefine ? `Last run ${esc(ago(lastRefine.finished_at))} · ${sinceRefine} new chapters` : "Not run yet"}</span>
       </div>

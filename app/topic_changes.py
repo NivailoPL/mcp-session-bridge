@@ -90,9 +90,11 @@ def build_candidate(active_topics: list[dict[str, str]], op: str, payload: dict[
     if op == "edit":
         return [topic(item) for item in payload["topics"]]
     if op == "new_topic":
+        # One part from Find or Refine; several when automation joins topics that each tested clean.
         source = next((t for t in base if t["key"] == payload.get("target")), None)
         family = payload.get("family") or (source["family"] if source else None)
-        return _shade_new(base + [topic(payload["parts"][0], family=family)], {payload["parts"][0]["key"]})
+        parts = payload["parts"]
+        return _shade_new(base + [topic(part, family=family) for part in parts], {part["key"] for part in parts})
     if op == "split":
         out = []
         for t in base:
@@ -175,9 +177,10 @@ def evaluate_test(
         for cid, item in after.items() if topic_of(before, cid) != item["topic_key"]
     ]
     per_topic: dict[str, Any] = {}
-    if op == "first_map":
+    many = op == "new_topic" and len(payload.get("parts") or []) > 1
+    if op == "first_map" or many:
         after_counts = Counter(item["topic_key"] for item in after.values())
-        for t in payload["topics"]:
+        for t in payload["topics"] if op == "first_map" else payload["parts"]:
             if not t.get("keep", True):
                 continue
             ids = t["chapter_ids"]
@@ -195,7 +198,7 @@ def evaluate_test(
     pool_before = sum(1 for item in before.values() if item["topic_key"] == POOL_KEY)
     pool_after = sum(1 for item in after.values() if item["topic_key"] == POOL_KEY)
     verdict = (
-        _verdict(len(intended), len(landed), len(pulled)) if intended and op != "first_map"
+        _verdict(len(intended), len(landed), len(pulled)) if intended and not per_topic
         else ("ok" if not any(v["verdict"] != "ok" for v in per_topic.values()) else "mixed") if per_topic
         else "ok"
     )

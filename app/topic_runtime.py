@@ -1,6 +1,6 @@
-"""Runs every Topics step, only when the owner asks.
+"""Runs every Topics step, when the owner asks or when automation is switched on.
 
-There is no scheduler here. One job runs at a time:
+There is no scheduler here; automation rides on the chapter fill. One job runs at a time:
 
 - Sort new / sort again: the sorting model (Jev) places chapters on the active map.
 - Find topics: the proposing model (Codex) reads Unsorted; on an empty map that is
@@ -12,6 +12,12 @@ There is no scheduler here. One job runs at a time:
 
 Every run keeps its input and raw output; accepting a tested proposal makes its
 candidate the active map and adopts the test's sorting, so nothing is sorted twice.
+
+Automation (Settings › Topics): after a chapter fill the sorting model sorts the new
+chapters; when enough chapters reached Unsorted since the last Find, the proposing
+model looks for topics and, in "accept" mode, proposals whose test is clean become the
+map. The first map and Refine stay with the owner. Every automatic step is journaled
+with data ``{"trigger": "auto", "cause": ...}``.
 """
 
 from __future__ import annotations
@@ -87,6 +93,9 @@ class TopicRuntime:
         self._pause_requested = False
         self._stop_requested = False
         self.job: dict[str, Any] | None = None
+        # Set by a job that wants an automatic next step once it has fully finished.
+        self._follow: Callable[[], Awaitable[None]] | None = None
+        self._follow_task: asyncio.Task[None] | None = None
 
     # ---------- planning ----------
 
@@ -161,7 +170,8 @@ class TopicRuntime:
                 f"Run {active['run_id']} is paused. Resume or close it before starting another.", code="run_paused"
             )
 
-    async def start_classify(self, scope_payload: Any, *, actor: str) -> dict[str, Any]:
+    async def start_classify(self, scope_payload: Any, *, actor: str, cause: str | None = None) -> dict[str, Any]:
+        """Sort chapters; ``cause`` marks an automatic start and says what set it off."""
         key = self._require_key()
         plan = await asyncio.to_thread(self.select, scope_payload)
         if not plan["send"]:
@@ -182,13 +192,14 @@ class TopicRuntime:
         )
         await asyncio.to_thread(
             self.store.add_topic_journal,
-            "owner",
+            "system" if cause else "owner",
             "classify.start",
-            f"Started sorting {len(plan['send'])} chapters on map v{version['version_id']}"
+            ("Automatically started" if cause else "Started")
+            + f" sorting {len(plan['send'])} chapters on map v{version['version_id']}"
             + (f" ({len(plan['skipped'])} sensitive skipped)." if plan["skipped"] else "."),
             run_id=run["run_id"],
             version_id=version["version_id"],
-            data={"scope": plan["scope"]},
+            data={"scope": plan["scope"], **_auto(cause)},
         )
         self._launch("classify", lambda: self._classify_job(run["run_id"], key))
         return run
@@ -303,8 +314,67 @@ class TopicRuntime:
                 logger.exception("Topics job %s failed", kind)
             finally:
                 self.job = None
+                follow, self._follow = self._follow, None
+                if follow is not None:
+                    current = asyncio.current_task()
+                    self._follow_task = asyncio.create_task(self._after(current, follow))
 
+        self._follow = None
         self._task = asyncio.create_task(runner())
+
+    async def _after(self, previous: asyncio.Task[Any] | None, follow: Callable[[], Awaitable[None]]) -> None:
+        if previous is not None:
+            await asyncio.wait({previous})
+        try:
+            await follow()
+        except Exception:
+            logger.exception("Automatic Topics step failed")
+
+    # ---------- automation ----------
+
+    def pool_new(self) -> list[dict[str, Any]]:
+        """Unsorted chapters the last finished Find has not seen yet; they set off automatic Find."""
+        pool = self.pool_chapters()
+        last = self.store.last_topic_run("find")
+        seen = set((self.store.get_topic_run_input(last["run_id"]) or {}).get("pool_ids") or []) if last else set()
+        return [c for c in pool if c["strand_id"] not in seen]
+
+    async def after_chapters(self) -> None:
+        """Called when a chapter fill ends: sort what is new, then maybe find topics."""
+        settings = await asyncio.to_thread(self.store.get_topic_settings)
+        if not settings["auto_sort"] or self.running():
+            return
+        if await asyncio.to_thread(self.store.active_topic_version) is None:
+            return
+        try:
+            await self.start_classify({"mode": "unclassified"}, actor="system", cause="chapters")
+        except TopicError as exc:
+            if exc.code == "nothing_to_do":
+                await self.maybe_find(cause="chapters")
+                return
+            await self._journal_skip("classify", exc)
+
+    async def maybe_find(self, *, cause: str) -> None:
+        """Start Find on its own when enough new chapters wait in Unsorted."""
+        settings = await asyncio.to_thread(self.store.get_topic_settings)
+        if settings["auto_find"] not in ("propose", "accept") or self.running():
+            return
+        if await asyncio.to_thread(self.store.active_topic_version) is None:
+            return  # the first map is the owner's call
+        waiting = await asyncio.to_thread(self.pool_new)
+        if len(waiting) < settings["pool_hint"]:
+            return
+        try:
+            await self.start_find({}, actor="system", cause=cause)
+        except TopicError as exc:
+            await self._journal_skip("find", exc)
+
+    async def _journal_skip(self, kind: str, exc: TopicError) -> None:
+        what = {"classify": "Automatic sorting", "find": "Automatic Find topics"}[kind]
+        await asyncio.to_thread(
+            self.store.add_topic_journal, "system", f"auto.{kind}.skip", f"{what} did not start: {exc}",
+            data={"trigger": "auto", "code": exc.code},
+        )
 
     # ---------- sorting ----------
 
@@ -317,6 +387,7 @@ class TopicRuntime:
                 self.store.add_topic_journal, "jev", "classify.finish", _finish_message(run, run["metrics"] or {}),
                 run_id=run_id, version_id=run["version_id"], data=run["metrics"],
             )
+            self._follow = lambda: self.maybe_find(cause="sorting")
         else:
             actor = "owner" if stop[0] == "paused_by_owner" else "system"
             await asyncio.to_thread(
@@ -445,7 +516,7 @@ class TopicRuntime:
         current = self.store.topic_current_assignments(version["version_id"])
         return [c for c in send if (current.get(c["strand_id"]) or {}).get("topic_key") == POOL_KEY]
 
-    async def start_find(self, payload: dict[str, Any], *, actor: str) -> dict[str, Any]:
+    async def start_find(self, payload: dict[str, Any], *, actor: str, cause: str | None = None) -> dict[str, Any]:
         key = self._require_key()
         self._require_codex()
         await self._no_paused_run()
@@ -467,15 +538,20 @@ class TopicRuntime:
                 kind="find", version_id=version["version_id"] if version else None, scope={"detail": detail},
                 settings=settings, chapters=[], skipped=[], actor=actor,
                 input_data={"prompt": prompt, "note": note, "detail": detail, "pool": len(pool),
-                            "first_map": version is None},
+                            "pool_ids": [c["strand_id"] for c in pool], "first_map": version is None,
+                            **({"cause": cause} if cause else {})},
             )
         )
         await asyncio.to_thread(
-            self.store.add_topic_journal, "owner", "find.start",
-            f"Asked for topics in Unsorted ({len(pool)} chapters, {detail})" + (" to build the first map." if version is None else "."),
-            run_id=run["run_id"], version_id=version["version_id"] if version else None,
+            self.store.add_topic_journal, "system" if cause else "owner", "find.start",
+            ("Unsorted is full: automatically asked" if cause else "Asked")
+            + f" for topics in Unsorted ({len(pool)} chapters, {detail})"
+            + (" to build the first map." if version is None else "."),
+            run_id=run["run_id"], version_id=version["version_id"] if version else None, data=_auto(cause),
         )
-        self._launch("find", lambda: self._find_job(run["run_id"], key, prompt, schema, pool, version, settings))
+        auto_accept = bool(cause) and settings["auto_find"] == "accept"
+        self._launch("find", lambda: self._find_job(
+            run["run_id"], key, prompt, schema, pool, version, settings, auto_accept=auto_accept))
         return run
 
     async def start_refine(self, payload: dict[str, Any], *, actor: str) -> dict[str, Any]:
@@ -560,7 +636,7 @@ class TopicRuntime:
 
     async def _find_job(
         self, run_id: int, key: str, prompt: str, schema: dict[str, Any], pool: list[dict[str, Any]],
-        version: dict[str, Any] | None, settings: dict[str, Any],
+        version: dict[str, Any] | None, settings: dict[str, Any], *, auto_accept: bool = False,
     ) -> None:
         raw = await self._ask_codex(run_id, prompt, schema, settings)
         if raw is None:
@@ -592,7 +668,9 @@ class TopicRuntime:
             self.store.add_topic_journal, "codex", "find.finish",
             f"Proposed {len(specs)} change{'s' if len(specs) != 1 else ''} from Unsorted.", run_id=run_id, data=metrics,
         )
-        await self._create_and_test(run_id, specs, key, source="find")
+        proposal_ids = await self._create_and_test(run_id, specs, key, source="find")
+        if auto_accept and version is not None:
+            await self._auto_accept(run_id, proposal_ids, key)
 
     async def _refine_job(
         self, run_id: int, key: str, prompt: str, version: dict[str, Any],
@@ -625,8 +703,11 @@ class TopicRuntime:
         )
         await self._create_and_test(run_id, specs, key, source="refine")
 
-    async def _create_and_test(self, run_id: int | None, specs: list[dict[str, Any]], key: str, *, source: str) -> None:
+    async def _create_and_test(
+        self, run_id: int | None, specs: list[dict[str, Any]], key: str, *, source: str
+    ) -> list[int]:
         version = await asyncio.to_thread(self.store.active_topic_version)
+        ids = []
         for spec in specs:
             proposal = await asyncio.to_thread(
                 lambda spec=spec: self.store.create_topic_proposal(
@@ -635,6 +716,46 @@ class TopicRuntime:
                 )
             )
             await self._test_proposal(proposal["proposal_id"], key)
+            ids.append(proposal["proposal_id"])
+        return ids
+
+    async def _auto_accept(self, run_id: int, proposal_ids: list[int], key: str) -> None:
+        """Accept what tested clean. Several clean topics are joined and tested once more together."""
+        proposals = [await asyncio.to_thread(self.store.get_topic_proposal, pid) for pid in proposal_ids]
+        clean = [p for p in proposals if p and p["status"] == "pending" and (p["test"] or {}).get("verdict") == "ok"]
+        if not clean:
+            if proposals:
+                await asyncio.to_thread(
+                    self.store.add_topic_journal, "system", "auto.accept.skip",
+                    "No proposal tested clean; they wait for you in Proposals.", run_id=run_id, data=_auto("find"),
+                )
+            return
+        chosen = clean[0]
+        if len(clean) > 1:
+            parts = [part for p in clean for part in p["payload"]["parts"]]
+            joined = await asyncio.to_thread(
+                lambda: self.store.create_topic_proposal(
+                    run_id=run_id, base_version_id=clean[0]["base_version_id"], op="new_topic", source="find",
+                    summary=f"{len(parts)} new topics: " + ", ".join(part["name"] for part in parts),
+                    payload={"target": None, "family": None, "parts": parts,
+                             "reason": "Joined from proposals that each tested clean."},
+                )
+            )
+            await self._test_proposal(joined["proposal_id"], key)
+            joined = await asyncio.to_thread(self.store.get_topic_proposal, joined["proposal_id"])
+            if joined and joined["status"] == "pending" and (joined["test"] or {}).get("verdict") == "ok":
+                await asyncio.to_thread(lambda: self._accept(joined["proposal_id"], actor="system", auto=True))
+                for p in clean:
+                    await asyncio.to_thread(lambda p=p: self.store.update_topic_proposal(
+                        p["proposal_id"], status="accepted", decided_at=int(time.time()),
+                        decision_note=f"Accepted as part of proposal {joined['proposal_id']}."))
+                return
+            if joined:
+                await asyncio.to_thread(lambda: self.store.update_topic_proposal(
+                    joined["proposal_id"], status="failed", decided_at=int(time.time()),
+                    decision_note="Joined test was not clean; the best topic was taken alone."))
+            chosen = max(clean, key=lambda p: p["test"].get("landed", 0))
+        await asyncio.to_thread(lambda: self._accept(chosen["proposal_id"], actor="system", auto=True))
 
     async def start_test_edit(self, topics: Any, *, note: Any, actor: str) -> dict[str, Any]:
         """Test a map edited by hand before saving it."""
@@ -766,6 +887,9 @@ class TopicRuntime:
     def accept(self, proposal_id: int, *, actor: str, note: str = "") -> dict[str, Any]:
         if self.running():
             raise TopicError("Wait for the running step to finish.", code="run_active")
+        return self._accept(proposal_id, actor=actor, note=note)
+
+    def _accept(self, proposal_id: int, *, actor: str, note: str = "", auto: bool = False) -> dict[str, Any]:
         proposal = self.store.get_topic_proposal(proposal_id)
         if proposal is None:
             raise TopicError("Unknown proposal.", code="proposal_unknown")
@@ -782,10 +906,13 @@ class TopicRuntime:
         )
         outdated = self.store.outdate_topic_proposals(version["version_id"])
         self.store.add_topic_journal(
-            "owner", "proposal.accept",
-            f"Accepted “{proposal['summary']}”: map v{version['version_id']} is active"
+            "system" if auto else "owner", "proposal.accept",
+            ("Accepted automatically after a clean test" if auto else "Accepted")
+            + f" “{proposal['summary']}”: map v{version['version_id']} is active"
             + (f"; {outdated} other proposal{'s' if outdated != 1 else ''} need a new test." if outdated else "."),
-            version_id=version["version_id"], data={"proposal_id": proposal_id},
+            version_id=version["version_id"],
+            data={"proposal_id": proposal_id, "previous_version_id": proposal["base_version_id"],
+                  **(_auto("find") if auto else {})},
         )
         return {"proposal": accepted, "version": version}
 
@@ -848,6 +975,10 @@ class TopicRuntime:
             + (f"; {outdated} proposals need a new test." if outdated else "."), version_id=version_id,
         )
         return version
+
+
+def _auto(cause: str | None) -> dict[str, Any]:
+    return {"trigger": "auto", "cause": cause} if cause else {}
 
 
 def _finish_message(run: dict[str, Any], metrics: dict[str, Any]) -> str:

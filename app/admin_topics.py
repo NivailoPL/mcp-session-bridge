@@ -87,6 +87,7 @@ class TopicAdminHandlers:
                 version["version_id"] if version else None, settings["include_sensitive"]
             ),
             "pool_count": len(self.runtime.pool_chapters()),
+            "pool_new_count": len(self.runtime.pool_new()),
             "pending_proposals": sum(1 for p in open_proposals if p["status"] == "pending"),
             "open_proposals": len(open_proposals),
             "last_find": self.store.last_topic_run("find"),

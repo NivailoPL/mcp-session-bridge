@@ -15,6 +15,7 @@ import json
 import logging
 import re
 import time
+from collections.abc import Awaitable, Callable
 from datetime import datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -144,6 +145,8 @@ class ChapterAutomation:
         self.runtime = runtime
         self._task: asyncio.Task[None] | None = None
         self._lock = asyncio.Lock()
+        # Runs when a batch reaches the end; Topics hangs its automatic sorting here.
+        self.on_done: Callable[[], Awaitable[None]] | None = None
 
     # ----- stored settings -----
 
@@ -343,6 +346,11 @@ class ChapterAutomation:
                 )
                 if session is None:
                     await asyncio.to_thread(self._finish, batch, "done")
+                    if self.on_done is not None:
+                        try:
+                            await self.on_done()
+                        except Exception:
+                            logger.exception("Step after the chapter fill failed")
                     return
                 batch.update(current_session_id=session["session_id"], current_title=session.get("title"))
                 await asyncio.to_thread(self._write, BATCH_STATE_KEY, batch)

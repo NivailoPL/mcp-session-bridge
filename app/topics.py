@@ -41,6 +41,8 @@ RUN_KINDS = ("classify", "test", "find", "refine")
 RUN_STATUSES = ("queued", "running", "paused", "completed", "failed")
 SCOPE_MODES = ("unclassified", "all", "topic")
 JOURNAL_ACTORS = ("owner", "jev", "codex", "system")
+# off: nothing; remind: a badge only; propose: Codex finds and Jev tests; accept: clean tests are accepted too.
+AUTO_FIND_MODES = ("off", "remind", "propose", "accept")
 
 
 class TopicError(ValueError):
@@ -58,6 +60,8 @@ def default_topic_settings() -> dict[str, Any]:
         "weak_threshold": 0.0,
         "pool_hint": 15,
         "codex_timeout_minutes": 10,
+        "auto_sort": False,
+        "auto_find": "remind",
     }
 
 
@@ -87,6 +91,10 @@ def validate_topic_settings(payload: Any, current: dict[str, Any] | None = None)
     hint = merged["pool_hint"]
     if isinstance(hint, bool) or not isinstance(hint, int) or not 1 <= hint <= 500:
         raise TopicError("pool_hint must be a whole number from 1 to 500.", code="settings_invalid")
+    if not isinstance(merged["auto_sort"], bool):
+        raise TopicError("auto_sort must be true or false.", code="settings_invalid")
+    if merged["auto_find"] not in AUTO_FIND_MODES:
+        raise TopicError("auto_find must be off, remind, propose or accept.", code="settings_invalid")
     return merged
 
 
