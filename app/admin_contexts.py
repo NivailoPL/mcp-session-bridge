@@ -242,8 +242,9 @@ class ContextAdminHandlers:
             topic_key = payload.get("topic_key")
             if not isinstance(topic_key, str) or not topic_key:
                 raise ValueError("topic_key is required for a topic block")
+            include = payload.get("include_sensitive")
             return snapshot_topic(
-                self.store, topic_key, include_sensitive=bool(payload.get("include_sensitive", False)),
+                self.store, topic_key, include_sensitive=include if isinstance(include, bool) else None,
                 timezone_name=self.admin._display_timezone_name(), redactor=redactor,
             )
         raise ValueError("source_type must be session, file or topic")

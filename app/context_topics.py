@@ -3,9 +3,9 @@
 A topic block holds every user and model turn from the chapters sorted into one
 topic of the active map, session by session. Like a session block it is a
 snapshot: it notes the map version and a fingerprint of the turns, and turns
-"outdated" when sorting or the turns change. Chapters from sensitive groups stay
-out unless the block asks for them, because a topic gathers sessions the owner
-did not pick one by one.
+"outdated" when sorting or the turns change. Chapters from sensitive groups come in
+only when Settings › Topics includes sensitive groups (a topic gathers sessions the
+owner did not pick one by one); each block can still include or leave them out.
 """
 
 from __future__ import annotations
@@ -72,12 +72,18 @@ def _fingerprint(version_id: int, include_sensitive: bool, strand_ids: list[int]
     return hashlib.sha256(json.dumps(canonical, ensure_ascii=False).encode("utf-8")).hexdigest()
 
 
+def default_include_sensitive(store: Store) -> bool:
+    return bool(store.get_topic_settings().get("include_sensitive"))
+
+
 def snapshot_topic(
-    store: Store, topic_key: str, *, include_sensitive: bool = False, timezone_name: str | None = None,
+    store: Store, topic_key: str, *, include_sensitive: bool | None = None, timezone_name: str | None = None,
     redactor: Redactor,
 ) -> ContextBlockSnapshot:
     from app.contexts import ContextSourceError, count_tokens, render_exchange
 
+    if include_sensitive is None:
+        include_sensitive = default_include_sensitive(store)
     members = _members(store, topic_key, include_sensitive)
     if members is None:
         raise ContextSourceError(f"Unknown topic on the active map: {topic_key}")
@@ -190,6 +196,7 @@ def library_topics(store: Store) -> list[dict[str, Any]]:
         return []
     current = store.topic_current_assignments(version["version_id"])
     sizes = store.topic_strand_turn_sizes()
+    include = default_include_sensitive(store)
     by_topic: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for chapter in store.topic_chapters():
         item = current.get(chapter["strand_id"])
@@ -200,7 +207,7 @@ def library_topics(store: Store) -> list[dict[str, Any]]:
         if topic["key"] == POOL_KEY:
             continue
         chapters = by_topic.get(topic["key"], [])
-        sent = [c for c in chapters if not c["sensitive"]]
+        sent = [c for c in chapters if include or not c["sensitive"]]
         groups: dict[str, int] = defaultdict(int)
         for chapter in sent:
             groups[chapter.get("group_id") or ""] += 1
@@ -211,7 +218,8 @@ def library_topics(store: Store) -> list[dict[str, Any]]:
             "color": topic.get("color"),
             "chapter_count": len(sent),
             "session_count": len({c["session_id"] for c in sent}),
-            "sensitive_count": len(chapters) - len(sent),
+            "sensitive_count": sum(1 for c in chapters if c["sensitive"]),
+            "sensitive_included": include,
             "token_estimate": _estimate(sizes, sent),
             "group_ids": [g for g, _ in sorted(groups.items(), key=lambda item: -item[1])][:3],
             "confidences": [round(c["confidence"] or 0, 2) for c in sorted(sent, key=lambda c: -(c["confidence"] or 0))][:14],

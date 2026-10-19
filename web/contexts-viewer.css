@@ -316,3 +316,7 @@ body.is-dragging .cx-chev svg:nth-child(3) { animation-delay: .24s; }
 .cx-pill.is-info { background: rgba(255, 255, 255, .05); border-color: rgba(255, 255, 255, .16); color: var(--text-2); }
 .cx-pill.is-sensitive { background: rgba(217, 185, 106, .08); border-color: rgba(217, 185, 106, .4); color: #d9b96a; }
 .cx-blk-row { white-space: nowrap; overflow: hidden; }
+.cx-card.is-topic .cx-card-in { position: relative; }
+.cx-teye { position: absolute; top: 40px; right: 16px; z-index: 1; display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 6px; border-radius: 999px; background: #2a2410; border: 1px solid #d9b96a; color: #d9b96a; font: 500 10px "Geist Mono", monospace; }
+.cx-teye svg { width: 11px; height: 11px; stroke-width: 2.4; }
+.cx-teye.is-out { background: transparent; border-style: dashed; opacity: .75; }

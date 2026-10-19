@@ -49,6 +49,12 @@ def test_sensitive_chapters_stay_out_unless_asked(lab) -> None:
     redactor = build_redactor(store)
     plain = snapshot_topic(store, "radio_job", redactor=redactor)
     assert "radio mobbing kierownik" not in plain.content and plain.meta["sensitive_left_out"] == 1
+    card = next(i for i in library_topics(store) if i["topic_key"] == "radio_job")
+    assert card["sensitive_count"] == 1 and card["chapter_count"] == 2
+    store.set_topic_settings({"include_sensitive": True})
+    assert snapshot_topic(store, "radio_job", redactor=redactor).meta["sensitive_left_out"] == 0
+    assert next(i for i in library_topics(store) if i["topic_key"] == "radio_job")["chapter_count"] == 3
+    store.set_topic_settings({"include_sensitive": False})
     full = snapshot_topic(store, "radio_job", include_sensitive=True, redactor=redactor)
     assert "radio mobbing kierownik" in full.content and full.meta["sensitive_left_out"] == 0
 

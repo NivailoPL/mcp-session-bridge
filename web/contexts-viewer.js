@@ -359,6 +359,15 @@
     const inner = el("div", "cx-card-in");
     const top = el("div", "cx-card-top");
     top.append(text("span", "cx-tfamily", topic.family.toUpperCase()), el("span", "cx-kind", `${ICON.topic}TOPIC`));
+    if (topic.sensitive_count) {
+      // The eye says some chapters come from sensitive groups; dimmed when Settings leaves them out.
+      const eye = el("span", `cx-teye${topic.sensitive_included ? "" : " is-out"}`, sensitiveIconSvg());
+      eye.append(text("b", "", String(topic.sensitive_count)));
+      eye.title = topic.sensitive_included
+        ? `${topic.sensitive_count} chapters from sensitive groups come in (Settings › Topics)`
+        : `${topic.sensitive_count} chapters from sensitive groups stay out (Settings › Topics)`;
+      inner.append(eye);
+    }
     const art = el("div", "cx-art is-topic");
     const core = el("i", "cx-core");
     art.append(core);
