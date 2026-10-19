@@ -328,6 +328,14 @@
   function renderTopicList() {
     const groups = byTopic();
     state.selected = currentSelection(groups);
+    dom.topicList.innerHTML = topicListMarkup(groups, state.selected);
+    for (const button of dom.topicList.querySelectorAll("[data-topic]")) {
+      button.addEventListener("click", () => { state.selected = button.dataset.topic; renderTopicList(); renderDetail(); dom.detail.scrollTop = 0; });
+    }
+  }
+
+  // The topic list by family with 12-week bars; the List view and the Graph view share it.
+  function topicListMarkup(groups, selected) {
     const now = Date.now() / 1000;
     const v = version();
     const weekly = new Map(topics().map((t) => [t.key, weeksFor(groups.get(t.key) || [], now)]));
@@ -340,7 +348,7 @@
     }
     const poolRows = groups.get(POOL) || [];
     const poolSessions = new Set(poolRows.map((r) => r.session_id)).size;
-    dom.topicList.innerHTML = `
+    return `
       ${v ? '<div class="tp-topics-head"><span>TOPIC</span><span>12 WEEKS</span><span style="text-align:right">SES.</span></div>' : '<div class="tp-family-name">TOPICS</div>'}
       ${families.map((family) => `
         <div class="tp-family">
@@ -349,20 +357,17 @@
             const rows = groups.get(t.key) || [];
             const sessions = new Set(rows.map((r) => r.session_id)).size;
             const bars = weekly.get(t.key).map((value) => `<i style="height:${Math.max(2, (value / peak) * 18)}px;background:${esc(t.color)};opacity:${value ? 0.9 : 0.22}"></i>`).join("");
-            return `<button type="button" class="tp-topic" data-topic="${esc(t.key)}" aria-current="${state.selected === t.key}">
+            return `<button type="button" class="tp-topic" data-topic="${esc(t.key)}" aria-current="${selected === t.key}">
               <span class="tp-topic-name"><i class="tp-dot" style="background:${esc(t.color)}"></i><span>${esc(t.name)}</span></span>
               <span class="tp-weeks" aria-label="Sessions per week, last 12 weeks">${bars}</span>
               <span class="tp-count">${sessions}</span></button>`;
           }).join("")}
         </div>`).join("")}
-      <button type="button" class="tp-pool" data-topic="${POOL}" aria-current="${state.selected === POOL}">
+      <button type="button" class="tp-pool" data-topic="${POOL}" aria-current="${selected === POOL}">
         <span style="display:flex;align-items:center;gap:9px"><i class="tp-dot" style="background:#4b5563"></i><b>Unsorted</b><span class="tp-muted">${poolRows.length} ch.</span></span>
         <span class="tp-count">${poolSessions}</span>
       </button>
       ${v ? "" : '<p class="tp-empty-note">No topics yet. <b>Manage topics</b> › Find topics proposes them from subjects you came back to in two or more sessions. Then Sort new places every new chapter.</p>'}`;
-    for (const button of dom.topicList.querySelectorAll("[data-topic]")) {
-      button.addEventListener("click", () => { state.selected = button.dataset.topic; renderTopicList(); renderDetail(); dom.detail.scrollTop = 0; });
-    }
   }
 
   function renderDetail() {
@@ -439,12 +444,11 @@
       <label class="tp-check">Second topics (≥ 20%)<input type="checkbox" data-g="second" ${g.second ? "checked" : ""}></label>
       <label class="tp-check">Sensitive groups<input type="checkbox" data-g="sensitive" ${g.sensitive ? "checked" : ""}></label>
       <input class="tp-input" data-g="query" type="search" placeholder="Search chapters" value="${esc(g.query)}">
-      <div class="tp-family-name" style="margin-top:6px">TOPICS</div>
-      ${list.map((t) => `<button type="button" class="tp-gtopic" data-gtopic="${esc(t.key)}" aria-current="${g.focus === t.key}"><i class="tp-dot" style="background:${esc(t.color)}"></i><span>${esc(t.name)}</span><span class="tp-count">${counts.get(t.key)}</span></button>`).join("")}`;
+      <div class="tp-graph-list">${topicListMarkup(byTopic(), g.focus)}</div>`;
     dom.graphSide.querySelector('[data-g="second"]').addEventListener("change", (e) => { g.second = e.target.checked; renderGraph(); });
     dom.graphSide.querySelector('[data-g="sensitive"]').addEventListener("change", (e) => { g.sensitive = e.target.checked; renderGraph(); });
     dom.graphSide.querySelector('[data-g="query"]').addEventListener("input", (e) => { g.query = e.target.value; highlightGraph(); });
-    for (const b of dom.graphSide.querySelectorAll("[data-gtopic]")) b.addEventListener("click", () => { g.focus = g.focus === b.dataset.gtopic ? null : b.dataset.gtopic; renderGraph(); });
+    for (const b of dom.graphSide.querySelectorAll("[data-topic]")) b.addEventListener("click", () => { g.focus = g.focus === b.dataset.topic ? null : b.dataset.topic; renderGraph(); });
     dom.graphLegend.innerHTML = '<span>● topic</span><span>· chapter (closer = more confident)</span><span>- - second topic</span><span style="color:#d9b96a">○ sensitive</span>';
     renderGraphInfo(rows);
     drawGraph(rows, list, counts);
@@ -484,7 +488,29 @@
     const root = sel.append("g");
     const zoom = d3.zoom().scaleExtent([0.2, 4]).on("zoom", (e) => root.attr("transform", e.transform));
     sel.call(zoom);
-    const topicNodes = list.map((t) => ({ id: `t:${t.key}`, kind: "topic", t, r: 10 + Math.sqrt(counts.get(t.key)) * 3.4 }));
+    // Families sit around a circle, each on an arc as wide as its share of chapters; its topics gather there.
+    const familyOrder = [];
+    const familySize = new Map();
+    for (const t of list) {
+      const f = t.key === POOL ? "" : (t.family || "Other");
+      if (!familySize.has(f)) { familyOrder.push(f); familySize.set(f, 0); }
+      familySize.set(f, familySize.get(f) + counts.get(t.key));
+    }
+    const total = [...familySize.values()].reduce((a, b) => a + b, 0) || 1;
+    const ring = Math.min(width, height) * 0.42 + list.length * 6;
+    const anchors = new Map();
+    let turn = -Math.PI / 2;
+    for (const f of familyOrder) {
+      const share = (familySize.get(f) / total) * Math.PI * 2;
+      const angle = turn + share / 2;
+      turn += share;
+      anchors.set(f, f === "" ? { x: width / 2, y: height / 2, f } : { x: width / 2 + Math.cos(angle) * ring, y: height / 2 + Math.sin(angle) * ring, f });
+    }
+    const anchorOf = (t) => anchors.get(t.key === POOL ? "" : (t.family || "Other"));
+    const topicNodes = list.map((t, i) => {
+      const a = anchorOf(t);
+      return { id: `t:${t.key}`, kind: "topic", t, r: 10 + Math.sqrt(counts.get(t.key)) * 3.4, x: a.x + Math.cos(i * 2.4) * 40, y: a.y + Math.sin(i * 2.4) * 40 };
+    });
     const known = new Set(list.map((t) => t.key));
     const chapterNodes = rows.filter((r) => known.has(r.topic_key)).map((r) => ({ id: `c:${r.strand_id}`, kind: "chapter", row: r }));
     const links = chapterNodes.map((n) => ({ source: n.id, target: `t:${n.row.topic_key}`, kind: "main", conf: n.row.confidence ?? 0.5, key: n.row.topic_key }));
@@ -494,10 +520,17 @@
         if (s && s.p >= SECOND_MIN && known.has(s.key)) links.push({ source: n.id, target: `t:${s.key}`, kind: "second", conf: s.p, key: s.key });
       }
     }
+    const topicById = new Map(topicNodes.map((n) => [n.t.key, n]));
+    for (const n of chapterNodes) {
+      const home = topicById.get(n.row.topic_key);
+      if (home) { n.x = home.x + (Math.random() - 0.5) * 30; n.y = home.y + (Math.random() - 0.5) * 30; }
+    }
     const nodes = [...topicNodes, ...chapterNodes];
+    const familyLayer = root.append("g");
     const linkSel = root.append("g").selectAll("line").data(links).join("line")
       .attr("stroke", (l) => topicInfo(l.key).color)
-      .attr("stroke-opacity", (l) => (l.kind === "second" ? 0.35 : 0.12))
+      .attr("stroke-width", (l) => (l.kind === "second" ? 0.8 : 0.4 + l.conf * 1.4))
+      .attr("stroke-opacity", (l) => (l.kind === "second" ? 0.35 : 0.1 + l.conf * 0.25))
       .attr("stroke-dasharray", (l) => (l.kind === "second" ? "3 4" : null));
     const nodeSel = root.append("g").selectAll("g").data(nodes).join("g").style("cursor", "pointer");
     nodeSel.filter((d) => d.kind === "topic").append("circle").attr("r", (d) => d.r).attr("fill", (d) => d.t.color).attr("stroke", "#0b0d12").attr("stroke-width", 2);
@@ -520,15 +553,26 @@
         if (d.kind === "topic") { state.graph.focus = state.graph.focus === d.t.key ? null : d.t.key; renderGraph(); }
         else window.location.assign(`/admin/sessions?session=${encodeURIComponent(d.row.session_id)}&chapter=${d.row.strand_id}`);
       });
+    const pull = (d) => (d.kind === "topic" ? anchorOf(d.t) : null);
     graphSim = d3.forceSimulation(nodes)
       .force("link", d3.forceLink(links).id((d) => d.id)
-        .distance((l) => (l.kind === "second" ? 160 : 24 + (1 - l.conf) * 80))
-        .strength((l) => (l.kind === "second" ? 0.004 : 0.7)))
-      .force("charge", d3.forceManyBody().strength((d) => (d.kind === "topic" ? -900 : -6)))
-      .force("collide", d3.forceCollide().radius((d) => (d.kind === "topic" ? d.r + 8 : 4.5)))
-      .force("x", d3.forceX(width / 2).strength(0.04)).force("y", d3.forceY(height / 2).strength(0.06))
+        .distance((l) => (l.kind === "second" ? 170 : 26 + (1 - l.conf) * 70))
+        .strength((l) => (l.kind === "second" ? l.conf * 0.01 : 0.5 + l.conf * 0.5)))
+      .force("charge", d3.forceManyBody().strength((d) => (d.kind === "topic" ? -620 : -12)))
+      .force("collide", d3.forceCollide().radius((d) => (d.kind === "topic" ? d.r + 10 : 4.4)))
+      .force("x", d3.forceX((d) => pull(d)?.x ?? width / 2).strength((d) => (d.kind === "topic" ? 0.09 : 0.004)))
+      .force("y", d3.forceY((d) => pull(d)?.y ?? height / 2).strength((d) => (d.kind === "topic" ? 0.09 : 0.004)))
       .stop();
-    for (let i = 0; i < 280; i++) graphSim.tick();
+    for (let i = 0; i < 360; i++) graphSim.tick();
+    // A faint family name behind each cluster, at the middle of its topics.
+    const familyLabels = familyOrder.filter((f) => f).map((f) => {
+      const members = topicNodes.filter((n) => n.t.key !== POOL && (n.t.family || "Other") === f);
+      const x = members.reduce((a, n) => a + n.x, 0) / members.length;
+      const top = Math.min(...members.map((n) => n.y - n.r));
+      return { f, x, y: top - 46 };
+    });
+    familyLayer.selectAll("text").data(familyLabels).join("text").attr("class", "tp-gfamily")
+      .attr("text-anchor", "middle").attr("x", (d) => d.x).attr("y", (d) => d.y).text((d) => d.f.toUpperCase());
     linkSel.attr("x1", (l) => l.source.x).attr("y1", (l) => l.source.y).attr("x2", (l) => l.target.x).attr("y2", (l) => l.target.y);
     nodeSel.attr("transform", (d) => `translate(${d.x},${d.y})`);
     labels.attr("x", (d) => d.x).attr("y", (d) => d.y - d.r - 7);
