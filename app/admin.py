@@ -40,6 +40,21 @@ from app.search import (
     SearchConfig,
     SearchService,
 )
+from app.session_titles import (
+    AI_RENAME_DEFAULT_MAX_WORDS,
+    AI_RENAME_MAX_MAX_WORDS,
+    AI_RENAME_MAX_WORDS_SETTING,
+    AI_RENAME_MIN_MAX_WORDS,
+    CODEX_MODELS_SETTING_KEY,
+    SESSION_TITLE_MAX_CHARS,
+    TITLE_DANGLING_WORDS,  # noqa: F401  (kept importable from here)
+    SessionTitleRuntime,
+    TitleError,
+)
+from app.session_titles import fit_title as _fit_title
+from app.session_titles import parse_ai_title as _parse_ai_title
+from app.session_titles import rename_prompt as _rename_prompt
+from app.session_titles import title_fits as _title_fits
 from app.pdf_files import (
     MAX_ADMIN_PDF_BYTES,
     PdfWorkerBusyError,
@@ -106,16 +121,10 @@ AI_RENAME_API_KEY_SETTING = "ai_rename.api_key"
 AI_RENAME_MODEL_SETTING = "ai_rename.model"
 AI_RENAME_DEFAULT_MODEL = "gpt-5.4-nano"
 AI_RENAME_ENDPOINT = "https://api.openai.com/v1/chat/completions"
-SESSION_TITLE_MAX_CHARS = 72
-AI_RENAME_MAX_WORDS_SETTING = "ai_rename.max_words"
-AI_RENAME_DEFAULT_MAX_WORDS = 6
-AI_RENAME_MIN_MAX_WORDS = 2
-AI_RENAME_MAX_MAX_WORDS = 10
 ADMIN_FILE_UPLOAD_MAX_BODY_BYTES = ((MAX_ADMIN_PDF_BYTES + 2) // 3 * 4) + 16_384
 ADMIN_FILE_EDIT_MAX_BODY_BYTES = (MAX_SESSION_FILE_BYTES * 6) + 16_384
 THUMBNAIL_CACHE_ENTRIES = 64
 CODEX_CHAT_MAX_BODY_BYTES = MAX_CHAT_MESSAGE_CHARS * 4 + 1_024
-CODEX_MODELS_SETTING_KEY = "codex.models.catalog"
 CodexAppServerErrorTypes = (
     CodexUnavailableError,
     CodexProtocolError,
@@ -170,6 +179,13 @@ class AdminHandlers:
         self.codex = codex_client
         self.graph_runtime = graph_runtime
         self._thumbnail_cache: dict[tuple[int, str], bytes] = {}
+        self.titles = SessionTitleRuntime(
+            store,
+            codex_client,
+            api_configured=lambda: bool(self._read_ai_api_key()),
+            api_suggest=self._api_title,
+            fallback_model=lambda: self.store.get_strand_settings()["model"],
+        )
 
     async def index(self, request: Request) -> Response:
         return RedirectResponse("/admin/sessions", status_code=303)
@@ -1212,35 +1228,71 @@ class AdminHandlers:
         if error:
             return error
 
-        api_key = self._read_ai_api_key()
-        if not api_key:
-            return self._json_error("AI rename API key is not configured.", status_code=400)
-
         session_id = request.path_params["session_id"]
-        session = self.store.get_session(session_id)
-        if session is None:
-            return self._json_error(f"Unknown session_id: {session_id}", status_code=404)
-
-        exchanges = self.store.list_exchanges(session.session_id)
-        if not exchanges:
-            return self._json_error("Session has no user message to rename from.", status_code=400)
-
-        first_user_message = exchanges[0].user_message
-        model = self.store.get_app_setting(AI_RENAME_MODEL_SETTING) or AI_RENAME_DEFAULT_MODEL
         try:
-            title = await asyncio.to_thread(
-                _suggest_session_title, api_key, model, first_user_message, self._rename_max_words()
-            )
-            session = self.store.set_session_title(session.session_id, title)
+            session, provider = await self.titles.rename_now(session_id)
+        except TitleError as exc:
+            status_code = {"session_unknown": 404, "codex_failed": 502, "codex_busy": 409}.get(exc.code, 400)
+            return self._json_error(str(exc), status_code=status_code)
         except ValueError as exc:
             return self._value_error(exc)
         except RuntimeError as exc:
             return self._json_error(str(exc), status_code=502)
 
         return JSONResponse(
-            {"ok": True, "session": _session_payload(session), "title": session.title},
+            {"ok": True, "session": _session_payload(session), "title": session.title, "provider": provider},
             headers=self._no_store_headers(),
         )
+
+    def _api_title(self, first_user_message: str, max_words: int) -> str:
+        api_key = self._read_ai_api_key()
+        if not api_key:
+            raise RuntimeError("AI rename API key is not configured.")
+        model = self.store.get_app_setting(AI_RENAME_MODEL_SETTING) or AI_RENAME_DEFAULT_MODEL
+        return _suggest_session_title(api_key, model, first_user_message, max_words)
+
+    async def api_update_title_settings(self, request: Request) -> Response:
+        """Settings › Titles: automatic naming, both rename models, max words and the list button."""
+        _, error = self._require_admin_mutation(request)
+        if error:
+            return error
+        payload, parse_error = await _json_body(request)
+        if parse_error:
+            return parse_error
+        payload = dict(payload)
+        general: dict[str, Any] = {}
+        for key in ("rename_model", "rename_max_words"):
+            if key in payload:
+                general[key] = payload.pop(key)
+        if "rename_model" in general:
+            model = str(general["rename_model"]).strip() or AI_RENAME_DEFAULT_MODEL
+            if len(model) > 96:
+                return self._json_error("rename_model must be 96 characters or fewer.", status_code=400)
+            general["rename_model"] = model
+        if "rename_max_words" in general:
+            max_words = general["rename_max_words"]
+            if (
+                isinstance(max_words, bool)
+                or not isinstance(max_words, int)
+                or not AI_RENAME_MIN_MAX_WORDS <= max_words <= AI_RENAME_MAX_MAX_WORDS
+            ):
+                return self._json_error(
+                    f"rename_max_words must be a whole number from {AI_RENAME_MIN_MAX_WORDS} "
+                    f"to {AI_RENAME_MAX_MAX_WORDS}.",
+                    status_code=400,
+                )
+        if payload:
+            try:
+                self.titles.save_settings(payload)
+            except TitleError as exc:
+                return self._json_error(str(exc), status_code=400)
+        if "rename_model" in general:
+            self.store.set_app_setting(RENAME_MODEL_SETTING, general["rename_model"])
+            self.store.set_app_setting(AI_RENAME_MODEL_SETTING, general["rename_model"])
+        if "rename_max_words" in general:
+            self.store.set_app_setting(AI_RENAME_MAX_WORDS_SETTING, str(general["rename_max_words"]))
+        return JSONResponse({"ok": True, "settings": await asyncio.to_thread(self._settings_payload)},
+                            headers=self._no_store_headers())
 
     async def api_file(self, request: Request) -> Response:
         _, error = self._require_admin(request)
@@ -1997,6 +2049,7 @@ class AdminHandlers:
                 "rename_max_words": self._rename_max_words(),
                 "rename_max_words_range": [AI_RENAME_MIN_MAX_WORDS, AI_RENAME_MAX_MAX_WORDS],
             },
+            "titles": self.titles.payload(),
             "api": {
                 "openai": {"configured": bool(openai_key), "preview": _secret_preview(openai_key) if openai_key else ""},
                 "cohere": {"configured": bool(cohere_key), "preview": _secret_preview(cohere_key) if cohere_key else ""},
@@ -2349,6 +2402,7 @@ def _session_payload(session: SessionRecord) -> dict[str, Any]:
         "title": session.title,
         "group_id": session.group_id,
         "title_is_auto": session.title_is_auto,
+        "title_source": session.title_source,
         "pinned": session.pinned_at is not None,
         "pinned_at": session.pinned_at,
         "created_at": session.created_at,
@@ -2383,26 +2437,6 @@ def _secret_preview(value: str) -> str:
     if len(value) <= 8:
         return "configured"
     return f"{value[:3]}...{value[-4:]}"
-
-
-def _rename_prompt(max_words: int) -> str:
-    return (
-        "You name conversation sessions for a sidebar list. Read the first user message and write a title "
-        "that tells the reader what the conversation is about.\n"
-        f"Hard limits: at most {max_words} words and at most {SESSION_TITLE_MAX_CHARS} characters. "
-        "Count the words before answering.\n"
-        "Condense the meaning instead of shortening a sentence: keep the specific subject, drop filler. "
-        "Do not start with words that only say it is a conversation, such as \"Session\", \"Conversation about\", "
-        "\"Question about\", \"Sesja\", \"Rozmowa o\" or \"Pytanie o\". "
-        "The title must be a complete phrase and must not end with a conjunction or preposition.\n"
-        "Write in the language of the user message.\n"
-        "Examples (limit 5 words): "
-        "\"Brainstorming session about AI tools and how our team could use them\" becomes "
-        "\"AI tools for the team\"; "
-        "\"Sesja brainstormingu o AI i jego zastosowaniach w firmie\" becomes \"Zastosowania AI w firmie\".\n"
-        "Return JSON only with one key: title. No markdown, no quotes around the title, no trailing ellipsis, "
-        "no bracket noise."
-    )
 
 
 def _suggest_session_title(
@@ -2468,42 +2502,6 @@ def _request_ai_title(api_key: str, model: str, messages: list[dict[str, str]]) 
         return str(data["choices"][0]["message"]["content"] or "")
     except (KeyError, IndexError, TypeError) as exc:
         raise RuntimeError("AI rename response did not include message content.") from exc
-
-
-# Words a title must not end on once it has been cut to fit (Polish and English).
-TITLE_DANGLING_WORDS = frozenset({
-    "a", "ale", "albo", "ani", "bo", "czy", "dla", "do", "i", "jak", "lub", "na", "nad", "o", "od", "oraz",
-    "po", "pod", "przez", "przy", "u", "w", "we", "z", "za", "ze", "że",
-    "an", "and", "at", "by", "for", "from", "in", "of", "on", "or", "the", "to", "vs", "with",
-})
-
-
-def _parse_ai_title(content: str) -> str:
-    raw = content.strip()
-    try:
-        parsed = json.loads(raw)
-        if isinstance(parsed, dict):
-            raw = str(parsed.get("title", ""))
-    except json.JSONDecodeError:
-        pass
-    title = " ".join(raw.strip().strip(chr(34) + chr(39)).split())
-    return title.rstrip(" .,-;:...")
-
-
-def _title_fits(title: str, max_words: int) -> bool:
-    return len(title.split()) <= max_words and len(title) <= SESSION_TITLE_MAX_CHARS
-
-
-def _fit_title(title: str, max_words: int) -> str:
-    """Last resort when the model overshoots twice: cut on word boundaries."""
-    if _title_fits(title, max_words):
-        return title
-    words = title.split()[:max_words]
-    while len(" ".join(words)) > SESSION_TITLE_MAX_CHARS and len(words) > 1:
-        words.pop()
-    while len(words) > 1 and words[-1].lower().strip(" .,-;:") in TITLE_DANGLING_WORDS:
-        words.pop()
-    return " ".join(words).rstrip(" .,-;:...")[:SESSION_TITLE_MAX_CHARS]
 
 
 def _title_from_ai_content(content: str, max_words: int = AI_RENAME_DEFAULT_MAX_WORDS) -> str:

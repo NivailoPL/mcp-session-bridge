@@ -2082,7 +2082,7 @@ def test_admin_search_settings_keys_and_basic_search_api(load_main) -> None:
     settings = client.get("/admin/api/settings")
     assert settings.status_code == 200
     assert set(settings.json()["settings"]) == {
-        "general", "search", "api", "groups", "index", "transcript", "tool_output"
+        "general", "search", "api", "groups", "index", "transcript", "tool_output", "titles"
     }
     assert settings.json()["settings"]["search"]["enabled"] is False
     assert settings.json()["settings"]["transcript"]["chunk_max_chars"] == 12000

@@ -203,6 +203,7 @@ class SessionRecord:
     created_at: int
     updated_at: int
     pinned_at: int | None = None
+    title_source: str | None = None
 
 
 @dataclass(frozen=True)
@@ -740,6 +741,9 @@ class Store(AnchorStoreMixin, TopicStoreMixin):
             self._ensure_column(conn, "sessions", "group_id", f"TEXT NOT NULL DEFAULT '{UNCATEGORIZED_GROUP_ID}'")
             # Nullable and ignored by older Bridges, so it needs no schema bump.
             self._ensure_column(conn, "sessions", "pinned_at", "INTEGER")
+            # Who wrote the title: "derived" (cut from the first message), "manual", "ai" or "auto".
+            # NULL on older rows; automatic naming only touches "derived" titles.
+            self._ensure_column(conn, "sessions", "title_source", "TEXT")
             self._ensure_column(conn, "session_groups", "is_sensitive", "INTEGER NOT NULL DEFAULT 0")
             self._ensure_column(conn, "exchanges", "assistant_created_at", "INTEGER")
             self._ensure_column(conn, "exchanges", "assistant_masked_at", "INTEGER")
@@ -3584,7 +3588,7 @@ class Store(AnchorStoreMixin, TopicStoreMixin):
             return None
         return _session_from_row(row)
 
-    def set_session_title(self, session_id: str, title: str) -> SessionRecord:
+    def set_session_title(self, session_id: str, title: str, source: str = "manual") -> SessionRecord:
         resolved_title = _validate_session_title(title)
         now = int(time.time())
         with self._lock, self._connect() as conn:
@@ -3592,11 +3596,22 @@ class Store(AnchorStoreMixin, TopicStoreMixin):
             if row is None:
                 raise ValueError(f"Unknown session_id: {session_id}")
             conn.execute(
-                "UPDATE sessions SET title = ?, title_is_auto = 0, updated_at = ? WHERE session_id = ?",
-                (resolved_title, now, session_id),
+                "UPDATE sessions SET title = ?, title_is_auto = 0, title_source = ?, updated_at = ? WHERE session_id = ?",
+                (resolved_title, source, now, session_id),
             )
             updated = conn.execute("SELECT * FROM sessions WHERE session_id = ?", (session_id,)).fetchone()
         return _session_from_row(updated)
+
+    def set_auto_session_title(self, session_id: str, title: str) -> bool:
+        """Name a session only while its title is still the one cut from the first message."""
+        resolved_title = _validate_session_title(title)
+        with self._lock, self._connect() as conn:
+            cursor = conn.execute(
+                "UPDATE sessions SET title = ?, title_source = 'auto', updated_at = ? "
+                "WHERE session_id = ? AND title_source = 'derived'",
+                (resolved_title, int(time.time()), session_id),
+            )
+        return cursor.rowcount == 1
 
     def set_session_group(self, session_id: str, group_id: str) -> SessionRecord:
         resolved_group_id = group_id.strip() or UNCATEGORIZED_GROUP_ID
@@ -3650,6 +3665,7 @@ class Store(AnchorStoreMixin, TopicStoreMixin):
                     s.title,
                     s.group_id,
                     s.title_is_auto,
+                    s.title_source,
                     s.created_at,
                     s.updated_at,
                     s.pinned_at,
@@ -3682,6 +3698,7 @@ class Store(AnchorStoreMixin, TopicStoreMixin):
                 "group_id": row["group_id"],
                 "group": _group_payload_from_join(row),
                 "title_is_auto": bool(row["title_is_auto"]),
+                "title_source": row["title_source"],
                 "pinned": row["pinned_at"] is not None,
                 "pinned_at": row["pinned_at"],
                 "created_at": row["created_at"],
@@ -3719,7 +3736,8 @@ class Store(AnchorStoreMixin, TopicStoreMixin):
             )
             if row["title_is_auto"] and self._exchange_count(conn, session_id, include_deleted=False) == 1:
                 conn.execute(
-                    "UPDATE sessions SET title = ?, title_is_auto = 0, updated_at = ? WHERE session_id = ?",
+                    "UPDATE sessions SET title = ?, title_is_auto = 0, title_source = 'derived', updated_at = ? "
+                    "WHERE session_id = ?",
                     (_derive_title(user_message), now, session_id),
                 )
             else:
@@ -4047,6 +4065,7 @@ def _session_from_row(row: sqlite3.Row) -> SessionRecord:
         created_at=row["created_at"],
         updated_at=row["updated_at"],
         pinned_at=row["pinned_at"] if "pinned_at" in row.keys() else None,
+        title_source=row["title_source"] if "title_source" in row.keys() else None,
     )
 
 

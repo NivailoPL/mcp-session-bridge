@@ -2536,6 +2536,7 @@
           <span id="tokenFeaturesTitle" class="settings-tabs-group-title">Uses tokens</span>
           <input id="tokenFeaturesMaster" class="settings-switch-input is-green" type="checkbox" role="switch" aria-labelledby="tokenFeaturesTitle" title="Turn every feature that spends tokens on or off" hidden>
         </div>
+        <button type="button" data-settings-tab="titles"><span>Titles</span><span class="settings-tab-meta"><span id="settingsHintTitles" class="settings-tab-hint"></span><span class="settings-tab-dirty" hidden aria-label="Unsaved changes"></span></span></button>
         <button type="button" data-settings-tab="strands"><span>Chapters</span><span class="settings-tab-meta"><span id="settingsHintStrands" class="settings-tab-hint"></span></span></button>
         <button type="button" data-settings-tab="topics"><span>Topics</span><span class="settings-tab-meta"><span id="settingsHintTopics" class="settings-tab-hint"></span></span></button>
       </nav>
@@ -2546,7 +2547,7 @@
         <section data-settings-panel="general" class="settings-panel">
           <div class="settings-panel-head">
             <h4>General</h4>
-            <span class="context-help"><button type="button" class="context-help-trigger" aria-label="About General" aria-describedby="settingsHelpGeneral">?</button><span id="settingsHelpGeneral" class="context-help-box" role="tooltip">Account, display and naming defaults for this admin. Nothing here changes what models see.</span></span>
+            <span class="context-help"><button type="button" class="context-help-trigger" aria-label="About General" aria-describedby="settingsHelpGeneral">?</button><span id="settingsHelpGeneral" class="context-help-box" role="tooltip">Account and display defaults for this admin. Nothing here changes what models see.</span></span>
           </div>
           <section class="settings-group">
             <div class="settings-group-head"><h5>Account</h5></div>
@@ -2565,25 +2566,6 @@
                 <span class="settings-item-title"><label for="timezoneSelect">Timezone</label><span class="context-help"><button type="button" class="context-help-trigger" aria-label="About Timezone" aria-describedby="settingsHelpTimezone">?</button><span id="settingsHelpTimezone" class="context-help-box" role="tooltip">Used for every timestamp in this admin and saved as soon as you pick it. Stored transcripts keep UTC; models are not affected.</span></span></span>
               </div>
               <div class="settings-item-control" data-settings-instant><select id="timezoneSelect" class="settings-input-wide" aria-label="Display timezone"></select></div>
-            </div>
-          </section>
-          <section class="settings-group">
-            <div class="settings-group-head"><h5>Session titles</h5></div>
-            <div class="settings-item">
-              <div class="settings-item-label">
-                <span class="settings-item-title"><label for="aiModelInput">AI rename model</label><span class="context-help"><button type="button" class="context-help-trigger" aria-label="About AI rename model" aria-describedby="settingsHelpRename">?</button><span id="settingsHelpRename" class="context-help-box" role="tooltip">The OpenAI model used when you press AI rename on a session. It uses the OpenAI key from API keys.</span></span></span>
-                <span id="aiModelKeyState" class="settings-item-sub"></span>
-              </div>
-              <div class="settings-item-control"><input id="aiModelInput" class="settings-input-mono settings-input-medium" type="text" maxlength="96" autocomplete="off"></div>
-            </div>
-            <div class="settings-item">
-              <div class="settings-item-label">
-                <span class="settings-item-title"><label for="aiRenameMaxWords">Max words</label><span class="context-help"><button type="button" class="context-help-trigger" aria-label="About Max words" aria-describedby="settingsHelpMaxWords">?</button><span id="settingsHelpMaxWords" class="context-help-box" role="tooltip">The longest title AI rename may suggest, in words. Applies to future renames only. Every session title is also capped at 72 characters, so at 9–10 words long words may be cut to fit.</span></span></span>
-              </div>
-              <div class="settings-item-control">
-                <input id="aiRenameMaxWords" class="settings-range" type="range" min="2" max="10" step="1" value="6">
-                <output id="aiRenameMaxWordsValue" class="settings-value settings-value-mono settings-range-value" for="aiRenameMaxWords">6</output>
-              </div>
             </div>
           </section>
         </section>
@@ -2826,6 +2808,69 @@
                 <button type="button" class="settings-quiet-danger settings-compact" id="codexSettingsSignOut" hidden>Sign out</button>
                 <button type="button" class="ghost settings-compact" id="codexSettingsRefresh">Refresh</button>
               </div>
+            </div>
+          </section>
+        </section>
+
+        <section data-settings-panel="titles" class="settings-panel" hidden>
+          <div class="settings-panel-head">
+            <h4>Titles</h4>
+            <span class="context-help"><button type="button" class="context-help-trigger" aria-label="About Titles" aria-describedby="settingsHelpTitles">?</button><span id="settingsHelpTitles" class="context-help-box" role="tooltip">Codex names a session from its first user message. If Codex fails, the OpenAI API can step in. Only the first message is sent, never the rest of the transcript. Sessions in sensitive groups are never named automatically.</span></span>
+          </div>
+          <p class="settings-feature-note">Automatic titles name each new session right after its first exchange. The AI rename button in the session list always works when you press it.</p>
+          <label id="titlesFeatureCard" class="feature-switch-card" data-settings-instant>
+            <input id="titlesAutoEnabled" class="settings-switch-input is-green" type="checkbox" role="switch" aria-describedby="titlesAutoNote">
+            <span class="feature-switch-text">
+              <span id="titlesAutoLabel" class="feature-switch-state">Automatic titles are off</span>
+              <span id="titlesAutoNote" class="feature-switch-detail"></span>
+            </span>
+          </label>
+          <section class="settings-group">
+            <div class="settings-group-head"><h5>Codex</h5><span class="settings-value-muted">tried first</span></div>
+            <div class="settings-item">
+              <div class="settings-item-label">
+                <span class="settings-item-title"><label for="titleCodexModel">Model</label><span class="context-help"><button type="button" class="context-help-trigger" aria-label="About the Codex title model" aria-describedby="settingsHelpTitleCodexModel">?</button><span id="settingsHelpTitleCodexModel" class="context-help-box" role="tooltip">Leave empty to use the newest Luna from the Codex model list. Spends tokens from the plan signed in under Codex.</span></span></span>
+                <span id="titleCodexResolved" class="settings-item-sub"></span>
+              </div>
+              <div class="settings-item-control"><input id="titleCodexModel" class="settings-input-mono settings-input-medium" data-model-picker="titleCodexEffort" placeholder="Newest Luna" spellcheck="false" autocomplete="off"></div>
+            </div>
+            <div class="settings-item">
+              <div class="settings-item-label"><span class="settings-item-title"><label for="titleCodexEffort">Reasoning effort</label></span></div>
+              <div class="settings-item-control"><select id="titleCodexEffort"><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="xhigh">Extra high</option><option value="max">Max</option><option value="ultra">Ultra</option></select></div>
+            </div>
+          </section>
+          <section class="settings-group">
+            <div class="settings-group-head"><h5>OpenAI API</h5><span class="settings-value-muted">fallback</span></div>
+            <div class="settings-item">
+              <div class="settings-item-label">
+                <span class="settings-item-title"><label for="titleApiFallback">Use the API when Codex fails</label><span class="context-help"><button type="button" class="context-help-trigger" aria-label="About the API fallback" aria-describedby="settingsHelpTitleFallback">?</button><span id="settingsHelpTitleFallback" class="context-help-box" role="tooltip">For automatic titles only. When Codex is signed out, down or times out, the session is named through the OpenAI API, which is billed per request. A busy Codex is waited for instead. The AI rename button always falls back to the API.</span></span></span>
+              </div>
+              <div class="settings-item-control"><input id="titleApiFallback" class="settings-switch-input" type="checkbox" role="switch"></div>
+            </div>
+            <div class="settings-item">
+              <div class="settings-item-label">
+                <span class="settings-item-title"><label for="aiModelInput">API model</label><span class="context-help"><button type="button" class="context-help-trigger" aria-label="About API model" aria-describedby="settingsHelpRename">?</button><span id="settingsHelpRename" class="context-help-box" role="tooltip">The OpenAI model used when Codex cannot name a session. It uses the OpenAI key from API keys and is billed per request.</span></span></span>
+                <span id="aiModelKeyState" class="settings-item-sub"></span>
+              </div>
+              <div class="settings-item-control"><input id="aiModelInput" class="settings-input-mono settings-input-medium" type="text" maxlength="96" autocomplete="off"></div>
+            </div>
+          </section>
+          <section class="settings-group">
+            <div class="settings-group-head"><h5>Titles</h5></div>
+            <div class="settings-item">
+              <div class="settings-item-label">
+                <span class="settings-item-title"><label for="aiRenameMaxWords">Max words</label><span class="context-help"><button type="button" class="context-help-trigger" aria-label="About Max words" aria-describedby="settingsHelpMaxWords">?</button><span id="settingsHelpMaxWords" class="context-help-box" role="tooltip">The longest title Codex or the API may suggest, in words. Applies to future titles only. Every session title is also capped at 72 characters, so at 9–10 words long words may be cut to fit.</span></span></span>
+              </div>
+              <div class="settings-item-control">
+                <input id="aiRenameMaxWords" class="settings-range" type="range" min="2" max="10" step="1" value="6">
+                <output id="aiRenameMaxWordsValue" class="settings-value settings-value-mono settings-range-value" for="aiRenameMaxWords">6</output>
+              </div>
+            </div>
+            <div class="settings-item">
+              <div class="settings-item-label">
+                <span class="settings-item-title"><label for="titleShowAiButton">AI rename button in the session list</label><span class="context-help"><button type="button" class="context-help-trigger" aria-label="About the AI rename button" aria-describedby="settingsHelpTitleButton">?</button><span id="settingsHelpTitleButton" class="context-help-box" role="tooltip">Turn it off to keep the hover menu short once titles are automatic. It still shows on sessions whose title was cut from the first message, so a failed automatic title can be fixed in one click.</span></span></span>
+              </div>
+              <div class="settings-item-control"><input id="titleShowAiButton" class="settings-switch-input" type="checkbox" role="switch"></div>
             </div>
           </section>
         </section>
@@ -3237,6 +3282,18 @@
         pop: document.getElementById("highlightPop"),
       };
       const codexSettings = { login: null, pollTimer: 0, defaults: null, automation: null, automationTimer: 0 };
+      const titlesDom = {
+        autoEnabled: document.getElementById("titlesAutoEnabled"),
+        card: document.getElementById("titlesFeatureCard"),
+        label: document.getElementById("titlesAutoLabel"),
+        note: document.getElementById("titlesAutoNote"),
+        hint: document.getElementById("settingsHintTitles"),
+        codexModel: document.getElementById("titleCodexModel"),
+        codexEffort: document.getElementById("titleCodexEffort"),
+        resolved: document.getElementById("titleCodexResolved"),
+        apiFallback: document.getElementById("titleApiFallback"),
+        showAiButton: document.getElementById("titleShowAiButton"),
+      };
       const codexSettingsDom = {
         pill: document.getElementById("codexSettingsPill"),
         hint: document.getElementById("settingsHintCodex"),
@@ -3876,10 +3933,16 @@
       async function loadSettings() {
         const payload = await api("/admin/api/settings");
         state.settings = payload.settings;
+        syncAiSettings();
+      }
+      // The AI rename button works when either Codex or an OpenAI key can answer.
+      function syncAiSettings() {
         const openai = state.settings.api.openai;
+        const titles = state.settings.titles || {};
         state.aiSettings = {
-          configured: openai.configured, api_key_preview: openai.preview,
+          configured: Boolean(openai.configured || titles.codex_configured), api_key_preview: openai.preview,
           model: state.settings.general.rename_model, title_max_chars: 72,
+          showButton: titles.show_ai_button !== false,
         };
       }
       async function loadOperationalStatus() {
@@ -4038,7 +4101,7 @@
         settingsDom.toolOutputRestart.addEventListener("click", () => restartBridgeService());
 
         // Panels whose fields wait for "Save changes". API keys and System act at once.
-        for (const name of ["general", "transcript", "search"]) {
+        for (const name of ["titles", "transcript", "search"]) {
           const panel = document.querySelector(`[data-settings-panel="${name}"]`);
           const markDirty = (event) => {
             if (event.target.closest("[data-settings-instant]")) return;
@@ -4076,6 +4139,7 @@
         settingsDom.indexCancel.addEventListener("click", () => runIndexAction("cancel"));
         settingsDom.indexDelete.addEventListener("click", () => runIndexAction("delete"));
         settingsDom.aiRenameMaxWords.addEventListener("input", renderRenameMaxWords);
+        titlesDom.autoEnabled.addEventListener("change", () => { renderTitlesCard(); saveTitlesAutoEnabled(); });
         settingsDom.probePromptCopy.addEventListener("click", () => copyOutputProbePrompt());
         settingsDom.probeSafeApply.addEventListener("click", () => {
           selectTranscriptChunkRecommendation(Number(settingsDom.probeSafeApply.dataset.value));
@@ -4119,7 +4183,7 @@
         settingsDom.settingsSaveButton.disabled = true;
         try {
           switch (name) {
-            case "general": return await saveGeneralSettings();
+            case "titles": return await saveTitleSettings();
             case "transcript": return await saveDeliverySettings();
             case "search": return await saveSearchSettings();
             default: return undefined;
@@ -4236,6 +4300,14 @@
         };
         const snapshot = snapshotDirtySettings();
         dom.aiModelInput.value = settings.general.rename_model || "gpt-5.4-nano";
+        if (settings.titles) {
+          titlesDom.autoEnabled.checked = Boolean(settings.titles.auto_enabled);
+          titlesDom.codexModel.value = settings.titles.codex_model || "";
+          titlesDom.codexEffort.value = settings.titles.codex_effort || "low";
+          titlesDom.apiFallback.checked = Boolean(settings.titles.api_fallback);
+          titlesDom.showAiButton.checked = settings.titles.show_ai_button !== false;
+          renderTitlesCard();
+        }
         const [minWords, maxWords] = settings.general.rename_max_words_range || [2, 10];
         settingsDom.aiRenameMaxWords.min = minWords;
         settingsDom.aiRenameMaxWords.max = maxWords;
@@ -4533,11 +4605,40 @@
         return number.toLocaleString();
       }
 
-      async function saveGeneralSettings() {
-        await saveSettingsRequest("/admin/api/settings/general", {
+      async function saveTitleSettings() {
+        await saveSettingsRequest("/admin/api/settings/titles", {
           rename_model: dom.aiModelInput.value.trim() || "gpt-5.4-nano",
           rename_max_words: Number.parseInt(settingsDom.aiRenameMaxWords.value, 10),
-        }, "General settings saved.", "general");
+          codex_model: titlesDom.codexModel.value.trim(),
+          codex_effort: titlesDom.codexEffort.value,
+          api_fallback: titlesDom.apiFallback.checked,
+          show_ai_button: titlesDom.showAiButton.checked,
+        }, "Title settings saved.", "titles");
+      }
+
+      // the big card saves at once, like Automatic chapters
+      async function saveTitlesAutoEnabled() {
+        const enabled = titlesDom.autoEnabled.checked;
+        const saved = await saveSettingsRequest(
+          "/admin/api/settings/titles", { auto_enabled: enabled },
+          enabled ? "Automatic titles are on." : "Automatic titles are off.",
+        );
+        if (!saved) { titlesDom.autoEnabled.checked = !enabled; renderTitlesCard(); }
+      }
+
+      function renderTitlesCard() {
+        const titles = state.settings?.titles;
+        if (!titles) return;
+        const on = titlesDom.autoEnabled.checked;
+        titlesDom.card.classList.toggle("is-on", on);
+        titlesDom.label.textContent = on ? "Automatic titles are on" : "Automatic titles are off";
+        const fallback = titles.api_fallback && titles.api_configured ? " If Codex fails, the OpenAI API names it instead." : "";
+        titlesDom.note.textContent = on
+          ? `Each new session is named by Codex after its first exchange.${fallback} Sessions from before you switched this on keep their titles.`
+          : "Nothing is named in the background and no tokens are spent. Use AI rename in the session list whenever you want.";
+        titlesDom.hint.textContent = on ? "Auto" : "Off";
+        titlesDom.hint.dataset.tone = on ? "ok" : "off";
+        titlesDom.resolved.textContent = titles.codex_model ? "" : `Now: ${titles.resolved_codex_model || "no Codex model listed yet"}`;
       }
 
       async function saveTranscriptSettings() {
@@ -4801,11 +4902,7 @@
         try {
           const result = await api(path, { method: "PUT", body: JSON.stringify(payload) });
           state.settings = result.settings;
-          const openai = state.settings.api.openai;
-          state.aiSettings = {
-            configured: openai.configured, api_key_preview: openai.preview,
-            model: state.settings.general.rename_model, title_max_chars: 72,
-          };
+          syncAiSettings();
           if (panel) state.settingsDirty.delete(panel);
           fillSettingsForm();
           renderSettingsStatus(success, "ok");
@@ -7475,7 +7572,7 @@
 
         const aiButton = iconAction("ai_rename", state.aiSettings.configured
           ? "Rename from the first user message"
-          : "Configure an AI API key first", (event) => {
+          : "Sign in to Codex or add an OpenAI key first", (event) => {
           event.stopPropagation();
           if (revealIfCovered()) renderSessions();
           aiRenameSession(session.session_id);
@@ -7506,7 +7603,9 @@
         pinButton.setAttribute("aria-pressed", session.pinned ? "true" : "false");
         pinButton.disabled = state.busy;
 
-        actions.append(pinButton, aiButton, manualButton, moveButton);
+        // Hidden by choice, but kept where the title is still cut from the first message.
+        const showAi = state.aiSettings.showButton !== false || session.title_source === "derived";
+        actions.append(...(showAi ? [pinButton, aiButton] : [pinButton]), manualButton, moveButton);
         return actions;
       }
 
@@ -7555,7 +7654,7 @@
       }
 
       async function aiRenameSession(sessionId) {
-        if (!state.aiSettings.configured) { setStatus("Configure an AI API key first.", "warn"); return; }
+        if (!state.aiSettings.configured) { setStatus("Sign in to Codex or add an OpenAI key first.", "warn"); return; }
         state.renamingSessionId = sessionId;
         renderSessions();
         await renameSessionRequest(sessionId, { method: "POST" }, "Session title updated by AI.", `/admin/api/sessions/${encodeURIComponent(sessionId)}/rename/ai`);
@@ -10365,6 +10464,11 @@
           if (!state.settings) {
             state.settings = {
               general: { rename_model: state.aiSettings.model },
+              titles: {
+                auto_enabled: false, enabled_since: null, codex_model: "", codex_effort: "low",
+                api_fallback: false, show_ai_button: true, resolved_codex_model: "gpt-5.6-luna",
+                codex_configured: true, api_configured: Boolean(state.aiSettings.configured), max_words: 6,
+              },
               api: {
                 openai: { configured: state.aiSettings.configured, preview: state.aiSettings.api_key_preview },
                 cohere: { configured: false, preview: "" },
@@ -10404,6 +10508,13 @@
         if (path === "/admin/api/settings/general" && method === "PUT") {
           state.settings.general.rename_model = body.rename_model;
           state.aiSettings.model = body.rename_model;
+          return Promise.resolve({ ok: true, settings: state.settings });
+        }
+        if (path === "/admin/api/settings/titles" && method === "PUT") {
+          const { rename_model, rename_max_words, ...titles } = body;
+          if (rename_model) { state.settings.general.rename_model = rename_model; state.aiSettings.model = rename_model; }
+          if (rename_max_words) state.settings.general.rename_max_words = rename_max_words;
+          Object.assign(state.settings.titles, titles);
           return Promise.resolve({ ok: true, settings: state.settings });
         }
         if (path === "/admin/api/settings/transcript" && method === "PUT") {

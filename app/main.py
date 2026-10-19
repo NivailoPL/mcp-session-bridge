@@ -141,6 +141,7 @@ async def _graph_pipeline_monitor() -> None:
 @asynccontextmanager
 async def app_lifespan(_: Any):
     async with mcp.session_manager.run():
+        admin.titles.bind_loop(asyncio.get_running_loop())
         monitor = asyncio.create_task(_search_index_monitor())
         await asyncio.to_thread(chapter_automation.recover)
         await asyncio.to_thread(topic_runtime.recover)
@@ -168,6 +169,7 @@ async def app_lifespan(_: Any):
                 with suppress(asyncio.CancelledError):
                     await graph_monitor
             await strand_runtime.close()
+            await admin.titles.close()
             await topic_runtime.close()
             await codex.close()
 
@@ -483,6 +485,11 @@ async def admin_api_codex_chat(request: Request) -> Response:
 @mcp.custom_route("/admin/api/settings/general", methods=["PUT"])
 async def admin_api_update_general_settings(request: Request) -> Response:
     return await admin.api_update_general_settings(request)
+
+
+@mcp.custom_route("/admin/api/settings/titles", methods=["PUT"])
+async def admin_api_update_title_settings(request: Request) -> Response:
+    return await admin.api_update_title_settings(request)
 
 
 @mcp.custom_route("/admin/api/settings/transcript", methods=["PUT"])
@@ -1297,6 +1304,8 @@ def save_exchange(
         user_message=user_message.strip(),
         assistant_response=assistant_response.strip(),
     )
+    # Automatic naming runs in the background; the tool answers without waiting for it.
+    admin.titles.notify_exchange_saved(exchange.session_id)
     display_timezone = _display_timezone_name()
     return {
         "ok": True,
