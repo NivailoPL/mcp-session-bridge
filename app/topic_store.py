@@ -295,21 +295,24 @@ class TopicStoreMixin:
                     out.setdefault(row["strand_id"], []).append((row["start_exchange_id"], row["end_exchange_id"]))
         return out
 
-    def topic_strand_sizes(self) -> dict[int, int]:
-        """Characters of user and model text per accepted chapter, for a quick token estimate."""
+    def topic_strand_turn_sizes(self) -> dict[int, dict[int, int]]:
+        """Characters of user and model text per turn of each accepted chapter. Chapters may
+        share a boundary turn, so callers count each turn once."""
+        out: dict[int, dict[int, int]] = {}
         with self._lock, self._connect() as conn:
-            rows = conn.execute(
+            for row in conn.execute(
                 """
-                SELECT r.strand_id, SUM(length(e.user_message) + length(COALESCE(e.assistant_response, ''))) AS chars
+                SELECT r.strand_id, e.exchange_id,
+                       length(e.user_message) + length(COALESCE(e.assistant_response, '')) AS chars
                 FROM strand_ranges r
                 JOIN strands s ON s.strand_id = r.strand_id
                 JOIN exchanges e ON e.session_id = s.session_id
                     AND e.exchange_id BETWEEN r.start_exchange_id AND r.end_exchange_id AND e.deleted_at IS NULL
                 WHERE r.status = 'accepted' AND s.status = 'accepted'
-                GROUP BY r.strand_id
                 """
-            ).fetchall()
-        return {row["strand_id"]: int(row["chars"] or 0) for row in rows}
+            ):
+                out.setdefault(row["strand_id"], {})[row["exchange_id"]] = int(row["chars"] or 0)
+        return out
 
     def topic_current_assignments(self, version_id: int) -> dict[int, dict[str, Any]]:
         """Latest finished answer per chapter on one map version."""

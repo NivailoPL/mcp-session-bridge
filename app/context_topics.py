@@ -19,8 +19,11 @@ from app.context_redaction import Redactor
 from app.storage import ContextBlockSnapshot, ExchangeRecord, Store
 from app.topics import POOL_KEY
 
-# Rough characters per token for the library estimate; the block counts exactly.
-CHARS_PER_TOKEN = 3.6
+# Characters per token for the library estimate, measured on Polish chat turns with
+# headers (2.8-2.9); the block itself counts exactly.
+CHARS_PER_TOKEN = 2.85
+# Speaker headings and session dividers the rendered block adds per turn.
+TURN_OVERHEAD_CHARS = 90
 
 
 def topic_source_key(topic_key: str) -> str:
@@ -173,13 +176,20 @@ def topic_turn_ids(block: dict[str, Any]) -> set[int]:
     return {part[1] for part in (block.get("meta") or {}).get("parts") or [] if part[1] is not None}
 
 
+def _estimate(sizes: dict[int, dict[int, int]], chapters: list[dict[str, Any]]) -> int:
+    turns: dict[int, int] = {}
+    for chapter in chapters:
+        turns.update(sizes.get(chapter["strand_id"], {}))
+    return round(sum(chars + TURN_OVERHEAD_CHARS for chars in turns.values()) / CHARS_PER_TOKEN)
+
+
 def library_topics(store: Store) -> list[dict[str, Any]]:
     """Topics of the active map as library cards; Unsorted is not a block."""
     version = store.active_topic_version()
     if version is None:
         return []
     current = store.topic_current_assignments(version["version_id"])
-    sizes = store.topic_strand_sizes()
+    sizes = store.topic_strand_turn_sizes()
     by_topic: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for chapter in store.topic_chapters():
         item = current.get(chapter["strand_id"])
@@ -202,7 +212,7 @@ def library_topics(store: Store) -> list[dict[str, Any]]:
             "chapter_count": len(sent),
             "session_count": len({c["session_id"] for c in sent}),
             "sensitive_count": len(chapters) - len(sent),
-            "token_estimate": round(sum(sizes.get(c["strand_id"], 0) for c in sent) / CHARS_PER_TOKEN),
+            "token_estimate": _estimate(sizes, sent),
             "group_ids": [g for g, _ in sorted(groups.items(), key=lambda item: -item[1])][:3],
             "confidences": [round(c["confidence"] or 0, 2) for c in sorted(sent, key=lambda c: -(c["confidence"] or 0))][:14],
             "last_at": max((c.get("session_updated_at") or 0 for c in sent), default=0),
