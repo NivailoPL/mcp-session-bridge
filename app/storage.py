@@ -593,6 +593,21 @@ class Store(AnchorStoreMixin, TopicStoreMixin):
                     after_json TEXT,
                     created_at INTEGER NOT NULL
                 );
+
+                -- Titles written by automatic naming, for the Codex activity panel.
+                -- Additive and ignored by older Bridges, so it needs no schema bump.
+                CREATE TABLE IF NOT EXISTS session_title_events (
+                    event_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    session_id TEXT NOT NULL,
+                    old_title TEXT NOT NULL,
+                    new_title TEXT NOT NULL,
+                    provider TEXT NOT NULL,
+                    estimated_tokens INTEGER NOT NULL DEFAULT 0,
+                    created_at INTEGER NOT NULL
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_session_title_events_created
+                    ON session_title_events(created_at);
                 """
             )
             # Admin-only highlights and strands (app.anchor_store); additive, no schema bump.
@@ -2473,16 +2488,31 @@ class Store(AnchorStoreMixin, TopicStoreMixin):
             updated = conn.execute("SELECT * FROM sessions WHERE session_id = ?", (session_id,)).fetchone()
         return _session_from_row(updated)
 
-    def set_auto_session_title(self, session_id: str, title: str) -> bool:
+    def set_auto_session_title(
+        self, session_id: str, title: str, *, provider: str = "codex", estimated_tokens: int = 0
+    ) -> bool:
         """Name a session only while its title is still the one cut from the first message."""
         resolved_title = _validate_session_title(title)
+        now = int(time.time())
         with self._lock, self._connect() as conn:
+            row = conn.execute(
+                "SELECT title FROM sessions WHERE session_id = ? AND title_source = 'derived'", (session_id,)
+            ).fetchone()
+            if row is None:
+                return False
             cursor = conn.execute(
                 "UPDATE sessions SET title = ?, title_source = 'auto', updated_at = ? "
                 "WHERE session_id = ? AND title_source = 'derived'",
-                (resolved_title, int(time.time()), session_id),
+                (resolved_title, now, session_id),
             )
-        return cursor.rowcount == 1
+            if cursor.rowcount != 1:
+                return False
+            conn.execute(
+                "INSERT INTO session_title_events "
+                "(session_id, old_title, new_title, provider, estimated_tokens, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+                (session_id, row["title"], resolved_title, provider, estimated_tokens, now),
+            )
+        return True
 
     def set_session_group(self, session_id: str, group_id: str) -> SessionRecord:
         resolved_group_id = group_id.strip() or UNCATEGORIZED_GROUP_ID

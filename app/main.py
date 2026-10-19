@@ -27,6 +27,7 @@ from app.admin_topics import TopicAdminHandlers
 from app.admin_contexts import ContextAdminHandlers
 from app.codex_app_server import CodexAppServerClient
 from app.oauth import OAuthHandlers
+from app.automation_activity import activity_report, live_status
 from app.chapter_automation import SCHEDULER_TICK_SECONDS, ChapterAutomation
 from app.strand_runtime import StrandRuntime
 from app.topic_runtime import TopicRuntime
@@ -633,6 +634,23 @@ async def admin_api_revert_strand_run(request: Request) -> Response:
 @mcp.custom_route("/admin/api/chapters/automation", methods=["GET"])
 async def admin_api_chapter_automation(request: Request) -> Response:
     return await anchors_admin.api_chapter_automation(request)
+
+
+@mcp.custom_route("/admin/api/automation/activity", methods=["GET"])
+async def admin_api_automation_activity(request: Request) -> Response:
+    """The header's Codex panel: what automation did over the last 30 days and what runs now."""
+    _, error = admin._require_admin(request)
+    if error:
+        return error
+
+    def build() -> dict:
+        return {
+            "enabled": store.get_token_features()["enabled"],
+            "live": live_status(chapter_automation, topic_runtime),
+            **activity_report(store, timezone_name=chapter_automation.timezone()),
+        }
+
+    return JSONResponse({"ok": True, "activity": await asyncio.to_thread(build)}, headers=admin._no_store_headers())
 
 
 @mcp.custom_route("/admin/api/chapters/fill", methods=["PUT"])

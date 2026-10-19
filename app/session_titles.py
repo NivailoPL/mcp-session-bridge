@@ -37,6 +37,8 @@ CODEX_BUSY_WAIT_SECONDS = 30.0
 CODEX_TITLE_TIMEOUT_SECONDS = 90.0
 CODEX_MODEL_MAX_CHARS = 96
 TITLE_INPUT_MAX_CHARS = 4000
+# Estimate only: Codex does not report usage. The rename instructions are about this long.
+TITLE_PROMPT_TOKENS = 250
 TITLE_OUTPUT_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {"title": {"type": "string"}},
@@ -106,6 +108,11 @@ def validate_title_settings(payload: Any, current: dict[str, Any], *, now: int) 
     if not result["auto_enabled"]:
         result["enabled_since"] = None
     return result
+
+
+def title_tokens(first_user_message: str) -> int:
+    """Estimated tokens of one naming request: the message as sent plus the instructions."""
+    return min(len(first_user_message), TITLE_INPUT_MAX_CHARS) // 4 + TITLE_PROMPT_TOKENS
 
 
 def rename_prompt(max_words: int) -> str:
@@ -372,7 +379,11 @@ class SessionTitleRuntime:
                         logger.info("Codex stayed busy; %s keeps its title until its next exchange", session_id)
                         return
                     await asyncio.sleep(self.busy_wait_seconds)
-            applied = await asyncio.to_thread(self.store.set_auto_session_title, session_id, title)
+            applied = await asyncio.to_thread(
+                lambda: self.store.set_auto_session_title(
+                    session_id, title, provider=provider, estimated_tokens=title_tokens(message)
+                )
+            )
             if applied:
                 logger.info("Session %s named automatically by %s", session_id, provider)
         except asyncio.CancelledError:

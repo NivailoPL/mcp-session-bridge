@@ -41,3 +41,13 @@ def test_settings_can_be_framed_only_by_bridge_itself(load_main, admin_client) -
     assert framed.headers["x-frame-options"] == "SAMEORIGIN"
     assert framed.headers["content-security-policy"] == "frame-ancestors 'self'"
     assert client.get("/admin/assets/admin-header.js").status_code == 200
+
+
+def test_codex_activity_api_feeds_the_header_meter(load_main, admin_client) -> None:
+    main = load_main()
+    client, _ = admin_client(main)
+    activity = client.get("/admin/api/automation/activity").json()["activity"]
+    assert len(activity["days"]) == 30 and activity["days"][0]["date"] == activity["today"]
+    assert set(activity["live"]) == {"chapters", "topics"} and "enabled" in activity
+    script = client.get("/admin/assets/admin-header.js").text
+    assert "/admin/api/automation/activity" in script and 'get("embed") !== "settings"' in script
