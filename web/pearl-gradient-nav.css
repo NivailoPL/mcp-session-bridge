@@ -388,7 +388,8 @@
 
 .ca-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
 .ca-col { display: flex; flex-direction: column; min-width: 0; overflow: hidden; border: 1px solid var(--ca-line); border-radius: 12px; background: #11131a; }
-.ca-col-head { display: flex; align-items: center; gap: 10px; padding: 14px 16px 12px; border-bottom: 1px solid rgba(255, 255, 255, .055); }
+.ca-col-head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding: 14px 16px 12px; border-bottom: 1px solid rgba(255, 255, 255, .055); }
+.ca-col-caption { flex-basis: 100%; color: var(--ca-muted); font: 500 12.5px Manrope, ui-sans-serif, system-ui, sans-serif; }
 .ca-col-name { display: flex; flex: 1; align-items: center; gap: 8px; color: var(--ca-ink-2); font-weight: 700; }
 .ca-swatch { width: 8px; height: 8px; border-radius: 2px; background: var(--ca-color); }
 .ca-col-num { font: 800 21px Manrope, sans-serif; letter-spacing: -.01em; white-space: nowrap; }

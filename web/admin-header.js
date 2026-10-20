@@ -210,6 +210,17 @@ function startCodexActivity(getJson) {
     );
   }
 
+  // The arrow reads "in → out"; the caption says it in words.
+  const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+  function caption(id, data) {
+    if (id === "titles") return `${plural(data.count, "session", "sessions")} renamed`;
+    if (id === "chapters") {
+      return `${plural(data.sessions, "session", "sessions")} split into ${plural(data.chapters, "chapter", "chapters")}`;
+    }
+    const sorted = `${plural(data.chapters, "chapter", "chapters")} sorted into ${plural(data.topics, "topic", "topics")}`;
+    return data.new_topics ? `${sorted} · ${data.new_topics} new` : sorted;
+  }
+
   function column(area, day) {
     const box = el("div", "ca-col");
     box.style.setProperty("--ca-color", area.color);
@@ -235,6 +246,7 @@ function startCodexActivity(getJson) {
     }
     const big = el("span", "ca-col-num", number);
     head.append(name, big, el("span", "ca-col-cost", cost));
+    head.append(el("span", "ca-col-caption", caption(area.id, data)));
     box.append(head);
 
     const list = el("div", "ca-rows");
