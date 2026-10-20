@@ -61,6 +61,9 @@ This project follows a lightweight changelog format inspired by Keep a Changelog
 - Expired sign-in requests, codes and tokens, and clients that registered but never signed in within a day, are removed every ten minutes.
 - The Caddy site that setup writes now sends `Strict-Transport-Security` (one year, this host only) and `X-Content-Type-Options`, and hides the `Server` header. Existing installations keep their Caddy file; add the same `header` block by hand (see `deploy/Caddyfile.mcp-session-bridge`).
 - The Topics graph loads d3 from Bridge (`vendor/d3`, 7.9.0, checked against the npm release) instead of cdnjs, so no admin page runs third-party code fetched at load time.
+- Updated dependencies with published security fixes: Starlette 1.9.0, python-multipart 0.0.32, cryptography 50.0.2, pypdf 6.21.1, mcp 1.30.0, anyio 4.15.1, urllib3 2.8.0, PyJWT 2.15.1 and pydantic-settings 2.16.1. `pip-audit` reports no known vulnerabilities in the locked runtime dependencies.
+- MCP now refuses a bearer token issued for any resource other than this Bridge (`validate_token_resource`).
+- The PDF decompression limit uses pypdf's configuration API, so it keeps working after pypdf removes the old module setting.
 - The sign-in pages cannot be framed by another site and send no referrer. One-click Allow uses its own cookie limited to `/oauth` and a token bound to that sign-in, and signing out of the admin ends it.
 
 ## [2026.10.1] - 2026-10-04

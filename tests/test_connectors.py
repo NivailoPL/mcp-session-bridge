@@ -584,3 +584,20 @@ def _password_hash(password: str) -> str:
     from app.security import password_hash
 
     return password_hash(password)
+
+
+def test_mcp_refuses_a_token_issued_for_another_resource(bridge, monkeypatch) -> None:
+    from mcp.server.auth.provider import AccessToken
+
+    client, main = bridge
+
+    async def verify(self, token):
+        return AccessToken(token=token, client_id="x", scopes=[main.settings.scope], resource="https://other.example/mcp")
+
+    monkeypatch.setattr(main.BridgeTokenVerifier, "verify_token", verify)
+    response = client.post(
+        "/mcp",
+        json={"jsonrpc": "2.0", "id": 1, "method": "tools/list"},
+        headers={"Authorization": "Bearer t", "Accept": "application/json, text/event-stream", "Host": "127.0.0.1:8787"},
+    )
+    assert response.status_code == 401

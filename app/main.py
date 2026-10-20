@@ -181,6 +181,8 @@ mcp = FastMCP(
         issuer_url=settings.issuer_url,
         resource_server_url=settings.resource_url,
         required_scopes=[settings.scope],
+        # Refuse a bearer token issued for any other resource; Bridge always issues its own.
+        validate_token_resource=True,
     ),
     streamable_http_path=settings.resource_path,
     json_response=True,

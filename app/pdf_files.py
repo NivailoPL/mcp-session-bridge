@@ -10,8 +10,7 @@ from dataclasses import dataclass
 from io import BytesIO
 from typing import Any, Callable, TypeVar
 
-from pypdf import PdfReader
-from pypdf import filters as pypdf_filters
+from pypdf import PdfReader, overwrite_configuration
 from pypdf.errors import PyPdfError
 
 MAX_ADMIN_PDF_BYTES = 20_000_000
@@ -24,9 +23,6 @@ _PDF_WORKER_LIMIT = asyncio.Semaphore(2)
 _PDF_WORKER_MAX_ADMITTED = 4
 _pdf_worker_admitted = 0
 T = TypeVar("T")
-
-pypdf_filters.ZLIB_MAX_OUTPUT_LENGTH = MAX_PDF_DECOMPRESSED_STREAM_BYTES
-
 
 @dataclass(frozen=True)
 class PdfExtraction:
@@ -113,6 +109,8 @@ def decode_pdf_base64(value: str, *, max_bytes: int) -> bytes:
 def extract_pdf_text(raw: bytes) -> PdfExtraction:
     if not raw.lstrip().startswith(b"%PDF-"):
         raise ValueError("File must be a valid PDF")
+    # Bounds every Flate stream so a small PDF cannot inflate into gigabytes.
+    overwrite_configuration(zlib_maximum_output_length=MAX_PDF_DECOMPRESSED_STREAM_BYTES)
     try:
         reader = PdfReader(BytesIO(raw), strict=False)
         if reader.is_encrypted:

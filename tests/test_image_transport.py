@@ -12,7 +12,9 @@ PNG = make_image()
 
 def mcp_client(main, monkeypatch):
     async def verify(self, token):
-        return AccessToken(token=token, client_id="image-test", scopes=[main.settings.scope])
+        return AccessToken(
+            token=token, client_id="image-test", scopes=[main.settings.scope], resource=main.settings.resource_url
+        )
 
     monkeypatch.setattr(main.BridgeTokenVerifier, "verify_token", verify)
     return TestClient(main.app, base_url="http://127.0.0.1:8787", headers={
