@@ -1233,6 +1233,19 @@ class AdminHandlers:
             },
         )
 
+    async def d3_asset(self, request: Request) -> Response:
+        _, error = self._require_admin(request)
+        if error:
+            return error
+        return FileResponse(
+            ROOT / "vendor" / "d3" / "d3.min.js",
+            media_type="text/javascript",
+            headers={
+                "Cache-Control": "private, max-age=31536000, immutable",
+                "X-Content-Type-Options": "nosniff",
+            },
+        )
+
     async def brand_asset(self, request: Request) -> Response:
         _, error = self._require_admin(request)
         if error:

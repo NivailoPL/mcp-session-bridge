@@ -60,6 +60,7 @@ This project follows a lightweight changelog format inspired by Keep a Changelog
 - Client registration refuses plain `http` redirects except to this computer, fragments and script or file schemes, allows at most ten redirect URIs and shortens long client names. Registration and authorization are rate-limited per address, pending sign-ins are capped, and sign-in requests larger than 16 KB are refused.
 - Expired sign-in requests, codes and tokens, and clients that registered but never signed in within a day, are removed every ten minutes.
 - The Caddy site that setup writes now sends `Strict-Transport-Security` (one year, this host only) and `X-Content-Type-Options`, and hides the `Server` header. Existing installations keep their Caddy file; add the same `header` block by hand (see `deploy/Caddyfile.mcp-session-bridge`).
+- The Topics graph loads d3 from Bridge (`vendor/d3`, 7.9.0, checked against the npm release) instead of cdnjs, so no admin page runs third-party code fetched at load time.
 - The sign-in pages cannot be framed by another site and send no referrer. One-click Allow uses its own cookie limited to `/oauth` and a token bound to that sign-in, and signing out of the admin ends it.
 
 ## [2026.10.1] - 2026-10-04

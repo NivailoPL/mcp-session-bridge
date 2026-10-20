@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 
 from starlette.testclient import TestClient
 
@@ -127,3 +128,18 @@ def test_find_and_proposal_routes(load_main, admin_client) -> None:
     assert client.post("/admin/api/topics/proposals/99/accept", json={}, headers=headers).status_code == 404
     overview = client.get("/admin/api/topics").json()
     assert overview["pool_count"] == 2 and overview["pending_proposals"] == 0 and overview["job"] is None
+
+
+def test_topics_graph_loads_d3_from_bridge_not_a_cdn(admin_client) -> None:
+    client, _ = admin_client()
+    page = Path("web/topics-viewer.html").read_text(encoding="utf-8")
+    assert '<script src="/admin/assets/d3/d3.min.js"></script>' in page
+    assert "cdnjs" not in page
+
+    asset = client.get("/admin/assets/d3/d3.min.js")
+    assert asset.status_code == 200
+    assert asset.headers["content-type"].startswith("text/javascript")
+    assert asset.text.startswith("// https://d3js.org v7.9.0")
+
+    anonymous = TestClient(client.app, base_url=ADMIN_BASE_URL)
+    assert anonymous.get("/admin/assets/d3/d3.min.js", follow_redirects=False).status_code == 303

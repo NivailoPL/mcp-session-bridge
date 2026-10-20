@@ -858,6 +858,11 @@ async def admin_pdfjs_asset(request: Request) -> Response:
     return await admin.pdfjs_asset(request)
 
 
+@mcp.custom_route("/admin/assets/d3/d3.min.js", methods=["GET"])
+async def admin_d3_asset(request: Request) -> Response:
+    return await admin.d3_asset(request)
+
+
 @mcp.custom_route("/admin/assets/brand/{asset_path:path}", methods=["GET"])
 async def admin_brand_asset(request: Request) -> Response:
     return await admin.brand_asset(request)
