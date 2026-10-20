@@ -197,6 +197,14 @@ class StatusCollector:
         runtime = CodexRuntimeManager(self.layout, self.runner, self.layout.current_link).inspect()[
             "runtime"
         ]
+        if runtime["active"] and not runtime["unit_enabled"]:
+            return CheckResult(
+                "codex",
+                "Codex app-server",
+                "action_required",
+                "active but not enabled at boot; a reboot would leave it down.",
+                "Run mcp-bridge codex-runtime repair.",
+            )
         if (
             runtime["active"]
             and runtime["socket_ready"]

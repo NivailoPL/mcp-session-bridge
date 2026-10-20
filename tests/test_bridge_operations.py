@@ -228,6 +228,37 @@ def test_status_keeps_bridge_checks_independent_when_codex_needs_attention(
     assert next(check for check in report.checks if check.id == "service").state == "pass"
 
 
+def test_status_flags_codex_unit_running_but_not_enabled_at_boot(tmp_path: Path) -> None:
+    layout = Layout.for_root(tmp_path)
+    layout.codex_status_file.parent.mkdir(parents=True)
+    layout.codex_status_file.write_text(
+        '{"desired_enabled":true,"version":"0.163.0"}', encoding="utf-8"
+    )
+    layout.codex_service_unit.parent.mkdir(parents=True)
+    layout.codex_service_unit.write_text("unit", encoding="utf-8")
+
+    class ActiveButDisabledRunner(RecordingRunner):
+        def run(self, *args: str, check: bool = True):
+            if args[:2] == ("systemctl", "is-enabled"):
+                self.calls.append(tuple(args))
+
+                class Disabled:
+                    returncode = 1
+                    stdout = "disabled\n"
+                    stderr = ""
+
+                return Disabled()
+            return super().run(*args, check=check)
+
+    report = StatusCollector(layout, ActiveButDisabledRunner(), probe_http=False).collect()
+
+    codex = next(check for check in report.checks if check.id == "codex")
+    assert codex.state == "action_required"
+    assert "not enabled at boot" in codex.message
+    assert codex.remediation == "Run mcp-bridge codex-runtime repair."
+    assert report.overall == "attention"
+
+
 def test_repeated_setup_preserves_bridge_secret(tmp_path: Path) -> None:
     source = tmp_path / "source"
     source.mkdir()

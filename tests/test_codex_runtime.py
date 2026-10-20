@@ -390,6 +390,7 @@ def test_release_reconcile_skips_unchanged_healthy_runtime(
                 "installed_version": CODEX_VERSION,
                 "expected_version": CODEX_VERSION,
                 "active": True,
+                "unit_enabled": True,
                 "socket_ready": True,
             }
         },
@@ -402,6 +403,115 @@ def test_release_reconcile_skips_unchanged_healthy_runtime(
     assert result["state"] == "complete"
     assert result["changed"] is False
     assert sum(call[:2] == ("npm", "ci") for call in runner.calls) == npm_calls
+
+
+class SystemdStateRunner(RecordingRunner):
+    """Tracks whether the Codex unit is active and enabled like systemd would."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.active = False
+        self.enabled = False
+
+    def run(self, *args: str, check: bool = True):
+        call = tuple(args)
+        if call[:2] == ("systemctl", "is-active"):
+            self.calls.append(call)
+            return Result(0, "active\n") if self.active else Result(3, "inactive\n")
+        if call[:2] == ("systemctl", "is-enabled"):
+            self.calls.append(call)
+            return Result(0, "enabled\n") if self.enabled else Result(1, "disabled\n")
+        result = super().run(*args, check=check)
+        if call[:2] == ("systemctl", "enable"):
+            self.enabled = True
+            self.active = self.active or "--now" in call
+        elif call[:2] == ("systemctl", "disable"):
+            self.enabled = False
+            self.active = self.active and "--now" not in call
+        elif call[:2] in {("systemctl", "restart"), ("systemctl", "start")}:
+            self.active = True
+        return result
+
+
+def test_release_reconcile_re_enables_active_unit_that_lost_its_wants_link(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    layout = Layout.for_root(tmp_path / "root")
+    runner = SystemdStateRunner()
+    manager = CodexRuntimeManager(layout, runner, _source_root(tmp_path))
+    manager.enable()
+    monkeypatch.setattr(manager, "_protocol_ready", lambda: True)
+    # Started but not enabled: up now, down after the next reboot.
+    runner.enabled = False
+    assert manager.inspect()["runtime"]["active"] is True
+    assert manager.inspect()["runtime"]["unit_enabled"] is False
+
+    result = UpdateManager(layout, runner)._reconcile_codex_runtime(manager.source_root)
+
+    assert result["state"] == "complete"
+    assert result["changed"] is True
+    assert result["runtime"]["unit_enabled"] is True
+    assert result["runtime"]["active"] is True
+    persisted = json.loads(layout.codex_status_file.read_text(encoding="utf-8"))
+    assert persisted["desired_enabled"] is True
+
+
+def test_release_reconcile_leaves_unit_enabled_whenever_desired(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    layout = Layout.for_root(tmp_path / "root")
+    runner = SystemdStateRunner()
+    manager = CodexRuntimeManager(layout, runner, _source_root(tmp_path))
+    manager.enable()
+    monkeypatch.setattr(manager, "_protocol_ready", lambda: True)
+
+    for active, enabled, unit_drift in (
+        (True, True, False),
+        (True, True, True),
+        (False, False, False),
+        (False, True, True),
+    ):
+        runner.active, runner.enabled = active, enabled
+        if unit_drift:
+            layout.codex_service_unit.write_text("stale unit", encoding="utf-8")
+
+        result = manager.reconcile_after_release()
+
+        assert result["state"] == "complete"
+        runtime = manager.inspect()["runtime"]
+        assert runtime["unit_enabled"] is True
+        assert runtime["active"] is True
+
+
+def test_repair_enables_unit_before_restart_when_desired(tmp_path: Path) -> None:
+    layout = Layout.for_root(tmp_path / "root")
+    runner = SystemdStateRunner()
+    manager = CodexRuntimeManager(layout, runner, _source_root(tmp_path))
+    manager.enable()
+    runner.enabled = False
+    runner.calls.clear()
+
+    manager.repair()
+
+    unit = ("mcp-session-bridge-codex.service",)
+    assert runner.calls.index(("systemctl", "enable", *unit)) < runner.calls.index(
+        ("systemctl", "restart", *unit)
+    )
+    assert runner.enabled is True
+
+
+def test_repair_keeps_disabled_runtime_disabled(tmp_path: Path) -> None:
+    layout = Layout.for_root(tmp_path / "root")
+    runner = SystemdStateRunner()
+    manager = CodexRuntimeManager(layout, runner, _source_root(tmp_path))
+    manager.enable()
+    manager.disable()
+    runner.calls.clear()
+
+    manager.repair()
+
+    assert not any(call[:2] == ("systemctl", "enable") for call in runner.calls)
+    assert runner.enabled is False
 
 
 def test_codex_runtime_cli_has_conservative_lifecycle_seams() -> None:

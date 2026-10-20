@@ -139,6 +139,9 @@ class CodexRuntimeManager:
         try:
             stage = self._stage_locked_runtime_and_unit()
             if desired_enabled:
+                # Re-assert the boot-time wants link: restart alone leaves a
+                # unit that lost it running now but down after a reboot.
+                self.runner.run("systemctl", "enable", CODEX_SERVICE_UNIT)
                 self.runner.run("systemctl", "restart", CODEX_SERVICE_UNIT)
                 self._require_service_active()
             self._write_status("complete", desired_enabled=desired_enabled, lock=stage.lock)
@@ -209,6 +212,7 @@ class CodexRuntimeManager:
         if (
             inspection["installed_version"] == lock.version
             and inspection["active"]
+            and inspection["unit_enabled"]
             and self._protocol_ready()
             and persisted.get("lock_digest") == lock.digest
             and self.layout.codex_service_unit.exists()
