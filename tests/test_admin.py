@@ -2577,7 +2577,7 @@ def test_admin_page_does_not_ship_retired_controls(admin_client) -> None:
     for dialog in ("searchDialog", "aiSettingsDialog", "fileWorkspaceDialog"):
         assert page.count(f'<dialog id="{dialog}"') == 1
 
-    for tab in ("general", "search", "api", "transcript", "system"):
+    for tab in ("general", "search", "api", "transcript", "connectors", "system"):
         assert f'data-settings-tab="{tab}"' in page
         assert f'data-settings-panel="{tab}"' in page
 

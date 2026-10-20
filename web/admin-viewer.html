@@ -862,6 +862,17 @@
     .feature-switch-card.is-on .feature-switch-state { color: var(--ok); }
     .feature-switch-detail { color: var(--muted); font-size: var(--t-meta); line-height: 1.45; }
     .settings-tabs-group .settings-switch-input[hidden] { display: none; }
+    /* green means automation is running; the connection lock is a safeguard, so it uses the accent */
+    .feature-switch-card.is-accent.is-on { border-color: rgba(122, 125, 240, .42); background: var(--accent-soft); }
+    .feature-switch-card.is-accent.is-on .feature-switch-state { color: var(--accent-ink); }
+    .feature-switch-state .settings-pill { margin-left: .5rem; vertical-align: 2px; font-size: 11px; font-weight: 700; letter-spacing: 0; }
+    .connectors-list { display: grid; }
+    .connector-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 10px 16px; border-top: 1px solid var(--stroke-soft); }
+    .connector-row:first-child { border-top: 0; }
+    .connector-main { display: grid; gap: .2rem; min-width: 0; }
+    .connector-host { display: flex; flex-wrap: wrap; align-items: center; gap: .45rem; overflow-wrap: anywhere; }
+    .connector-meta { color: var(--muted); font-size: var(--t-meta); line-height: 1.45; overflow-wrap: anywhere; }
+    .connectors-empty { margin: 0; padding: 12px 16px; color: var(--muted); font-size: var(--t-meta); }
     .chapter-days { display: flex; flex-wrap: wrap; gap: .3rem; }
     .chapter-days label { display: inline-flex; align-items: center; justify-content: center; min-width: 2.6rem; min-height: var(--h-compact); padding: 0 .5rem; border: 1px solid var(--stroke); border-radius: var(--r-ctrl); color: var(--muted); font-size: var(--t-meta); font-weight: 600; cursor: pointer; }
     .chapter-days input { position: absolute; opacity: 0; width: 1px; height: 1px; }
@@ -1712,6 +1723,7 @@
     .settings-tab-hint[data-tone]::after { content: ""; width: 6px; height: 6px; border-radius: var(--r-pill); background: var(--muted); }
     .settings-tab-hint[data-tone="ok"]::after { background: var(--ok); }
     .settings-tab-hint[data-tone="warn"]::after { background: var(--warn); }
+    .settings-tab-hint[data-tone="accent"]::after { background: var(--accent-ink); }
     .settings-tab-hint[data-tone="fail"]::after { background: var(--danger); }
     .settings-tab-dirty { width: 7px; height: 7px; border-radius: var(--r-pill); background: var(--accent-ink); }
     .settings-tab-dirty[hidden] { display: none; }
@@ -2527,6 +2539,7 @@
       <nav class="settings-tabs" aria-label="Settings sections">
         <button type="button" data-settings-tab="general" class="is-active"><span>General</span><span class="settings-tab-meta"><span class="settings-tab-dirty" hidden aria-label="Unsaved changes"></span></span></button>
         <button type="button" data-settings-tab="transcript"><span>MCP</span><span class="settings-tab-meta"><span id="settingsHintTranscript" class="settings-tab-hint"></span><span class="settings-tab-dirty" hidden aria-label="Unsaved changes"></span></span></button>
+        <button type="button" data-settings-tab="connectors"><span>Connectors</span><span class="settings-tab-meta"><span id="settingsHintConnectors" class="settings-tab-hint"></span></span></button>
         <button type="button" data-settings-tab="search"><span>Search</span><span class="settings-tab-meta"><span id="settingsHintSearch" class="settings-tab-hint"></span><span class="settings-tab-dirty" hidden aria-label="Unsaved changes"></span></span></button>
         <button type="button" data-settings-tab="api"><span>API keys</span><span class="settings-tab-meta"><span id="settingsHintApi" class="settings-tab-hint"></span></span></button>
         <button type="button" data-settings-tab="codex"><span>Codex</span><span class="settings-tab-meta"><span id="settingsHintCodex" class="settings-tab-hint"></span></span></button>
@@ -2643,6 +2656,37 @@
                 <div><button type="button" class="primary settings-compact" id="probePromptCopy">Copy test instruction</button></div>
               </div>
             </details>
+          </section>
+        </section>
+
+        <section data-settings-panel="connectors" class="settings-panel" hidden>
+          <div class="settings-panel-head">
+            <h4>Connectors</h4>
+            <span class="context-help"><button type="button" class="context-help-trigger" aria-label="About Connectors" aria-describedby="settingsHelpConnectors">?</button><span id="settingsHelpConnectors" class="context-help-box" role="tooltip">Harnesses you signed in to this Bridge over OAuth. Disconnect ends a harness's access at once; it can come back only by signing in again.</span></span>
+          </div>
+          <label id="connectorsLockCard" class="feature-switch-card is-accent" data-settings-instant>
+            <input id="connectorsLockEnabled" class="settings-switch-input" type="checkbox" role="switch" aria-describedby="connectorsLockNote">
+            <span class="feature-switch-text">
+              <span class="feature-switch-state"><span id="connectorsLockLabel">New connections are open</span><span class="settings-pill" data-tone="accent">Recommended</span></span>
+              <span id="connectorsLockNote" class="feature-switch-detail"></span>
+            </span>
+          </label>
+          <section id="connectorsWindowGroup" class="settings-group" hidden>
+            <div class="settings-group-head"><h5>Connection window</h5><span id="connectorsWindowPill" class="settings-pill"></span></div>
+            <div class="settings-item">
+              <div class="settings-item-label">
+                <span class="settings-item-title"><label for="connectorsWindowMinutes">Open for</label><span class="context-help"><button type="button" class="context-help-trigger" aria-label="About the connection window" aria-describedby="settingsHelpConnectorsWindow">?</button><span id="settingsHelpConnectorsWindow" class="context-help-box" role="tooltip">Like unblocking an ID number for a moment: while the window is open, a new harness on the internet can sign in for the first time. It closes by itself. Harnesses on this computer and ones already connected never need it.</span></span></span>
+              </div>
+              <div class="settings-item-control" data-settings-instant>
+                <select id="connectorsWindowMinutes" aria-label="Window length"><option value="10">10 min</option><option value="30" selected>30 min</option><option value="60">1 hour</option></select>
+                <button type="button" class="primary settings-compact" id="connectorsWindowOpen">Open window</button>
+                <button type="button" class="ghost settings-compact" id="connectorsWindowClose" hidden>Close now</button>
+              </div>
+            </div>
+          </section>
+          <section class="settings-group">
+            <div class="settings-group-head"><h5>Connected</h5><span id="connectorsCount" class="settings-value-muted"></span></div>
+            <div id="connectorsList" class="connectors-list" aria-live="polite"></div>
           </section>
         </section>
 
@@ -3314,6 +3358,20 @@
         showAiButton: document.getElementById("titleShowAiButton"),
         includeSensitive: document.getElementById("titleIncludeSensitive"),
       };
+      const connectorsDom = {
+        lockEnabled: document.getElementById("connectorsLockEnabled"),
+        lockCard: document.getElementById("connectorsLockCard"),
+        lockLabel: document.getElementById("connectorsLockLabel"),
+        lockNote: document.getElementById("connectorsLockNote"),
+        hint: document.getElementById("settingsHintConnectors"),
+        windowGroup: document.getElementById("connectorsWindowGroup"),
+        windowPill: document.getElementById("connectorsWindowPill"),
+        windowMinutes: document.getElementById("connectorsWindowMinutes"),
+        windowOpen: document.getElementById("connectorsWindowOpen"),
+        windowClose: document.getElementById("connectorsWindowClose"),
+        count: document.getElementById("connectorsCount"),
+        list: document.getElementById("connectorsList"),
+      };
       const codexSettingsDom = {
         pill: document.getElementById("codexSettingsPill"),
         hint: document.getElementById("settingsHintCodex"),
@@ -3916,6 +3974,12 @@
             window.history.replaceState(null, "", window.location.pathname);
             openContextSearch();
           }
+          // /admin/sessions?settings=connectors is the link the locked sign-in page offers
+          if (params.get("settings")) {
+            const tab = params.get("settings");
+            window.history.replaceState(null, "", window.location.pathname);
+            openAiSettingsDialog(tab);
+          }
         } catch (error) {
           if (error.status === 401) {
             redirectToLogin();
@@ -4160,6 +4224,9 @@
         settingsDom.indexDelete.addEventListener("click", () => runIndexAction("delete"));
         settingsDom.aiRenameMaxWords.addEventListener("input", renderRenameMaxWords);
         titlesDom.autoEnabled.addEventListener("change", () => { renderTitlesCard(); saveTitlesAutoEnabled(); });
+        connectorsDom.lockEnabled.addEventListener("change", saveConnectorsLock);
+        connectorsDom.windowOpen.addEventListener("click", openConnectionWindow);
+        connectorsDom.windowClose.addEventListener("click", closeConnectionWindow);
         settingsDom.probePromptCopy.addEventListener("click", () => copyOutputProbePrompt());
         settingsDom.probeSafeApply.addEventListener("click", () => {
           selectTranscriptChunkRecommendation(Number(settingsDom.probeSafeApply.dataset.value));
@@ -4180,6 +4247,7 @@
           panel.hidden = panel.dataset.settingsPanel !== name;
         }
         if (name === "codex") refreshCodexSettings();
+        if (name === "connectors") loadConnectors();
         if (name === "strands") { loadStrandSettings(); loadTokenFeatures(); loadChapterAutomation(); }
         if (name === "topics") loadTopicSettings();
         renderSettingsDirty();
@@ -4267,6 +4335,7 @@
         // tab hints (Codex Ready, Chapters Auto) show from the start, not only once their tab is opened
         const opened = activeSettingsTab();
         if (opened !== "codex") refreshCodexSettings();
+        if (opened !== "connectors") loadConnectors();
         if (opened !== "strands") loadChapterAutomation();
         if (opened !== "topics") loadTopicSettings();
         dom.aiSettingsStatus.textContent = "Loading settings...";
@@ -4644,6 +4713,160 @@
       }
 
       // the big card saves at once, like Automatic chapters
+      // ---------- connectors ----------
+      let connectorsTimer = 0;
+
+      async function loadConnectors() {
+        try {
+          setConnectors(await api("/admin/api/connectors"));
+        } catch (error) {
+          connectorsDom.list.replaceChildren(connectorsEmpty(`Could not load connectors: ${error.message}`));
+          return;
+        }
+        renderConnectors();
+      }
+
+      function setConnectors(data) {
+        state.connectors = data;
+        // count down on this machine's clock; the server's may differ
+        state.connectorsWindowEndsAt = performance.now() + (data.window_remaining_seconds || 0) * 1000;
+      }
+
+      async function connectorsRequest(path, options, success) {
+        try {
+          setConnectors(await api(path, options));
+          renderSettingsStatus(success, "ok");
+        } catch (error) {
+          renderSettingsStatus(error.message, "error");
+        }
+        renderConnectors();
+      }
+
+      function saveConnectorsLock() {
+        const enabled = connectorsDom.lockEnabled.checked;
+        connectorsRequest(
+          "/admin/api/connectors/lock", { method: "PUT", body: JSON.stringify({ enabled }) },
+          enabled ? "New connections are locked." : "New connections are open.",
+        );
+      }
+
+      function openConnectionWindow() {
+        const minutes = Number(connectorsDom.windowMinutes.value);
+        connectorsRequest(
+          "/admin/api/connectors/window", { method: "POST", body: JSON.stringify({ minutes }) },
+          "Connection window is open.",
+        );
+      }
+
+      function closeConnectionWindow() {
+        connectorsRequest("/admin/api/connectors/window", { method: "DELETE" }, "Connection window is closed.");
+      }
+
+      async function disconnectConnector(client) {
+        const where = connectorDestinations(client);
+        const confirmed = await window.adminConfirmation.confirm({
+          title: "Disconnect harness?",
+          message: client.name ? `Disconnect ${client.name} (${where})?` : `Disconnect ${where}?`,
+          detail: "Its access ends at once. It can come back only by signing in again.",
+          confirmLabel: "Disconnect",
+          tone: "danger",
+        });
+        if (!confirmed) return;
+        connectorsRequest(
+          `/admin/api/connectors/${encodeURIComponent(client.client_id)}`, { method: "DELETE" },
+          "Harness disconnected.",
+        );
+      }
+
+      function connectorsWindowRemaining() {
+        if (!state.connectors?.window_open) return 0;
+        return Math.max(0, Math.round((state.connectorsWindowEndsAt - performance.now()) / 1000));
+      }
+
+      function formatCountdown(seconds) {
+        return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+      }
+
+      function renderConnectors() {
+        const data = state.connectors;
+        if (!data) return;
+        const locked = Boolean(data.lock_enabled);
+        connectorsDom.lockEnabled.checked = locked;
+        connectorsDom.lockCard.classList.toggle("is-on", locked);
+        connectorsDom.lockLabel.textContent = locked ? "New connections are locked" : "New connections are open";
+        connectorsDom.lockNote.textContent = locked
+          ? "A new harness on the internet can sign in for the first time only while a connection window is open."
+          : "Any harness may ask to connect, and you approve it by signing in. Locking also stops sign-in links you did not start.";
+        connectorsDom.windowGroup.hidden = !locked;
+        renderConnectorsWindow();
+        renderConnectorsList(data.clients || []);
+      }
+
+      function renderConnectorsWindow() {
+        clearInterval(connectorsTimer);
+        connectorsTimer = 0;
+        const locked = Boolean(state.connectors?.lock_enabled);
+        const remaining = connectorsWindowRemaining();
+        const open = locked && remaining > 0;
+        connectorsDom.windowPill.textContent = open ? `Open · ${formatCountdown(remaining)} left` : "Closed";
+        connectorsDom.windowPill.dataset.tone = open ? "warn" : "accent";
+        connectorsDom.windowOpen.textContent = open ? "Restart" : "Open window";
+        connectorsDom.windowClose.hidden = !open;
+        connectorsDom.hint.textContent = locked ? (open ? "Open" : "Locked") : "";
+        if (locked) connectorsDom.hint.dataset.tone = open ? "warn" : "accent";
+        else delete connectorsDom.hint.dataset.tone;
+        if (!open) return;
+        connectorsTimer = setInterval(() => {
+          const left = connectorsWindowRemaining();
+          if (left <= 0) {
+            clearInterval(connectorsTimer);
+            connectorsTimer = 0;
+            loadConnectors();
+            return;
+          }
+          connectorsDom.windowPill.textContent = `Open · ${formatCountdown(left)} left`;
+        }, 1000);
+      }
+
+      function connectorDestinations(client) {
+        return client.destinations.map((destination) => destination.label).join(", ") || "unknown address";
+      }
+
+      function connectorsEmpty(text) {
+        const node = document.createElement("p");
+        node.className = "connectors-empty";
+        node.textContent = text;
+        return node;
+      }
+
+      function connectorPill(text, tone) {
+        const node = spanCls("settings-pill", text);
+        node.dataset.tone = tone;
+        return node;
+      }
+
+      function renderConnectorsList(clients) {
+        connectorsDom.count.textContent = clients.length ? String(clients.length) : "";
+        if (!clients.length) {
+          connectorsDom.list.replaceChildren(connectorsEmpty("No harness has signed in yet."));
+          return;
+        }
+        connectorsDom.list.replaceChildren(...clients.map((client) => {
+          const host = div("connector-host");
+          host.append(spanCls("settings-value settings-value-mono", connectorDestinations(client)));
+          if (client.kind === "local") host.append(connectorPill("This computer", "accent"));
+          if (client.kind === "app") host.append(connectorPill("App on this device", "accent"));
+          if (!client.signed_in) host.append(connectorPill("Signed out", "off"));
+          const meta = [client.name || "No name given", `Connected ${formatDate(client.approved_at * 1000)}`];
+          if (client.last_active_at) meta.push(`Active ${formatDate(client.last_active_at * 1000)}`);
+          const main = div("connector-main");
+          main.append(host, div("connector-meta", meta.join(" · ")));
+          const row = div("connector-row");
+          row.append(main, button("Disconnect", () => disconnectConnector(client), "settings-quiet-danger settings-compact"));
+          return row;
+        }));
+      }
+
       async function saveTitlesAutoEnabled() {
         const enabled = titlesDom.autoEnabled.checked;
         const saved = await saveSettingsRequest(

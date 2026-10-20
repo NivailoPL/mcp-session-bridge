@@ -25,8 +25,11 @@ from app.admin import AdminHandlers
 from app.admin_anchors import AnchorAdminHandlers
 from app.admin_topics import TopicAdminHandlers
 from app.admin_contexts import ContextAdminHandlers
+from app.admin_connectors import ConnectorAdminHandlers
+from app.connectors import ConnectionLock
 from app.codex_app_server import CodexAppServerClient
 from app.oauth import OAuthHandlers
+from app.rate_limits import LoginGuard
 from app.automation_activity import activity_report, live_status
 from app.chapter_automation import SCHEDULER_TICK_SECONDS, ChapterAutomation
 from app.strand_runtime import StrandRuntime
@@ -79,6 +82,10 @@ store = Store(
 )
 logger = logging.getLogger(__name__)
 MCP_REQUEST_MAX_BODY_BYTES = ((MAX_MCP_PDF_BYTES + 2) // 3 * 4) + 262_144
+# Anyone can reach these before signing in; none of them needs more than a few kilobytes.
+SIGN_IN_PATHS = ("/oauth/register", "/oauth/login", "/oauth/token", "/admin/login")
+SIGN_IN_MAX_BODY_BYTES = 16_384
+OAUTH_HOUSEKEEPING_SECONDS = 600
 BRIDGE_RESTART_HELPER_UNIT = "mcp-session-bridge-restart.service"
 CODEX_SOCKET_PATH = Path("/run/mcp-session-bridge-codex/app-server.sock")
 CODEX_WORKSPACE_PATH = Path("/var/lib/mcp-session-bridge-codex/workspace")
@@ -116,6 +123,15 @@ async def _search_index_monitor() -> None:
             logger.exception("Automatic search index refresh check failed")
 
 
+async def _oauth_housekeeping() -> None:
+    while True:
+        try:
+            await asyncio.to_thread(store.purge_oauth)
+        except Exception:
+            logger.exception("OAuth housekeeping failed")
+        await asyncio.sleep(OAUTH_HOUSEKEEPING_SECONDS)
+
+
 async def _chapter_schedule_monitor() -> None:
     while True:
         await asyncio.sleep(SCHEDULER_TICK_SECONDS)
@@ -132,6 +148,7 @@ async def app_lifespan(_: Any):
     async with mcp.session_manager.run():
         admin.titles.bind_loop(asyncio.get_running_loop())
         monitor = asyncio.create_task(_search_index_monitor())
+        housekeeping = asyncio.create_task(_oauth_housekeeping())
         await asyncio.to_thread(chapter_automation.recover)
         await asyncio.to_thread(topic_runtime.recover)
         chapter_monitor = asyncio.create_task(_chapter_schedule_monitor())
@@ -141,7 +158,10 @@ async def app_lifespan(_: Any):
             yield {}
         finally:
             monitor.cancel()
+            housekeeping.cancel()
             chapter_monitor.cancel()
+            with suppress(asyncio.CancelledError):
+                await housekeeping
             with suppress(asyncio.CancelledError):
                 await chapter_monitor
             await chapter_automation.close()
@@ -172,7 +192,10 @@ mcp = FastMCP(
     ),
 )
 
-oauth = OAuthHandlers(settings, store)
+# The OAuth and admin sign-in forms check the same password, so they share one limiter.
+login_guard = LoginGuard()
+connection_lock = ConnectionLock(store)
+oauth = OAuthHandlers(settings, store, login_guard=login_guard, lock=connection_lock)
 codex = CodexAppServerClient(
     socket_path=CODEX_SOCKET_PATH,
     workspace_dir=CODEX_WORKSPACE_PATH,
@@ -232,8 +255,10 @@ admin = AdminHandlers(
     active_tool_output_mode=ACTIVE_TOOL_OUTPUT_MODE,
     restart_requester=_request_service_restart,
     codex_client=codex,
+    login_guard=login_guard,
 )
 contexts_admin = ContextAdminHandlers(admin)
+connectors_admin = ConnectorAdminHandlers(admin, connection_lock)
 anchors_admin = AnchorAdminHandlers(admin, strand_runtime, chapter_automation)
 # Topics: runs start from an admin request, or after a chapter fill when automation is on.
 topic_runtime = TopicRuntime(store, key_reader=lambda: topics_admin.read_key(), codex=codex)
@@ -334,6 +359,31 @@ async def admin_api_update_ai_settings(request: Request) -> Response:
 @mcp.custom_route("/admin/api/ai-settings/key", methods=["DELETE"])
 async def admin_api_delete_ai_key(request: Request) -> Response:
     return await admin.api_delete_ai_key(request)
+
+@mcp.custom_route("/admin/api/connectors", methods=["GET"])
+async def admin_api_connectors(request: Request) -> Response:
+    return await connectors_admin.api_overview(request)
+
+
+@mcp.custom_route("/admin/api/connectors/lock", methods=["PUT"])
+async def admin_api_connectors_lock(request: Request) -> Response:
+    return await connectors_admin.api_update_lock(request)
+
+
+@mcp.custom_route("/admin/api/connectors/window", methods=["POST"])
+async def admin_api_connectors_open_window(request: Request) -> Response:
+    return await connectors_admin.api_open_window(request)
+
+
+@mcp.custom_route("/admin/api/connectors/window", methods=["DELETE"])
+async def admin_api_connectors_close_window(request: Request) -> Response:
+    return await connectors_admin.api_close_window(request)
+
+
+@mcp.custom_route("/admin/api/connectors/{client_id}", methods=["DELETE"])
+async def admin_api_connectors_disconnect(request: Request) -> Response:
+    return await connectors_admin.api_disconnect(request)
+
 
 @mcp.custom_route("/admin/api/settings", methods=["GET"])
 async def admin_api_settings(request: Request) -> Response:
@@ -1493,7 +1543,12 @@ def _group_payload(group: Any) -> dict[str, Any] | None:
 mcp_http_app = mcp.streamable_http_app()
 mcp_http_app.router.lifespan_context = app_lifespan
 app = RequestBodyLimitMiddleware(
-    mcp_http_app,
+    RequestBodyLimitMiddleware(
+        mcp_http_app,
+        paths=SIGN_IN_PATHS,
+        max_bytes=SIGN_IN_MAX_BODY_BYTES,
+        jsonrpc=False,
+    ),
     path=settings.resource_path,
     max_bytes=MCP_REQUEST_MAX_BODY_BYTES,
 )

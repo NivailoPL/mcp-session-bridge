@@ -92,6 +92,10 @@ everywhere:
 
 1. Add a custom connector pointing at your domain — `https://mcp.example.com`
 2. Authorise it. The Bridge uses OAuth 2.1 with PKCE; your harness runs the flow.
+   The sign-in page shows the address access is sent to, so check it before
+   you sign in. For extra safety, turn on **Lock new connections** in
+   Settings › Connectors: a new web harness can then connect only while you
+   have a short connection window open.
 3. Create a project and paste [docs/project-prompt-template.md](docs/project-prompt-template.md)
    into its instructions.
 

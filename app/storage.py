@@ -135,6 +135,9 @@ class ClientRecord:
     scope: str
     client_name: str | None
     secret_expires_at: int | None
+    created_at: int | None = None
+    # Set the first time the owner signs a client in; the connection lock spares it after that.
+    approved_at: int | None = None
 
 
 @dataclass(frozen=True)
@@ -364,7 +367,8 @@ class Store(AnchorStoreMixin, TopicStoreMixin):
                     scope TEXT NOT NULL,
                     client_name TEXT,
                     created_at INTEGER NOT NULL,
-                    secret_expires_at INTEGER
+                    secret_expires_at INTEGER,
+                    approved_at INTEGER
                 );
 
                 CREATE TABLE IF NOT EXISTS auth_challenges (
@@ -619,6 +623,16 @@ class Store(AnchorStoreMixin, TopicStoreMixin):
             for table, column, declaration in ANCHOR_LATER_COLUMNS:
                 self._ensure_column(conn, table, column, declaration)
             self._ensure_column(conn, "refresh_tokens", "resource", "TEXT")
+            if self._ensure_column(conn, "clients", "approved_at", "INTEGER"):
+                # Clients that already hold tokens were signed in by the owner; keep them connected.
+                conn.execute(
+                    """
+                    UPDATE clients SET approved_at = created_at
+                    WHERE client_id IN (
+                        SELECT client_id FROM access_tokens UNION SELECT client_id FROM refresh_tokens
+                    )
+                    """
+                )
             self._ensure_column(conn, "sessions", "context_pack_version", "TEXT")
             self._ensure_column(conn, "sessions", "title_is_auto", "INTEGER NOT NULL DEFAULT 0")
             self._ensure_column(conn, "sessions", "group_id", f"TEXT NOT NULL DEFAULT '{UNCATEGORIZED_GROUP_ID}'")
@@ -717,10 +731,13 @@ class Store(AnchorStoreMixin, TopicStoreMixin):
         )
 
     @staticmethod
-    def _ensure_column(conn: sqlite3.Connection, table: str, column: str, definition: str) -> None:
+    def _ensure_column(conn: sqlite3.Connection, table: str, column: str, definition: str) -> bool:
+        """Add the column when it is missing; return True when it was added just now."""
         columns = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})")}
-        if column not in columns:
-            conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+        if column in columns:
+            return False
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+        return True
 
     def register_client(self, record: ClientRecord) -> None:
         with self._lock, self._connect() as conn:
@@ -760,7 +777,100 @@ class Store(AnchorStoreMixin, TopicStoreMixin):
             scope=row["scope"],
             client_name=row["client_name"],
             secret_expires_at=row["secret_expires_at"],
+            created_at=row["created_at"],
+            approved_at=row["approved_at"],
         )
+
+    def approve_client(self, client_id: str) -> None:
+        with self._lock, self._connect() as conn:
+            conn.execute(
+                "UPDATE clients SET approved_at = ? WHERE client_id = ? AND approved_at IS NULL",
+                (int(time.time()), client_id),
+            )
+
+    def list_connected_clients(self) -> list[dict[str, Any]]:
+        """Approved clients with their newest token, newest activity first."""
+        now = int(time.time())
+        with self._lock, self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT c.client_id, c.client_name, c.redirect_uris, c.created_at, c.approved_at,
+                       -- tokens are issued whenever the harness signs in or refreshes; access tokens
+                       -- are purged soon after they expire, so the rotating refresh token counts too
+                       (
+                           SELECT MAX(issued) FROM (
+                               SELECT MAX(created_at) AS issued FROM access_tokens a WHERE a.client_id = c.client_id
+                               UNION ALL
+                               SELECT MAX(created_at) FROM refresh_tokens r WHERE r.client_id = c.client_id
+                           )
+                       ) AS last_active_at,
+                       EXISTS (
+                           SELECT 1 FROM refresh_tokens r
+                           WHERE r.client_id = c.client_id AND r.revoked_at IS NULL
+                             AND (r.expires_at IS NULL OR r.expires_at > ?)
+                       ) AS has_live_token
+                FROM clients c
+                WHERE c.approved_at IS NOT NULL
+                ORDER BY COALESCE(last_active_at, c.approved_at) DESC, c.client_id
+                """,
+                (now,),
+            ).fetchall()
+        return [
+            {
+                "client_id": row["client_id"],
+                "client_name": row["client_name"],
+                "redirect_uris": json.loads(row["redirect_uris"]),
+                "created_at": row["created_at"],
+                "approved_at": row["approved_at"],
+                "last_active_at": row["last_active_at"],
+                "has_live_token": bool(row["has_live_token"]),
+            }
+            for row in rows
+        ]
+
+    def disconnect_client(self, client_id: str) -> bool:
+        """Delete a client with every code and token it holds; its bearer tokens stop working at once."""
+        with self._lock, self._connect() as conn:
+            for table in ("access_tokens", "refresh_tokens", "auth_codes", "auth_challenges"):
+                conn.execute(f"DELETE FROM {table} WHERE client_id = ?", (client_id,))
+            return conn.execute("DELETE FROM clients WHERE client_id = ?", (client_id,)).rowcount > 0
+
+    def count_pending_oauth(self) -> dict[str, int]:
+        now = int(time.time())
+        with self._lock, self._connect() as conn:
+            challenges = conn.execute(
+                "SELECT COUNT(*) FROM auth_challenges WHERE expires_at >= ?", (now,)
+            ).fetchone()[0]
+            unapproved = conn.execute("SELECT COUNT(*) FROM clients WHERE approved_at IS NULL").fetchone()[0]
+        return {"challenges": int(challenges), "unapproved_clients": int(unapproved)}
+
+    def purge_oauth(self, *, unapproved_client_seconds: int = 24 * 60 * 60, revoked_grace_seconds: int = 24 * 60 * 60) -> dict[str, int]:
+        """Drop expired OAuth state and clients that registered but were never signed in."""
+        now = int(time.time())
+        with self._lock, self._connect() as conn:
+            removed = {
+                "challenges": conn.execute("DELETE FROM auth_challenges WHERE expires_at < ?", (now,)).rowcount,
+                "codes": conn.execute("DELETE FROM auth_codes WHERE expires_at < ?", (now,)).rowcount,
+            }
+            for table in ("access_tokens", "refresh_tokens"):
+                removed[table] = conn.execute(
+                    f"""
+                    DELETE FROM {table}
+                    WHERE (expires_at IS NOT NULL AND expires_at < ?)
+                       OR (revoked_at IS NOT NULL AND revoked_at < ?)
+                    """,
+                    (now, now - revoked_grace_seconds),
+                ).rowcount
+            removed["clients"] = conn.execute(
+                """
+                DELETE FROM clients
+                WHERE approved_at IS NULL AND created_at < ?
+                  AND client_id NOT IN (SELECT client_id FROM auth_challenges)
+                  AND client_id NOT IN (SELECT client_id FROM auth_codes)
+                """,
+                (now - unapproved_client_seconds,),
+            ).rowcount
+        return removed
 
     def create_challenge(self, record: ChallengeRecord) -> None:
         with self._lock, self._connect() as conn:

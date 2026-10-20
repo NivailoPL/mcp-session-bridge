@@ -43,6 +43,9 @@ This project follows a lightweight changelog format inspired by Keep a Changelog
 - Group bars under What gets split end at the same point, and sensitive groups show the Bridge sensitive pictogram next to their name.
 - A fill pauses itself after three Codex errors in a row, skips sessions too long for one run, and comes back paused, never running, after a Bridge restart. The last runs are listed under Fill now.
 - Highlights are drawn in solid highlighter yellow so they stay readable on every transcript layout, and the highlight and chapter docks share one tinted card in the rail.
+- Added Settings › Connectors: every harness you signed in over OAuth, with its address, the name it gave, when it connected and when it was last active. Disconnect ends its access at once.
+- The connector sign-in page now has the Bridge look and logo and works as a consent screen: it shows where access will be sent, marks a first-time address, and labels the name a harness gives itself as unverified. On a phone the logo shrinks to a header so the form is in view.
+- If the browser signed in to Bridge in the last 12 hours (admin login or an earlier connector sign-in), the connector page asks only Allow or Deny, without the password. Deny tells the harness access was refused.
 
 ### Removed
 
@@ -52,6 +55,11 @@ This project follows a lightweight changelog format inspired by Keep a Changelog
 
 - Highlights and chapters are admin-only: they are never part of transcript chunks, contexts or any MCP response.
 - Contexts are redacted when they are assembled: session IDs, context IDs and links into the bridge become numbered placeholders such as `[SESSION-1]`, so a model cannot follow a context back to its sources. The context name never reaches the model.
+- Added an optional connection lock in Settings › Connectors, off by default and recommended. When it is on, a harness that receives access over the internet can sign in for the first time only while a connection window (10 minutes, 30 minutes or an hour) is open; harnesses on this computer and ones already connected are not affected. It stops a sign-in link someone else registered from working on your Bridge. Harnesses connected before this release stay connected.
+- Owner sign-in (connector and admin) is limited to five wrong passwords per address in 15 minutes and 30 across all addresses per minute, and the password check no longer blocks the server while it runs.
+- Client registration refuses plain `http` redirects except to this computer, fragments and script or file schemes, allows at most ten redirect URIs and shortens long client names. Registration and authorization are rate-limited per address, pending sign-ins are capped, and sign-in requests larger than 16 KB are refused.
+- Expired sign-in requests, codes and tokens, and clients that registered but never signed in within a day, are removed every ten minutes.
+- The sign-in pages cannot be framed by another site and send no referrer. One-click Allow uses its own cookie limited to `/oauth` and a token bound to that sign-in, and signing out of the admin ends it.
 
 ## [2026.10.1] - 2026-10-04
 

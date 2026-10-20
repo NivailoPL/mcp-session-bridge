@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Iterable
 
 from starlette.responses import JSONResponse
 from starlette.types import Message, Receive, Scope, Send
@@ -9,16 +9,27 @@ ASGIApp = Callable[[Scope, Receive, Send], Awaitable[None]]
 
 
 class RequestBodyLimitMiddleware:
-    def __init__(self, app: ASGIApp, *, path: str, max_bytes: int):
+    """Buffer POST bodies on the given paths and refuse them past ``max_bytes``."""
+
+    def __init__(
+        self,
+        app: ASGIApp,
+        *,
+        max_bytes: int,
+        path: str | None = None,
+        paths: Iterable[str] = (),
+        jsonrpc: bool = True,
+    ):
         self.app = app
-        self.path = path.rstrip("/") or "/"
+        self.paths = {item.rstrip("/") or "/" for item in (*paths, *([path] if path else []))}
         self.max_bytes = max_bytes
+        self.jsonrpc = jsonrpc
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if (
             scope["type"] != "http"
             or scope.get("method") != "POST"
-            or str(scope.get("path", "")).rstrip("/") != self.path
+            or (str(scope.get("path", "")).rstrip("/") or "/") not in self.paths
         ):
             await self.app(scope, receive, send)
             return
@@ -57,17 +68,16 @@ class RequestBodyLimitMiddleware:
 
         await self.app(scope, replay, send)
 
-    @staticmethod
-    async def _reject(scope: Scope, receive: Receive, send: Send) -> None:
-        response = JSONResponse(
-            {
+    async def _reject(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if self.jsonrpc:
+            payload = {
                 "jsonrpc": "2.0",
                 "error": {
                     "code": -32000,
                     "message": "MCP request body is too large",
                 },
                 "id": None,
-            },
-            status_code=413,
-        )
-        await response(scope, receive, send)
+            }
+        else:
+            payload = {"error": "invalid_request", "error_description": "request body is too large"}
+        await JSONResponse(payload, status_code=413)(scope, receive, send)

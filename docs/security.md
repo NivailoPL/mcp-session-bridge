@@ -62,9 +62,38 @@ live key rotation is performed by the setup tools.
 ## OAuth And Tokens
 
 - OAuth authorization codes and bearer tokens are stored as hashes.
-- Refresh tokens can be revoked.
 - MCP tool calls require a bearer token with the configured `BRIDGE_SCOPE`.
 - Dynamic client registration is enabled for compatible remote MCP clients.
+- Settings › Connectors lists every harness the owner signed in. Disconnect deletes the client with all its codes and tokens, so its access ends at once.
+- Refresh tokens rotate on every use. Expired codes and tokens, and clients that registered but never signed in within a day, are purged every ten minutes.
+
+### Who a client is
+
+A dynamically registered client is identified only by its redirect URI, the address the authorization code is delivered to. The name it registers is chosen by the client and is never trusted. Registration accepts:
+
+- `https` URIs on internet hosts (web harnesses such as claude.ai or chatgpt.com),
+- `http` or `https` URIs on this computer (`127.0.0.1`, `::1`, `localhost`) for desktop and CLI harnesses,
+- custom app schemes such as `cursor://`.
+
+Plain `http` to another host, URIs with a fragment, and `javascript:`, `data:`, `file:` and similar schemes are refused. A client may register at most ten redirect URIs.
+
+The sign-in page is a consent screen. It shows the host the code will be sent to, whether that host has been approved before, and the client's self-declared name marked as unverified. It cannot be framed and sends no referrer.
+
+A browser that signed in to Bridge with the owner password, on the admin login or on this page, sees only **Allow** and **Deny** for the next 12 hours, the same lifetime as an admin session. This rests on a separate signed cookie scoped to `/oauth` (`HttpOnly`, `SameSite=Lax`, `Secure` over HTTPS). Allow also requires a token bound to that cookie and to the one pending sign-in, so it cannot be submitted from another site or replayed for another client. Signing out of the admin clears the cookie. Deny returns `access_denied` to the harness and ends the sign-in.
+
+### Connection lock
+
+Anyone can register a client and send the owner a sign-in link for it on the owner's own Bridge. Without further protection, signing in on such a link hands the attacker a token. Settings › Connectors offers a lock against this, off by default and recommended:
+
+- When it is on, a client whose redirect URI is an internet host can sign in for the first time only while the owner has a connection window open (10 minutes, 30 minutes or an hour). Outside the window the sign-in page explains how to open one and stores nothing.
+- Clients on this computer and custom app schemes are not affected: an authorization code sent there cannot reach anyone else.
+- A client that has signed in once is approved and is not affected later. Clients that already held tokens when this feature was installed are approved automatically.
+
+The lock protects against links the owner did not start. It does not protect a harness provider from itself; disconnect any harness you no longer trust.
+
+### Sign-in limits
+
+The connector sign-in and the admin login check the same owner password and share one limiter: five wrong passwords per address within 15 minutes, and 30 across all addresses within a minute, after which sign-in answers 429 until the window passes. The password check runs off the event loop, at most two at a time. Client registration (20 per address per 10 minutes) and authorization (60) are limited too, and at most 500 sign-ins may be pending. Request bodies on the sign-in endpoints are capped at 16 KB.
 
 ## Unlisted Sessions
 

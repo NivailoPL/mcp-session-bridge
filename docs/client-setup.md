@@ -30,8 +30,12 @@ instructions for conversations that should use the Bridge.
 
 1. Find the custom connector or custom MCP server setting.
 2. Give it the resource URL above. Some clients ask for a name as well.
-3. Authorise. The client opens the Bridge login, you sign in as the owner, and
-   the client stores the resulting token.
+3. Authorise. The client opens the Bridge sign-in page, which shows the address
+   access will be sent to. Check it, then sign in as the owner (or just press
+   Allow if this browser signed in to Bridge in the last 12 hours), and the
+   client stores the resulting token. If Settings › Connectors has Lock new connections on,
+   open a connection window there first; a harness on your own computer does
+   not need one.
 4. Confirm with `bridge_ping`, described under
    [First Tool Check](#first-tool-check).
 
