@@ -13,7 +13,7 @@ from typing import Any, Callable
 from urllib.parse import urlparse
 
 from app.security import password_hash, validate_secret_key
-from bridge_cli.caddy import has_site
+from bridge_cli.caddy import bridge_site_block, has_site
 from bridge_cli.config import read_env_file, update_env_file
 from bridge_cli.files import atomic_write_json, atomic_write_text, read_json
 from bridge_cli.health import require_health_payload, verify_local_health
@@ -582,11 +582,7 @@ Persistent=true
 [Install]
 WantedBy=timers.target
 """
-        caddy = f"""{domain} {{
-    encode zstd gzip
-    reverse_proxy 127.0.0.1:8787
-}}
-"""
+        caddy = bridge_site_block(domain)
         launcher = f"""#!/bin/sh
 # MCP Session Bridge managed launcher
 set -eu

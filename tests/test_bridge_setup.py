@@ -810,3 +810,14 @@ def test_rollback_reports_failure_when_service_cannot_stop(tmp_path: Path) -> No
 
     receipt = json.loads(layout.operation_file.read_text(encoding="utf-8"))
     assert receipt["rollback"] == "failed"
+
+
+def test_bridge_site_block_sends_hsts_for_this_host_only() -> None:
+    from bridge_cli.caddy import bridge_site_block
+
+    block = bridge_site_block("bridge.example.test")
+    assert block.startswith("bridge.example.test {\n")
+    assert 'Strict-Transport-Security "max-age=31536000"' in block
+    assert "includeSubDomains" not in block and "preload" not in block
+    assert "-Server" in block
+    assert block.rstrip().endswith("reverse_proxy 127.0.0.1:8787\n}")

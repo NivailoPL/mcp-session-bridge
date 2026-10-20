@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 
 from app.conversation_export import export_database_to_markdown
-from bridge_cli.caddy import replace_site_address
+from bridge_cli.caddy import bridge_site_block, replace_site_address
 from bridge_cli.config import read_env_file, update_env_file
 from bridge_cli.files import atomic_write_json, atomic_write_text, read_json
 from bridge_cli.install import ManagedInstaller, SetupAnswers, url_hostname
@@ -609,7 +609,7 @@ def _configure(args: argparse.Namespace, layout: Layout, runner: SubprocessRunne
         else:
             atomic_write_text(
                 layout.caddy_fragment,
-                f"{domain} {{\n    encode zstd gzip\n    reverse_proxy 127.0.0.1:8787\n}}\n",
+                bridge_site_block(domain),
             )
             import_line = f"import {layout.caddy_fragment.parent}/*.caddy"
             if import_line not in caddyfile_text:

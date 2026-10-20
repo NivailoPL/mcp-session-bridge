@@ -2,6 +2,18 @@ from __future__ import annotations
 
 import re
 
+# HSTS for this host only: no includeSubDomains, so other sites on the same domain are unaffected.
+SECURITY_HEADERS = """    header {
+        Strict-Transport-Security "max-age=31536000"
+        X-Content-Type-Options "nosniff"
+        -Server
+    }
+"""
+
+
+def bridge_site_block(domain: str) -> str:
+    return f"{domain} {{\n    encode zstd gzip\n{SECURITY_HEADERS}    reverse_proxy 127.0.0.1:8787\n}}\n"
+
 
 def has_site(caddyfile: str, domain: str) -> bool:
     pattern = _domain_pattern(domain)
