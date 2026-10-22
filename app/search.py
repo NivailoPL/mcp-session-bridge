@@ -19,6 +19,7 @@ from sqlite_vec import serialize_float32
 from app.storage import Store
 
 SEARCH_CONFIG_SETTING = "search.config"
+SEARCH_SCHEDULE_SETTING = "search.schedule"
 OPENAI_KEY_SETTING = "providers.openai.api_key"
 COHERE_KEY_SETTING = "providers.cohere.api_key"
 RENAME_MODEL_SETTING = "general.rename_model"
@@ -30,6 +31,10 @@ EMBEDDING_PRICES_USD_PER_MILLION = {
 EMBEDDING_PRICING_URL = "https://developers.openai.com/api/docs/guides/embeddings#embedding-models"
 
 _TOKEN_RE = re.compile(r"\w+", re.UNICODE)
+_PHRASE_RE = re.compile(r'"([^"]*)"')
+# Bump when the text sent for embedding changes, so the index rebuilds once.
+EMBEDDING_INPUT_VERSION = 2
+PASSAGE_CHARS_PER_TOKEN = 4
 _HIGHLIGHT_OPEN = "\u0002"
 _HIGHLIGHT_CLOSE = "\u0003"
 logger = logging.getLogger(__name__)
@@ -114,8 +119,13 @@ class SearchConfig:
             "chunk_overlap": self.chunk_overlap,
             "embedding_model": self.embedding_model,
             "embedding_dimensions": self.embedding_dimensions,
+            "embedding_input": EMBEDDING_INPUT_VERSION,
         }
         return hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
+
+    def embedding_signature(self) -> str:
+        """Vectors stay reusable across index rebuilds while this value is unchanged."""
+        return f"{self.embedding_model}:{self.embedding_dimensions}:{EMBEDDING_INPUT_VERSION}"
 
     @classmethod
     def from_dict(cls, value: dict[str, Any] | None) -> SearchConfig:
@@ -151,9 +161,115 @@ class SearchConfig:
         return cls(**payload).validate()
 
 
-def fts_query(query: str) -> str:
-    tokens = _TOKEN_RE.findall(query)
-    return " OR ".join(f'"{token}"' for token in tokens)
+def default_search_schedule() -> dict[str, Any]:
+    # "messages" keeps today's behaviour: update after a batch of new messages.
+    return {"enabled": True, "mode": "messages", "interval_hours": 6, "time": "03:00",
+            "days": [0, 1, 2, 3, 4, 5, 6], "anchor_at": None, "last_run_at": None}
+
+
+def validate_search_schedule(payload: Any, current: dict[str, Any], *, now: int) -> dict[str, Any]:
+    """Chapters' schedule rules plus one extra mode, "messages"."""
+    from app.chapter_automation import validate_schedule
+
+    if not isinstance(payload, dict) or not payload or not set(payload) <= {"mode", "interval_hours", "time", "days"}:
+        raise ValueError("Send mode, interval_hours, time and/or days.")
+    as_messages = payload.get("mode") == "messages"
+    rest = {key: value for key, value in payload.items() if not (key == "mode" and as_messages)}
+    result = validate_schedule(rest, current, now=now) if rest else {**current, "anchor_at": now}
+    if as_messages:
+        result["mode"] = "messages"
+    result["enabled"] = True
+    return result
+
+
+def _query_stem(token: str) -> str | None:
+    """Light, language-agnostic stemming: drop a short inflection ending.
+
+    FTS5 has no Polish stemmer, so "agentów" would never match "agent". Cutting a
+    few trailing characters and searching by prefix covers most inflected forms.
+    Short tokens and tokens with digits stay exact (IDs, acronyms, versions).
+    """
+    if len(token) < 5 or any(char.isdigit() for char in token):
+        return None
+    cut = 3 if len(token) >= 8 else 2 if len(token) == 7 else 1
+    return token[:-cut]
+
+
+def query_terms(query: str) -> tuple[list[str], list[str]]:
+    """Return (phrases, terms): quoted phrases stay exact, other words get stemmed."""
+    phrases = [" ".join(_TOKEN_RE.findall(item)) for item in _PHRASE_RE.findall(query)]
+    rest = _PHRASE_RE.sub(" ", query)
+    terms = [_query_stem(token) or token for token in _TOKEN_RE.findall(rest)]
+    return [item for item in phrases if item], list(dict.fromkeys(terms))
+
+
+def fts_query(query: str, *, any_term: bool = False) -> str:
+    """Build a literal FTS5 expression: every word by default, any word on request."""
+    phrases, _ = query_terms(query)
+    parts = [f'"{phrase}"' for phrase in phrases]
+    for token in _TOKEN_RE.findall(_PHRASE_RE.sub(" ", query)):
+        stem = _query_stem(token)
+        parts.append(f'"{stem}"*' if stem else f'"{token}"')
+    parts = list(dict.fromkeys(parts))
+    return (" OR " if any_term else " AND ").join(parts)
+
+
+def _term_pattern(query: str) -> re.Pattern[str] | None:
+    phrases, terms = query_terms(query)
+    pieces = [r"\s+".join(map(re.escape, phrase.split())) for phrase in phrases]
+    pieces += [re.escape(term) + r"\w*" for term in terms]
+    if not pieces:
+        return None
+    pieces.sort(key=len, reverse=True)
+    return re.compile(r"(?<!\w)(?:" + "|".join(pieces) + ")", re.IGNORECASE)
+
+
+def best_passage(content: str, query: str, *, chunk_tokens: int = 600) -> dict[str, Any]:
+    """Pick the window of a document that holds the most query matches.
+
+    Used for the result preview and as the text the reranker reads, so both see
+    a full passage rather than a 48-token FTS snippet.
+    """
+    width = max(400, chunk_tokens * PASSAGE_CHARS_PER_TOKEN)
+    pattern = _term_pattern(query)
+    matches = list(pattern.finditer(content)) if pattern else []
+    start = 0
+    if len(content) > width and matches:
+        best = (-1, -1)
+        step = max(1, len(matches) // 200)
+        for anchor in matches[::step]:
+            window_start = max(0, min(anchor.start() - width // 4, len(content) - width))
+            inside = [m for m in matches if window_start <= m.start() and m.end() <= window_start + width]
+            score = (len({m.group(0).lower() for m in inside}), len(inside))
+            if score > best:
+                best, start = score, window_start
+        if start:
+            # Begin on a line or word boundary rather than mid-word.
+            boundary = content.rfind("\n", max(0, start - 200), start)
+            if boundary < 0:
+                boundary = content.rfind(" ", max(0, start - 40), start)
+            start = boundary + 1 if boundary >= 0 else start
+    end = min(len(content), start + width)
+    if end < len(content):
+        boundary = content.rfind(" ", end - 200, end)
+        end = boundary if boundary > start else end
+    text = content[start:end].strip()
+    lead = len(content[start:end]) - len(content[start:end].lstrip())
+    highlights = [
+        {"start": m.start() - start - lead, "end": m.end() - start - lead}
+        for m in matches
+        if m.start() >= start + lead and m.end() <= start + lead + len(text)
+    ]
+    return {
+        "passage": text,
+        "passage_highlights": highlights,
+        "passage_truncated_start": start > 0,
+        "passage_truncated_end": end < len(content),
+    }
+
+
+def embedding_input(title: str, text: str) -> str:
+    return f"{title.strip()}\n\n{text}" if title.strip() else text
 
 
 def chunk_text(text: str, *, chunk_size: int = 600, overlap: int = 100) -> list[TextChunk]:
@@ -326,6 +442,18 @@ class SearchService:
                 conn.execute(
                     "ALTER TABLE search_index_state ADD COLUMN auto_rebuild_suppressed INTEGER NOT NULL DEFAULT 0"
                 )
+            if "embedding_signature" not in columns:
+                conn.execute("ALTER TABLE search_index_state ADD COLUMN embedding_signature TEXT")
+            for name in ("reused_count", "embedded_count"):
+                if name not in columns:
+                    conn.execute(
+                        f"ALTER TABLE search_index_state ADD COLUMN {name} INTEGER NOT NULL DEFAULT 0"
+                    )
+            chunk_columns = {
+                row["name"] for row in conn.execute("PRAGMA table_info(search_vector_chunks)")
+            }
+            if "input_hash" not in chunk_columns:
+                conn.execute("ALTER TABLE search_vector_chunks ADD COLUMN input_hash TEXT")
 
     def get_config(self) -> SearchConfig:
         raw = self.store.get_app_setting(SEARCH_CONFIG_SETTING)
@@ -485,16 +613,30 @@ class SearchService:
             kind_marks = ",".join("?" for _ in source_kinds)
             with self._connect() as conn:
                 documents = conn.execute(
-                    f"""SELECT content FROM search_documents
+                    f"""SELECT title,content FROM search_documents
                         WHERE group_id IN ({group_marks}) AND source_kind IN ({kind_marks})
                         ORDER BY document_id""",
                     [*config.included_group_ids, *source_kinds],
                 ).fetchall()
+        existing: set[str] = set()
+        with self._connect() as conn:
+            state = conn.execute(
+                "SELECT active_generation,embedding_signature FROM search_index_state WHERE singleton=1"
+            ).fetchone()
+            if state["active_generation"] is not None and state["embedding_signature"] == config.embedding_signature():
+                existing = {
+                    row[0] for row in conn.execute(
+                        "SELECT input_hash FROM search_vector_chunks WHERE generation=? AND input_hash IS NOT NULL",
+                        (state["active_generation"],),
+                    )
+                }
 
         encoding = tiktoken.get_encoding("cl100k_base")
         source_tokens = 0
         embedding_tokens = 0
         chunk_count = 0
+        update_tokens = 0
+        update_chunks = 0
         for document in documents:
             content = document["content"]
             source_tokens += len(encoding.encode(content))
@@ -504,11 +646,18 @@ class SearchService:
                 overlap=config.chunk_overlap,
             )
             chunk_count += len(chunks)
-            # Count the normalized chunk strings that will be sent to the embeddings API.
-            embedding_tokens += sum(len(encoding.encode(chunk.text)) for chunk in chunks)
+            # Count the exact strings that will be sent to the embeddings API.
+            for chunk in chunks:
+                text = embedding_input(document["title"], chunk.text)
+                tokens = len(encoding.encode(text))
+                embedding_tokens += tokens
+                if hashlib.sha256(text.encode()).hexdigest() not in existing:
+                    update_tokens += tokens
+                    update_chunks += 1
 
         price = EMBEDDING_PRICES_USD_PER_MILLION.get(config.embedding_model)
         estimated_cost = None if price is None else embedding_tokens * price / 1_000_000
+        update_cost = None if price is None else update_tokens * price / 1_000_000
         return {
             "document_count": len(documents),
             "chunk_count": chunk_count,
@@ -518,6 +667,9 @@ class SearchService:
             "embedding_model": config.embedding_model,
             "price_usd_per_million_tokens": price,
             "estimated_cost_usd": estimated_cost,
+            "update_chunk_count": update_chunks,
+            "update_token_count": update_tokens,
+            "update_cost_usd": update_cost,
             "pricing_url": EMBEDDING_PRICING_URL,
             "cohere_included": False,
         }
@@ -525,8 +677,24 @@ class SearchService:
     def basic_search(self, query: str, *, limit: int = 20,
                      group_ids: Sequence[str] | None = None,
                      source_kinds: Sequence[str] | None = None) -> list[dict[str, Any]]:
+        return self.bm25_search(query, limit=limit, group_ids=group_ids, source_kinds=source_kinds)[0]
+
+    def bm25_search(self, query: str, *, limit: int = 20,
+                    group_ids: Sequence[str] | None = None,
+                    source_kinds: Sequence[str] | None = None) -> tuple[list[dict[str, Any]], str]:
+        """Match every word first; only when nothing matches, accept any word.
+
+        Returns the results and "all" or "any" so the UI can say which one ran.
+        """
         self.sync_documents()
-        expression = fts_query(query)
+        results = self._bm25_query(fts_query(query), limit, group_ids, source_kinds)
+        if results or len(_TOKEN_RE.findall(query)) < 2:
+            return results, "all"
+        return self._bm25_query(fts_query(query, any_term=True), limit, group_ids, source_kinds), "any"
+
+    def _bm25_query(self, expression: str, limit: int,
+                    group_ids: Sequence[str] | None,
+                    source_kinds: Sequence[str] | None) -> list[dict[str, Any]]:
         if not expression:
             return []
         clauses = ["search_documents_fts MATCH ?"]
@@ -556,21 +724,51 @@ class SearchService:
                 "source_id": row["source_id"], "session_id": row["session_id"],
                 "group_id": row["group_id"], "title": row["title"], "subtitle": row["subtitle"],
                 "timestamp": row["source_timestamp"], "snippet": snippet, "highlights": highlights,
-                "bm25_score": -float(row["raw_rank"]), "pipeline": ["BM25"],
+                "bm25_score": -float(row["raw_rank"]), "pipeline": ["BM25"], "found_by": ["bm25"],
             })
         return results
 
+    def attach_passages(self, results: Sequence[dict[str, Any]], query: str,
+                        config: SearchConfig | None = None) -> None:
+        """Give each result the passage that best matches the query (in place)."""
+        missing = [item for item in results if "passage" not in item]
+        if not missing:
+            return
+        chunk_tokens = (config or self.get_config()).chunk_size
+        keys = list({item["document_key"] for item in missing})
+        contents: dict[str, str] = {}
+        with self._connect() as conn:
+            for start in range(0, len(keys), 500):
+                batch = keys[start:start + 500]
+                marks = ",".join("?" for _ in batch)
+                contents.update(
+                    (row["document_key"], row["content"])
+                    for row in conn.execute(
+                        f"SELECT document_key,content FROM search_documents WHERE document_key IN ({marks})",
+                        batch,
+                    )
+                )
+        for item in missing:
+            item.update(best_passage(contents.get(item["document_key"], item.get("snippet", "")),
+                                     query, chunk_tokens=chunk_tokens))
+
     def partition_basic_candidates(self, query: str, config: SearchConfig | None = None
                                    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+        approved, local_only, _ = self._partition_bm25(query, config)
+        return approved, local_only
+
+    def _partition_bm25(self, query: str, config: SearchConfig | None = None
+                        ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], str]:
         config = self.effective_external_config((config or self.get_config()).validate())
-        candidates = self.basic_search(query, limit=config.bm25_candidates * 2,
-                                       source_kinds=config.source_kinds())
+        candidates, match = self.bm25_search(query, limit=config.bm25_candidates * 2,
+                                             source_kinds=config.source_kinds())
         approved_ids = set(config.included_group_ids)
         approved = [item for item in candidates if item["group_id"] in approved_ids]
         local_only = [item for item in candidates if item["group_id"] not in approved_ids]
         for item in local_only:
             item["pipeline"] = ["BM25", "Local only"]
-        return approved[:config.bm25_candidates], local_only[:config.result_limit]
+            item["local_only"] = True
+        return approved[:config.bm25_candidates], local_only[:config.result_limit], match
 
     def index_status(self, *, sync: bool = True) -> dict[str, Any]:
         if sync:
@@ -725,38 +923,84 @@ class SearchService:
         if cancelled_before_start:
             return self.index_status(sync=False)
         try:
-            prepared: list[tuple[str, int, TextChunk]] = []
+            # (document_key, chunk_index, chunk, embedding input, its hash)
+            prepared: list[tuple[str, int, TextChunk, str, str]] = []
             for document in documents:
                 for index, chunk in enumerate(chunk_text(
                     document["content"], chunk_size=config.chunk_size, overlap=config.chunk_overlap
                 )):
-                    prepared.append((document["document_key"], index, chunk))
+                    text = embedding_input(document["title"], chunk.text)
+                    prepared.append((
+                        document["document_key"], index, chunk, text,
+                        hashlib.sha256(text.encode()).hexdigest(),
+                    ))
+            # Vectors from the live generation are reused when the same text was
+            # embedded with the same model, so a rebuild only pays for new passages.
+            reusable: dict[str, bytes] = {}
+            if state["active_generation"] is not None and state["embedding_signature"] == config.embedding_signature():
+                wanted = {item[4] for item in prepared}
+                with self._connect() as conn:
+                    for row in conn.execute(
+                        """SELECT input_hash,embedding FROM search_vector_chunks
+                           WHERE generation=? AND input_hash IS NOT NULL""",
+                        (state["active_generation"],),
+                    ):
+                        if row["input_hash"] in wanted:
+                            reusable[row["input_hash"]] = row["embedding"]
             with self._connect() as conn:
                 conn.execute("DELETE FROM search_vector_chunks WHERE generation=?", (generation,))
-            processed_documents: set[str] = set()
-            for start in range(0, len(prepared), 64):
+                conn.executemany(
+                    """INSERT INTO search_vector_chunks(
+                        generation,document_key,chunk_index,content,token_count,embedding,input_hash
+                    ) VALUES (?,?,?,?,?,?,?)""",
+                    [
+                        (generation, key, index, chunk.text, chunk.token_count, reusable[digest], digest)
+                        for key, index, chunk, _, digest in prepared
+                        if digest in reusable
+                    ],
+                )
+            pending = [item for item in prepared if item[4] not in reusable]
+            reused_count = len(prepared) - len(pending)
+            processed_documents: set[str] = {item[0] for item in prepared if item[4] in reusable}
+            pending_by_document: dict[str, int] = {}
+            for item in pending:
+                pending_by_document[item[0]] = pending_by_document.get(item[0], 0) + 1
+            processed_documents -= pending_by_document.keys()
+            with self._connect() as conn:
+                conn.execute(
+                    """UPDATE search_index_state SET processed_count=?,reused_count=?,embedded_count=0
+                       WHERE singleton=1""",
+                    (len(processed_documents), reused_count),
+                )
+            embedded_count = 0
+            for start in range(0, len(pending), 64):
                 with self._connect() as conn:
                     cancelled = conn.execute(
                         "SELECT cancel_requested FROM search_index_state WHERE singleton=1"
                     ).fetchone()[0]
                 if cancelled:
                     raise InterruptedError("Vector index build was stopped")
-                batch = prepared[start:start + 64]
-                embeddings = self.embed_texts(openai_api_key, [item[2].text for item in batch], config)
+                batch = pending[start:start + 64]
+                embeddings = self.embed_texts(openai_api_key, [item[3] for item in batch], config)
+                embedded_count += len(batch)
+                for item in batch:
+                    pending_by_document[item[0]] -= 1
+                    if not pending_by_document[item[0]]:
+                        processed_documents.add(item[0])
                 with self._connect() as conn:
                     conn.executemany(
                         """INSERT INTO search_vector_chunks(
-                            generation,document_key,chunk_index,content,token_count,embedding
-                        ) VALUES (?,?,?,?,?,?)""",
+                            generation,document_key,chunk_index,content,token_count,embedding,input_hash
+                        ) VALUES (?,?,?,?,?,?,?)""",
                         [
-                            (generation, key, index, chunk.text, chunk.token_count, serialize_float32(vector))
-                            for (key, index, chunk), vector in zip(batch, embeddings, strict=True)
+                            (generation, key, index, chunk.text, chunk.token_count,
+                             serialize_float32(vector), digest)
+                            for (key, index, chunk, _, digest), vector in zip(batch, embeddings, strict=True)
                         ],
                     )
-                    processed_documents.update(item[0] for item in batch)
                     conn.execute(
-                        "UPDATE search_index_state SET processed_count=? WHERE singleton=1",
-                        (len(processed_documents),),
+                        "UPDATE search_index_state SET processed_count=?,embedded_count=? WHERE singleton=1",
+                        (len(processed_documents), embedded_count),
                     )
             with self._connect() as conn:
                 conn.execute("BEGIN IMMEDIATE")
@@ -766,10 +1010,10 @@ class SearchService:
                 conn.execute(
                     """UPDATE search_index_state SET active_generation=?,status='ready',
                         chunk_count=?,processed_count=?,completed_at=?,last_error=NULL,
-                        cancel_requested=0,index_config_hash=? WHERE singleton=1""",
+                        cancel_requested=0,index_config_hash=?,embedding_signature=? WHERE singleton=1""",
                     (
                         generation, len(prepared), len(documents), int(time.time()),
-                        config.index_signature(),
+                        config.index_signature(), config.embedding_signature(),
                     ),
                 )
                 conn.execute("DELETE FROM search_dirty_documents")
@@ -832,10 +1076,40 @@ class SearchService:
             )
         return self.index_status(sync=False)
 
-    def maybe_start_rebuild(self, openai_api_key: str) -> dict[str, Any]:
+    def get_schedule(self) -> dict[str, Any]:
+        raw = self.store.get_app_setting(SEARCH_SCHEDULE_SETTING)
+        try:
+            value = json.loads(raw) if raw else {}
+        except ValueError:
+            value = {}
+        return {**default_search_schedule(), **(value if isinstance(value, dict) else {})}
+
+    def set_schedule(self, payload: Any, *, now: int | None = None) -> dict[str, Any]:
+        schedule = validate_search_schedule(
+            payload, self.get_schedule(), now=int(now if now is not None else time.time())
+        )
+        self.store.set_app_setting(SEARCH_SCHEDULE_SETTING, json.dumps(schedule))
+        return schedule
+
+    def next_update_at(self, timezone_name: str, *, now: int | None = None) -> int | None:
+        """When a scheduled index update is due; None in "as messages arrive" mode."""
+        schedule = self.get_schedule()
+        if schedule["mode"] == "messages":
+            return None
+        from app.chapter_automation import next_run_at
+
+        return next_run_at(schedule, timezone_name, now=int(now if now is not None else time.time()))
+
+    def maybe_start_rebuild(self, openai_api_key: str, *, timezone_name: str = "UTC",
+                            paused: bool = False) -> dict[str, Any]:
+        """Start an automatic index update when one is due.
+
+        `paused` is the "Runs models" master switch: nothing starts on its own
+        while it is off. "Update now" goes through start_rebuild and ignores both.
+        """
         config = self.effective_external_config(self.get_config())
         status = self.index_status(sync=False)
-        if not config.enabled or not openai_api_key:
+        if not config.enabled or not openai_api_key or paused:
             return status
         if status["status"] in {"queued", "building", "failed"}:
             return status
@@ -843,6 +1117,21 @@ class SearchService:
             return status
         self.sync_documents()
         status = self.index_status(sync=False)
+        if status["active_generation"] is None:
+            # The first index is built right away; schedules only pace updates.
+            return self.start_rebuild(openai_api_key, config)
+        schedule = self.get_schedule()
+        if schedule["mode"] != "messages":
+            now = int(time.time())
+            due = self.next_update_at(timezone_name, now=now)
+            if due is None or now < due:
+                return status
+            self.store.set_app_setting(
+                SEARCH_SCHEDULE_SETTING, json.dumps({**schedule, "last_run_at": now})
+            )
+            if status["needs_rebuild"] or status["dirty_document_count"]:
+                return self.start_rebuild(openai_api_key, config)
+            return status
         dirty = status["dirty_document_count"]
         with self._connect() as conn:
             oldest = conn.execute("SELECT MIN(changed_at) FROM search_dirty_documents").fetchone()[0]
@@ -855,24 +1144,51 @@ class SearchService:
             return self.start_rebuild(openai_api_key, config)
         return status
 
-    def _vector_candidates(self, query: str, openai_api_key: str,
-                           config: SearchConfig) -> list[dict[str, Any]]:
-        config = self.effective_external_config(config)
+    def semantic_unavailable_reason(self, config: SearchConfig, openai_api_key: str) -> str | None:
+        """Why Semantic search cannot run right now, or None when it can.
+
+        A generation built with the same embedding model stays usable while a
+        rebuild for new groups, chunking or messages is pending.
+        """
+        if not config.enabled:
+            return "Semantic search is off"
+        if not openai_api_key.strip():
+            return "OpenAI key is not configured"
+        if not config.included_group_ids:
+            return "No groups are shared for Semantic search"
         with self._connect() as conn:
             state = conn.execute(
-                """SELECT active_generation,index_config_hash
+                """SELECT active_generation,index_config_hash,embedding_signature,status
                    FROM search_index_state WHERE singleton=1"""
             ).fetchone()
         if not state or state["active_generation"] is None:
-            raise ValueError("The vector index has not been built yet")
-        if state["index_config_hash"] != config.index_signature():
-            raise ValueError("The vector index is stale; rebuild it before Hybrid search")
-        generation = state["active_generation"]
+            return "Index is building" if state and state["status"] in {"queued", "building"} \
+                else "Index has not been built yet"
+        if (
+            state["embedding_signature"] != config.embedding_signature()
+            and state["index_config_hash"] != config.index_signature()
+        ):
+            return "Index is being rebuilt for a new model" if state["status"] in {"queued", "building"} \
+                else "Index was built for another model; rebuild it"
+        return None
+
+    def _vector_candidates(self, query: str, openai_api_key: str,
+                           config: SearchConfig) -> list[dict[str, Any]]:
+        config = self.effective_external_config(config)
+        reason = self.semantic_unavailable_reason(config, openai_api_key)
+        if reason:
+            raise ValueError(reason)
+        with self._connect() as conn:
+            generation = conn.execute(
+                "SELECT active_generation FROM search_index_state WHERE singleton=1"
+            ).fetchone()[0]
         query_vector = self.embed_texts(openai_api_key, [query], config)[0]
         marks = ",".join("?" for _ in config.included_group_ids)
         kinds = config.source_kinds()
         kind_marks = ",".join("?" for _ in kinds)
         with self._vector_connect() as conn:
+            # Several chunks of one document can rank close together, so read more
+            # chunks than the document budget before keeping each document's best.
             rows = conn.execute(
                 f"""SELECT c.document_key,c.content,
                            vec_distance_cosine(c.embedding,?) AS distance
@@ -881,7 +1197,7 @@ class SearchService:
                       AND d.source_kind IN ({kind_marks})
                     ORDER BY distance LIMIT ?""",
                 [serialize_float32(query_vector), generation,
-                 *config.included_group_ids, *kinds, config.vector_candidates],
+                 *config.included_group_ids, *kinds, config.vector_candidates * 4],
             ).fetchall()
         best: dict[str, dict[str, Any]] = {}
         for row in rows:
@@ -889,9 +1205,38 @@ class SearchService:
             if row["document_key"] not in best or score > best[row["document_key"]]["vector_score"]:
                 best[row["document_key"]] = {
                     "document_key": row["document_key"], "vector_score": score,
-                    "vector_snippet": row["content"][:900],
+                    "vector_passage": row["content"],
                 }
-        return list(best.values())
+        ranked = sorted(best.values(), key=lambda item: item["vector_score"], reverse=True)
+        return ranked[:config.vector_candidates]
+
+    def search(self, query: str, *, openai_api_key: str, cohere_api_key: str = "",
+               config: SearchConfig | None = None, semantic: bool = True) -> dict[str, Any]:
+        """BM25 always; Semantic and rerank when they are available.
+
+        Never fails because the vector side is missing: it says why in `engine`
+        and returns BM25 results instead.
+        """
+        config = self.effective_external_config((config or self.get_config()).validate())
+        reason = self.semantic_unavailable_reason(config, openai_api_key) if semantic else "BM25 only"
+        if reason is None:
+            try:
+                return self.hybrid_search(query, openai_api_key=openai_api_key,
+                                          cohere_api_key=cohere_api_key, config=config)
+            except Exception as exc:  # provider outage must not break search
+                logger.warning("Semantic search failed, falling back to BM25: %s", exc)
+                reason = f"Semantic search failed: {exc}"
+        # Without Semantic search nothing leaves the server, so there is no
+        # private lane to keep apart: every group shares one BM25 list.
+        results, match = self.bm25_search(query, limit=config.result_limit,
+                                          source_kinds=config.source_kinds())
+        self.attach_passages(results, query, config)
+        return {
+            "results": results,
+            "local_only_results": [],
+            "warning": None,
+            "engine": {"semantic": False, "rerank": False, "match": match, "semantic_note": reason},
+        }
 
     def hybrid_search(self, query: str, *, openai_api_key: str,
                       cohere_api_key: str = "", config: SearchConfig | None = None
@@ -899,11 +1244,12 @@ class SearchService:
         config = self.effective_external_config((config or self.get_config()).validate())
         if not config.enabled:
             raise ValueError("RAG search is disabled")
-        approved, local_only = self.partition_basic_candidates(query, config)
+        approved, local_only, match = self._partition_bm25(query, config)
         vectors = self._vector_candidates(query, openai_api_key, config)
         fused: dict[str, dict[str, Any]] = {}
         for rank, item in enumerate(approved):
             entry = fused.setdefault(item["document_key"], dict(item))
+            entry["bm25_rank"] = rank + 1
             entry["hybrid_score"] = entry.get("hybrid_score", 0.0) + 1.0 / (60 + rank + 1)
         vector_map = {item["document_key"]: item for item in vectors}
         if vector_map:
@@ -924,29 +1270,51 @@ class SearchService:
                         "source_id": document["source_id"], "session_id": document["session_id"],
                         "group_id": document["group_id"], "title": document["title"],
                         "subtitle": document["subtitle"], "timestamp": document["source_timestamp"],
-                        "snippet": vector["vector_snippet"], "highlights": [], "pipeline": [],
+                        "snippet": vector["vector_passage"][:300], "highlights": [], "pipeline": [],
+                        "found_by": [],
                     }
+                    pattern = _term_pattern(query)
+                    passage = vector["vector_passage"]
+                    fused[key].update({
+                        "passage": passage,
+                        "passage_highlights": [
+                            {"start": m.start(), "end": m.end()} for m in pattern.finditer(passage)
+                        ] if pattern else [],
+                        "passage_truncated_start": True, "passage_truncated_end": True,
+                    })
+                fused[key]["found_by"] = [*fused[key].get("found_by", []), "semantic"]
+                fused[key]["vector_rank"] = rank + 1
                 fused[key]["vector_score"] = vector["vector_score"]
                 fused[key]["hybrid_score"] = fused[key].get("hybrid_score", 0.0) + 1.0 / (60 + rank + 1)
         ranked = sorted(fused.values(), key=lambda item: item.get("hybrid_score", 0), reverse=True)
         for item in ranked:
             item["pipeline"] = ["Hybrid"]
         warning = None
+        reranked = False
         if config.cohere_rerank_enabled and ranked:
             if not cohere_api_key:
                 warning = "Cohere rerank is enabled but its API key is not configured."
             else:
                 try:
                     selection = ranked[:config.rerank_candidates]
-                    order = self.rerank(cohere_api_key, query, [item["snippet"] for item in selection], config)
+                    self.attach_passages(selection, query, config)
+                    order = self.rerank(
+                        cohere_api_key, query,
+                        [embedding_input(item["title"], item["passage"]) for item in selection], config,
+                    )
                     ranked = [selection[index] for index, _ in order]
                     for item, (_, score) in zip(ranked, order, strict=True):
                         item["rerank_score"] = score
                         item["pipeline"] = ["Hybrid", "Reranked"]
+                    reranked = True
                 except Exception as exc:
                     warning = f"Cohere rerank failed; showing Hybrid results: {exc}"
+        results = ranked[:config.result_limit]
+        self.attach_passages(results, query, config)
+        self.attach_passages(local_only, query, config)
         return {
-            "results": ranked[:config.result_limit],
+            "results": results,
             "local_only_results": local_only[:config.result_limit],
             "warning": warning,
+            "engine": {"semantic": True, "rerank": reranked, "match": match, "semantic_note": None},
         }

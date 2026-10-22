@@ -590,9 +590,7 @@ class AdminHandlers:
                     status_code=409,
                 )
             self.search.set_config(config)
-            index = await asyncio.to_thread(
-                self.search.maybe_start_rebuild, self._read_provider_key("openai")
-            )
+            index = await asyncio.to_thread(self.maybe_schedule_search_rebuild)
         except (TypeError, ValueError) as exc:
             return self._json_error(str(exc), status_code=400)
         return JSONResponse(
@@ -646,28 +644,34 @@ class AdminHandlers:
         if parse_error:
             return parse_error
         query = str(payload.get("query", "")).strip()
-        mode = str(payload.get("mode", "basic")).strip().lower()
+        mode = str(payload.get("mode", "auto")).strip().lower()
         if not query:
             return self._json_error("query must not be empty.", status_code=400)
         if len(query) > 1000:
             return self._json_error("query must be 1000 characters or fewer.", status_code=400)
         config = self.search.get_config()
+        started = time.monotonic()
         try:
             if mode == "basic":
-                results = await asyncio.to_thread(
-                    self.search.basic_search, query, limit=config.result_limit,
+                results, match = await asyncio.to_thread(
+                    self.search.bm25_search, query, limit=config.result_limit,
                     source_kinds=config.source_kinds(),
                 )
-                data = {"results": results, "local_only_results": [], "warning": None}
-            elif mode == "hybrid":
+                await asyncio.to_thread(self.search.attach_passages, results, query, config)
+                data = {
+                    "results": results, "local_only_results": [], "warning": None,
+                    "engine": {"semantic": False, "rerank": False, "match": match,
+                               "semantic_note": "BM25 only"},
+                }
+            elif mode in {"auto", "hybrid"}:
                 data = await asyncio.to_thread(
-                    self.search.hybrid_search, query,
+                    self.search.search, query,
                     openai_api_key=self._read_provider_key("openai"),
                     cohere_api_key=self._read_provider_key("cohere"),
                     config=config,
                 )
             else:
-                return self._json_error("mode must be basic or hybrid.", status_code=400)
+                return self._json_error("mode must be auto or basic.", status_code=400)
         except ValueError as exc:
             return self._json_error(str(exc), status_code=400)
         except Exception as exc:
@@ -676,15 +680,14 @@ class AdminHandlers:
         for lane in ("results", "local_only_results"):
             for result in data[lane]:
                 result["group"] = group_map.get(result["group_id"])
+        data["elapsed_ms"] = round((time.monotonic() - started) * 1000)
         return JSONResponse({"ok": True, "mode": mode, **data}, headers=self._no_store_headers())
 
     async def api_search_index(self, request: Request) -> Response:
         _, error = self._require_admin(request)
         if error:
             return error
-        index = await asyncio.to_thread(
-            self.search.maybe_start_rebuild, self._read_provider_key("openai")
-        )
+        index = await asyncio.to_thread(self.maybe_schedule_search_rebuild)
         return JSONResponse({"ok": True, "index": index}, headers=self._no_store_headers())
 
     async def api_search_index_estimate(self, request: Request) -> Response:
@@ -862,10 +865,11 @@ class AdminHandlers:
                     self.search.set_config(SearchConfig.from_dict(config_payload))
                 group = self.store.update_session_group(group_id, **fields)
                 external_config = self.search.effective_external_config(self.search.get_config())
-            if enabling_sensitive and external_config.included_group_ids:
-                await asyncio.to_thread(
-                    self.search.maybe_start_rebuild, self._read_provider_key("openai")
-                )
+            if enabling_sensitive and external_config.included_group_ids and external_config.enabled:
+                # Drop the group's vectors now, whatever the update schedule says.
+                api_key = self._read_provider_key("openai")
+                if api_key:
+                    await asyncio.to_thread(self.search.start_rebuild, api_key)
         except ValueError as exc:
             return self._value_error(exc)
         return JSONResponse(
@@ -1702,13 +1706,46 @@ class AdminHandlers:
         except (InvalidToken, ValueError):
             return ""
 
-    def maybe_schedule_search_rebuild(self) -> dict[str, Any] | None:
-        """Refresh source state and queue a due vector rebuild without blocking callers."""
-        config = self.search.get_config()
-        api_key = self._read_provider_key("openai")
-        if not config.enabled or not api_key:
-            return None
-        return self.search.maybe_start_rebuild(api_key)
+    def _display_timezone(self) -> str:
+        try:
+            return resolve_timezone_name(self.store.get_app_setting(DISPLAY_TIMEZONE_SETTING_KEY))
+        except ValueError:
+            return "UTC"
+
+    def maybe_schedule_search_rebuild(self) -> dict[str, Any]:
+        """Refresh source state and queue a due index update without blocking callers.
+
+        Automatic updates follow the Semantic schedule and stop while the
+        "Runs models" master switch is off.
+        """
+        return self.search.maybe_start_rebuild(
+            self._read_provider_key("openai"),
+            timezone_name=self._display_timezone(),
+            paused=not self.store.get_token_features()["enabled"],
+        )
+
+    def _search_schedule_payload(self) -> dict[str, Any]:
+        return {
+            **self.search.get_schedule(),
+            "next_run_at": self.search.next_update_at(self._display_timezone()),
+            "paused": not self.store.get_token_features()["enabled"],
+        }
+
+    async def api_update_search_schedule(self, request: Request) -> Response:
+        _, error = self._require_admin_mutation(request)
+        if error:
+            return error
+        payload, parse_error = await _json_body(request)
+        if parse_error:
+            return parse_error
+        try:
+            await asyncio.to_thread(self.search.set_schedule, payload)
+        except (TypeError, ValueError) as exc:
+            return self._json_error(str(exc), status_code=400)
+        return JSONResponse(
+            {"ok": True, "schedule": await asyncio.to_thread(self._search_schedule_payload)},
+            headers=self._no_store_headers(),
+        )
 
     def _operational_status_payload(self) -> dict[str, Any]:
         cached: dict[str, Any] = {}
@@ -1806,6 +1843,7 @@ class AdminHandlers:
             "search": self.search.get_config().to_dict(),
             "groups": self.store.list_session_groups(),
             "index": self.search.index_status(),
+            "search_schedule": self._search_schedule_payload(),
             "tool_output": tool_output,
             "transcript": {
                 "chunk_max_chars": chunk_max_chars,

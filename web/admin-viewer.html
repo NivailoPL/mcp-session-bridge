@@ -902,7 +902,7 @@
     .chapter-fill-actions { display: flex; gap: .5rem; }
     .chapter-fill-history { display: grid; gap: .2rem; margin: 0; padding: 0; list-style: none; color: var(--muted); font-size: var(--t-label); font-family: "Geist Mono", ui-monospace, monospace; }
     .chapter-fill-history:empty { display: none; }
-    /* "Uses tokens": features that spend money sit under one switch in the settings menu */
+    /* "Runs models": features that run a model in the background sit under one switch in the settings menu */
     .settings-tabs-group { display: flex; align-items: center; justify-content: space-between; gap: .5rem; margin-top: .9rem; padding: .75rem 10px .35rem; border-top: 1px solid var(--stroke-soft); }
     .settings-tabs-group-title { font-family: "Geist Mono", ui-monospace, monospace; font-size: var(--t-label); font-weight: 500; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
     .settings-switch-input.is-green:checked { background: var(--ok); }
@@ -1930,27 +1930,55 @@
     .status-check-list .settings-footnote { padding: 10px 16px; }
     .status-command-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); gap: 8px; }
     .status-command-list code { display: block; padding: .5rem .7rem; border: 1px solid var(--stroke-soft); border-radius: var(--r-ctrl); background: rgba(0,0,0,.22); font-size: var(--t-meta); }
-    .search-dialog { width: min(72rem, calc(100vw - 2rem)); height: min(48rem, calc(100vh - 2rem)); max-width: none; max-height: none; }
-    .search-dialog[open] { display: grid; grid-template-rows: auto auto auto minmax(0,1fr); }
-    .search-command { display: grid; grid-template-columns: minmax(12rem,1fr) auto auto auto; gap: .6rem; padding: .9rem 1rem; border-bottom: 1px solid var(--stroke-soft); }
-    .search-dialog > .settings-status { padding: .55rem 1rem; margin: 0; border-bottom: 1px solid var(--stroke-soft); }
-    .search-workspace { display: grid; grid-template-columns: minmax(18rem,25rem) minmax(0,1fr); min-height: 0; }
-    .search-results-pane, .search-detail { min-width: 0; overflow: auto; padding: 1rem; }
-    .search-results-pane { border-right: 1px solid var(--stroke-soft); }
-    .search-results { display: grid; gap: .55rem; }
-    .search-results + .search-results { margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--stroke-soft); }
-    .search-lane-title { margin: 0 0 .6rem; color: var(--faint-ink); font-size: var(--t-label); text-transform: uppercase; letter-spacing: .13em; }
-    .search-result-card { display: grid; gap: .45rem; width: 100%; padding: .75rem; text-align: left; background: rgba(255,255,255,.025); }
-    .search-result-card.is-active { border-color: var(--accent); background: var(--accent-soft); }
-    .search-result-title { display: flex; align-items: center; gap: .45rem; min-width: 0; }
-    .search-result-title b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .search-result-meta, .search-badges { display: flex; flex-wrap: wrap; gap: .35rem; color: var(--muted); font-size: var(--t-label); }
-    .search-badge { padding: .12rem .35rem; border: 1px solid var(--stroke); border-radius: var(--r-pill); color: var(--accent-ink); }
-    .search-result-card p { margin: 0; color: var(--muted); font-size: var(--t-ctrl); line-height: 1.45; }
-    .search-result-card mark, .search-detail mark { border-radius: 2px; background: rgba(246,200,95,.28); color: inherit; }
-    .search-detail { display: grid; align-content: start; gap: .9rem; }
+    .search-dialog { width: min(72rem, calc(100vw - 2rem)); height: min(46rem, calc(100vh - 2rem)); max-width: none; max-height: none; padding: 0; overflow: hidden; }
+    .search-dialog[open] { display: grid; grid-template-rows: auto auto minmax(0,1fr); }
+    .search-command { display: flex; align-items: center; gap: .6rem; padding: .7rem 1rem; border-bottom: 1px solid var(--stroke-soft); }
+    .search-command-icon { flex: 0 0 auto; width: 18px; height: 18px; color: var(--muted); }
+    .search-command input { flex: 1; min-width: 0; height: 38px; padding: 0; border: 0; outline: 0; background: transparent; box-shadow: none; font-size: 16.5px; font-weight: 600; }
+    .search-command input:focus { box-shadow: none; }
+    .search-close { min-height: 0; padding: 0; border: 0; background: none; color: var(--faint-ink); }
+    .search-close kbd { font-size: var(--t-label); }
+    .search-engine { flex: 0 0 auto; display: inline-flex; align-items: center; gap: .35rem; height: 26px; padding: 0 .6rem; border: 1px solid var(--stroke-soft); border-radius: var(--r-pill); color: var(--text-2); font-size: var(--t-label); font-weight: 700; white-space: nowrap; }
+    .search-engine[hidden] { display: none; }
+    .search-engine-mark { padding: 0 .3rem; border-radius: 4px; background: var(--accent-soft); color: var(--accent-ink); font-family: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10.5px; font-weight: 500; }
+    .search-status { min-height: 1.9rem; margin: 0; padding: .45rem 1rem; border-bottom: 1px solid var(--stroke-soft); color: var(--muted); font-size: var(--t-meta); }
+    .search-status:empty { display: none; }
+    .search-workspace { display: grid; grid-template-columns: minmax(18rem, 27rem) minmax(0,1fr); min-height: 0; }
+    .search-results-pane, .search-detail { min-width: 0; overflow: auto; }
+    .search-results-pane { padding: .5rem; border-right: 1px solid var(--stroke-soft); }
+    .search-results { display: grid; gap: .2rem; }
+    .search-results:empty { display: none; }
+    .search-results + .search-results { margin-top: .6rem; }
+    .search-session { padding: .45rem .5rem .55rem; border-radius: var(--r-ctrl); }
+    .search-session-head { display: grid; grid-template-columns: 26px minmax(0,1fr) auto; align-items: center; gap: .55rem; min-width: 0; }
+    .search-session-mark { display: grid; place-items: center; width: 26px; height: 26px; border: 1px solid color-mix(in srgb, var(--g) 45%, transparent); border-radius: 7px; background: color-mix(in srgb, var(--g) 13%, transparent); color: var(--g); }
+    .search-session-mark svg { width: 14px; height: 14px; }
+    .search-session-title { overflow: hidden; font-size: 13.5px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+    .search-session-when { color: var(--faint-ink); font-size: var(--t-label); white-space: nowrap; }
+    .search-hits { display: grid; grid-template-columns: minmax(0,1fr); gap: 1px; min-width: 0; margin: .25rem 0 0 calc(26px + .55rem); }
+    .search-hit { display: flex; align-items: baseline; gap: .5rem; width: 100%; min-width: 0; min-height: 0; padding: .3rem .45rem; border: 1px solid transparent; border-radius: 7px; background: none; color: var(--text-2); font-size: var(--t-meta); font-weight: 500; text-align: left; }
+    .search-hit:hover { background: rgba(255,255,255,.035); }
+    .search-hit.is-active { border-color: rgba(122,125,240,.45); background: var(--accent-soft); color: var(--text); }
+    .search-hit-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .search-hit-tag { flex: 0 0 auto; color: var(--ok); font-size: 10.5px; }
+    .search-lane { margin: 0; color: var(--faint-ink); font-size: var(--t-meta); }
+    .search-lane summary { padding: .5rem .6rem; border: 1px dashed var(--stroke-soft); border-radius: var(--r-ctrl); cursor: pointer; }
+    .search-lane[open] summary { margin-bottom: .3rem; }
+    .search-results mark, .search-detail mark { border-radius: 2px; background: rgba(246,200,95,.28); color: inherit; }
+    .search-detail { display: grid; align-content: start; gap: .85rem; padding: 1.1rem 1.3rem; }
     .search-detail h4, .search-detail p { margin: 0; }
-    .search-detail-snippet { padding: 1rem; border: 1px solid var(--stroke); border-radius: var(--r-card); background: rgba(255,255,255,.025); white-space: pre-wrap; line-height: 1.6; }
+    .search-detail-head { display: grid; grid-template-columns: 26px minmax(0,1fr); gap: .6rem; align-items: center; }
+    .search-detail-head h4 { font-size: 15px; }
+    .search-detail-meta { color: var(--muted); font-size: var(--t-meta); }
+    .search-passage { display: grid; gap: .55rem; }
+    .search-turn { padding: .7rem .85rem; border: 1px solid var(--stroke-soft); border-radius: var(--r-card); background: rgba(255,255,255,.025); white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; line-height: 1.55; }
+    .search-turn.is-user { justify-self: end; max-width: 85%; border-color: rgba(122,125,240,.28); background: var(--accent-soft); }
+    .search-turn-label { display: block; margin-bottom: .2rem; color: var(--faint-ink); font-size: var(--t-label); font-weight: 700; letter-spacing: .08em; text-transform: uppercase; white-space: normal; }
+    .search-detail-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
+    .search-empty { padding: 1.2rem .6rem; color: var(--muted); font-size: var(--t-meta); }
+    .search-dialog.is-id-match .search-workspace { grid-template-columns: minmax(0,1fr); }
+    .search-dialog.is-id-match .search-results-pane { display: none; }
+    .search-id-card { display: grid; gap: .7rem; padding: .9rem; border: 1px solid rgba(122,125,240,.45); border-radius: var(--r-card); background: var(--accent-soft); }
 
     /* ---------- responsive ---------- */
     @media (max-width: 920px) {
@@ -2012,8 +2040,8 @@
       .probe-result { grid-template-columns: minmax(0, 1fr) auto auto; }
       .probe-result > :nth-child(4) { display: none; }
       .status-command-list { grid-template-columns: 1fr; }
-      .search-command { grid-template-columns: 1fr 1fr; }
-      .search-command input { grid-column: 1 / -1; }
+      .search-command { flex-wrap: wrap; }
+      .search-command input { flex-basis: calc(100% - 2rem); }
       .search-workspace { grid-template-columns: 1fr; overflow: auto; }
       .search-results-pane { border-right: 0; border-bottom: 1px solid var(--stroke-soft); }
     }
@@ -2540,17 +2568,18 @@
         <button type="button" data-settings-tab="general" class="is-active"><span>General</span><span class="settings-tab-meta"><span class="settings-tab-dirty" hidden aria-label="Unsaved changes"></span></span></button>
         <button type="button" data-settings-tab="transcript"><span>MCP</span><span class="settings-tab-meta"><span id="settingsHintTranscript" class="settings-tab-hint"></span><span class="settings-tab-dirty" hidden aria-label="Unsaved changes"></span></span></button>
         <button type="button" data-settings-tab="connectors"><span>Connectors</span><span class="settings-tab-meta"><span id="settingsHintConnectors" class="settings-tab-hint"></span></span></button>
-        <button type="button" data-settings-tab="search"><span>Search</span><span class="settings-tab-meta"><span id="settingsHintSearch" class="settings-tab-hint"></span><span class="settings-tab-dirty" hidden aria-label="Unsaved changes"></span></span></button>
+        <button type="button" data-settings-tab="search"><span>Search</span><span class="settings-tab-meta"><span class="settings-tab-dirty" hidden aria-label="Unsaved changes"></span></span></button>
         <button type="button" data-settings-tab="api"><span>API keys</span><span class="settings-tab-meta"><span id="settingsHintApi" class="settings-tab-hint"></span></span></button>
         <button type="button" data-settings-tab="codex"><span>Codex</span><span class="settings-tab-meta"><span id="settingsHintCodex" class="settings-tab-hint"></span></span></button>
         <button type="button" data-settings-tab="system"><span>System</span><span class="settings-tab-meta"><span id="settingsHintSystem" class="settings-tab-hint"></span><span id="statusUpdateDot" class="update-dot" hidden aria-hidden="true"></span></span></button>
         <div class="settings-tabs-group">
-          <span id="tokenFeaturesTitle" class="settings-tabs-group-title">Uses tokens</span>
-          <input id="tokenFeaturesMaster" class="settings-switch-input is-green" type="checkbox" role="switch" aria-labelledby="tokenFeaturesTitle" title="Turn every feature that spends tokens on or off" hidden>
+          <span id="tokenFeaturesTitle" class="settings-tabs-group-title">Runs models</span>
+          <input id="tokenFeaturesMaster" class="settings-switch-input is-green" type="checkbox" role="switch" aria-labelledby="tokenFeaturesTitle" title="Turn every feature that runs a model in the background on or off" hidden>
         </div>
         <button type="button" data-settings-tab="titles"><span>Titles</span><span class="settings-tab-meta"><span id="settingsHintTitles" class="settings-tab-hint"></span><span class="settings-tab-dirty" hidden aria-label="Unsaved changes"></span></span></button>
         <button type="button" data-settings-tab="strands"><span>Chapters</span><span class="settings-tab-meta"><span id="settingsHintStrands" class="settings-tab-hint"></span></span></button>
         <button type="button" data-settings-tab="topics"><span>Topics</span><span class="settings-tab-meta"><span id="settingsHintTopics" class="settings-tab-hint"></span></span></button>
+        <button type="button" data-settings-tab="semantic"><span>Semantic</span><span class="settings-tab-meta"><span id="settingsHintSearch" class="settings-tab-hint"></span><span class="settings-tab-dirty" hidden aria-label="Unsaved changes"></span></span></button>
       </nav>
       <div class="settings-body">
       <div class="settings-content">
@@ -2693,29 +2722,10 @@
         <section data-settings-panel="search" class="settings-panel" hidden>
           <div class="settings-panel-head">
             <h4>Search</h4>
-            <span class="context-help"><button type="button" class="context-help-trigger" aria-label="About Search" aria-describedby="settingsHelpSearch">?</button><span id="settingsHelpSearch" class="context-help-box" role="tooltip">Basic search (BM25) is always available and never leaves this server. Hybrid search adds vector search through OpenAI embeddings and optional Cohere reranking, only for the groups you allow.</span></span>
-            <span id="searchVerdict" class="settings-pill settings-verdict" hidden></span>
+            <span class="context-help"><button type="button" class="context-help-trigger" aria-label="About Search" aria-describedby="settingsHelpSearch">?</button><span id="settingsHelpSearch" class="context-help-box" role="tooltip">Search (⌘K) always matches exact words with BM25 on this server. Semantic search, under Runs models, adds related wording on top. Pasting a session ID opens that session.</span></span>
           </div>
           <section class="settings-group">
-            <div class="settings-group-head"><h5>Hybrid search</h5></div>
-            <div class="settings-item">
-              <div class="settings-item-label">
-                <span class="settings-item-title"><label for="ragEnabled">Vector search (RAG)</label><span class="context-help"><button type="button" class="context-help-trigger" aria-label="About Vector search" aria-describedby="settingsHelpRag">?</button><span id="settingsHelpRag" class="context-help-box" role="tooltip">Builds and uses a vector index so the Hybrid mode in Search also finds related wording, not only exact words. Needs an OpenAI key.</span></span></span>
-                <span id="ragKeyState" class="settings-item-sub"></span>
-              </div>
-              <div class="settings-item-control"><input id="ragEnabled" class="settings-switch-input" type="checkbox" role="switch"></div>
-            </div>
-            <div class="settings-item" id="cohereRow">
-              <div class="settings-item-label">
-                <span class="settings-item-title"><label for="cohereEnabled">Cohere rerank</label><span class="context-help"><button type="button" class="context-help-trigger" aria-label="About Cohere rerank" aria-describedby="settingsHelpCohere">?</button><span id="settingsHelpCohere" class="context-help-box" role="tooltip">Re-orders Hybrid results for relevance. Applied only to candidates from groups allowed for external processing, and billed per search rather than per index rebuild.</span></span></span>
-                <span id="cohereKeyState" class="settings-item-sub"></span>
-              </div>
-              <div class="settings-item-control"><button type="button" class="settings-link" id="cohereAddKey" hidden>Add key</button><input id="cohereEnabled" class="settings-switch-input" type="checkbox" role="switch"></div>
-            </div>
-          </section>
-          <div id="ragOptions" class="settings-stack">
-            <section class="settings-group">
-              <div class="settings-group-head"><h5>What gets indexed</h5></div>
+            <div class="settings-group-head"><h5>What Search reads</h5></div>
               <div class="settings-item">
                 <div class="settings-item-label">
                   <span class="settings-item-title">Sources<span class="context-help"><button type="button" class="context-help-trigger" aria-label="About Sources" aria-describedby="settingsHelpSources">?</button><span id="settingsHelpSources" class="context-help-box" role="tooltip">PDFs are indexed from their text layer. OCR is not supported: scanned or image-only PDFs are kept for preview and download but are not indexed.</span></span></span>
@@ -2726,6 +2736,40 @@
                   <label class="toggle"><input id="sourceGroupFiles" type="checkbox"> Group files</label>
                 </div>
               </div>
+          </section>
+          <details class="settings-disclosure developer-settings">
+            <summary><span class="settings-disclosure-title">Advanced tuning</span><span class="settings-disclosure-meta">results, BM25</span></summary>
+            <div class="settings-disclosure-body settings-grid">
+              <label class="field">Results<input id="resultLimit" type="number" min="1" max="500"></label>
+              <label class="field">BM25 candidates<input id="bm25Candidates" type="number" min="1" max="500"></label>
+            </div>
+          </details>
+        </section>
+
+        <section data-settings-panel="semantic" class="settings-panel" hidden>
+          <div class="settings-panel-head">
+            <h4>Semantic search</h4>
+            <span class="context-help"><button type="button" class="context-help-trigger" aria-label="About Semantic search" aria-describedby="settingsHelpSemantic">?</button><span id="settingsHelpSemantic" class="context-help-box" role="tooltip">Embeds passages of the groups you share so Search also finds related wording, and can let Cohere reorder the results. Only new or changed passages are embedded on each update. When it is unavailable, Search keeps working with BM25.</span></span>
+            <span id="searchVerdict" class="settings-pill settings-verdict" hidden></span>
+          </div>
+          <section class="settings-group">
+            <div class="settings-item">
+              <div class="settings-item-label">
+                <span class="settings-item-title"><label for="ragEnabled">Semantic · OpenAI</label><span class="context-help"><button type="button" class="context-help-trigger" aria-label="About Semantic search" aria-describedby="settingsHelpRag">?</button><span id="settingsHelpRag" class="context-help-box" role="tooltip">Keeps a vector index of shared groups so Search also finds related wording, not only exact words. New messages are added in small updates; only new or changed passages are sent to OpenAI. Needs an OpenAI key.</span></span></span>
+                <span id="ragKeyState" class="settings-item-sub"></span>
+              </div>
+              <div class="settings-item-control"><input id="ragEnabled" class="settings-switch-input" type="checkbox" role="switch"></div>
+            </div>
+            <div class="settings-item" id="cohereRow">
+              <div class="settings-item-label">
+                <span class="settings-item-title"><label for="cohereEnabled">Rerank · Cohere</label><span class="context-help"><button type="button" class="context-help-trigger" aria-label="About Rerank" aria-describedby="settingsHelpCohere">?</button><span id="settingsHelpCohere" class="context-help-box" role="tooltip">Reorders the top results by relevance, reading the best passage of each. Applied only to results from shared groups, and billed per search rather than per index update.</span></span></span>
+                <span id="cohereKeyState" class="settings-item-sub"></span>
+              </div>
+              <div class="settings-item-control"><button type="button" class="settings-link" id="cohereAddKey" hidden>Add key</button><input id="cohereEnabled" class="settings-switch-input" type="checkbox" role="switch"></div>
+            </div>
+          </section>
+          <div id="ragOptions" class="settings-stack">
+            <section class="settings-group">
               <div class="settings-item is-stacked">
                 <div class="settings-item-label">
                   <span class="settings-item-title">Sent to OpenAI / Cohere<span class="context-help"><button type="button" class="context-help-trigger" aria-label="About external processing" aria-describedby="settingsHelpGroups">?</button><span id="settingsHelpGroups" class="context-help-box" role="tooltip">Only checked groups ever leave this server for embeddings or reranking. Sensitive groups (crossed eye) are never sent; they stay searchable with local BM25 only.</span></span></span>
@@ -2749,9 +2793,25 @@
                   <button id="indexCancel" type="button" class="ghost settings-compact" hidden>Stop</button>
                 </div>
               </div>
+                            <div class="settings-item" data-settings-instant>
+                <div class="settings-item-label">
+                  <span class="settings-item-title"><label for="searchScheduleMode">Updates</label><span class="context-help"><button type="button" class="context-help-trigger" aria-label="About updates" aria-describedby="settingsHelpSchedule">?</button><span id="settingsHelpSchedule" class="context-help-box" role="tooltip">When new messages get embedded. New messages are found by BM25 at once either way; only Semantic waits for the update. Automatic updates pause while Runs models is off; Update now always works. Saved at once.</span></span></span>
+                  <span id="searchScheduleNext" class="settings-item-sub"></span>
+                </div>
+                <div class="settings-item-control">
+                  <select id="searchScheduleMode">
+                    <option value="messages">As messages arrive</option>
+                    <option value="interval:3">Every 3 hours</option>
+                    <option value="interval:6">Every 6 hours</option>
+                    <option value="interval:12">Every 12 hours</option>
+                    <option value="daily">Every day at…</option>
+                  </select>
+                  <input id="searchScheduleTime" type="time" class="settings-input-mono" step="300" aria-label="Update time" hidden>
+                </div>
+              </div>
               <div class="settings-item" id="indexEstimate" aria-label="Estimated full rebuild" aria-live="polite" hidden>
                 <div class="settings-item-label">
-                  <span class="settings-item-title">Full rebuild cost<span class="context-help"><button type="button" class="context-help-trigger" aria-label="About rebuild cost" aria-describedby="settingsHelpEstimate">?</button><span id="settingsHelpEstimate" class="context-help-box" role="tooltip">Estimate for re-embedding everything with the settings on this tab: <span id="indexEstimateDocuments"></span>, <span id="indexEstimateChunks"></span>, <span id="indexEstimateOverlap"></span>, model <span id="indexEstimateModel"></span>. Cohere rerank is not included; it is billed only when Hybrid search runs.</span></span></span>
+                  <span class="settings-item-title">Full rebuild cost<span class="context-help"><button type="button" class="context-help-trigger" aria-label="About rebuild cost" aria-describedby="settingsHelpEstimate">?</button><span id="settingsHelpEstimate" class="context-help-box" role="tooltip">Estimate for re-embedding everything with the settings on this tab: <span id="indexEstimateDocuments"></span>, <span id="indexEstimateChunks"></span>, <span id="indexEstimateOverlap"></span>, model <span id="indexEstimateModel"></span>. Rerank is not included; it is billed per search.</span></span></span>
                   <span id="indexEstimateState" class="settings-item-sub"></span>
                 </div>
                 <div id="indexEstimateMetrics" class="settings-item-control" hidden>
@@ -2760,7 +2820,7 @@
                 </div>
               </div>
               <details class="settings-disclosure developer-settings">
-                <summary><span class="settings-disclosure-title">Advanced tuning</span><span class="settings-disclosure-meta">chunking, models, candidates</span></summary>
+                <summary><span class="settings-disclosure-title">Advanced tuning</span><span class="settings-disclosure-meta">passages, models, candidates</span></summary>
                 <div class="settings-disclosure-body settings-grid">
                   <label class="field">Chunk size (tokens)<input id="chunkSize" type="number" min="64" max="4000"></label>
                   <label class="field">Overlap (tokens)<input id="chunkOverlap" type="number" min="0" max="3999"></label>
@@ -2768,15 +2828,13 @@
                   <label class="field">Dimensions<input id="embeddingDimensions" type="number" min="1" max="4096"></label>
                   <label class="field">New messages threshold<input id="rebuildThreshold" type="number" min="1" max="10000"></label>
                   <label class="field">Maximum wait (minutes)<input id="rebuildMaxWait" type="number" min="1" max="10080"></label>
-                  <label class="field">BM25 candidates<input id="bm25Candidates" type="number" min="1" max="500"></label>
                   <label class="field">Vector candidates<input id="vectorCandidates" type="number" min="1" max="500"></label>
-                  <label class="field">Results<input id="resultLimit" type="number" min="1" max="500"></label>
                   <label class="field">Cohere model<input id="cohereModel" type="text"></label>
                   <label class="field">Rerank candidates<input id="rerankCandidates" type="number" min="1" max="500"></label>
                 </div>
               </details>
               <div class="settings-item">
-                <div class="settings-item-label"><span class="settings-item-title">Delete index</span><span class="settings-item-sub">Hybrid search stops until the index is rebuilt</span></div>
+                <div class="settings-item-label"><span class="settings-item-title">Delete index</span><span class="settings-item-sub">Search uses BM25 only until the index is rebuilt</span></div>
                 <div class="settings-item-control"><button id="indexDelete" type="button" class="settings-quiet-danger settings-compact">Delete index</button></div>
               </div>
             </section>
@@ -2814,7 +2872,7 @@
             </div>
             <div class="settings-item">
               <div class="settings-item-label"><span class="settings-item-title">Used for</span></div>
-              <div class="settings-item-control"><span class="settings-value-muted">Rerank in Hybrid search</span></div>
+              <div class="settings-item-control"><span class="settings-value-muted">Rerank in Search</span></div>
             </div>
           </section>
         </section>
@@ -2822,7 +2880,7 @@
         <section data-settings-panel="codex" class="settings-panel" hidden>
           <div class="settings-panel-head">
             <h4>Codex</h4>
-            <span class="context-help"><button type="button" class="context-help-trigger" aria-label="About Codex" aria-describedby="settingsHelpCodex">?</button><span id="settingsHelpCodex" class="context-help-box" role="tooltip">Codex App Server runs on this server and uses the plan of the OpenAI account signed in here. Features under Uses tokens call it only when they are switched on.</span></span>
+            <span class="context-help"><button type="button" class="context-help-trigger" aria-label="About Codex" aria-describedby="settingsHelpCodex">?</button><span id="settingsHelpCodex" class="context-help-box" role="tooltip">Codex App Server runs on this server and uses the plan of the OpenAI account signed in here. Features under Runs models call it only when they are switched on.</span></span>
             <span id="codexSettingsPill" class="settings-pill"></span>
           </div>
           <section id="codexSettingsLogin" class="settings-group codex-code-card" hidden aria-labelledby="codexCodeHeading">
@@ -3145,24 +3203,19 @@
     </div>
   </dialog>
 
-  <dialog id="searchDialog" class="search-dialog" aria-labelledby="searchHeading">
-    <div class="dialog-head">
-      <div><h3 id="searchHeading">Search context</h3><p class="meta">Search every conversation and text file in the admin database.</p></div>
-      <button type="button" class="ghost" id="searchClose">Close</button>
-    </div>
+  <dialog id="searchDialog" class="search-dialog" aria-label="Search">
     <form id="contextSearchForm" class="search-command">
-      <input id="contextSearchInput" type="search" maxlength="1000" placeholder="What are you looking for?" autocomplete="off">
-      <div class="seg" role="radiogroup" aria-label="Search mode">
-        <button type="button" data-search-mode="basic" class="is-active">Basic (BM25)</button>
-        <button type="button" data-search-mode="hybrid">Hybrid</button>
-      </div>
-      <button id="contextSearchSubmit" type="submit" class="primary">Search</button>
-      <button id="contextSearchStop" type="button" class="ghost" hidden>Stop</button>
+      <svg class="search-command-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+      <input id="contextSearchInput" type="search" maxlength="1000" placeholder="Search sessions and files, or paste a session ID" aria-label="Search" autocomplete="off" spellcheck="false">
+      <span id="searchEngine" class="search-engine" hidden></span>
+      <button id="contextSearchSubmit" type="submit" class="primary settings-compact">Search</button>
+      <button id="contextSearchStop" type="button" class="ghost settings-compact" hidden>Stop</button>
+      <button type="button" class="search-close" id="searchClose" aria-label="Close search"><kbd>esc</kbd></button>
     </form>
-    <p id="contextSearchStatus" class="settings-status" aria-live="polite">Enter a query to search local context.</p>
+    <p id="contextSearchStatus" class="search-status" aria-live="polite"></p>
     <div class="search-workspace">
-      <section id="searchResultsPane" class="search-results-pane"><div id="searchResults" class="search-results"></div><div id="localSearchResults" class="search-results"></div></section>
-      <section id="searchDetail" class="search-detail"><div class="file-workspace-placeholder">Select a result to inspect its source and snippet.</div></section>
+      <section id="searchResultsPane" class="search-results-pane" aria-label="Results"><div id="searchResults" class="search-results"></div><div id="localSearchResults" class="search-results"></div></section>
+      <section id="searchDetail" class="search-detail" aria-label="Preview"></section>
     </div>
   </dialog>
 
@@ -3305,7 +3358,8 @@
         aiSettings: { configured: false, api_key_preview: "", model: "gpt-5.4-nano", title_max_chars: 72 },
         settings: null,
         operationalStatus: null,
-        searchMode: "basic",
+        searchShowingId: false,
+        searchQuery: "",
         searchResults: [],
         selectedSearchResult: null,
         searchController: null,
@@ -3595,7 +3649,8 @@
         "indexEstimateTokens", "indexEstimateOverlap", "indexEstimateCost", "indexEstimateModel", "indexEstimatePricing",
         "indexRebuild", "indexRebuildSpinner", "indexRebuildLabel", "indexCancel", "indexDelete", "searchDialog", "searchClose",
         "contextSearchForm", "contextSearchInput", "contextSearchSubmit", "contextSearchStop",
-        "contextSearchStatus", "searchResults", "localSearchResults", "searchDetail",
+        "contextSearchStatus", "searchResults", "localSearchResults", "searchDetail", "searchEngine",
+        "searchScheduleMode", "searchScheduleTime", "searchScheduleNext",
         "transcriptChunkMaxChars", "transcriptChunkMaxLines", "probeHarnessLabel", "probeTargetChars",
         "probeContentProfile", "probePromptPreview", "probePromptCopy", "probeRecommendations", "probeResults",
         "databaseExportButton", "databaseExportResult",
@@ -4185,7 +4240,7 @@
         settingsDom.toolOutputRestart.addEventListener("click", () => restartBridgeService());
 
         // Panels whose fields wait for "Save changes". API keys and System act at once.
-        for (const name of ["titles", "transcript", "search"]) {
+        for (const name of ["titles", "transcript", "search", "semantic"]) {
           const panel = document.querySelector(`[data-settings-panel="${name}"]`);
           const markDirty = (event) => {
             if (event.target.closest("[data-settings-instant]")) return;
@@ -4216,9 +4271,20 @@
 
         settingsDom.ragEnabled.addEventListener("change", renderRagVisibility);
         settingsDom.ragGroupList.addEventListener("change", renderRagGroupSummary);
-        const searchPanel = document.querySelector('[data-settings-panel="search"]');
-        searchPanel.addEventListener("input", () => scheduleIndexEstimate());
-        searchPanel.addEventListener("change", () => scheduleIndexEstimate());
+        for (const name of ["search", "semantic"]) {
+          const panel = document.querySelector(`[data-settings-panel="${name}"]`);
+          panel.addEventListener("input", (event) => { if (!event.target.closest("[data-settings-instant]")) scheduleIndexEstimate(); });
+          panel.addEventListener("change", (event) => { if (!event.target.closest("[data-settings-instant]")) scheduleIndexEstimate(); });
+        }
+        settingsDom.searchScheduleMode.addEventListener("change", () => {
+          const [mode, hours] = settingsDom.searchScheduleMode.value.split(":");
+          const change = mode === "interval" ? { mode, interval_hours: Number(hours) } : { mode };
+          if (mode === "daily") change.time = settingsDom.searchScheduleTime.value || "03:00";
+          saveSearchSchedule(change);
+        });
+        settingsDom.searchScheduleTime.addEventListener("change", () => {
+          if (settingsDom.searchScheduleTime.value) saveSearchSchedule({ time: settingsDom.searchScheduleTime.value });
+        });
         settingsDom.indexRebuild.addEventListener("click", () => runIndexAction("rebuild"));
         settingsDom.indexCancel.addEventListener("click", () => runIndexAction("cancel"));
         settingsDom.indexDelete.addEventListener("click", () => runIndexAction("delete"));
@@ -4273,7 +4339,8 @@
           switch (name) {
             case "titles": return await saveTitleSettings();
             case "transcript": return await saveDeliverySettings();
-            case "search": return await saveSearchSettings();
+            case "search":
+            case "semantic": return await saveSearchSettings();
             default: return undefined;
           }
         } finally {
@@ -4438,6 +4505,7 @@
         renderRagGroupSummary();
         renderRenameMaxWords();
         renderRagVisibility();
+        renderSearchSchedule();
         renderOutputProbePrompt();
         renderOutputProbeResults();
         renderSettingsStatus();
@@ -4583,7 +4651,7 @@
 
       function searchSummary(settings) {
         const index = settings.index || {};
-        if (!settings.search.enabled) return { verdict: "Hybrid off", tone: "off", hint: "Off" };
+        if (!settings.search.enabled) return { verdict: "Semantic off", tone: "off", hint: "Off" };
         if (!settings.api.openai.configured) {
           return { verdict: "OpenAI key needed", tone: "warn", hint: "Needs key", hintTone: "warn" };
         }
@@ -4594,8 +4662,8 @@
         if (index.active_generation == null) {
           return { verdict: "Index not built", tone: "warn", hint: "Not built", hintTone: "warn" };
         }
-        if (index.needs_rebuild) return { verdict: "Index needs rebuild", tone: "warn", hint: "Rebuild", hintTone: "warn" };
-        return { verdict: "Hybrid ready", tone: "ok", hint: "Ready", hintTone: "ok" };
+        if (index.needs_rebuild) return { verdict: "Index needs update", tone: "warn", hint: "Update", hintTone: "warn" };
+        return { verdict: "Semantic ready", tone: "ok", hint: "Ready", hintTone: "ok" };
       }
 
       function renderIndexStatus(index) {
@@ -4604,11 +4672,11 @@
         const ready = index.status === "ready";
         const count = (value) => Number(value || 0).toLocaleString();
         let summary;
-        if (index.status === "building") summary = `Building · ${count(index.processed_count)}/${count(index.document_count)} documents`;
+        if (index.status === "building") summary = `Updating · ${count(index.processed_count)}/${count(index.document_count)} documents${index.embedded_count ? ` · ${count(index.embedded_count)} new passages` : ""}`;
         else if (index.status === "queued") summary = "Queued";
         else if (index.status === "failed") summary = "Build failed";
         else if (index.active_generation == null) summary = "No index yet";
-        else summary = `${count(index.chunk_count)} chunks`;
+        else summary = `${count(index.chunk_count)} passages${index.embedded_count != null && index.reused_count ? ` · last update embedded ${count(index.embedded_count)}` : ""}`;
         const dirty = index.dirty_document_count ? ` · ${index.dirty_document_count} pending` : "";
         const paused = index.auto_rebuild_suppressed ? " · automatic rebuild paused" : "";
         settingsDom.indexStatusText.textContent =
@@ -4621,14 +4689,14 @@
         settingsDom.indexRebuild.setAttribute("aria-busy", String(building));
         settingsDom.indexRebuildSpinner.hidden = !building;
         settingsDom.indexRebuildLabel.textContent = building
-          ? "Building…" : index.active_generation == null ? "Build index" : "Rebuild";
+          ? "Updating…" : index.active_generation == null ? "Build index" : "Update now";
         settingsDom.indexCancel.hidden = !building;
         settingsDom.indexCancel.disabled = !building;
         settingsDom.indexDelete.disabled = building || index.active_generation == null;
         if (building) setSettingsPill(settingsDom.indexStatePill, "Building", "accent");
         else if (index.status === "failed") setSettingsPill(settingsDom.indexStatePill, "Failed", "fail");
         else if (index.active_generation == null) setSettingsPill(settingsDom.indexStatePill, "Not built", "warn");
-        else if (index.needs_rebuild) setSettingsPill(settingsDom.indexStatePill, "Needs rebuild", "warn");
+        else if (index.needs_rebuild) setSettingsPill(settingsDom.indexStatePill, "Needs update", "warn");
         else setSettingsPill(settingsDom.indexStatePill, "Up to date", "ok");
       }
 
@@ -4675,7 +4743,11 @@
             ? "price unavailable"
             : `$${estimate.estimated_cost_usd < 0.01
               ? estimate.estimated_cost_usd.toFixed(4) : estimate.estimated_cost_usd.toFixed(2)}`;
-          settingsDom.indexEstimateState.textContent = "";
+          const updateCost = estimate.update_cost_usd == null ? "" : ` ≈ $${estimate.update_cost_usd < 0.01
+            ? estimate.update_cost_usd.toFixed(4) : estimate.update_cost_usd.toFixed(2)}`;
+          settingsDom.indexEstimateState.textContent = estimate.update_chunk_count
+            ? `Next update: ${count(estimate.update_chunk_count)} new passages${updateCost}`
+            : "Next update: nothing new to embed";
           settingsDom.indexEstimateDocuments.textContent = `${count(estimate.document_count)} documents`;
           settingsDom.indexEstimateChunks.textContent = `${count(estimate.chunk_count)} chunks`;
           settingsDom.indexEstimateTokens.textContent = compactCount(estimate.embedding_token_count);
@@ -5135,7 +5207,33 @@
       }
 
       async function saveSearchSettings() {
-        await saveSettingsRequest("/admin/api/settings/search", searchFormPayload(), "Search settings saved.", "search");
+        // Search and Semantic share one stored config, so one save settles both tabs.
+        if (await saveSettingsRequest("/admin/api/settings/search", searchFormPayload(), "Search settings saved.", "search")) {
+          state.settingsDirty.delete("semantic");
+        }
+      }
+
+      function renderSearchSchedule() {
+        const schedule = state.settings?.search_schedule;
+        if (!schedule) return;
+        settingsDom.searchScheduleMode.value = schedule.mode === "interval" ? `interval:${schedule.interval_hours}` : schedule.mode;
+        if (!settingsDom.searchScheduleMode.value) settingsDom.searchScheduleMode.value = "daily";
+        settingsDom.searchScheduleTime.value = schedule.time || "03:00";
+        settingsDom.searchScheduleTime.hidden = !["daily", "weekly"].includes(schedule.mode);
+        const next = schedule.next_run_at ? `Next update ${formatAutomationTime(schedule.next_run_at, state.displayTimezone)}` : "After a batch of new messages";
+        settingsDom.searchScheduleNext.textContent = schedule.paused ? `${next} · paused while Runs models is off` : next;
+      }
+
+      async function saveSearchSchedule(change) {
+        try {
+          const result = await api("/admin/api/search/schedule", { method: "PUT", body: JSON.stringify(change) });
+          state.settings.search_schedule = result.schedule;
+          renderSearchSchedule();
+          renderSettingsStatus("Update schedule saved.", "ok");
+        } catch (error) {
+          renderSettingsStatus(error.message, "error");
+          renderSearchSchedule();
+        }
       }
 
       async function saveProviderKey(provider) {
@@ -5190,7 +5288,7 @@
           const confirmed = await window.adminConfirmation.confirm({
             title: "Delete vector index?",
             message: "Delete the complete vector index?",
-            detail: "BM25 search will keep working. Vector search will remain unavailable until the index is rebuilt.",
+            detail: "BM25 search will keep working. Semantic search will remain unavailable until the index is rebuilt.",
             confirmLabel: "Delete index",
             tone: "danger",
           });
@@ -5225,13 +5323,27 @@
       }
       function bindContextSearchEvents() {
         settingsDom.searchClose.addEventListener("click", () => settingsDom.searchDialog.close());
-        settingsDom.contextSearchForm.addEventListener("submit", (event) => { event.preventDefault(); runContextSearch(); });
+        settingsDom.contextSearchForm.addEventListener("submit", (event) => {
+          event.preventDefault();
+          const match = sessionIdMatch(settingsDom.contextSearchInput.value);
+          if (match) openSearchSession(match.session_id);
+          else runContextSearch();
+        });
         settingsDom.contextSearchStop.addEventListener("click", () => state.searchController?.abort());
-        settingsDom.searchDialog.querySelector("[role=\"radiogroup\"]").addEventListener("click", (event) => {
-          const button = event.target.closest("[data-search-mode]");
-          if (!button) return;
-          state.searchMode = button.dataset.searchMode;
-          for (const item of settingsDom.searchDialog.querySelectorAll("[data-search-mode]")) item.classList.toggle("is-active", item === button);
+        settingsDom.contextSearchInput.addEventListener("input", () => {
+          const match = sessionIdMatch(settingsDom.contextSearchInput.value);
+          if (match) renderSessionIdMatch(match);
+          else if (state.searchShowingId) clearSearchResults("");
+        });
+        settingsDom.contextSearchInput.addEventListener("keydown", (event) => {
+          if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+          const hits = [...settingsDom.searchDialog.querySelectorAll(".search-hit")];
+          if (!hits.length) return;
+          event.preventDefault();
+          const current = hits.findIndex((hit) => hit.classList.contains("is-active"));
+          const next = hits[Math.max(0, Math.min(hits.length - 1, current + (event.key === "ArrowDown" ? 1 : -1)))];
+          next.click();
+          next.scrollIntoView({ block: "nearest" });
         });
       }
 
@@ -5239,45 +5351,110 @@
         if (!state.settings) {
           try { await loadSettings(); } catch (error) { setStatus(error.message, "error"); return; }
         }
-        const hybrid = settingsDom.searchDialog.querySelector('[data-search-mode="hybrid"]');
-        hybrid.disabled = !state.settings.search.enabled || !state.settings.api.openai.configured || state.settings.index.active_generation == null || state.settings.index.needs_rebuild;
-        hybrid.title = hybrid.disabled ? "Enable RAG, configure OpenAI, and build the vector index first." : "";
-        if (hybrid.disabled && state.searchMode === "hybrid") state.searchMode = "basic";
-        for (const item of settingsDom.searchDialog.querySelectorAll("[data-search-mode]")) item.classList.toggle("is-active", item.dataset.searchMode === state.searchMode);
         settingsDom.searchDialog.showModal();
         settingsDom.contextSearchInput.focus();
+        settingsDom.contextSearchInput.select();
+      }
+
+      // A pasted session ID (full, or a unique prefix of 6+ characters) opens the
+      // session instead of running a full-text search.
+      function sessionIdMatch(value) {
+        const text = String(value || "").trim();
+        if (text.length < 6 || /\s/.test(text)) return null;
+        const exact = state.sessions.find((session) => session.session_id === text);
+        if (exact) return exact;
+        const prefixed = state.sessions.filter((session) => session.session_id.startsWith(text));
+        return prefixed.length === 1 ? prefixed[0] : null;
+      }
+
+      function clearSearchResults(status) {
+        state.searchShowingId = false;
+        settingsDom.searchDialog.classList.remove("is-id-match");
+        settingsDom.searchResults.replaceChildren();
+        settingsDom.localSearchResults.replaceChildren();
+        settingsDom.searchDetail.replaceChildren();
+        settingsDom.searchEngine.hidden = true;
+        settingsDom.contextSearchStatus.textContent = status;
+      }
+
+      function renderSessionIdMatch(session) {
+        clearSearchResults("Session ID · press Enter to open");
+        state.searchShowingId = true;
+        settingsDom.searchDialog.classList.add("is-id-match");
+        const group = sessionGroup(session);
+        const card = div("search-id-card");
+        const head = div("search-detail-head");
+        const titles = document.createElement("div");
+        const title = document.createElement("h4");
+        title.textContent = session.title || session.session_id;
+        titles.append(title, div("search-detail-meta", [
+          group?.name || session.group_id,
+          `${session.exchange_count ?? 0} ${session.exchange_count === 1 ? "exchange" : "exchanges"}`,
+          session.updated_at ? formatDate(new Date(session.updated_at * 1000).toISOString()) : "",
+        ].filter(Boolean).join(" · ")));
+        head.append(searchGroupMark(group), titles);
+        const actions = div("search-detail-actions");
+        actions.append(button("Open session", () => openSearchSession(session.session_id), "primary"));
+        card.append(head, actions);
+        settingsDom.searchDetail.replaceChildren(card);
+      }
+
+      async function openSearchSession(sessionId) {
+        settingsDom.searchDialog.close();
+        state.activeGroupId = "all";
+        await loadSession(sessionId);
+      }
+
+      function searchEngineLabel(engine) {
+        const parts = [];
+        const mark = (text) => spanCls("search-engine-mark", text);
+        if (engine?.semantic) {
+          parts.push(document.createTextNode("BM25 + Semantic"), mark("OpenAI"));
+          if (engine.rerank) parts.push(document.createTextNode(" · Reranked"), mark("Cohere"));
+        } else {
+          parts.push(document.createTextNode("BM25 only"));
+        }
+        return parts;
       }
 
       async function runContextSearch() {
         const query = settingsDom.contextSearchInput.value.trim();
         if (!query) return;
+        state.searchController?.abort();
         state.searchController = new AbortController();
         settingsDom.contextSearchSubmit.disabled = true;
         settingsDom.contextSearchStop.hidden = false;
-        settingsDom.contextSearchStatus.textContent = `Searching with ${state.searchMode === "basic" ? "local BM25" : "Hybrid"}…`;
+        settingsDom.contextSearchStatus.textContent = "Searching…";
         try {
           const result = await api("/admin/api/search", {
-            method: "POST", body: JSON.stringify({ query, mode: state.searchMode }), signal: state.searchController.signal,
+            method: "POST", body: JSON.stringify({ query, mode: "auto" }), signal: state.searchController.signal,
           });
+          state.searchShowingId = false;
+          settingsDom.searchDialog.classList.remove("is-id-match");
+          state.searchQuery = query;
           state.searchResults = [...result.results, ...result.local_only_results];
-          renderSearchLane(settingsDom.searchResults, "Results", result.results);
-          renderSearchLane(settingsDom.localSearchResults, "Local-only matches", result.local_only_results);
-          settingsDom.contextSearchStatus.textContent = result.warning || `Found ${state.searchResults.length} result${state.searchResults.length === 1 ? "" : "s"}.`;
-          if (state.searchResults[0]) selectSearchResult(state.searchResults[0]);
-          else {
-            const empty = document.createElement("div");
-            empty.className = "file-workspace-placeholder";
-            empty.textContent = "No matching context.";
-            settingsDom.searchDetail.replaceChildren(empty);
+          const engine = result.engine || {};
+          settingsDom.searchEngine.replaceChildren(...searchEngineLabel(engine));
+          settingsDom.searchEngine.hidden = false;
+          settingsDom.searchEngine.title = engine.semantic_note || "";
+          const sessions = renderSearchSessions(settingsDom.searchResults, result.results);
+          renderSearchLocalLane(result.local_only_results);
+          const notes = [];
+          if (result.results.length || result.local_only_results.length) {
+            notes.push(`${sessions} ${sessions === 1 ? "session" : "sessions"} · ${state.searchResults.length} ${state.searchResults.length === 1 ? "match" : "matches"}${result.elapsed_ms != null ? ` · ${result.elapsed_ms < 1000 ? `${result.elapsed_ms} ms` : `${(result.elapsed_ms / 1000).toFixed(1)} s`}` : ""}`);
           }
+          if (engine.match === "any") notes.push("No result had every word; showing any word");
+          // Say why Semantic did not run only when it was meant to.
+          if (!engine.semantic && state.settings?.search?.enabled && engine.semantic_note) notes.push(engine.semantic_note);
+          if (result.warning) notes.push(result.warning);
+          settingsDom.contextSearchStatus.textContent = notes.join(" · ");
+          const first = settingsDom.searchDialog.querySelector(".search-hit");
+          if (first) first.click();
+          else settingsDom.searchDetail.replaceChildren(div("search-empty", "Nothing found. Try fewer or different words."));
         } catch (error) {
-          if (error.name === "AbortError") {
-            settingsDom.contextSearchStatus.textContent = "Stopped waiting for search results.";
-          } else {
-            settingsDom.contextSearchStatus.textContent = state.searchMode === "hybrid"
-              ? `${error.message} Basic search is still available.`
-              : error.message;
-          }
+          settingsDom.contextSearchStatus.textContent = error.name === "AbortError"
+            ? "Stopped waiting for search results."
+            : error.message;
         } finally {
           state.searchController = null;
           settingsDom.contextSearchSubmit.disabled = false;
@@ -5285,42 +5462,110 @@
         }
       }
 
-      function renderSearchLane(container, title, results) {
+      function searchGroupMark(group) {
+        const mark = spanCls("search-session-mark");
+        mark.style.setProperty("--g", group?.color || "#8b93a7");
+        mark.innerHTML = iconSvg(group?.icon_key || "folder");
+        mark.setAttribute("aria-hidden", "true");
+        return mark;
+      }
+
+      // Results arrive one per exchange or file; show them under their session,
+      // in the order of each session's best hit.
+      function renderSearchSessions(container, results) {
         container.replaceChildren();
-        if (!results.length) return;
-        const heading = document.createElement("h4");
-        heading.className = "search-lane-title";
-        heading.textContent = title;
-        container.append(heading);
+        const buckets = new Map();
         for (const result of results) {
-          const card = document.createElement("button");
-          card.type = "button";
-          card.className = "search-result-card";
-          card.dataset.documentKey = result.document_key;
-          const titleRow = document.createElement("div");
-          titleRow.className = "search-result-title";
-          const icon = document.createElement("span");
-          icon.innerHTML = iconSvg(result.group?.icon_key || "folder");
-          const name = document.createElement("b");
-          name.textContent = result.title;
-          titleRow.append(icon, name);
-          const meta = document.createElement("div");
-          meta.className = "search-result-meta";
-          meta.textContent = `${result.group?.name || result.group_id} · ${result.source_kind.replaceAll("_", " ")} · ${formatDate(new Date(result.timestamp * 1000).toISOString())}`;
-          const snippet = document.createElement("p");
-          appendHighlightedText(snippet, result.snippet, result.highlights || []);
-          const badges = document.createElement("div");
-          badges.className = "search-badges";
-          for (const label of result.pipeline || []) badges.append(spanCls("search-badge", label));
-          card.append(titleRow, meta, snippet, badges);
-          card.addEventListener("click", () => selectSearchResult(result));
-          container.append(card);
+          const key = result.session_id && !result.source_kind.endsWith("group_file")
+            ? `session:${result.session_id}` : result.document_key;
+          if (!buckets.has(key)) buckets.set(key, []);
+          buckets.get(key).push(result);
         }
+        for (const hits of buckets.values()) {
+          const lead = hits[0];
+          const session = lead.session_id ? state.sessions.find((item) => item.session_id === lead.session_id) : null;
+          const group = lead.group || state.groups.find((item) => item.group_id === lead.group_id);
+          const block = div("search-session");
+          const head = div("search-session-head");
+          const title = spanCls("search-session-title", session?.title || (lead.source_kind === "group_file" ? lead.title : lead.subtitle || lead.title));
+          const when = spanCls("search-session-when", shortSearchDate(lead.timestamp));
+          head.append(searchGroupMark(group), title, when);
+          const list = div("search-hits");
+          for (const hit of hits) {
+            const row = document.createElement("button");
+            row.type = "button";
+            row.className = "search-hit";
+            row.dataset.documentKey = hit.document_key;
+            const text = spanCls("search-hit-text");
+            if (hit.source_kind.endsWith("_file")) text.append(document.createTextNode(`${hit.title} · `));
+            const snippet = withoutSpeakerLabels(hit.snippet || "", hit.highlights || []);
+            appendHighlightedText(text, snippet.text, snippet.ranges);
+            row.append(text);
+            if ((hit.found_by || []).length === 1 && hit.found_by[0] === "semantic") row.append(spanCls("search-hit-tag", "semantic"));
+            row.addEventListener("click", () => selectSearchResult(hit));
+            row.addEventListener("dblclick", () => openSearchResult(hit));
+            list.append(row);
+          }
+          block.append(head, list);
+          container.append(block);
+        }
+        return buckets.size;
+      }
+
+      function renderSearchLocalLane(results) {
+        settingsDom.localSearchResults.replaceChildren();
+        if (!results.length) return;
+        const lane = document.createElement("details");
+        lane.className = "search-lane";
+        const summary = document.createElement("summary");
+        summary.textContent = `${results.length} in groups not shared with OpenAI · BM25 only`;
+        const body = div("search-results");
+        renderSearchSessions(body, results);
+        lane.append(summary, body);
+        settingsDom.localSearchResults.append(lane);
+      }
+
+      // Indexed exchanges read "User:\n…\n\nAssistant:\n…"; a one-line hit reads
+      // better without those labels. Highlight offsets are shifted to match.
+      function withoutSpeakerLabels(text, ranges) {
+        const label = /(^|\s)(User|Assistant):\s*/g;
+        let output = "";
+        let cursor = 0;
+        const shifts = [];
+        let found;
+        while ((found = label.exec(text))) {
+          const start = found.index + found[1].length;
+          output += text.slice(cursor, start);
+          if (output && !output.endsWith(" ")) output += " ";
+          shifts.push({ at: label.lastIndex, delta: label.lastIndex - output.length });
+          cursor = label.lastIndex;
+        }
+        output += text.slice(cursor);
+        const shift = (offset) => {
+          let delta = 0;
+          for (const item of shifts) if (offset >= item.at) delta = item.delta;
+          return offset - delta;
+        };
+        return {
+          text: output,
+          ranges: ranges.map((range) => ({ start: shift(range.start), end: shift(range.end) }))
+            .filter((range) => range.start >= 0 && range.end <= output.length && range.end > range.start),
+        };
+      }
+
+      function shortSearchDate(timestamp) {
+        if (!timestamp) return "";
+        const days = Math.floor((Date.now() / 1000 - timestamp) / 86400);
+        if (days < 1) return "today";
+        if (days < 7) return `${days} d`;
+        if (days < 60) return `${Math.floor(days / 7)} w`;
+        return `${Math.floor(days / 30)} mo`;
       }
 
       function appendHighlightedText(container, text, ranges) {
         let cursor = 0;
         for (const range of ranges) {
+          if (range.start < cursor) continue;
           container.append(document.createTextNode(text.slice(cursor, range.start)));
           const mark = document.createElement("mark");
           mark.textContent = text.slice(range.start, range.end);
@@ -5330,26 +5575,66 @@
         container.append(document.createTextNode(text.slice(cursor)));
       }
 
+      // Split a passage of "User:\n…\n\nAssistant:\n…" into turns, keeping the
+      // highlight offsets of each piece.
+      function searchPassageTurns(passage, highlights) {
+        const marker = /(^|\n)(User|Assistant):\n/g;
+        const cuts = [];
+        let found;
+        while ((found = marker.exec(passage))) cuts.push({ at: found.index + found[1].length, body: marker.lastIndex, speaker: found[2] });
+        if (!cuts.length) return [{ speaker: "", start: 0, end: passage.length }];
+        const turns = [];
+        if (cuts[0].at > 0) turns.push({ speaker: "", start: 0, end: cuts[0].at });
+        cuts.forEach((cut, index) => turns.push({ speaker: cut.speaker, start: cut.body, end: index + 1 < cuts.length ? cuts[index + 1].at : passage.length }));
+        return turns.map((turn) => ({
+          speaker: turn.speaker,
+          text: passage.slice(turn.start, turn.end),
+          ranges: highlights
+            .filter((range) => range.start >= turn.start && range.end <= turn.end)
+            .map((range) => ({ start: range.start - turn.start, end: range.end - turn.start })),
+        })).filter((turn) => turn.text.trim());
+      }
+
       function selectSearchResult(result) {
         state.selectedSearchResult = result;
-        for (const card of settingsDom.searchDialog.querySelectorAll(".search-result-card")) card.classList.toggle("is-active", card.dataset.documentKey === result.document_key);
+        for (const hit of settingsDom.searchDialog.querySelectorAll(".search-hit")) hit.classList.toggle("is-active", hit.dataset.documentKey === result.document_key);
+        const session = result.session_id ? state.sessions.find((item) => item.session_id === result.session_id) : null;
+        const group = result.group || state.groups.find((item) => item.group_id === result.group_id);
+        const head = div("search-detail-head");
+        const titles = document.createElement("div");
         const title = document.createElement("h4");
-        title.textContent = result.title;
-        const meta = document.createElement("p");
-        meta.className = "meta";
-        meta.textContent = `${result.group?.name || result.group_id} · ${result.subtitle || result.source_kind}`;
-        const snippet = document.createElement("div");
-        snippet.className = "search-detail-snippet";
-        appendHighlightedText(snippet, result.snippet, result.highlights || []);
-        settingsDom.searchDetail.replaceChildren(title, meta, snippet);
-        if (result.session_id || result.source_kind === "group_file") {
-          const open = document.createElement("button");
-          open.type = "button";
-          open.className = "primary";
-          open.textContent = result.source_kind.endsWith("_file") ? "Preview full file" : "Open conversation";
-          open.addEventListener("click", () => openSearchResult(result));
-          settingsDom.searchDetail.append(open);
+        title.textContent = result.source_kind.endsWith("_file") ? result.title : (session?.title || result.title);
+        titles.append(title, div("search-detail-meta", [
+          group?.name || result.group_id,
+          result.source_kind.endsWith("_file") ? (result.subtitle || "file") : result.subtitle,
+          formatDate(new Date(result.timestamp * 1000).toISOString()),
+        ].filter(Boolean).join(" · ")));
+        head.append(searchGroupMark(group), titles);
+        const passage = div("search-passage");
+        const text = result.passage ?? result.snippet ?? "";
+        for (const [index, turn] of searchPassageTurns(text, result.passage_highlights || result.highlights || []).entries()) {
+          const node = div(`search-turn${turn.speaker === "User" ? " is-user" : ""}`);
+          if (turn.speaker) node.append(spanCls("search-turn-label", turn.speaker === "User" ? "User" : (result.subtitle || "Assistant")));
+          const body = turn.text.replace(/^\s+|\s+$/g, "");
+          const offset = turn.text.indexOf(body);
+          const prefix = index === 0 && result.passage_truncated_start ? "… " : "";
+          node.append(document.createTextNode(prefix));
+          appendHighlightedText(node, body, turn.ranges.map((range) => ({ start: range.start - offset, end: range.end - offset })).filter((range) => range.start >= 0 && range.end <= body.length));
+          passage.append(node);
         }
+        if (result.passage_truncated_end) passage.append(div("search-detail-meta", "…"));
+        const actions = div("search-detail-actions");
+        if (result.session_id || result.source_kind === "group_file") {
+          const label = result.source_kind.endsWith("_file") ? "Open file" : "Open at this exchange";
+          actions.append(button(label, () => openSearchResult(result), "primary"));
+        }
+        if (result.session_id) {
+          actions.append(button("Copy session ID", async (event) => {
+            await navigator.clipboard?.writeText(result.session_id);
+            event.currentTarget.textContent = "Copied";
+          }, "ghost"));
+        }
+        settingsDom.searchDetail.replaceChildren(head, passage, actions);
       }
 
       async function openSearchResult(result) {
@@ -10859,8 +11144,13 @@
           state.settings.index.active_generation = path.endsWith("rebuild") ? 1 : null;
           return Promise.resolve({ ok: true, index: state.settings.index });
         }
+        if (path === "/admin/api/search/schedule" && method === "PUT") {
+          const schedule = { mode: "messages", interval_hours: 6, time: "03:00", ...(state.settings.search_schedule || {}), ...body, next_run_at: null, paused: false };
+          state.settings.search_schedule = schedule;
+          return Promise.resolve({ ok: true, schedule });
+        }
         if (path === "/admin/api/search" && method === "POST") {
-          return Promise.resolve({ ok: true, mode: body.mode, results: [], local_only_results: [], warning: null });
+          return Promise.resolve({ ok: true, mode: body.mode, results: [], local_only_results: [], warning: null, engine: { semantic: false, rerank: false, match: "all", semantic_note: "Demo data" }, elapsed_ms: 0 });
         }
 
         if (path === "/admin/api/ai-settings" && method === "GET") {

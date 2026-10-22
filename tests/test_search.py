@@ -3,7 +3,7 @@ import threading
 
 import pytest
 
-from app.search import SearchConfig, SearchService, chunk_text, fts_query
+from app.search import SearchConfig, SearchService, best_passage, chunk_text, fts_query
 from app.storage import Store
 from tests.pdf_samples import make_pdf
 
@@ -108,8 +108,39 @@ def test_unchanged_sources_skip_full_document_rescan(tmp_path, monkeypatch):
 
 
 def test_fts_query_is_literal_and_empty_safe():
-    assert fts_query('"red team" OR secret:*') == '"red" OR "team" OR "OR" OR "secret"'
+    assert fts_query('"red team" OR secret:*') == '"red team" AND "OR" AND "secre"*'
+    assert fts_query('"red team" OR secret:*', any_term=True) == '"red team" OR "OR" OR "secre"*'
     assert fts_query(" --- ") == ""
+
+
+def test_fts_query_stems_inflected_words_but_keeps_ids_exact():
+    assert fts_query("agentów") == '"agent"*'
+    assert fts_query("agentami") == '"agent"*'
+    assert fts_query("RAG v2 e9bafcad") == '"RAG" AND "v2" AND "e9bafcad"'
+
+
+def test_bm25_requires_every_word_then_falls_back_to_any(tmp_path):
+    store = make_store(tmp_path)
+    store.save_exchange("public-session", "test", "agent i kumkwat razem", "reply")
+    store.save_exchange("private-session", "test", "tylko agentami", "reply")
+    service = SearchService(store)
+
+    results, match = service.bm25_search("agentów kumkwat")
+    assert match == "all"
+    assert [item["session_id"] for item in results] == ["public-session"]
+
+    results, match = service.bm25_search("agentów pomarańcza")
+    assert match == "any"
+    assert {item["session_id"] for item in results} == {"public-session", "private-session"}
+
+
+def test_best_passage_centers_on_the_densest_matches():
+    content = "wstęp " * 2000 + "tu jest lokalny search z gemmą " + "koniec " * 2000
+    passage = best_passage(content, "lokalny gemma", chunk_tokens=100)
+    assert "lokalny search" in passage["passage"]
+    assert passage["passage_truncated_start"] and passage["passage_truncated_end"]
+    marked = [passage["passage"][r["start"]:r["end"]] for r in passage["passage_highlights"]]
+    assert "lokalny" in marked
 
 
 def test_chunk_text_honors_token_budget_and_overlap():
@@ -303,8 +334,69 @@ def test_index_configuration_changes_mark_generation_stale(tmp_path):
     service.set_config(changed)
 
     assert service.index_status()["needs_rebuild"] is True
-    with pytest.raises(ValueError, match="stale"):
-        service.hybrid_search("guava", openai_api_key="test-key", config=changed)
+    # Same embedding model: the old vectors stay searchable until the rebuild lands.
+    assert service.hybrid_search("guava", openai_api_key="test-key", config=changed)["results"]
+
+    other_model = SearchConfig.from_dict({**config.to_dict(), "embedding_model": "text-embedding-3-large"})
+    service.set_config(other_model)
+    with pytest.raises(ValueError, match="another model"):
+        service.hybrid_search("guava", openai_api_key="test-key", config=other_model)
+    fallback = service.search("guava", openai_api_key="test-key", config=other_model)
+    assert fallback["engine"]["semantic"] is False
+    assert "another model" in fallback["engine"]["semantic_note"]
+    assert fallback["results"][0]["passage"]
+
+
+def test_rebuild_embeds_only_new_or_changed_passages(tmp_path):
+    store = make_store(tmp_path)
+    store.save_exchange("public-session", "test", "first fig note", "reply")
+    service = SearchService(store)
+    config = SearchConfig(
+        enabled=True, included_group_ids=("uncategorized",), chunk_size=64, chunk_overlap=8,
+        embedding_dimensions=2,
+    )
+    sent: list[str] = []
+
+    def fake_embed(api_key, texts, config):
+        sent.extend(texts)
+        return [[1.0, 0.0] for _ in texts]
+
+    service.embed_texts = fake_embed
+    first = service.rebuild_index("test-key", config)
+    assert first["embedded_count"] == len(sent) == 1
+    assert sent[0].startswith("Public board\n\nUser:")
+
+    sent.clear()
+    store.save_exchange("public-session", "test", "second fig note", "reply")
+    second = service.rebuild_index("test-key", config)
+    assert len(sent) == 1 and "second fig note" in sent[0]
+    assert second["reused_count"] == 1
+    assert second["chunk_count"] == 2
+    assert service.estimate_index(config)["update_chunk_count"] == 0
+
+
+def test_rerank_reads_full_passages_with_titles(tmp_path):
+    store = make_store(tmp_path)
+    store.save_exchange("public-session", "test", "plum " + "context " * 50, "reply")
+    service = SearchService(store)
+    config = SearchConfig(
+        enabled=True, included_group_ids=("uncategorized",), cohere_rerank_enabled=True,
+        chunk_size=64, chunk_overlap=8, embedding_dimensions=2,
+    )
+    service.embed_texts = lambda api_key, texts, config: [[1.0, 0.0] for _ in texts]
+    seen: list[str] = []
+
+    def fake_rerank(api_key, query, documents, config):
+        seen.extend(documents)
+        return [(index, 0.9) for index in range(len(documents))]
+
+    service.rerank = fake_rerank
+    service.rebuild_index("test-key", config)
+    result = service.search("plum", openai_api_key="k", cohere_api_key="c", config=config)
+    assert result["engine"] == {"semantic": True, "rerank": True, "match": "all", "semantic_note": None}
+    assert seen[0].startswith("Public board\n\n")
+    assert seen[0].count("context") > 30
+    assert result["results"][0]["found_by"] == ["bm25", "semantic"]
 
 
 def test_deleting_index_suppresses_automatic_recreation(tmp_path):
@@ -399,3 +491,53 @@ def test_hybrid_search_keeps_unapproved_bm25_results_in_local_lane(tmp_path):
     assert result["local_only_results"][0]["pipeline"] == ["BM25", "Local only"]
     assert all("private" not in document for document in reranked_documents)
     assert all("sensitive" not in document for document in reranked_documents)
+
+
+def test_scheduled_updates_wait_for_their_time_and_the_master_switch(tmp_path):
+    store = make_store(tmp_path)
+    store.save_exchange("public-session", "test", "first date note", "reply")
+    service = SearchService(store)
+    config = SearchConfig(
+        enabled=True, included_group_ids=("uncategorized",), chunk_size=64, chunk_overlap=8,
+        embedding_dimensions=2, rebuild_message_threshold=1,
+    )
+    service.embed_texts = lambda api_key, texts, config: [[1.0, 0.0] for _ in texts]
+    service.set_config(config)
+    started: list[str] = []
+    service.start_rebuild = lambda api_key, config=None: started.append("run") or service.index_status(sync=False)
+
+    # The first index is built at once, even on a schedule, but never while paused.
+    service.set_schedule({"mode": "daily", "time": "03:00"}, now=1_000)
+    service.maybe_start_rebuild("k", paused=True)
+    assert started == []
+    service.maybe_start_rebuild("k")
+    assert started == ["run"]
+
+    service.rebuild_index("k", config)
+    store.save_exchange("public-session", "test", "second date note", "reply")
+    started.clear()
+    service.set_schedule({"time": "03:00"})  # counts from now: next run is the coming 03:00
+    service.maybe_start_rebuild("k")
+    assert started == []
+
+    service.set_schedule({"mode": "interval", "interval_hours": 3}, now=1_000)  # long overdue
+    service.maybe_start_rebuild("k")
+    assert started == ["run"]
+    assert service.get_schedule()["last_run_at"] is not None
+    started.clear()
+
+    service.set_schedule({"mode": "messages"})
+    service.maybe_start_rebuild("k")
+    assert started == ["run"]
+
+
+def test_search_schedule_validation():
+    from app.search import default_search_schedule, validate_search_schedule
+
+    current = default_search_schedule()
+    assert validate_search_schedule({"mode": "interval", "interval_hours": 12}, current, now=5)["mode"] == "interval"
+    assert validate_search_schedule({"mode": "messages"}, current, now=5)["anchor_at"] == 5
+    with pytest.raises(ValueError):
+        validate_search_schedule({"mode": "hourly"}, current, now=5)
+    with pytest.raises(ValueError):
+        validate_search_schedule({"enabled": False}, current, now=5)

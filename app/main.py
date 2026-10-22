@@ -492,6 +492,11 @@ async def admin_api_search_index(request: Request) -> Response:
     return await admin.api_search_index(request)
 
 
+@mcp.custom_route("/admin/api/search/schedule", methods=["PUT"])
+async def admin_api_update_search_schedule(request: Request) -> Response:
+    return await admin.api_update_search_schedule(request)
+
+
 @mcp.custom_route("/admin/api/search/index/estimate", methods=["POST"])
 async def admin_api_search_index_estimate(request: Request) -> Response:
     return await admin.api_search_index_estimate(request)
