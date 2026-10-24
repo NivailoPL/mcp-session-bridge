@@ -5582,9 +5582,10 @@
         const cuts = [];
         let found;
         while ((found = marker.exec(passage))) cuts.push({ at: found.index + found[1].length, body: marker.lastIndex, speaker: found[2] });
-        if (!cuts.length) return [{ speaker: "", start: 0, end: passage.length }];
+        // Files and passages cut from the middle of a long answer carry no labels:
+        // they become one unlabelled turn, built the same way as the rest.
         const turns = [];
-        if (cuts[0].at > 0) turns.push({ speaker: "", start: 0, end: cuts[0].at });
+        if (!cuts.length || cuts[0].at > 0) turns.push({ speaker: "", start: 0, end: cuts.length ? cuts[0].at : passage.length });
         cuts.forEach((cut, index) => turns.push({ speaker: cut.speaker, start: cut.body, end: index + 1 < cuts.length ? cuts[index + 1].at : passage.length }));
         return turns.map((turn) => ({
           speaker: turn.speaker,
