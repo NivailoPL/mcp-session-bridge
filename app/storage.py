@@ -2794,6 +2794,10 @@ class Store(AnchorStoreMixin, TopicStoreMixin):
     def fail_session_summary(self, session_id: str, error: str) -> None:
         self._upsert_summary(session_id, status="failed", error=error[:500])
 
+    def delete_session_summary(self, session_id: str) -> None:
+        with self._lock, self._connect() as conn:
+            conn.execute("DELETE FROM session_summaries WHERE session_id = ?", (session_id,))
+
     def requeue_running_summaries(self) -> None:
         with self._lock, self._connect() as conn:
             conn.execute(

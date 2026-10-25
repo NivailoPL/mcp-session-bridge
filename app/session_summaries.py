@@ -8,7 +8,8 @@ it, so it keeps working while "Runs models" is off.
 
 A summary closes its session too: while a written summary covers the latest
 exchange, the session is closed, whatever the timer says. That is how a
-summary written by hand on an open session closes it.
+summary written by hand on an open session closes it, and reopening a
+session deletes its summary.
 
 Each close queues one summary. Codex writes it from the whole transcript, in
 Markdown, from a fixed base prompt plus the owner's own instructions. The
@@ -398,8 +399,10 @@ class SessionSummaries:
             raise SummaryError(f"Unknown session_id: {session_id}", code="session_unknown")
         if not state["closed"]:
             raise SummaryError("This session is not closed.", code="not_closed")
+        # summary = closed, so reopening drops the summary; the next close writes a new one
         until = current + state["close_after_days"] * DAY_SECONDS
         self.store.set_session_reopened_until(session_id, until)
+        self.store.delete_session_summary(session_id)
         return self.state_for(session_id, now=current) or state
 
     # ----- the queue -----

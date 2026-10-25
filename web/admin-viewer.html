@@ -9006,9 +9006,20 @@
         });
         summaryDom.reopen.addEventListener("click", async () => {
           const sessionId = state.selectedSessionId;
+          const days = state.selectedClosing?.close_after_days;
+          const confirmed = await window.adminConfirmation.confirm({
+            title: "Reopen this session?",
+            message: `Its summary is deleted. Models can add to the session again for ${days} days.`,
+            detail: "When it closes again, Codex writes a new summary. To close it sooner, write one with the Summary card in the rail.",
+            confirmLabel: "Reopen and delete summary",
+            tone: "warning",
+          });
+          if (!confirmed || sessionId !== state.selectedSessionId) return;
           summaryDom.reopen.disabled = true;
           try {
             const payload = await api(`/admin/api/sessions/${encodeURIComponent(sessionId)}/reopen`, { method: "POST" });
+            // the summary is gone, so the card follows the session again: hidden while it is open
+            state.summaryCard.delete(sessionId);
             if (sessionId === state.selectedSessionId) state.selectedClosing = payload.closing;
             setStatus(`Reopened until ${shortDate(payload.closing?.reopened_until)}. Models can add to it again.`, "ok");
             await loadSessions();

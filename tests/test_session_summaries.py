@@ -208,13 +208,11 @@ def test_failure_waits_for_regenerate_and_new_turns_make_it_outdated(tmp_path):
     asyncio.run(regenerate())
     assert runtime.state_for("old")["summary"]["content"] == "Second try."
 
+    # reopening deletes the summary; once the reopen runs out, the session closes and is queued again
     runtime.reopen("old")
-    store.save_exchange("old", "Claude", "Later question", "Later answer")
-    with store._connect() as conn:
-        conn.execute("UPDATE exchanges SET created_at = 0, assistant_created_at = 0 WHERE session_id = 'old'")
+    assert runtime.state_for("old")["summary"] is None and runtime.candidates() == []
     store.set_session_reopened_until("old", int(time.time()) - 1)
-    assert runtime.state_for("old")["summary"]["outdated"]
-    assert runtime.candidates() == ["old"]
+    assert runtime.state_for("old")["closed"] and runtime.candidates() == ["old"]
 
 
 def test_unavailable_codex_leaves_summaries_queued(tmp_path):
@@ -249,13 +247,11 @@ def test_a_summary_written_by_hand_closes_an_open_session(tmp_path):
     assert codex.calls[0]["model"] == "gpt-5.6-sol" and codex.calls[0]["effort"] == "high"
     assert "is closed" in runtime.closed_error("fresh") and runtime.candidates() == []
 
-    # reopening lets models in again; a new exchange makes the summary outdated, so it stays open
+    # reopening lets models in again and deletes the summary, so the session stays open after the reopen
     runtime.reopen("fresh")
-    assert runtime.closed_error("fresh") is None
-    store.save_exchange("fresh", "Claude", "One more", "Answer")
+    assert runtime.closed_error("fresh") is None and runtime.state_for("fresh")["summary"] is None
     store.set_session_reopened_until("fresh", int(time.time()) - 1)
-    state = runtime.state_for("fresh")
-    assert not state["closed"] and state["summary"]["outdated"]
+    assert not runtime.state_for("fresh")["closed"]
 
 
 def test_a_summary_being_rewritten_keeps_the_session_closed(tmp_path):
