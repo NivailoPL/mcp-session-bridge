@@ -14,6 +14,7 @@ from typing import Any
 
 from app.anchor_store import ANCHOR_LATER_COLUMNS, ANCHOR_SCHEMA_SQL, AnchorStoreMixin
 from app.topic_store import TOPIC_LATER_COLUMNS, TOPIC_SCHEMA_SQL, TopicStoreMixin
+from app.session_summaries import SUMMARY_SCHEMA_SQL
 from app.image_files import ValidatedImage
 
 from app.time_format import format_timestamp_iso
@@ -617,6 +618,7 @@ class Store(AnchorStoreMixin, TopicStoreMixin):
             # Admin-only highlights and strands (app.anchor_store); additive, no schema bump.
             conn.executescript(ANCHOR_SCHEMA_SQL)
             conn.executescript(TOPIC_SCHEMA_SQL)
+            conn.executescript(SUMMARY_SCHEMA_SQL)
             self._allow_topic_context_blocks(conn)
             for table, column, declaration in TOPIC_LATER_COLUMNS:
                 self._ensure_column(conn, table, column, declaration)
@@ -641,6 +643,8 @@ class Store(AnchorStoreMixin, TopicStoreMixin):
             # Who wrote the title: "derived" (cut from the first message), "manual", "ai" or "auto".
             # NULL on older rows; automatic naming only touches "derived" titles.
             self._ensure_column(conn, "sessions", "title_source", "TEXT")
+            # Until when the owner reopened a closed session; NULL when never reopened.
+            self._ensure_column(conn, "sessions", "reopened_until", "INTEGER")
             self._ensure_column(conn, "session_groups", "is_sensitive", "INTEGER NOT NULL DEFAULT 0")
             self._ensure_column(conn, "exchanges", "assistant_created_at", "INTEGER")
             self._ensure_column(conn, "exchanges", "assistant_masked_at", "INTEGER")
@@ -2666,6 +2670,136 @@ class Store(AnchorStoreMixin, TopicStoreMixin):
                 conn.execute("UPDATE sessions SET pinned_at = NULL WHERE session_id = ?", (session_id,))
             updated = conn.execute("SELECT * FROM sessions WHERE session_id = ?", (session_id,)).fetchone()
         return _session_from_row(updated)
+
+    # ---------- closing and summaries (app.session_summaries) ----------
+
+    _ACTIVITY_SQL = """
+        SELECT
+            s.session_id,
+            s.group_id,
+            s.pinned_at,
+            s.reopened_until,
+            COALESCE(
+                MAX(CASE WHEN e.deleted_at IS NULL THEN COALESCE(e.assistant_created_at, e.created_at) END),
+                s.created_at
+            ) AS last_turn_at,
+            MAX(CASE WHEN e.deleted_at IS NULL THEN e.exchange_id END) AS last_exchange_id,
+            SUM(CASE WHEN e.exchange_id IS NOT NULL AND e.deleted_at IS NULL THEN 1 ELSE 0 END) AS exchange_count
+        FROM sessions s
+        LEFT JOIN exchanges e ON e.session_id = s.session_id
+    """
+
+    @staticmethod
+    def _activity_from_row(row: sqlite3.Row) -> dict[str, Any]:
+        return {
+            "session_id": row["session_id"],
+            "group_id": row["group_id"] or UNCATEGORIZED_GROUP_ID,
+            "pinned": row["pinned_at"] is not None,
+            "reopened_until": row["reopened_until"],
+            "last_turn_at": row["last_turn_at"],
+            "last_exchange_id": row["last_exchange_id"],
+            "exchange_count": row["exchange_count"] or 0,
+        }
+
+    def list_session_activity(self) -> list[dict[str, Any]]:
+        """What the closing rule needs for every session: last turn, pin, group and reopen time."""
+        with self._lock, self._connect() as conn:
+            rows = conn.execute(self._ACTIVITY_SQL + " GROUP BY s.session_id").fetchall()
+        return [self._activity_from_row(row) for row in rows]
+
+    def get_session_activity(self, session_id: str) -> dict[str, Any] | None:
+        with self._lock, self._connect() as conn:
+            row = conn.execute(
+                self._ACTIVITY_SQL + " WHERE s.session_id = ? GROUP BY s.session_id", (session_id,)
+            ).fetchone()
+        return self._activity_from_row(row) if row else None
+
+    def set_session_reopened_until(self, session_id: str, until: int | None) -> None:
+        # Reopening is housekeeping, not activity, so updated_at stays put.
+        with self._lock, self._connect() as conn:
+            cursor = conn.execute(
+                "UPDATE sessions SET reopened_until = ? WHERE session_id = ?", (until, session_id)
+            )
+            if cursor.rowcount != 1:
+                raise ValueError(f"Unknown session_id: {session_id}")
+
+    @staticmethod
+    def _summary_from_row(row: sqlite3.Row) -> dict[str, Any]:
+        return {
+            "status": row["status"],
+            "content": row["content"],
+            "upto_exchange_id": row["upto_exchange_id"],
+            "exchange_count": row["exchange_count"],
+            "model": row["model"],
+            "prompt_hash": row["prompt_hash"],
+            "error": row["error"],
+            "estimated_tokens": row["estimated_tokens"],
+            "written_at": row["written_at"],
+            "updated_at": row["updated_at"],
+        }
+
+    def list_session_summaries(self) -> dict[str, dict[str, Any]]:
+        with self._lock, self._connect() as conn:
+            rows = conn.execute("SELECT * FROM session_summaries").fetchall()
+        return {row["session_id"]: self._summary_from_row(row) for row in rows}
+
+    def get_session_summary(self, session_id: str) -> dict[str, Any] | None:
+        with self._lock, self._connect() as conn:
+            row = conn.execute("SELECT * FROM session_summaries WHERE session_id = ?", (session_id,)).fetchone()
+        return self._summary_from_row(row) if row else None
+
+    def _upsert_summary(self, session_id: str, **fields: Any) -> None:
+        fields["updated_at"] = int(time.time())
+        columns = ", ".join(fields)
+        marks = ", ".join("?" for _ in fields)
+        updates = ", ".join(f"{column} = excluded.{column}" for column in fields)
+        with self._lock, self._connect() as conn:
+            conn.execute(
+                f"INSERT INTO session_summaries (session_id, {columns}) VALUES (?, {marks}) "
+                f"ON CONFLICT(session_id) DO UPDATE SET {updates}",
+                (session_id, *fields.values()),
+            )
+
+    def queue_session_summary(self, session_id: str) -> None:
+        """Waiting for Codex. A summary written earlier stays readable until the new one lands."""
+        self._upsert_summary(session_id, status="queued", error=None)
+
+    def start_session_summary(self, session_id: str, model: str) -> None:
+        self._upsert_summary(session_id, status="running", error=None, model=model)
+
+    def finish_session_summary(
+        self,
+        session_id: str,
+        content: str,
+        *,
+        upto_exchange_id: int,
+        exchange_count: int,
+        model: str,
+        prompt_hash: str,
+        estimated_tokens: int,
+    ) -> None:
+        self._upsert_summary(
+            session_id,
+            status="done",
+            content=content,
+            upto_exchange_id=upto_exchange_id,
+            exchange_count=exchange_count,
+            model=model,
+            prompt_hash=prompt_hash,
+            estimated_tokens=estimated_tokens,
+            error=None,
+            written_at=int(time.time()),
+        )
+
+    def fail_session_summary(self, session_id: str, error: str) -> None:
+        self._upsert_summary(session_id, status="failed", error=error[:500])
+
+    def requeue_running_summaries(self) -> None:
+        with self._lock, self._connect() as conn:
+            conn.execute(
+                "UPDATE session_summaries SET status = 'queued', updated_at = ? WHERE status = 'running'",
+                (int(time.time()),),
+            )
 
     def list_sessions(self) -> list[dict[str, Any]]:
         with self._lock, self._connect() as conn:

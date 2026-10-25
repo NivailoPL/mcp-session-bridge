@@ -2034,7 +2034,7 @@ def test_admin_search_settings_keys_and_basic_search_api(load_main) -> None:
     assert settings.status_code == 200
     assert set(settings.json()["settings"]) == {
         "general", "search", "api", "groups", "index", "transcript", "tool_output", "titles",
-        "search_schedule",
+        "summaries", "search_schedule",
     }
     assert settings.json()["settings"]["search"]["enabled"] is False
     assert settings.json()["settings"]["search_schedule"]["mode"] == "messages"

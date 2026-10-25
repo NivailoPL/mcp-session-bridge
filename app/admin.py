@@ -37,6 +37,7 @@ from app.search import (
     SearchConfig,
     SearchService,
 )
+from app.session_summaries import SessionSummaries, SummaryError
 from app.session_titles import (
     AI_RENAME_DEFAULT_MAX_WORDS,
     AI_RENAME_MAX_MAX_WORDS,
@@ -183,6 +184,12 @@ class AdminHandlers:
             codex_client,
             api_configured=lambda: bool(self._read_ai_api_key()),
             api_suggest=self._api_title,
+            fallback_model=lambda: self.store.get_strand_settings()["model"],
+        )
+        # Closing old sessions and writing their summaries; app.main drives the queue.
+        self.summaries = SessionSummaries(
+            store,
+            codex_client,
             fallback_model=lambda: self.store.get_strand_settings()["model"],
         )
 
@@ -784,8 +791,10 @@ class AdminHandlers:
             return error
         sessions = self.store.list_sessions()
         chapter_states = self.store.chapter_states()
+        closing = self.summaries.states()
         for item in sessions:
             item["chapters"] = chapter_states.get(item["session_id"])
+            item["closing"] = _closing_list_payload(closing.get(item["session_id"]))
         return JSONResponse(
             {
                 "ok": True,
@@ -930,6 +939,7 @@ class AdminHandlers:
                 },
                 "file_labels": self.store.list_file_labels(session.group_id),
                 "exchanges": exchange_payloads,
+                "closing": self.summaries.state_for(session.session_id),
             },
             headers=self._no_store_headers(),
         )
@@ -983,6 +993,44 @@ class AdminHandlers:
             {"ok": True, "session": _session_payload(session), "title": session.title, "provider": provider},
             headers=self._no_store_headers(),
         )
+
+    async def api_reopen_session(self, request: Request) -> Response:
+        """Reopen a closed session for the same stretch that closed it."""
+        _, error = self._require_admin_mutation(request)
+        if error:
+            return error
+        try:
+            state = await asyncio.to_thread(self.summaries.reopen, request.path_params["session_id"])
+        except SummaryError as exc:
+            return self._json_error(str(exc), status_code=404 if exc.code == "session_unknown" else 409)
+        return JSONResponse({"ok": True, "closing": state}, headers=self._no_store_headers())
+
+    async def api_regenerate_summary(self, request: Request) -> Response:
+        """Write a closed session's summary again now, with the current prompt."""
+        _, error = self._require_admin_mutation(request)
+        if error:
+            return error
+        try:
+            state = self.summaries.regenerate(request.path_params["session_id"])
+        except SummaryError as exc:
+            status_code = {"session_unknown": 404, "codex_unavailable": 503}.get(exc.code, 409)
+            return self._json_error(str(exc), status_code=status_code)
+        return JSONResponse({"ok": True, "closing": state}, headers=self._no_store_headers())
+
+    async def api_update_summary_settings(self, request: Request) -> Response:
+        """Settings › Summaries: closing, its scope, the summary card and the prompt."""
+        _, error = self._require_admin_mutation(request)
+        if error:
+            return error
+        payload, parse_error = await _json_body(request)
+        if parse_error:
+            return parse_error
+        try:
+            await asyncio.to_thread(self.summaries.save_settings, payload)
+        except SummaryError as exc:
+            return self._json_error(str(exc), status_code=400)
+        return JSONResponse({"ok": True, "settings": await asyncio.to_thread(self._settings_payload)},
+                            headers=self._no_store_headers())
 
     def _api_title(self, first_user_message: str, max_words: int) -> str:
         api_key = self._read_ai_api_key()
@@ -1836,6 +1884,7 @@ class AdminHandlers:
                 "rename_max_words_range": [AI_RENAME_MIN_MAX_WORDS, AI_RENAME_MAX_MAX_WORDS],
             },
             "titles": self.titles.payload(),
+            "summaries": self.summaries.payload(),
             "api": {
                 "openai": {"configured": bool(openai_key), "preview": _secret_preview(openai_key) if openai_key else ""},
                 "cohere": {"configured": bool(cohere_key), "preview": _secret_preview(cohere_key) if cohere_key else ""},
@@ -1995,6 +2044,20 @@ def _session_payload(session: SessionRecord) -> dict[str, Any]:
         "created_at_iso": format_timestamp_iso(session.created_at),
         "updated_at": session.updated_at,
         "updated_at_iso": format_timestamp_iso(session.updated_at),
+    }
+
+
+def _closing_list_payload(state: dict[str, Any] | None) -> dict[str, Any] | None:
+    """The session list needs only whether a session is closed and how far its summary got."""
+    if state is None:
+        return None
+    summary = state.get("summary")
+    return {
+        "closed": state["closed"],
+        "closed_at": state["closed_at"],
+        "reopened_until": state["reopened_until"],
+        "summary_status": summary["status"] if summary else None,
+        "summary_outdated": bool(summary and summary["outdated"]),
     }
 
 

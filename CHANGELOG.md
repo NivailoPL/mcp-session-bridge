@@ -10,6 +10,7 @@ This project follows a lightweight changelog format inspired by Keep a Changelog
 
 - Added a Contexts workspace: build a temporary context from any sessions and files in the bridge and hand it to a model by its `ctx_` ID (NIV-25).
 - Added highlights and chapters inside the session view: mark the exact words that matter to you, and split a session into named exchange ranges by hand or with a Codex proposal you start yourself.
+- Added closing and summaries: once switched on in Settings › Summaries, a session closes after 7–90 days without a new exchange. Models can still read a closed session but cannot add exchanges or files to it, and the owner can reopen it for the same stretch. Each close queues one Markdown summary written by Codex from a fixed "Summarize this session." line plus your own instructions, within a length limit you set. Closed sessions open on their summary card (Frost or Paper) over the dimmed conversation, show a blue check in the session list, and give models the summary in `get_session_overview`. Closing spends no tokens and keeps working while Runs models is off; only the summaries wait for it.
 - Added a Topics workspace: a picture of what you write about, across sessions. Find topics proposes topics from your chapters, every proposal is tested by sorting all chapters before you decide, and Sort new places new chapters. Nothing runs until you press it, and every step is kept in a journal readable in the admin and with `mcp-bridge topics`.
 
 ### New Features

@@ -530,6 +530,112 @@
       color: var(--text); text-align: center;
     }
     .sensitive-curtain[hidden] { display: none; }
+
+    /* a closed session: its summary lies over the dimmed conversation until it is put away */
+    .session-closed-chip {
+      flex: 0 0 auto; display: inline-flex; align-items: center; gap: 7px;
+      height: 26px; margin-right: 12px; padding: 0 11px 0 8px;
+      border: 1px solid rgba(0, 129, 191, .75); border-radius: var(--r-pill);
+      background: rgba(0, 129, 191, .2); color: #cfe3f2;
+      font-family: "Geist Mono", ui-monospace, monospace; font-size: var(--t-label); font-weight: 500; letter-spacing: .12em;
+    }
+    .session-closed-chip[hidden] { display: none; }
+    .session-closed-chip .closed-check { width: 14px; height: 14px; }
+    .closed-check { display: block; width: 13px; height: 13px; flex: 0 0 auto; }
+    .session-meta-row { display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: 12px; align-items: center; }
+    .session-meta-row .closed-check { justify-self: center; }
+    .session-meta-row .session-meta-line { margin-left: 0; }
+    .summary-toggle { border-color: rgba(0, 129, 191, .75); background: rgba(0, 129, 191, .2); color: #cfe3f2; }
+    .summary-toggle:hover { border-color: rgba(0, 129, 191, .95); background: rgba(0, 129, 191, .3); }
+    .summary-toggle svg { width: 15px; height: 15px; }
+    .summary-toggle[hidden], .session-reopen[hidden] { display: none; }
+    .session-reopen {
+      display: inline-flex; align-items: center; gap: 6px; min-height: 24px; margin-left: 10px; padding: 0 8px;
+      border: 1px solid transparent; border-radius: var(--r-xs); background: transparent;
+      color: #cfe3f2; font-size: var(--t-meta); font-weight: 600;
+    }
+    .session-reopen:hover { border-color: rgba(0, 129, 191, .6); background: rgba(0, 129, 191, .16); color: #e6f2fa; }
+    .session-reopen svg { width: 13px; height: 13px; }
+    .thread-sensitive-content.has-summary { overflow: hidden; }
+    .summary-layer { position: absolute; inset: 0; z-index: 11; display: grid; place-items: start center; padding: 22px 24px; }
+    .summary-layer[hidden] { display: none; }
+    .summary-scrim { position: absolute; inset: 0; background: rgba(10, 12, 16, .55); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); }
+    .summary-card {
+      --sc-bg: #a9c4dc; --sc-text: #0b2233; --sc-sub: #1f4560; --sc-label: #0b4a6e;
+      --sc-rule: rgba(11, 34, 51, .2); --sc-ghost: rgba(11, 34, 51, .35); --sc-btn: #0b2233; --sc-btn-text: #fff; --sc-badge: rgba(11, 34, 51, .12);
+      position: relative; display: flex; flex-direction: column; gap: 12px;
+      width: min(600px, 100%); max-height: 100%; padding: 16px 20px; box-sizing: border-box;
+      border-radius: 14px; background: var(--sc-bg); color: var(--sc-text);
+      box-shadow: 0 28px 64px -20px rgba(0, 0, 0, .9), 0 0 0 1px rgba(0, 0, 0, .25);
+    }
+    .summary-card.is-paper {
+      --sc-bg: #f3f1ea; --sc-text: #17181c; --sc-sub: #4a4d57; --sc-label: #00658f;
+      --sc-rule: rgba(0, 0, 0, .12); --sc-ghost: rgba(0, 0, 0, .22); --sc-btn: #0081bf; --sc-btn-text: #fff; --sc-badge: #ddeef7;
+    }
+    .summary-head { display: flex; align-items: center; gap: 10px; }
+    .summary-head h3 { margin: 0; font-size: 16px; font-weight: 800; letter-spacing: -.01em; color: inherit; }
+    .summary-glyph { width: 18px; height: 18px; flex: 0 0 auto; }
+    .summary-spacer { flex: 1; }
+    .summary-synth { display: inline-flex; color: var(--sc-sub); }
+    .summary-synth svg { width: 15px; height: 15px; }
+    .summary-card .summary-icon-button {
+      width: 32px; min-height: 32px; height: 32px; padding: 0;
+      border: 1px solid var(--sc-ghost); border-radius: 8px; background: transparent; color: var(--sc-text);
+    }
+    .summary-card .summary-icon-button:hover { background: var(--sc-badge); border-color: var(--sc-ghost); }
+    .summary-card .summary-icon-button svg { width: 14px; height: 14px; }
+    .summary-card .summary-hide {
+      min-height: 32px; height: 32px; padding: 0 12px; gap: 7px;
+      border: 0; border-radius: 8px; background: var(--sc-btn); color: var(--sc-btn-text);
+      font-size: 12.5px; font-weight: 700;
+    }
+    .summary-card .summary-hide:hover { background: var(--sc-btn); filter: brightness(1.12); }
+    .summary-card .summary-hide svg { width: 14px; height: 14px; }
+    .summary-meta {
+      display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+      color: var(--sc-sub); font-family: "Geist Mono", ui-monospace, monospace; font-size: 11.5px; letter-spacing: .04em;
+    }
+    .summary-model {
+      display: inline-flex; align-items: center; height: 20px; padding: 0 8px;
+      border-radius: var(--r-pill); background: var(--sc-badge); color: var(--sc-text);
+      font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase;
+    }
+    .summary-body { min-height: 0; overflow: auto; color: var(--sc-text); font-size: 14px; line-height: 1.6; }
+    .summary-body.markdown-body h1, .summary-body.markdown-body h2, .summary-body.markdown-body h3, .summary-body.markdown-body h4 { color: inherit; }
+    .summary-body.markdown-body code { background: var(--sc-badge); color: inherit; }
+    .summary-body.markdown-body pre { background: var(--sc-badge); color: inherit; border-color: var(--sc-rule); }
+    .summary-body.markdown-body a { color: inherit; }
+    .summary-body.markdown-body th, .summary-body.markdown-body td { border-color: var(--sc-rule); }
+    .summary-note { margin: 0; color: var(--sc-sub); font-size: 13px; line-height: 1.5; }
+    .summary-foot { display: flex; align-items: center; justify-content: flex-end; gap: 12px; padding-top: 10px; border-top: 1px solid var(--sc-rule); font-size: 12px; }
+    .summary-card .summary-link {
+      min-height: 0; padding: 0; border: 0; background: none; color: var(--sc-text);
+      font-size: 12px; font-weight: 700; text-decoration: underline; text-underline-offset: 3px;
+    }
+    .summary-card .summary-link:hover { background: none; }
+
+    /* Settings › Summaries */
+    .summary-swatches { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; width: 100%; max-width: 30rem; align-self: flex-start; }
+    .summary-swatch { position: relative; display: grid; gap: 8px; padding: 10px; border: 1px solid var(--stroke); border-radius: var(--r-card); background: rgba(0, 0, 0, .2); cursor: pointer; }
+    .summary-swatch:has(input:checked) { border-color: var(--accent-2); box-shadow: inset 0 0 0 1px var(--accent-2); }
+    .summary-swatch input { position: absolute; opacity: 0; pointer-events: none; }
+    .summary-swatch:has(input:focus-visible) { outline: 2px solid var(--accent-2); outline-offset: 2px; }
+    .summary-swatch-card { display: grid; gap: 6px; padding: 10px 12px; border-radius: 9px; }
+    .summary-swatch-card b { font-size: 12px; font-weight: 800; }
+    .summary-swatch-card i { display: block; height: 6px; border-radius: 3px; background: currentColor; opacity: .25; }
+    .summary-swatch-card i:nth-child(3) { width: 74%; }
+    .summary-swatch-card i:nth-child(4) { width: 52%; }
+    .summary-swatch-name { display: flex; justify-content: space-between; font-size: var(--t-ctrl); font-weight: 600; }
+    .summary-swatch-name span { color: var(--muted); font-family: "Geist Mono", ui-monospace, monospace; font-size: var(--t-label); }
+    .summary-base-prompt {
+      display: flex; align-items: center; gap: 10px; min-height: 36px; padding: 0 12px;
+      border: 1px dashed var(--stroke-strong); border-radius: var(--r-ctrl); background: rgba(255, 255, 255, .02);
+      color: var(--text-2); font-family: "Geist Mono", ui-monospace, monospace; font-size: 12.5px;
+    }
+    .summary-base-prompt svg { width: 13px; height: 13px; color: var(--faint-ink); flex: 0 0 auto; }
+    .summary-prompt-stack { display: grid; gap: 8px; width: 100%; }
+    .summary-prompt-stack textarea { width: 100%; box-sizing: border-box; min-height: 112px; resize: vertical; font-family: "Geist Mono", ui-monospace, monospace; font-size: 12px; line-height: 1.6; }
+    .summary-max-chars { width: 96px; text-align: right; }
     .sensitive-curtain-card {
       position: sticky; top: 28vh;
       display: grid; justify-items: center; gap: 10px; max-width: 26rem;
@@ -2110,6 +2216,7 @@
           <div class="topbar-title">
             <span id="sessionGroupLabel" class="session-group-label"></span>
             <div class="session-title-line">
+              <span id="sessionClosedChip" class="session-closed-chip" title="Closed: models can read this session but not add to it" hidden><svg class="closed-check" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="7.5" fill="#0081bf"></circle><path d="M4.8 8.3l2.1 2.1 4.3-4.6" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"></path></svg>CLOSED</span>
               <h2 id="sessionTitle">Select a session</h2>
             </div>
             <div id="sessionIdLine" class="session-id-line" hidden>
@@ -2120,6 +2227,7 @@
                   <span id="copySessionIdLabel" class="session-id-copy-label">Copy</span>
                 </span>
               </button>
+              <button id="reopenSessionButton" type="button" class="session-reopen" hidden><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><circle cx="8" cy="8" r="5.6"></circle><path d="M8 5v3.2l2 1.2"></path></svg><span id="reopenSessionLabel">Reopen</span></button>
             </div>
             <div id="sessionMeta" class="meta">Conversation history correction panel.</div>
           </div>
@@ -2156,6 +2264,7 @@
             </button>
           </div>
           <select id="sessionGroupSelect" class="session-group-select" aria-label="Session group"></select>
+          <button id="summaryShowButton" type="button" class="ghost summary-toggle" hidden><svg class="summary-glyph" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M3 4.5h10M3 8h10M3 11.5h5" stroke-dasharray="2.2 1.6"></path><circle cx="13.4" cy="13.4" r="3.4" stroke-width="1.3"></circle><path d="M11.9 13.5l1 1 2-2.2" stroke-width="1.3"></path></svg>Summary</button>
           <span class="top-actions-spacer"></span>
           <div class="export-menu">
             <button id="exportMenuButton" type="button" class="ghost export-menu-trigger" aria-haspopup="menu" aria-expanded="false" aria-controls="exportMenuList">
@@ -2212,6 +2321,22 @@
           <p id="status" class="status" role="status"></p>
           <div id="exchangeList" aria-live="polite"></div>
           <button id="highlightPop" type="button" class="highlight-pop" hidden></button>
+        </section>
+      </div>
+      <div id="summaryLayer" class="summary-layer" hidden>
+        <div class="summary-scrim" aria-hidden="true"></div>
+        <section id="summaryCard" class="summary-card" aria-labelledby="summaryHeading">
+          <div class="summary-head">
+            <svg class="summary-glyph" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M3 4.5h10M3 8h10M3 11.5h5" stroke-dasharray="2.2 1.6"></path><circle cx="13.4" cy="13.4" r="3.4" stroke-width="1.3"></circle><path d="M11.9 13.5l1 1 2-2.2" stroke-width="1.3"></path></svg>
+            <h3 id="summaryHeading">Summary</h3>
+            <span class="summary-spacer"></span>
+            <span class="summary-synth" title="Synthesized: written by a model from the transcript"><svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3" role="img" aria-label="Synthesized"><circle cx="5.1" cy="5.4" r="3.1"></circle><circle cx="8.9" cy="8.6" r="3.1"></circle></svg></span>
+            <button id="summaryRegenerate" type="button" class="summary-icon-button" title="Regenerate" aria-label="Regenerate summary"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.6-6.4"></path><path d="M21 4v5h-5"></path></svg></button>
+            <button id="summaryHide" type="button" class="summary-hide"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M1.5 8s2.4-4 6.5-4 6.5 4 6.5 4-2.4 4-6.5 4-6.5-4-6.5-4z"></path><circle cx="8" cy="8" r="1.8"></circle></svg>Show conversation</button>
+          </div>
+          <div id="summaryMeta" class="summary-meta"></div>
+          <div id="summaryBody" class="summary-body markdown-body"></div>
+          <div class="summary-foot"><button id="summaryEditPrompt" type="button" class="summary-link">Edit prompt</button></div>
         </section>
       </div>
       <button id="threadSensitiveOverlay" type="button" class="sensitive-curtain" hidden>
@@ -2585,6 +2710,7 @@
         <button type="button" data-settings-tab="titles"><span>Titles</span><span class="settings-tab-meta"><span id="settingsHintTitles" class="settings-tab-hint"></span><span class="settings-tab-dirty" hidden aria-label="Unsaved changes"></span></span></button>
         <button type="button" data-settings-tab="strands"><span>Chapters</span><span class="settings-tab-meta"><span id="settingsHintStrands" class="settings-tab-hint"></span></span></button>
         <button type="button" data-settings-tab="topics"><span>Topics</span><span class="settings-tab-meta"><span id="settingsHintTopics" class="settings-tab-hint"></span></span></button>
+        <button type="button" data-settings-tab="summaries"><span>Summaries</span><span class="settings-tab-meta"><span id="settingsHintSummaries" class="settings-tab-hint"></span><span class="settings-tab-dirty" hidden aria-label="Unsaved changes"></span></span></button>
         <button type="button" data-settings-tab="semantic"><span>Semantic</span><span class="settings-tab-meta"><span id="settingsHintSearch" class="settings-tab-hint"></span><span class="settings-tab-dirty" hidden aria-label="Unsaved changes"></span></span></button>
       </nav>
       <div class="settings-body">
@@ -2988,6 +3114,68 @@
           </section>
         </section>
 
+        <section data-settings-panel="summaries" class="settings-panel" hidden>
+          <div class="settings-panel-head">
+            <h4>Summaries</h4>
+            <span class="context-help"><button type="button" class="context-help-trigger" aria-label="About Summaries" aria-describedby="settingsHelpSummaries">?</button><span id="settingsHelpSummaries" class="context-help-box" role="tooltip">A session closes after the time below passes without a new exchange. Models can still read a closed session but cannot add to it; Reopen in the session lets them in again for the same time. Closing spends no tokens and keeps working while Runs models is off. Each close queues one summary, written by Codex from the whole transcript with the plan signed in under Codex. Summaries wait while Runs models is off; Regenerate in the session always works.</span></span>
+          </div>
+          <p class="settings-feature-note">Closed sessions open on their summary. Show conversation in the card puts it away.</p>
+          <label id="summariesFeatureCard" class="feature-switch-card" data-settings-instant>
+            <input id="summariesEnabled" class="settings-switch-input is-green" type="checkbox" role="switch" aria-describedby="summariesEnabledNote">
+            <span class="feature-switch-text">
+              <span id="summariesEnabledLabel" class="feature-switch-state">Automatic closing is off</span>
+              <span id="summariesEnabledNote" class="feature-switch-detail"></span>
+            </span>
+          </label>
+          <section class="settings-group">
+            <div class="settings-group-head"><h5>Closing</h5><span id="summariesCounts" class="settings-value-muted"></span></div>
+            <div class="settings-item">
+              <div class="settings-item-label"><span class="settings-item-title"><label for="summariesCloseAfter">Close after</label></span></div>
+              <div class="settings-item-control"><select id="summariesCloseAfter"></select></div>
+            </div>
+            <div class="settings-item">
+              <div class="settings-item-label"><span class="settings-item-title"><label for="summariesSkipPinned">Don't close pinned sessions</label></span></div>
+              <div class="settings-item-control"><input id="summariesSkipPinned" class="settings-switch-input" type="checkbox" role="switch"></div>
+            </div>
+            <div class="settings-item">
+              <div class="settings-item-label">
+                <span class="settings-item-title"><label for="summariesIncludeSensitive">Summarize sensitive groups</label><span class="context-help"><button type="button" class="context-help-trigger" aria-label="About summarizing sensitive groups" aria-describedby="settingsHelpSummariesSensitive">?</button><span id="settingsHelpSummariesSensitive" class="context-help-box" role="tooltip">Sessions in sensitive groups still close. When this is on, their whole transcript also goes to Codex for a summary.</span></span></span>
+              </div>
+              <div class="settings-item-control"><input id="summariesIncludeSensitive" class="settings-switch-input" type="checkbox" role="switch"></div>
+            </div>
+            <div class="settings-item settings-item-stack">
+              <div class="settings-item-label"><span class="settings-item-title">Groups</span></div>
+              <div id="summariesGroups" class="rag-group-list"></div>
+            </div>
+          </section>
+          <section class="settings-group">
+            <div class="settings-group-head"><h5>Summary card</h5></div>
+            <div class="settings-item settings-item-stack">
+              <div class="settings-item-label"><span class="settings-item-title">Color</span></div>
+              <div class="summary-swatches" role="radiogroup" aria-label="Summary card color">
+                <label class="summary-swatch"><input type="radio" name="summariesCardColor" value="frost" aria-label="Frost"><span class="summary-swatch-card" style="background:#a9c4dc;color:#0b2233"><b>Summary</b><i></i><i></i><i></i></span><span class="summary-swatch-name">Frost<span>#A9C4DC</span></span></label>
+                <label class="summary-swatch"><input type="radio" name="summariesCardColor" value="paper" aria-label="Paper"><span class="summary-swatch-card" style="background:#f3f1ea;color:#17181c"><b>Summary</b><i></i><i></i><i></i></span><span class="summary-swatch-name">Paper<span>#F3F1EA</span></span></label>
+              </div>
+            </div>
+          </section>
+          <section class="settings-group">
+            <div class="settings-group-head"><h5>Writing</h5><span id="summariesModel" class="settings-value-muted"></span></div>
+            <div class="settings-item">
+              <div class="settings-item-label"><span class="settings-item-title"><label for="summariesMaxChars">Max length</label></span><span class="settings-item-sub">characters</span></div>
+              <div class="settings-item-control"><input id="summariesMaxChars" class="settings-input-mono summary-max-chars" type="number" min="300" max="8000" step="100"></div>
+            </div>
+            <div class="settings-item settings-item-stack">
+              <div class="settings-item-label">
+                <span class="settings-item-title"><label for="summariesInstructions">Prompt</label><span class="context-help"><button type="button" class="context-help-trigger" aria-label="About the summary prompt" aria-describedby="settingsHelpSummariesPrompt">?</button><span id="settingsHelpSummariesPrompt" class="context-help-box" role="tooltip">The fixed line and your instructions go to Codex as one prompt. Bridge adds the length limit and asks for Markdown in the session's language, using only what the transcript says. Changes apply to the next summary; Regenerate rewrites an existing one.</span></span></span>
+              </div>
+              <div class="summary-prompt-stack">
+                <div id="summariesBasePrompt" class="summary-base-prompt" aria-label="Fixed prompt"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><rect x="3" y="7" width="10" height="6.5" rx="1.5"></rect><path d="M5.6 7V4.8a2.4 2.4 0 0 1 4.8 0V7"></path></svg><span></span></div>
+                <textarea id="summariesInstructions" maxlength="4000" rows="5" placeholder="Start with the decisions. Keep code and file names in backticks." aria-label="Additional instructions"></textarea>
+              </div>
+            </div>
+          </section>
+        </section>
+
         <section data-settings-panel="strands" class="settings-panel" hidden>
           <div class="settings-panel-head">
             <h4>Chapters</h4>
@@ -3374,6 +3562,10 @@
         pendingSessionMove: null,
         toolOutputRestartInFlight: false,
         settingsDirty: new Set(),
+        selectedClosing: null,
+        // closed sessions whose summary card was put away on this page
+        summaryHidden: new Set(),
+        summaryPollTimer: 0,
         editingExchangeId: null,
         busy: false,
         layout: localStorage.getItem("mcp-admin:layout") || "pairs",
@@ -3417,6 +3609,35 @@
         apiFallback: document.getElementById("titleApiFallback"),
         showAiButton: document.getElementById("titleShowAiButton"),
         includeSensitive: document.getElementById("titleIncludeSensitive"),
+      };
+      const summaryDom = {
+        chip: document.getElementById("sessionClosedChip"),
+        show: document.getElementById("summaryShowButton"),
+        reopen: document.getElementById("reopenSessionButton"),
+        reopenLabel: document.getElementById("reopenSessionLabel"),
+        layer: document.getElementById("summaryLayer"),
+        card: document.getElementById("summaryCard"),
+        meta: document.getElementById("summaryMeta"),
+        body: document.getElementById("summaryBody"),
+        hide: document.getElementById("summaryHide"),
+        regenerate: document.getElementById("summaryRegenerate"),
+        editPrompt: document.getElementById("summaryEditPrompt"),
+      };
+      const summariesSettingsDom = {
+        enabled: document.getElementById("summariesEnabled"),
+        card: document.getElementById("summariesFeatureCard"),
+        label: document.getElementById("summariesEnabledLabel"),
+        note: document.getElementById("summariesEnabledNote"),
+        hint: document.getElementById("settingsHintSummaries"),
+        counts: document.getElementById("summariesCounts"),
+        closeAfter: document.getElementById("summariesCloseAfter"),
+        skipPinned: document.getElementById("summariesSkipPinned"),
+        includeSensitive: document.getElementById("summariesIncludeSensitive"),
+        groups: document.getElementById("summariesGroups"),
+        model: document.getElementById("summariesModel"),
+        maxChars: document.getElementById("summariesMaxChars"),
+        basePrompt: document.querySelector("#summariesBasePrompt span"),
+        instructions: document.getElementById("summariesInstructions"),
       };
       const connectorsDom = {
         lockEnabled: document.getElementById("connectorsLockEnabled"),
@@ -3690,6 +3911,7 @@
       bindTopicSettings();
       bindModelPickers();
       bindSettingsEvents();
+      bindSummaryEvents();
       bindAnchorEvents();
       bindCodexSettingsEvents();
       bindContextSearchEvents();
@@ -4246,7 +4468,7 @@
         settingsDom.toolOutputRestart.addEventListener("click", () => restartBridgeService());
 
         // Panels whose fields wait for "Save changes". API keys and System act at once.
-        for (const name of ["titles", "transcript", "search", "semantic"]) {
+        for (const name of ["titles", "transcript", "search", "semantic", "summaries"]) {
           const panel = document.querySelector(`[data-settings-panel="${name}"]`);
           const markDirty = (event) => {
             if (event.target.closest("[data-settings-instant]")) return;
@@ -4344,6 +4566,7 @@
         try {
           switch (name) {
             case "titles": return await saveTitleSettings();
+            case "summaries": return await saveSummarySettings();
             case "transcript": return await saveDeliverySettings();
             case "search":
             case "semantic": return await saveSearchSettings();
@@ -4476,6 +4699,7 @@
           titlesDom.includeSensitive.checked = Boolean(settings.titles.include_sensitive);
           renderTitlesCard();
         }
+        if (settings.summaries) fillSummarySettings(settings.summaries, settings.groups || []);
         const [minWords, maxWords] = settings.general.rename_max_words_range || [2, 10];
         settingsDom.aiRenameMaxWords.min = minWords;
         settingsDom.aiRenameMaxWords.max = maxWords;
@@ -5760,6 +5984,7 @@
           if (loadGeneration !== state.sessionLoadGeneration) return;
           if (quiet && (state.busy || hasUnsavedWork())) return;
           state.selectedSession = payload.session;
+          state.selectedClosing = payload.closing || null;
           state.exchanges = payload.exchanges || [];
           state.files = payload.files || { session: [], group: [] };
           state.fileLabels = payload.file_labels || [];
@@ -8097,7 +8322,16 @@
         if (Number(session.deleted_exchange_count || 0) > 0) {
           facts.push(`${session.deleted_exchange_count} excluded`);
         }
-        return div("session-meta-line", facts.join(" · "));
+        const line = div("session-meta-line", facts.join(" · "));
+        if (!session.closing?.closed) return line;
+        // closed: a blue check in the free space under the group icon
+        const row = div("session-meta-row");
+        const check = spanCls("");
+        check.innerHTML = closedCheckSvg();
+        check.firstElementChild.setAttribute("role", "img");
+        check.firstElementChild.setAttribute("aria-label", "Closed");
+        row.append(check.firstElementChild, line);
+        return row;
       }
 
       function sessionGroupChip(group, fallbackId) {
@@ -8495,6 +8729,7 @@
       function renderExchanges() {
         dom.exchangeList.replaceChildren();
         renderThreadSensitiveGuard();
+        renderClosing();
         dom.turnNav.classList.toggle("show", Boolean(state.selectedSession));
         dom.exportHtmlButton.disabled = !state.selectedSession || selectedThreadIsGuarded();
         const hasTurns = state.exchanges.length > 0;
@@ -8570,6 +8805,217 @@
         dom.exportMenuList.hidden = !open;
         dom.exportMenuButton.setAttribute("aria-expanded", String(open));
         if (open) dom.exportMenuList.querySelector("button:not(:disabled)")?.focus();
+      }
+
+      // ---------- closed sessions and their summaries ----------
+      function closedCheckSvg() {
+        return '<svg class="closed-check" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="7.5" fill="#0081bf"></circle><path d="M4.8 8.3l2.1 2.1 4.3-4.6" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"></path></svg>';
+      }
+
+      function shortDate(unix) {
+        if (!unix) return "";
+        try {
+          return new Date(unix * 1000).toLocaleDateString("pl-PL", { day: "2-digit", month: "2-digit", timeZone: state.displayTimezone || undefined });
+        } catch (_) {
+          return new Date(unix * 1000).toLocaleDateString("pl-PL", { day: "2-digit", month: "2-digit" });
+        }
+      }
+
+      function renderClosing() {
+        window.clearTimeout(state.summaryPollTimer);
+        const session = state.selectedSession;
+        const closing = session ? state.selectedClosing : null;
+        const closed = Boolean(closing?.closed);
+        const guarded = selectedThreadIsGuarded();
+        summaryDom.chip.hidden = !closed;
+        summaryDom.reopen.hidden = !closed;
+        if (closed) summaryDom.reopenLabel.textContent = `Reopen for ${closing.close_after_days} days`;
+        const showCard = closed && !guarded && !state.summaryHidden.has(session.session_id);
+        summaryDom.layer.hidden = !showCard;
+        dom.threadSensitiveContent.classList.toggle("has-summary", showCard);
+        summaryDom.show.hidden = !closed || guarded || showCard;
+        if (showCard) dom.threadSensitiveContent.scrollTop = 0;
+        if (!closed) return;
+
+        summaryDom.card.classList.toggle("is-paper", closing.card_color === "paper");
+        const summary = closing.summary;
+        const written = Boolean(summary?.content);
+        const working = summary && (summary.status === "queued" || summary.status === "running");
+        summaryDom.meta.replaceChildren();
+        if (summary?.model) summaryDom.meta.append(spanCls("summary-model", summary.model));
+        const facts = [];
+        if (written && summary.exchange_count) facts.push(`turns 1–${summary.exchange_count * 2}`);
+        if (written && summary.written_at) facts.push(`written ${shortDate(summary.written_at)}`);
+        facts.push(`closed ${shortDate(closing.closed_at)}`);
+        summaryDom.meta.append(spanCls("", facts.join(" · ")));
+
+        summaryDom.body.replaceChildren();
+        if (written) {
+          summaryDom.body.innerHTML = renderMarkdown(summary.content);
+          if (summary.outdated) summaryDom.body.prepend(noteNode("Written before the session was reopened. A new summary comes when it closes again."));
+        }
+        if (working) {
+          summaryDom.body.prepend(noteNode(summary.status === "running" ? "Writing the summary…" : "Waiting for Codex to write the summary…"));
+          state.summaryPollTimer = window.setTimeout(() => refreshClosing(session.session_id), 4000);
+        } else if (summary?.status === "failed") {
+          summaryDom.body.prepend(noteNode(`No summary: ${summary.error || "Codex failed."} Regenerate tries again.`));
+        } else if (!summary) {
+          summaryDom.body.append(noteNode("No summary yet. Summaries are written while Runs models is on, or now with Regenerate."));
+        }
+        summaryDom.regenerate.disabled = Boolean(working);
+      }
+
+      function noteNode(text) {
+        const node = document.createElement("p");
+        node.className = "summary-note";
+        node.textContent = text;
+        return node;
+      }
+
+      async function refreshClosing(sessionId) {
+        if (sessionId !== state.selectedSessionId) return;
+        try {
+          const payload = await api(`/admin/api/sessions/${encodeURIComponent(sessionId)}`);
+          if (sessionId !== state.selectedSessionId) return;
+          state.selectedClosing = payload.closing || null;
+          renderClosing();
+        } catch (_) {
+          // the next manual refresh shows the state
+        }
+      }
+
+      function bindSummaryEvents() {
+        summaryDom.hide.addEventListener("click", () => {
+          if (!state.selectedSessionId) return;
+          state.summaryHidden.add(state.selectedSessionId);
+          renderClosing();
+          dom.exchangeList.focus?.();
+        });
+        summaryDom.show.addEventListener("click", () => {
+          state.summaryHidden.delete(state.selectedSessionId);
+          renderClosing();
+          summaryDom.hide.focus();
+        });
+        summaryDom.regenerate.addEventListener("click", async () => {
+          const sessionId = state.selectedSessionId;
+          summaryDom.regenerate.disabled = true;
+          try {
+            const payload = await api(`/admin/api/sessions/${encodeURIComponent(sessionId)}/summary/regenerate`, { method: "POST" });
+            if (sessionId === state.selectedSessionId) state.selectedClosing = payload.closing;
+            setStatus("Writing a new summary.", "ok");
+          } catch (error) {
+            setStatus(error.message, "error");
+          }
+          renderClosing();
+        });
+        summaryDom.reopen.addEventListener("click", async () => {
+          const sessionId = state.selectedSessionId;
+          summaryDom.reopen.disabled = true;
+          try {
+            const payload = await api(`/admin/api/sessions/${encodeURIComponent(sessionId)}/reopen`, { method: "POST" });
+            if (sessionId === state.selectedSessionId) state.selectedClosing = payload.closing;
+            setStatus(`Reopened until ${shortDate(payload.closing?.reopened_until)}. Models can add to it again.`, "ok");
+            await loadSessions();
+          } catch (error) {
+            setStatus(error.message, "error");
+          } finally {
+            summaryDom.reopen.disabled = false;
+          }
+          renderClosing();
+        });
+        summaryDom.editPrompt.addEventListener("click", () => openAiSettingsDialog("summaries"));
+        summariesSettingsDom.enabled.addEventListener("change", () => { renderSummariesCard(); saveSummariesEnabled(); });
+      }
+
+      function fillSummarySettings(summaries, groups) {
+        const dom = summariesSettingsDom;
+        dom.enabled.checked = Boolean(summaries.enabled);
+        dom.closeAfter.replaceChildren(...(summaries.close_after_days_choices || [7, 14, 30, 60, 90]).map((days) => {
+          const option = document.createElement("option");
+          option.value = String(days);
+          option.textContent = `${days} days without a new exchange`;
+          return option;
+        }));
+        dom.closeAfter.value = String(summaries.close_after_days);
+        dom.skipPinned.checked = Boolean(summaries.skip_pinned);
+        dom.includeSensitive.checked = Boolean(summaries.include_sensitive);
+        const chosen = summaries.group_ids;
+        dom.groups.replaceChildren(...groups.map((group) => {
+          // same chips as Search › groups; sensitive groups close too, only their summaries wait for the switch
+          const option = document.createElement("label");
+          option.className = "rag-group-option";
+          option.style.setProperty("--g", group.color || "#8b93a7");
+          const box = document.createElement("input");
+          box.type = "checkbox";
+          box.value = group.group_id;
+          box.checked = chosen == null || chosen.includes(group.group_id);
+          const icon = document.createElement("span");
+          icon.innerHTML = iconSvg(group.icon_key || "folder");
+          option.append(box, icon, spanCls("rag-group-name", group.name || group.group_id));
+          if (group.is_sensitive) {
+            const badge = spanCls("");
+            badge.innerHTML = sensitiveIconSvg();
+            badge.title = "Sensitive group";
+            option.append(badge);
+          }
+          return option;
+        }));
+        for (const radio of document.querySelectorAll('input[name="summariesCardColor"]')) {
+          radio.checked = radio.value === summaries.card_color;
+        }
+        dom.maxChars.min = summaries.max_chars_range?.[0] || 300;
+        dom.maxChars.max = summaries.max_chars_range?.[1] || 8000;
+        dom.maxChars.value = summaries.max_chars;
+        dom.basePrompt.textContent = summaries.base_prompt || "Summarize this session.";
+        dom.instructions.value = summaries.instructions || "";
+        dom.model.textContent = summaries.codex_model || summaries.resolved_codex_model || "";
+        const counts = summaries.counts || {};
+        dom.counts.textContent = summaries.enabled ? `${counts.closed || 0} closed · ${counts.summarized || 0} summarized` : "";
+        renderSummariesCard();
+      }
+
+      function renderSummariesCard() {
+        const summaries = state.settings?.summaries;
+        if (!summaries) return;
+        const dom = summariesSettingsDom;
+        const on = dom.enabled.checked;
+        dom.card.classList.toggle("is-on", on);
+        dom.label.textContent = on ? "Automatic closing is on" : "Automatic closing is off";
+        dom.note.textContent = on
+          ? `Sessions close after ${summaries.close_after_days} days without a new exchange. Models can still read them. Codex writes a summary for each while Runs models is on.`
+          : "Nothing closes on its own and no tokens are spent.";
+        dom.hint.textContent = on ? "On" : "Off";
+        dom.hint.dataset.tone = on ? "ok" : "off";
+      }
+
+      async function saveSummariesEnabled() {
+        const enabled = summariesSettingsDom.enabled.checked;
+        const saved = await saveSettingsRequest(
+          "/admin/api/settings/summaries", { enabled },
+          enabled ? "Automatic closing is on." : "Automatic closing is off.",
+        );
+        if (!saved) { summariesSettingsDom.enabled.checked = !enabled; renderSummariesCard(); }
+        if (saved) await loadSessions();
+      }
+
+      async function saveSummarySettings() {
+        const dom = summariesSettingsDom;
+        const boxes = [...dom.groups.querySelectorAll("input[type=checkbox]")];
+        const picked = boxes.filter((box) => box.checked).map((box) => box.value);
+        const color = document.querySelector('input[name="summariesCardColor"]:checked')?.value || "frost";
+        const saved = await saveSettingsRequest("/admin/api/settings/summaries", {
+          close_after_days: Number.parseInt(dom.closeAfter.value, 10),
+          skip_pinned: dom.skipPinned.checked,
+          include_sensitive: dom.includeSensitive.checked,
+          group_ids: picked.length === boxes.length ? null : picked,
+          card_color: color,
+          max_chars: Number.parseInt(dom.maxChars.value, 10),
+          instructions: dom.instructions.value,
+        }, "Summary settings saved.", "summaries");
+        if (saved) {
+          await loadSessions();
+          if (state.selectedSessionId) refreshClosing(state.selectedSessionId);
+        }
       }
 
       function renderThreadSensitiveGuard() {

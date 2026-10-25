@@ -141,6 +141,12 @@ async def _chapter_schedule_monitor() -> None:
             raise
         except Exception:
             logger.exception("Chapter schedule check failed")
+        try:
+            await admin.summaries.tick()
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception("Summary queue check failed")
 
 
 @asynccontextmanager
@@ -151,6 +157,7 @@ async def app_lifespan(_: Any):
         housekeeping = asyncio.create_task(_oauth_housekeeping())
         await asyncio.to_thread(chapter_automation.recover)
         await asyncio.to_thread(topic_runtime.recover)
+        await asyncio.to_thread(admin.summaries.recover)
         chapter_monitor = asyncio.create_task(_chapter_schedule_monitor())
         try:
             # Reaching this point is the final startup step before the app is ready to serve.
@@ -169,6 +176,7 @@ async def app_lifespan(_: Any):
                 await monitor
             await strand_runtime.close()
             await admin.titles.close()
+            await admin.summaries.close()
             await topic_runtime.close()
             await codex.close()
 
@@ -531,6 +539,21 @@ async def admin_api_session(request: Request) -> Response:
 @mcp.custom_route("/admin/api/sessions/{session_id}", methods=["PATCH"])
 async def admin_api_update_session(request: Request) -> Response:
     return await admin.api_update_session(request)
+
+
+@mcp.custom_route("/admin/api/sessions/{session_id}/reopen", methods=["POST"])
+async def admin_api_reopen_session(request: Request) -> Response:
+    return await admin.api_reopen_session(request)
+
+
+@mcp.custom_route("/admin/api/sessions/{session_id}/summary/regenerate", methods=["POST"])
+async def admin_api_regenerate_summary(request: Request) -> Response:
+    return await admin.api_regenerate_summary(request)
+
+
+@mcp.custom_route("/admin/api/settings/summaries", methods=["PUT"])
+async def admin_api_update_summary_settings(request: Request) -> Response:
+    return await admin.api_update_summary_settings(request)
 
 
 @mcp.custom_route("/admin/api/sessions/{session_id}/rename/ai", methods=["POST"])
@@ -1195,6 +1218,7 @@ def get_session_overview(session_id: str) -> dict[str, Any]:
         "ok": True,
         "group": _group_payload(group),
         "files": files,
+        **_closed_overview(session.session_id),
         **render_session_overview(
             session,
             exchanges,
@@ -1202,6 +1226,28 @@ def get_session_overview(session_id: str) -> dict[str, Any]:
             max_chars=chunk_max_chars,
             timezone_name=display_timezone,
         ),
+    }
+
+
+def _closed_overview(session_id: str) -> dict[str, Any]:
+    """For a closed session: that it is read-only, and its summary when one is written."""
+    state = admin.summaries.state_for(session_id)
+    if state is None or not state["closed"]:
+        return {}
+    summary = state["summary"]
+    written = summary is not None and summary["status"] == "done" and summary["content"]
+    return {
+        "closed": True,
+        "closed_note": (
+            "This session is closed: read it, but do not save exchanges or files to it. "
+            "Continue in a new session if the user wants to go on."
+        ),
+        "summary": {
+            "content": summary["content"],
+            "covers_turns": summary["exchange_count"],
+            "outdated": summary["outdated"],
+            "note": "Written by a model from the transcript. The transcript chunks stay the source of truth.",
+        } if written else None,
     }
 
 
@@ -1280,6 +1326,9 @@ def save_exchange(
     assistant_response: str,
 ) -> dict[str, Any]:
     """Save one full user/model exchange in the shared session transcript."""
+    closed = admin.summaries.closed_error(session_id)
+    if closed:
+        raise ValueError(closed)
     exchange = store.save_exchange(
         session_id=session_id,
         model_name=model_name.strip() or "Unknown model",
@@ -1314,6 +1363,9 @@ def upload_session_file(
     mime_type: str = "text/markdown",
 ) -> dict[str, Any]:
     """Save a text file that belongs only to one conversation session."""
+    closed = admin.summaries.closed_error(session_id)
+    if closed:
+        return {"ok": False, "error": closed, "error_code": "session_closed"}
     token = get_access_token()
     created_by = token.client_id if token else "unknown"
     try:
@@ -1359,6 +1411,9 @@ async def upload_session_pdf(
     content_base64: str,
 ) -> dict[str, Any]:
     """Upload an existing .pdf for one session as base64 (10 MB, 500 pages max). Encrypted PDFs are rejected. OCR is unavailable; image-only PDFs succeed with text_available=false. Retry temporary pdf_worker_busy errors."""
+    closed = admin.summaries.closed_error(session_id)
+    if closed:
+        return {"ok": False, "error": closed, "error_code": "session_closed", "retryable": False}
     token = get_access_token()
     created_by = token.client_id if token else "unknown"
     try:
