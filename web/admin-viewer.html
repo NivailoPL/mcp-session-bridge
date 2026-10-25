@@ -542,9 +542,7 @@
     .session-closed-chip[hidden] { display: none; }
     .session-closed-chip .closed-check { width: 14px; height: 14px; }
     .closed-check { display: block; width: 13px; height: 13px; flex: 0 0 auto; }
-    .session-meta-row { display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: 12px; align-items: center; }
-    .session-meta-row .closed-check { justify-self: center; }
-    .session-meta-row .session-meta-line { margin-left: 0; }
+    .session-meta-line.is-closed .closed-check { display: inline-block; width: 12px; height: 12px; margin-right: 6px; vertical-align: -2px; }
     .session-reopen[hidden] { display: none; }
     /* Summary: its own card in the rail, frost like the summary itself; lit while the card is shown */
     .summary-dock {
@@ -580,6 +578,7 @@
     .thread-sensitive-content.has-summary { overflow: hidden; }
     /* the rail stays above the dimmed conversation so the lit Summary card can close it; the rest waits */
     .thread-sensitive-content.has-summary .side-rail { z-index: 12; }
+    .topbar:has(~ .thread-sensitive-content.has-summary), .stage:has(.thread-sensitive-content.has-summary) > .topbar { z-index: 13; }
     .thread-sensitive-content.has-summary .side-rail > :not(.summary-dock) { opacity: .3; pointer-events: none; }
     .summary-layer { position: absolute; inset: 0; z-index: 11; display: flex; justify-content: center; align-items: flex-start; padding: 22px 24px; box-sizing: border-box; }
     .summary-layer[hidden] { display: none; }
@@ -608,6 +607,10 @@
     }
     .summary-card .summary-icon-button:hover { background: var(--sc-badge); border-color: var(--sc-ghost); }
     .summary-card .summary-icon-button svg { width: 14px; height: 14px; }
+    .summary-card .summary-copy-icon { display: inline-flex; }
+    .summary-card .summary-copied-icon, .summary-card .summary-icon-button.is-copied .summary-copy-icon { display: none; }
+    .summary-card .summary-icon-button.is-copied .summary-copied-icon { display: inline-flex; }
+    .summary-card .summary-icon-button[hidden] { display: none; }
     .summary-card .summary-hide {
       min-height: 32px; height: 32px; padding: 0 12px; gap: 7px;
       border: 0; border-radius: 8px; background: var(--sc-btn); color: var(--sc-btn-text);
@@ -2363,6 +2366,7 @@
             <h3 id="summaryHeading">Summary</h3>
             <span class="summary-spacer"></span>
             <span class="summary-synth" title="Synthesized: written by a model from the transcript"><svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3" role="img" aria-label="Synthesized"><circle cx="5.1" cy="5.4" r="3.1"></circle><circle cx="8.9" cy="8.6" r="3.1"></circle></svg></span>
+            <button id="summaryCopy" type="button" class="summary-icon-button" title="Copy summary" aria-label="Copy summary"><span class="summary-copy-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"></rect><path d="M15 5H6a2 2 0 0 0-2 2v9"></path></svg></span><span class="summary-copied-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7"></path></svg></span></button>
             <button id="summaryRegenerate" type="button" class="summary-icon-button" title="Regenerate" aria-label="Regenerate summary"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.6-6.4"></path><path d="M21 4v5h-5"></path></svg></button>
             <button id="summaryHide" type="button" class="summary-hide"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M1.5 8s2.4-4 6.5-4 6.5 4 6.5 4-2.4 4-6.5 4-6.5-4-6.5-4z"></path><circle cx="8" cy="8" r="1.8"></circle></svg>Show conversation</button>
           </div>
@@ -3665,6 +3669,7 @@
         body: document.getElementById("summaryBody"),
         hide: document.getElementById("summaryHide"),
         regenerate: document.getElementById("summaryRegenerate"),
+        copy: document.getElementById("summaryCopy"),
         editPrompt: document.getElementById("summaryEditPrompt"),
       };
       const summariesSettingsDom = {
@@ -8370,14 +8375,14 @@
         }
         const line = div("session-meta-line", facts.join(" · "));
         if (!session.closing?.closed) return line;
-        // closed: a blue check in the free space under the group icon
-        const row = div("session-meta-row");
+        // closed: a blue check opens the meta line, under the title's first letter
         const check = spanCls("");
         check.innerHTML = closedCheckSvg();
         check.firstElementChild.setAttribute("role", "img");
         check.firstElementChild.setAttribute("aria-label", "Closed");
-        row.append(check.firstElementChild, line);
-        return row;
+        line.prepend(check.firstElementChild);
+        line.classList.add("is-closed");
+        return line;
       }
 
       function sessionGroupChip(group, fallbackId) {
@@ -8916,6 +8921,7 @@
             : "No summary yet. Writing one closes the session: models can still read it, and Reopen lets them add to it again."));
         }
         summaryDom.regenerate.disabled = working;
+        summaryDom.copy.hidden = !showText;
         const label = written ? "Regenerate" : closed ? "Write summary" : "Write summary and close";
         summaryDom.regenerate.title = label;
         summaryDom.regenerate.setAttribute("aria-label", label);
@@ -9011,6 +9017,24 @@
             summaryDom.reopen.disabled = false;
           }
           renderClosing();
+        });
+        summaryDom.copy.addEventListener("click", async () => {
+          const text = state.selectedClosing?.summary?.content;
+          if (!text) return;
+          try {
+            await navigator.clipboard.writeText(text);
+          } catch (_) {
+            setStatus("Could not copy the summary.", "error");
+            return;
+          }
+          // the Markdown as Codex wrote it, the way session IDs are copied elsewhere
+          window.clearTimeout(summaryDom.copy.timer);
+          summaryDom.copy.classList.add("is-copied");
+          summaryDom.copy.title = "Copied";
+          summaryDom.copy.timer = window.setTimeout(() => {
+            summaryDom.copy.classList.remove("is-copied");
+            summaryDom.copy.title = "Copy summary";
+          }, 1200);
         });
         summaryDom.editPrompt.addEventListener("click", () => openAiSettingsDialog("summaries"));
         summariesSettingsDom.enabled.addEventListener("change", () => { renderSummariesCard(); saveSummariesEnabled(); });
