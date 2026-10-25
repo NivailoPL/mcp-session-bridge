@@ -91,7 +91,8 @@ def test_settings_validation():
     current = default_settings()
     saved = validate_settings({"close_after_days": 7, "max_chars": 1200, "instructions": "  Lead with decisions. "}, current)
     assert saved["close_after_days"] == 7 and saved["max_chars"] == 1200 and saved["instructions"] == "Lead with decisions."
-    for bad in ({"close_after_days": 5}, {"max_chars": 10}, {"card_color": "blue"}, {"enabled": "yes"}, {"nope": 1}, {}):
+    assert validate_settings({"instructions": "x" * 8000}, current)["instructions"] == "x" * 8000
+    for bad in ({"instructions": "x" * 8001}, {"close_after_days": 5}, {"max_chars": 10}, {"card_color": "blue"}, {"enabled": "yes"}, {"nope": 1}, {}):
         with pytest.raises(SummaryError):
             validate_settings(bad, current)
 

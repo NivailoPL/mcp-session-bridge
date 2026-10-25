@@ -43,7 +43,7 @@ CLOSE_AFTER_DAYS_CHOICES = (7, 14, 30, 60, 90)
 CARD_COLORS = ("frost", "paper")
 MIN_SUMMARY_CHARS = 300
 MAX_SUMMARY_CHARS = 8000
-INSTRUCTIONS_MAX_CHARS = 4000
+INSTRUCTIONS_MAX_CHARS = 8000
 CODEX_MODEL_MAX_CHARS = 96
 
 # The fixed half of the prompt; the owner's instructions follow it.
