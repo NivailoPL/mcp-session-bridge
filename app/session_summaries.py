@@ -468,14 +468,13 @@ class SessionSummaries:
             logger.exception("Summary queue stopped on an unexpected error")
 
     def regenerate(self, session_id: str) -> dict[str, Any]:
-        """Write the summary again now, whatever the schedule and the Runs models switch say."""
+        """Write the summary now, for an open or closed session, whatever the Runs models switch says."""
         if self.codex is None:
             raise SummaryError("Codex App Server is not configured.", code="codex_unavailable")
         state = self.state_for(session_id)
         if state is None:
             raise SummaryError(f"Unknown session_id: {session_id}", code="session_unknown")
-        if not state["closed"]:
-            raise SummaryError("Only a closed session has a summary.", code="not_closed")
+        # An open session can be summarized by hand too, to try the prompt; it is not closed by this.
         if session_id in self._in_flight:
             raise SummaryError("This summary is being written right now.", code="summary_running")
         self.store.queue_session_summary(session_id)

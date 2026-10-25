@@ -545,10 +545,31 @@
     .session-meta-row { display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: 12px; align-items: center; }
     .session-meta-row .closed-check { justify-self: center; }
     .session-meta-row .session-meta-line { margin-left: 0; }
-    .summary-toggle { border-color: rgba(0, 129, 191, .75); background: rgba(0, 129, 191, .2); color: #cfe3f2; }
-    .summary-toggle:hover { border-color: rgba(0, 129, 191, .95); background: rgba(0, 129, 191, .3); }
-    .summary-toggle svg { width: 15px; height: 15px; }
-    .summary-toggle[hidden], .session-reopen[hidden] { display: none; }
+    .session-reopen[hidden] { display: none; }
+    /* Summary: its own card in the rail, frost like the summary itself; lit while the card is shown */
+    .summary-dock {
+      position: relative; display: flex; flex-direction: column; align-items: center; gap: .4rem;
+      width: 3.4rem; min-height: 0; padding: .6rem 0 .5rem;
+      border: 1px solid rgba(169, 196, 220, .35); border-radius: var(--r-card);
+      background: rgba(169, 196, 220, .06); color: #a9c4dc;
+    }
+    .summary-dock[hidden] { display: none; }
+    .summary-dock:hover { background: rgba(169, 196, 220, .12); border-color: rgba(169, 196, 220, .6); }
+    .summary-dock[aria-pressed="true"] { background: #a9c4dc; border-color: #a9c4dc; color: #0b2233; }
+    .summary-dock.is-paper[aria-pressed="true"] { background: #f3f1ea; border-color: #f3f1ea; color: #17181c; }
+    .summary-dock > svg { width: 18px; height: 18px; }
+    .summary-dock-stripe { width: 1.4rem; height: 3px; border-radius: var(--r-pill); background: currentColor; opacity: .3; }
+    .summary-dock.is-done .summary-dock-stripe { opacity: 1; }
+    .summary-dock.is-outdated .summary-dock-stripe { opacity: 1; background: repeating-linear-gradient(90deg, currentColor 0 5px, transparent 5px 8px); }
+    .summary-dock.is-working .summary-dock-stripe { opacity: 1; animation: anchor-pulse 1.2s ease-in-out infinite; }
+    .summary-dock.is-failed .summary-dock-stripe { opacity: 1; background: #fbbf24; }
+    .summary-dock-tip {
+      position: absolute; left: calc(100% + .75rem); top: 0; z-index: 6; width: max-content; max-width: 14rem; padding: .5rem .7rem;
+      border: 1px solid rgba(255, 255, 255, .12); border-radius: 10px; background: #161a24; box-shadow: var(--shadow-pop);
+      color: var(--text-2); font-size: var(--t-meta); font-weight: 500; text-align: left; white-space: normal;
+      opacity: 0; pointer-events: none; transition: opacity .12s ease;
+    }
+    .summary-dock:hover .summary-dock-tip, .summary-dock:focus-visible .summary-dock-tip { opacity: 1; }
     .session-reopen {
       display: inline-flex; align-items: center; gap: 6px; min-height: 24px; margin-left: 10px; padding: 0 8px;
       border: 1px solid transparent; border-radius: var(--r-xs); background: transparent;
@@ -557,6 +578,9 @@
     .session-reopen:hover { border-color: rgba(0, 129, 191, .6); background: rgba(0, 129, 191, .16); color: #e6f2fa; }
     .session-reopen svg { width: 13px; height: 13px; }
     .thread-sensitive-content.has-summary { overflow: hidden; }
+    /* the rail stays above the dimmed conversation so the lit Summary card can close it; the rest waits */
+    .thread-sensitive-content.has-summary .side-rail { z-index: 12; }
+    .thread-sensitive-content.has-summary .side-rail > :not(.summary-dock) { opacity: .3; pointer-events: none; }
     .summary-layer { position: absolute; inset: 0; z-index: 11; display: grid; place-items: start center; padding: 22px 24px; }
     .summary-layer[hidden] { display: none; }
     .summary-scrim { position: absolute; inset: 0; background: rgba(10, 12, 16, .55); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); }
@@ -2264,7 +2288,6 @@
             </button>
           </div>
           <select id="sessionGroupSelect" class="session-group-select" aria-label="Session group"></select>
-          <button id="summaryShowButton" type="button" class="ghost summary-toggle" hidden><svg class="summary-glyph" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M3 4.5h10M3 8h10M3 11.5h5" stroke-dasharray="2.2 1.6"></path><circle cx="13.4" cy="13.4" r="3.4" stroke-width="1.3"></circle><path d="M11.9 13.5l1 1 2-2.2" stroke-width="1.3"></path></svg>Summary</button>
           <span class="top-actions-spacer"></span>
           <div class="export-menu">
             <button id="exportMenuButton" type="button" class="ghost export-menu-trigger" aria-haspopup="menu" aria-expanded="false" aria-controls="exportMenuList">
@@ -2298,6 +2321,11 @@
           <span id="highlightDockCount" class="anchor-dock-count" aria-hidden="true">0</span>
         </button>
         </div>
+        <button id="summaryDock" type="button" class="summary-dock" aria-pressed="false" aria-controls="summaryLayer" hidden>
+          <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M3 4.5h10M3 8h10M3 11.5h5" stroke-dasharray="2.2 1.6"></path><circle cx="13.4" cy="13.4" r="3.4" stroke-width="1.3"></circle><path d="M11.9 13.5l1 1 2-2.2" stroke-width="1.3"></path></svg>
+          <span class="summary-dock-stripe" aria-hidden="true"></span>
+          <span id="summaryDockLabel" class="summary-dock-tip" aria-hidden="true"></span>
+        </button>
         <nav id="turnNav" class="turn-nav" aria-label="Transcript navigation">
           <button id="scrollTopButton" type="button" class="ghost" title="Scroll to top"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"></path><path d="M6 5h12"></path></svg></button>
           <button id="scrollPrevButton" type="button" class="ghost" title="Previous turn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"></path></svg></button>
@@ -3159,7 +3187,18 @@
             </div>
           </section>
           <section class="settings-group">
-            <div class="settings-group-head"><h5>Writing</h5><span id="summariesModel" class="settings-value-muted"></span></div>
+            <div class="settings-group-head"><h5>Writing</h5></div>
+            <div class="settings-item">
+              <div class="settings-item-label">
+                <span class="settings-item-title"><label for="summariesCodexModel">Model</label><span class="context-help"><button type="button" class="context-help-trigger" aria-label="About the summary model" aria-describedby="settingsHelpSummariesModel">?</button><span id="settingsHelpSummariesModel" class="context-help-box" role="tooltip">Leave empty to use the newest Luna from the Codex model list. Spends tokens from the plan signed in under Codex.</span></span></span>
+                <span id="summariesModelResolved" class="settings-item-sub"></span>
+              </div>
+              <div class="settings-item-control"><input id="summariesCodexModel" class="settings-input-mono settings-input-medium" data-model-picker="summariesCodexEffort" placeholder="Newest Luna" spellcheck="false" autocomplete="off"></div>
+            </div>
+            <div class="settings-item">
+              <div class="settings-item-label"><span class="settings-item-title"><label for="summariesCodexEffort">Reasoning effort</label></span></div>
+              <div class="settings-item-control"><select id="summariesCodexEffort"><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="xhigh">Extra high</option><option value="max">Max</option><option value="ultra">Ultra</option></select></div>
+            </div>
             <div class="settings-item">
               <div class="settings-item-label"><span class="settings-item-title"><label for="summariesMaxChars">Max length</label></span><span class="settings-item-sub">characters</span></div>
               <div class="settings-item-control"><input id="summariesMaxChars" class="settings-input-mono summary-max-chars" type="number" min="300" max="8000" step="100"></div>
@@ -3563,8 +3602,8 @@
         toolOutputRestartInFlight: false,
         settingsDirty: new Set(),
         selectedClosing: null,
-        // closed sessions whose summary card was put away on this page
-        summaryHidden: new Set(),
+        // the summary card put away or opened by hand on this page, per session; otherwise it shows on closed ones
+        summaryCard: new Map(),
         summaryPollTimer: 0,
         editingExchangeId: null,
         busy: false,
@@ -3612,7 +3651,8 @@
       };
       const summaryDom = {
         chip: document.getElementById("sessionClosedChip"),
-        show: document.getElementById("summaryShowButton"),
+        dock: document.getElementById("summaryDock"),
+        dockLabel: document.getElementById("summaryDockLabel"),
         reopen: document.getElementById("reopenSessionButton"),
         reopenLabel: document.getElementById("reopenSessionLabel"),
         layer: document.getElementById("summaryLayer"),
@@ -3634,7 +3674,9 @@
         skipPinned: document.getElementById("summariesSkipPinned"),
         includeSensitive: document.getElementById("summariesIncludeSensitive"),
         groups: document.getElementById("summariesGroups"),
-        model: document.getElementById("summariesModel"),
+        codexModel: document.getElementById("summariesCodexModel"),
+        codexEffort: document.getElementById("summariesCodexEffort"),
+        resolved: document.getElementById("summariesModelResolved"),
         maxChars: document.getElementById("summariesMaxChars"),
         basePrompt: document.querySelector("#summariesBasePrompt span"),
         instructions: document.getElementById("summariesInstructions"),
@@ -8830,23 +8872,26 @@
         summaryDom.chip.hidden = !closed;
         summaryDom.reopen.hidden = !closed;
         if (closed) summaryDom.reopenLabel.textContent = `Reopen for ${closing.close_after_days} days`;
-        const showCard = closed && !guarded && !state.summaryHidden.has(session.session_id);
+        const override = session ? state.summaryCard.get(session.session_id) : undefined;
+        const showCard = Boolean(session && closing) && !guarded && (override ?? closed);
         summaryDom.layer.hidden = !showCard;
         dom.threadSensitiveContent.classList.toggle("has-summary", showCard);
-        summaryDom.show.hidden = !closed || guarded || showCard;
         if (showCard) dom.threadSensitiveContent.scrollTop = 0;
-        if (!closed) return;
+        const summary = closing?.summary || null;
+        const working = Boolean(summary && (summary.status === "queued" || summary.status === "running"));
+        renderSummaryDock(session, closing, guarded, showCard, working);
+        if (working) state.summaryPollTimer = window.setTimeout(() => refreshClosing(session.session_id), 4000);
+        if (!showCard) return;
 
         summaryDom.card.classList.toggle("is-paper", closing.card_color === "paper");
-        const summary = closing.summary;
         const written = Boolean(summary?.content);
-        const working = summary && (summary.status === "queued" || summary.status === "running");
         summaryDom.meta.replaceChildren();
         if (summary?.model) summaryDom.meta.append(spanCls("summary-model", summary.model));
         const facts = [];
         if (written && summary.exchange_count) facts.push(`turns 1–${summary.exchange_count * 2}`);
         if (written && summary.written_at) facts.push(`written ${shortDate(summary.written_at)}`);
-        facts.push(`closed ${shortDate(closing.closed_at)}`);
+        if (closed) facts.push(`closed ${shortDate(closing.closed_at)}`);
+        else facts.push(closing.closes_at ? `closes ${shortDate(closing.closes_at)}` : "open");
         summaryDom.meta.append(spanCls("", facts.join(" · ")));
 
         summaryDom.body.replaceChildren();
@@ -8856,13 +8901,34 @@
         }
         if (working) {
           summaryDom.body.prepend(noteNode(summary.status === "running" ? "Writing the summary…" : "Waiting for Codex to write the summary…"));
-          state.summaryPollTimer = window.setTimeout(() => refreshClosing(session.session_id), 4000);
         } else if (summary?.status === "failed") {
           summaryDom.body.prepend(noteNode(`No summary: ${summary.error || "Codex failed."} Regenerate tries again.`));
         } else if (!summary) {
-          summaryDom.body.append(noteNode("No summary yet. Summaries are written while Runs models is on, or now with Regenerate."));
+          summaryDom.body.append(noteNode(closed
+            ? "No summary yet. Summaries are written while Runs models is on, or now with Regenerate."
+            : "No summary yet. Regenerate writes one now from the whole session; it closes and gets its own summary later."));
         }
-        summaryDom.regenerate.disabled = Boolean(working);
+        summaryDom.regenerate.disabled = working;
+        summaryDom.regenerate.title = written ? "Regenerate" : "Write summary";
+        summaryDom.regenerate.setAttribute("aria-label", written ? "Regenerate summary" : "Write summary");
+      }
+
+      function renderSummaryDock(session, closing, guarded, shown, working) {
+        const dock = summaryDom.dock;
+        dock.hidden = !session || !closing || guarded;
+        if (dock.hidden) return;
+        const summary = closing.summary;
+        dock.setAttribute("aria-pressed", String(shown));
+        dock.classList.toggle("is-paper", closing.card_color === "paper");
+        dock.classList.toggle("is-working", working);
+        dock.classList.toggle("is-failed", summary?.status === "failed");
+        dock.classList.toggle("is-outdated", Boolean(summary?.outdated));
+        dock.classList.toggle("is-done", Boolean(summary?.content) && !summary?.outdated && !working);
+        const status = working ? "being written" : summary?.status === "failed" ? "failed"
+          : summary?.outdated ? "outdated" : summary?.content ? "written" : "none yet";
+        const action = shown ? "Hide summary" : "Show summary";
+        dock.setAttribute("aria-label", `${action}. Summary: ${status}`);
+        summaryDom.dockLabel.textContent = `${action} · ${status}`;
       }
 
       function noteNode(text) {
@@ -8887,14 +8953,16 @@
       function bindSummaryEvents() {
         summaryDom.hide.addEventListener("click", () => {
           if (!state.selectedSessionId) return;
-          state.summaryHidden.add(state.selectedSessionId);
+          state.summaryCard.set(state.selectedSessionId, false);
           renderClosing();
-          dom.exchangeList.focus?.();
+          summaryDom.dock.focus();
         });
-        summaryDom.show.addEventListener("click", () => {
-          state.summaryHidden.delete(state.selectedSessionId);
+        summaryDom.dock.addEventListener("click", () => {
+          if (!state.selectedSessionId) return;
+          const shown = summaryDom.dock.getAttribute("aria-pressed") === "true";
+          state.summaryCard.set(state.selectedSessionId, !shown);
           renderClosing();
-          summaryDom.hide.focus();
+          if (!shown) summaryDom.hide.focus();
         });
         summaryDom.regenerate.addEventListener("click", async () => {
           const sessionId = state.selectedSessionId;
@@ -8968,7 +9036,9 @@
         dom.maxChars.value = summaries.max_chars;
         dom.basePrompt.textContent = summaries.base_prompt || "Summarize this session.";
         dom.instructions.value = summaries.instructions || "";
-        dom.model.textContent = summaries.codex_model || summaries.resolved_codex_model || "";
+        dom.codexModel.value = summaries.codex_model || "";
+        dom.codexEffort.value = summaries.codex_effort || "low";
+        dom.resolved.textContent = summaries.codex_model ? "" : `Now: ${summaries.resolved_codex_model || "no Codex model listed yet"}`;
         const counts = summaries.counts || {};
         dom.counts.textContent = summaries.enabled ? `${counts.closed || 0} closed · ${counts.summarized || 0} summarized` : "";
         renderSummariesCard();
@@ -9011,6 +9081,8 @@
           card_color: color,
           max_chars: Number.parseInt(dom.maxChars.value, 10),
           instructions: dom.instructions.value,
+          codex_model: dom.codexModel.value.trim(),
+          codex_effort: dom.codexEffort.value,
         }, "Summary settings saved.", "summaries");
         if (saved) {
           await loadSessions();

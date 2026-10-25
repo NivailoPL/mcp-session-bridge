@@ -226,6 +226,22 @@ def test_unavailable_codex_leaves_summaries_queued(tmp_path):
     assert runtime.candidates() == ["b", "a"]
 
 
+def test_an_open_session_can_be_summarized_by_hand(tmp_path):
+    codex = FakeCodex(["Trying the prompt."])
+    store, runtime = build(tmp_path, codex, enabled=True, codex_model="gpt-5.6-sol", codex_effort="high")
+    session_with_turns(store, "fresh", days_ago=1)
+
+    async def scenario():
+        runtime.regenerate("fresh")
+        await runtime.wait()
+
+    asyncio.run(scenario())
+    state = runtime.state_for("fresh")
+    assert not state["closed"] and state["summary"]["content"] == "Trying the prompt."
+    assert codex.calls[0]["model"] == "gpt-5.6-sol" and codex.calls[0]["effort"] == "high"
+    assert runtime.closed_error("fresh") is None and runtime.candidates() == []
+
+
 def test_restart_requeues_a_running_summary(tmp_path):
     store, runtime = build(tmp_path, FakeCodex([]), enabled=True)
     session_with_turns(store, "old", days_ago=40)
