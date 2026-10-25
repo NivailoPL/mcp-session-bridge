@@ -11,7 +11,9 @@ exchange, the session is closed, whatever the timer says. That is how a
 summary written by hand on an open session closes it.
 
 Each close queues one summary. Codex writes it from the whole transcript, in
-Markdown, from a fixed base prompt plus the owner's own instructions. Only the
+Markdown, from a fixed base prompt plus the owner's own instructions. The
+length the owner sets is a target for the model, not a cut: Bridge keeps the
+whole answer, however long it comes back. Only the
 summaries wait for the "Runs models" switch; Regenerate always works when the
 owner presses it. Token figures are estimates from text length, because Codex
 App Server does not report usage back.
@@ -225,7 +227,7 @@ def compose_prompt(settings: dict[str, Any], transcript: str) -> str:
     parts = [BASE_PROMPT]
     if settings["instructions"]:
         parts.append(settings["instructions"])
-    parts.append(f"{FORMAT_RULES} Keep it under {settings['max_chars']} characters.")
+    parts.append(f"{FORMAT_RULES} Aim to keep it under {settings['max_chars']} characters.")
     parts.append(f"Transcript:\n<<<\n{transcript}\n>>>")
     return "\n\n".join(parts)
 
@@ -261,19 +263,6 @@ def render_transcript(exchanges: list[Any], *, max_chars: int = TRANSCRIPT_MAX_C
         used += len(block) + 2
     skipped = len(blocks) - len(head) - len(tail)
     return "\n\n".join([*head, f"[… {skipped} turns in the middle left out for length …]", *tail])
-
-
-def fit_summary(text: str, max_chars: int) -> str:
-    """Trim an over-long answer at a paragraph or line break; a little overrun is left alone."""
-    cleaned = text.strip()
-    if len(cleaned) <= int(max_chars * 1.15):
-        return cleaned
-    cut = cleaned[:max_chars]
-    for mark in ("\n\n", "\n", ". "):
-        position = cut.rfind(mark)
-        if position >= max_chars // 2:
-            return cut[: position + (1 if mark == ". " else 0)].rstrip() + "\n\n…"
-    return cut.rstrip() + "…"
 
 
 # ---------- runtime ----------
@@ -539,7 +528,7 @@ class SessionSummaries:
                     await asyncio.to_thread(self.store.queue_session_summary, session_id)
                     raise CodexNotReady("Codex is busy. Try again in a moment.") from exc
                 raise
-            content = fit_summary(str(raw.get("summary") or ""), settings["max_chars"])
+            content = str(raw.get("summary") or "").strip()
             if not content:
                 await asyncio.to_thread(self.store.fail_session_summary, session_id, "Codex returned an empty summary.")
                 return False

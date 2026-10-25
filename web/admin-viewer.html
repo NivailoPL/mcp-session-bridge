@@ -3204,12 +3204,12 @@
               <div class="settings-item-control"><select id="summariesCodexEffort"><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="xhigh">Extra high</option><option value="max">Max</option><option value="ultra">Ultra</option></select></div>
             </div>
             <div class="settings-item">
-              <div class="settings-item-label"><span class="settings-item-title"><label for="summariesMaxChars">Max length</label></span><span class="settings-item-sub">characters</span></div>
+              <div class="settings-item-label"><span class="settings-item-title"><label for="summariesMaxChars">Target length</label></span><span class="settings-item-sub">characters</span></div>
               <div class="settings-item-control"><input id="summariesMaxChars" class="settings-input-mono summary-max-chars" type="number" min="300" max="8000" step="100"></div>
             </div>
             <div class="settings-item settings-item-stack">
               <div class="settings-item-label">
-                <span class="settings-item-title"><label for="summariesInstructions">Prompt</label><span class="context-help"><button type="button" class="context-help-trigger" aria-label="About the summary prompt" aria-describedby="settingsHelpSummariesPrompt">?</button><span id="settingsHelpSummariesPrompt" class="context-help-box" role="tooltip">The fixed line and your instructions go to Codex as one prompt. Bridge adds the length limit and asks for Markdown in the session's language, using only what the transcript says. Changes apply to the next summary; Regenerate rewrites an existing one.</span></span></span>
+                <span class="settings-item-title"><label for="summariesInstructions">Prompt</label><span class="context-help"><button type="button" class="context-help-trigger" aria-label="About the summary prompt" aria-describedby="settingsHelpSummariesPrompt">?</button><span id="settingsHelpSummariesPrompt" class="context-help-box" role="tooltip">The fixed line and your instructions go to Codex as one prompt. Bridge adds the target length, which the model may go over, and asks for Markdown in the session's language, using only what the transcript says. Changes apply to the next summary; Regenerate rewrites an existing one.</span></span></span>
               </div>
               <div class="summary-prompt-stack">
                 <div id="summariesBasePrompt" class="summary-base-prompt" aria-label="Fixed prompt"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><rect x="3" y="7" width="10" height="6.5" rx="1.5"></rect><path d="M5.6 7V4.8a2.4 2.4 0 0 1 4.8 0V7"></path></svg><span></span></div>

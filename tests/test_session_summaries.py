@@ -17,7 +17,6 @@ from app.session_summaries import (
     close_state,
     compose_prompt,
     default_settings,
-    fit_summary,
     render_transcript,
     validate_settings,
 )
@@ -116,11 +115,19 @@ def test_long_transcript_keeps_its_start_and_end(tmp_path):
     assert len(text) <= 3000 and "Question 0 " in text and "Question 39 " in text and "left out for length" in text
 
 
-def test_fit_summary_trims_only_real_overruns():
-    assert fit_summary("short", 300) == "short"
-    long_text = ("Para one. " * 30) + "\n\n" + ("Para two. " * 60)
-    trimmed = fit_summary(long_text, 400)
-    assert len(trimmed) < 420 and trimmed.endswith("…")
+def test_a_summary_over_the_target_length_is_kept_whole(tmp_path):
+    long_text = ("Para one. " * 30) + "\n\n" + ("Para two. " * 60) + "\n\n## Stan na koniec\n\nOtwarte."
+    codex = FakeCodex([f"  {long_text}\n"])
+    store, runtime = build(tmp_path, codex, enabled=True, max_chars=300)
+    session_with_turns(store, "old", days_ago=40)
+
+    async def scenario():
+        assert await runtime.tick()
+        await runtime.wait()
+
+    asyncio.run(scenario())
+    assert "Aim to keep it under 300 characters." in codex.calls[0]["message"]
+    assert runtime.state_for("old")["summary"]["content"] == long_text
 
 
 # ---------- the runtime ----------
