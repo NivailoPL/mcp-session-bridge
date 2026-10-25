@@ -543,7 +543,6 @@
     .session-closed-chip .closed-check { width: 14px; height: 14px; }
     .closed-check { display: block; width: 13px; height: 13px; flex: 0 0 auto; }
     .session-meta-line.is-closed .closed-check { display: inline-block; width: 12px; height: 12px; margin-right: 6px; vertical-align: -2px; }
-    .session-reopen[hidden] { display: none; }
     /* Summary: its own card in the rail, frost like the summary itself; lit while the card is shown */
     .summary-dock {
       position: relative; display: flex; flex-direction: column; align-items: center; gap: .4rem;
@@ -568,19 +567,21 @@
       opacity: 0; pointer-events: none; transition: opacity .12s ease;
     }
     .summary-dock:hover .summary-dock-tip, .summary-dock:focus-visible .summary-dock-tip { opacity: 1; }
-    .session-reopen {
-      display: inline-flex; align-items: center; gap: 6px; min-height: 24px; margin-left: 10px; padding: 0 8px;
-      border: 1px solid transparent; border-radius: var(--r-xs); background: transparent;
-      color: #cfe3f2; font-size: var(--t-meta); font-weight: 600;
-    }
-    .session-reopen:hover { border-color: rgba(0, 129, 191, .6); background: rgba(0, 129, 191, .16); color: #e6f2fa; }
-    .session-reopen svg { width: 13px; height: 13px; }
     .thread-sensitive-content.has-summary { overflow: hidden; }
     /* the rail stays above the dimmed conversation so the lit Summary card can close it; the rest waits */
     .thread-sensitive-content.has-summary .side-rail { z-index: 12; }
     .topbar:has(~ .thread-sensitive-content.has-summary), .stage:has(.thread-sensitive-content.has-summary) > .topbar { z-index: 13; }
     .thread-sensitive-content.has-summary .side-rail > :not(.summary-dock) { opacity: .3; pointer-events: none; }
-    .summary-layer { position: absolute; inset: 0; z-index: 11; display: flex; justify-content: center; align-items: flex-start; padding: 22px 24px; box-sizing: border-box; }
+    .summary-layer { position: absolute; inset: 0; z-index: 11; display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 18px 24px 22px; box-sizing: border-box; }
+    .summary-layer > .summary-card { flex: 0 1 auto; }
+    .summary-reopen {
+      position: relative; flex: 0 0 auto; display: inline-flex; align-items: center; gap: 7px; min-height: 30px; padding: 0 13px;
+      border: 1px solid rgba(169, 196, 220, .45); border-radius: var(--r-pill); background: rgba(17, 19, 26, .88);
+      color: #cfe3f2; font-size: var(--t-meta); font-weight: 600; box-shadow: 0 10px 24px -12px rgba(0, 0, 0, .8);
+    }
+    .summary-reopen:hover { border-color: rgba(169, 196, 220, .8); background: rgba(24, 28, 38, .95); color: #e6f2fa; }
+    .summary-reopen[hidden] { display: none; }
+    .summary-reopen svg { width: 13px; height: 13px; }
     .summary-layer[hidden] { display: none; }
     .summary-scrim { position: absolute; inset: 0; background: rgba(10, 12, 16, .55); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); }
     .summary-card {
@@ -2258,7 +2259,6 @@
                   <span id="copySessionIdLabel" class="session-id-copy-label">Copy</span>
                 </span>
               </button>
-              <button id="reopenSessionButton" type="button" class="session-reopen" hidden><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><circle cx="8" cy="8" r="5.6"></circle><path d="M8 5v3.2l2 1.2"></path></svg><span id="reopenSessionLabel">Reopen</span></button>
             </div>
             <div id="sessionMeta" class="meta">Conversation history correction panel.</div>
           </div>
@@ -2360,6 +2360,7 @@
       </div>
       <div id="summaryLayer" class="summary-layer" hidden>
         <div class="summary-scrim" aria-hidden="true"></div>
+        <button id="reopenSessionButton" type="button" class="summary-reopen" hidden><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><circle cx="8" cy="8" r="5.6"></circle><path d="M8 5v3.2l2 1.2"></path></svg><span id="reopenSessionLabel">Reopen</span></button>
         <section id="summaryCard" class="summary-card" aria-labelledby="summaryHeading">
           <div class="summary-head">
             <svg class="summary-glyph" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M3 4.5h10M3 8h10M3 11.5h5" stroke-dasharray="2.2 1.6"></path><circle cx="13.4" cy="13.4" r="3.4" stroke-width="1.3"></circle><path d="M11.9 13.5l1 1 2-2.2" stroke-width="1.3"></path></svg>
@@ -2367,7 +2368,7 @@
             <span class="summary-spacer"></span>
             <span class="summary-synth" title="Synthesized: written by a model from the transcript"><svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3" role="img" aria-label="Synthesized"><circle cx="5.1" cy="5.4" r="3.1"></circle><circle cx="8.9" cy="8.6" r="3.1"></circle></svg></span>
             <button id="summaryCopy" type="button" class="summary-icon-button" title="Copy summary" aria-label="Copy summary"><span class="summary-copy-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"></rect><path d="M15 5H6a2 2 0 0 0-2 2v9"></path></svg></span><span class="summary-copied-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7"></path></svg></span></button>
-            <button id="summaryRegenerate" type="button" class="summary-icon-button" title="Regenerate" aria-label="Regenerate summary"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.6-6.4"></path><path d="M21 4v5h-5"></path></svg></button>
+            <button id="summaryRegenerate" type="button" class="summary-icon-button" title="Regenerate" aria-label="Regenerate summary"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4l1.4 3.9 3.9 1.4-3.9 1.4L12 14.6l-1.4-3.9L6.7 9.3l3.9-1.4z"></path><path d="M17.8 14.6l.6 1.6 1.6.6-1.6.6-.6 1.6-.6-1.6-1.6-.6 1.6-.6z"></path></svg></button>
             <button id="summaryHide" type="button" class="summary-hide"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M1.5 8s2.4-4 6.5-4 6.5 4 6.5 4-2.4 4-6.5 4-6.5-4-6.5-4z"></path><circle cx="8" cy="8" r="1.8"></circle></svg>Show conversation</button>
           </div>
           <div id="summaryMeta" class="summary-meta"></div>
