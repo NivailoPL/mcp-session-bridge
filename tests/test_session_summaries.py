@@ -251,6 +251,19 @@ def test_a_summary_written_by_hand_closes_an_open_session(tmp_path):
     assert not state["closed"] and state["summary"]["outdated"]
 
 
+def test_a_summary_being_rewritten_keeps_the_session_closed(tmp_path):
+    store, runtime = build(tmp_path)
+    session_with_turns(store, "s", days_ago=1)
+    store.finish_session_summary(
+        "s", "Old.", upto_exchange_id=store.list_exchanges("s")[-1].exchange_id,
+        exchange_count=2, model="m", prompt_hash="h", estimated_tokens=1,
+    )
+    for step in (store.queue_session_summary, lambda sid: store.start_session_summary(sid, "m"),
+                 lambda sid: store.fail_session_summary(sid, "timed out")):
+        step("s")
+        assert runtime.state_for("s")["closed"] and runtime.closed_error("s")
+
+
 def test_a_summary_closes_even_with_automatic_closing_off(tmp_path):
     store, runtime = build(tmp_path)
     session_with_turns(store, "s", days_ago=1)

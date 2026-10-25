@@ -354,8 +354,9 @@ class SessionSummaries:
         )
         view = self._summary_view(summary, row)
         reopened_until = row.get("reopened_until") or 0
-        # summary = closed: a current summary closes the session until the owner reopens it
-        if not state["closed"] and view and view["status"] == "done" and not view["outdated"] and reopened_until <= now:
+        # summary = closed: a current summary closes the session until the owner reopens it,
+        # also while it is being rewritten or after a rewrite failed, since the old text still stands
+        if not state["closed"] and view and view["content"] and not view["outdated"] and reopened_until <= now:
             state = {
                 "closed": True,
                 "closed_at": max(int(view["written_at"] or now), int(reopened_until)),
@@ -374,7 +375,8 @@ class SessionSummaries:
         if summary is None:
             return None
         last = row.get("last_exchange_id")
-        outdated = summary["status"] == "done" and last is not None and (summary["upto_exchange_id"] or 0) < last
+        # judged on the text kept, so a summary being rewritten still counts until the new one lands
+        outdated = bool(summary["content"]) and last is not None and (summary["upto_exchange_id"] or 0) < last
         return {**summary, "outdated": outdated}
 
     def states(self, *, now: int | None = None) -> dict[str, dict[str, Any]]:

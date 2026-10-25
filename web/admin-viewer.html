@@ -8886,17 +8886,19 @@
 
         summaryDom.card.classList.toggle("is-paper", closing.card_color === "paper");
         const written = Boolean(summary?.content);
+        // while Codex rewrites it, the old text leaves the card; only the new one comes back
+        const showText = written && !working;
         summaryDom.meta.replaceChildren();
         if (summary?.model) summaryDom.meta.append(spanCls("summary-model", summary.model));
         const facts = [];
-        if (written && summary.exchange_count) facts.push(`turns 1–${summary.exchange_count * 2}`);
-        if (written && summary.written_at) facts.push(`written ${shortDate(summary.written_at)}`);
+        if (showText && summary.exchange_count) facts.push(`turns 1–${summary.exchange_count * 2}`);
+        if (showText && summary.written_at) facts.push(`written ${shortDate(summary.written_at)}`);
         if (closed) facts.push(`closed ${shortDate(closing.closed_at)}`);
         else facts.push(closing.closes_at ? `closes ${shortDate(closing.closes_at)}` : "open");
         summaryDom.meta.append(spanCls("", facts.join(" · ")));
 
         summaryDom.body.replaceChildren();
-        if (written) {
+        if (showText) {
           summaryDom.body.innerHTML = renderMarkdown(summary.content);
           if (summary.outdated) summaryDom.body.prepend(noteNode("Written before the session was reopened. A new summary comes when it closes again."));
         }
