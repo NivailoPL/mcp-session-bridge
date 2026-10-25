@@ -6,6 +6,10 @@ add to it; the owner can reopen it for the same stretch, after which it closes
 again unless a new exchange arrived. Closing is a plain rule with no model in
 it, so it keeps working while "Runs models" is off.
 
+A summary closes its session too: while a written summary covers the latest
+exchange, the session is closed, whatever the timer says. That is how a
+summary written by hand on an open session closes it.
+
 Each close queues one summary. Codex writes it from the whole transcript, in
 Markdown, from a fixed base prompt plus the owner's own instructions. Only the
 summaries wait for the "Runs models" switch; Regenerate always works when the
@@ -348,11 +352,21 @@ class SessionSummaries:
             reopened_until=row.get("reopened_until"),
             now=now,
         )
+        view = self._summary_view(summary, row)
+        reopened_until = row.get("reopened_until") or 0
+        # summary = closed: a current summary closes the session until the owner reopens it
+        if not state["closed"] and view and view["status"] == "done" and not view["outdated"] and reopened_until <= now:
+            state = {
+                "closed": True,
+                "closed_at": max(int(view["written_at"] or now), int(reopened_until)),
+                "closes_at": None,
+                "reopened_until": None,
+            }
         return {
             **state,
             "close_after_days": settings["close_after_days"],
             "card_color": settings["card_color"],
-            "summary": self._summary_view(summary, row),
+            "summary": view,
         }
 
     @staticmethod
@@ -468,13 +482,13 @@ class SessionSummaries:
             logger.exception("Summary queue stopped on an unexpected error")
 
     def regenerate(self, session_id: str) -> dict[str, Any]:
-        """Write the summary now, for an open or closed session, whatever the Runs models switch says."""
+        """Write the summary now, whatever the Runs models switch says. On an open session this closes it."""
         if self.codex is None:
             raise SummaryError("Codex App Server is not configured.", code="codex_unavailable")
         state = self.state_for(session_id)
         if state is None:
             raise SummaryError(f"Unknown session_id: {session_id}", code="session_unknown")
-        # An open session can be summarized by hand too, to try the prompt; it is not closed by this.
+        # An open session can be summarized by hand too; once the summary is written, it is closed.
         if session_id in self._in_flight:
             raise SummaryError("This summary is being written right now.", code="summary_running")
         self.store.queue_session_summary(session_id)

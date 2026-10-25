@@ -226,7 +226,7 @@ def test_unavailable_codex_leaves_summaries_queued(tmp_path):
     assert runtime.candidates() == ["b", "a"]
 
 
-def test_an_open_session_can_be_summarized_by_hand(tmp_path):
+def test_a_summary_written_by_hand_closes_an_open_session(tmp_path):
     codex = FakeCodex(["Trying the prompt."])
     store, runtime = build(tmp_path, codex, enabled=True, codex_model="gpt-5.6-sol", codex_effort="high")
     session_with_turns(store, "fresh", days_ago=1)
@@ -237,9 +237,27 @@ def test_an_open_session_can_be_summarized_by_hand(tmp_path):
 
     asyncio.run(scenario())
     state = runtime.state_for("fresh")
-    assert not state["closed"] and state["summary"]["content"] == "Trying the prompt."
+    assert state["closed"] and state["summary"]["content"] == "Trying the prompt."
     assert codex.calls[0]["model"] == "gpt-5.6-sol" and codex.calls[0]["effort"] == "high"
-    assert runtime.closed_error("fresh") is None and runtime.candidates() == []
+    assert "is closed" in runtime.closed_error("fresh") and runtime.candidates() == []
+
+    # reopening lets models in again; a new exchange makes the summary outdated, so it stays open
+    runtime.reopen("fresh")
+    assert runtime.closed_error("fresh") is None
+    store.save_exchange("fresh", "Claude", "One more", "Answer")
+    store.set_session_reopened_until("fresh", int(time.time()) - 1)
+    state = runtime.state_for("fresh")
+    assert not state["closed"] and state["summary"]["outdated"]
+
+
+def test_a_summary_closes_even_with_automatic_closing_off(tmp_path):
+    store, runtime = build(tmp_path)
+    session_with_turns(store, "s", days_ago=1)
+    store.finish_session_summary(
+        "s", "Done.", upto_exchange_id=store.list_exchanges("s")[-1].exchange_id,
+        exchange_count=2, model="m", prompt_hash="h", estimated_tokens=1,
+    )
+    assert runtime.state_for("s")["closed"] and runtime.closed_error("s")
 
 
 def test_restart_requeues_a_running_summary(tmp_path):

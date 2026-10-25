@@ -8907,11 +8907,12 @@
         } else if (!summary) {
           summaryDom.body.append(noteNode(closed
             ? "No summary yet. Summaries are written while Runs models is on, or now with Regenerate."
-            : "No summary yet. Regenerate writes one now from the whole session; it closes and gets its own summary later."));
+            : "No summary yet. Writing one closes the session: models can still read it, and Reopen lets them add to it again."));
         }
         summaryDom.regenerate.disabled = working;
-        summaryDom.regenerate.title = written ? "Regenerate" : "Write summary";
-        summaryDom.regenerate.setAttribute("aria-label", written ? "Regenerate summary" : "Write summary");
+        const label = written ? "Regenerate" : closed ? "Write summary" : "Write summary and close";
+        summaryDom.regenerate.title = label;
+        summaryDom.regenerate.setAttribute("aria-label", label);
       }
 
       function renderSummaryDock(session, closing, guarded, shown, working) {
@@ -8944,8 +8945,11 @@
         try {
           const payload = await api(`/admin/api/sessions/${encodeURIComponent(sessionId)}`);
           if (sessionId !== state.selectedSessionId) return;
+          const wasClosed = Boolean(state.selectedClosing?.closed);
           state.selectedClosing = payload.closing || null;
           renderClosing();
+          // a summary written by hand just closed it: the list needs its check
+          if (Boolean(state.selectedClosing?.closed) !== wasClosed) await loadSessions();
         } catch (_) {
           // the next manual refresh shows the state
         }
@@ -8967,6 +8971,16 @@
         });
         summaryDom.regenerate.addEventListener("click", async () => {
           const sessionId = state.selectedSessionId;
+          // a summary closes its session, so writing one on an open session asks first
+          if (!state.selectedClosing?.closed) {
+            const confirmed = await window.adminConfirmation.confirm({
+              title: "Write a summary and close this session?",
+              message: "Codex summarizes the whole session. Once the summary is written, the session is closed: models can read it but not add to it.",
+              detail: "Reopen in the session header lets them add to it again.",
+              confirmLabel: "Write and close",
+            });
+            if (!confirmed || sessionId !== state.selectedSessionId) return;
+          }
           summaryDom.regenerate.disabled = true;
           try {
             const payload = await api(`/admin/api/sessions/${encodeURIComponent(sessionId)}/summary/regenerate`, { method: "POST" });
