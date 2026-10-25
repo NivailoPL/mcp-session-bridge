@@ -1954,6 +1954,12 @@
     .search-session-mark { display: grid; place-items: center; width: 26px; height: 26px; border: 1px solid color-mix(in srgb, var(--g) 45%, transparent); border-radius: 7px; background: color-mix(in srgb, var(--g) 13%, transparent); color: var(--g); }
     .search-session-mark svg { width: 14px; height: 14px; }
     .search-session-title { overflow: hidden; font-size: 13.5px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+    .search-file-mark { width: 26px; height: 26px; border-radius: 7px; }
+    .search-file-mark svg { width: 14px; height: 14px; }
+    .search-session-sub { color: var(--muted); font-weight: 500; }
+    .search-hit .ft-badge { flex: 0 0 auto; align-self: center; }
+    .search-hit-file { color: var(--text); font-weight: 600; }
+    .search-detail-meta .ft-badge { vertical-align: 1px; }
     .search-session-when { color: var(--faint-ink); font-size: var(--t-label); white-space: nowrap; }
     .search-hits { display: grid; grid-template-columns: minmax(0,1fr); gap: 1px; min-width: 0; margin: .25rem 0 0 calc(26px + .55rem); }
     .search-hit { display: flex; align-items: baseline; gap: .5rem; width: 100%; min-width: 0; min-height: 0; padding: .3rem .45rem; border: 1px solid transparent; border-radius: 7px; background: none; color: var(--text-2); font-size: var(--t-meta); font-weight: 500; text-align: left; }
@@ -5462,6 +5468,19 @@
         }
       }
 
+      // Search results carry a file's name but not its record; this is enough
+      // for the Files panel's kind tile, badge and name helpers.
+      function searchResultFile(result) {
+        const extension = String(result.title || "").split(".").pop().toLowerCase();
+        return { filename: result.title, file_id: result.source_id, content_kind: extension === "pdf" ? "pdf" : "text" };
+      }
+
+      function searchFileMark(result) {
+        const tile = fileTile(searchResultFile(result));
+        tile.classList.add("search-file-mark");
+        return tile;
+      }
+
       function searchGroupMark(group) {
         const mark = spanCls("search-session-mark");
         mark.style.setProperty("--g", group?.color || "#8b93a7");
@@ -5487,9 +5506,15 @@
           const group = lead.group || state.groups.find((item) => item.group_id === lead.group_id);
           const block = div("search-session");
           const head = div("search-session-head");
-          const title = spanCls("search-session-title", session?.title || (lead.source_kind === "group_file" ? lead.title : lead.subtitle || lead.title));
+          const groupFile = lead.source_kind === "group_file";
+          const title = spanCls("search-session-title");
+          if (groupFile) {
+            title.append(fileNameNode(searchResultFile(lead)), spanCls("search-session-sub", ` · ${group?.name || lead.group_id}`));
+          } else {
+            title.textContent = session?.title || lead.subtitle || lead.title;
+          }
           const when = spanCls("search-session-when", shortSearchDate(lead.timestamp));
-          head.append(searchGroupMark(group), title, when);
+          head.append(groupFile ? searchFileMark(lead) : searchGroupMark(group), title, when);
           const list = div("search-hits");
           for (const hit of hits) {
             const row = document.createElement("button");
@@ -5497,7 +5522,10 @@
             row.className = "search-hit";
             row.dataset.documentKey = hit.document_key;
             const text = spanCls("search-hit-text");
-            if (hit.source_kind.endsWith("_file")) text.append(document.createTextNode(`${hit.title} · `));
+            if (hit.source_kind === "session_file") {
+              row.append(fileBadge(searchResultFile(hit)));
+              text.append(spanCls("search-hit-file", hit.title), document.createTextNode(" · "));
+            }
             const snippet = withoutSpeakerLabels(hit.snippet || "", hit.highlights || []);
             appendHighlightedText(text, snippet.text, snippet.ranges);
             row.append(text);
@@ -5525,10 +5553,11 @@
         settingsDom.localSearchResults.append(lane);
       }
 
-      // Indexed exchanges read "User:\n…\n\nAssistant:\n…"; a one-line hit reads
-      // better without those labels. Highlight offsets are shifted to match.
+      // Indexed exchanges read "User:\n…\n\nAssistant:\n…" and may hold markup
+      // directives such as :writing{…}; a one-line hit reads better without both.
+      // Highlight offsets are shifted to match.
       function withoutSpeakerLabels(text, ranges) {
-        const label = /(^|\s)(User|Assistant):\s*/g;
+        const label = /(^|\s)(?:(?:User|Assistant):\s*|:[a-zA-Z][\w-]*\{[^}\n]*\}\s*)+/g;
         let output = "";
         let cursor = 0;
         const shifts = [];
@@ -5603,14 +5632,19 @@
         const group = result.group || state.groups.find((item) => item.group_id === result.group_id);
         const head = div("search-detail-head");
         const titles = document.createElement("div");
+        const isFile = result.source_kind.endsWith("_file");
         const title = document.createElement("h4");
-        title.textContent = result.source_kind.endsWith("_file") ? result.title : (session?.title || result.title);
-        titles.append(title, div("search-detail-meta", [
+        if (isFile) title.append(fileNameNode(searchResultFile(result)));
+        else title.textContent = session?.title || result.title;
+        const meta = div("search-detail-meta");
+        if (isFile) meta.append(fileBadge(searchResultFile(result)), document.createTextNode(" "));
+        meta.append(document.createTextNode([
           group?.name || result.group_id,
-          result.source_kind.endsWith("_file") ? (result.subtitle || "file") : result.subtitle,
+          result.source_kind === "session_file" ? `in ${session?.title || result.subtitle}` : (isFile ? "group file" : result.subtitle),
           formatDate(new Date(result.timestamp * 1000).toISOString()),
         ].filter(Boolean).join(" · ")));
-        head.append(searchGroupMark(group), titles);
+        titles.append(title, meta);
+        head.append(isFile ? searchFileMark(result) : searchGroupMark(group), titles);
         const passage = div("search-passage");
         const text = result.passage ?? result.snippet ?? "";
         for (const [index, turn] of searchPassageTurns(text, result.passage_highlights || result.highlights || []).entries()) {
