@@ -939,7 +939,7 @@ class AdminHandlers:
                 },
                 "file_labels": self.store.list_file_labels(session.group_id),
                 "exchanges": exchange_payloads,
-                "closing": self.summaries.state_for(session.session_id),
+                "closing": _with_summary_tokens(self.summaries.state_for(session.session_id)),
             },
             headers=self._no_store_headers(),
         )
@@ -1003,7 +1003,7 @@ class AdminHandlers:
             state = await asyncio.to_thread(self.summaries.reopen, request.path_params["session_id"])
         except SummaryError as exc:
             return self._json_error(str(exc), status_code=404 if exc.code == "session_unknown" else 409)
-        return JSONResponse({"ok": True, "closing": state}, headers=self._no_store_headers())
+        return JSONResponse({"ok": True, "closing": _with_summary_tokens(state)}, headers=self._no_store_headers())
 
     async def api_regenerate_summary(self, request: Request) -> Response:
         """Write a closed session's summary again now, with the current prompt."""
@@ -1015,7 +1015,7 @@ class AdminHandlers:
         except SummaryError as exc:
             status_code = {"session_unknown": 404, "codex_unavailable": 503}.get(exc.code, 409)
             return self._json_error(str(exc), status_code=status_code)
-        return JSONResponse({"ok": True, "closing": state}, headers=self._no_store_headers())
+        return JSONResponse({"ok": True, "closing": _with_summary_tokens(state)}, headers=self._no_store_headers())
 
     async def api_update_summary_settings(self, request: Request) -> Response:
         """Settings › Summaries: closing, its scope, the summary card and the prompt."""
@@ -2045,6 +2045,14 @@ def _session_payload(session: SessionRecord) -> dict[str, Any]:
         "updated_at": session.updated_at,
         "updated_at_iso": format_timestamp_iso(session.updated_at),
     }
+
+
+def _with_summary_tokens(state: dict[str, Any] | None) -> dict[str, Any] | None:
+    """The summary's size, counted like the session's own token meter."""
+    summary = (state or {}).get("summary")
+    if summary is not None:
+        summary["content_tokens"] = _estimate_token_count(summary.get("content") or "")
+    return state
 
 
 def _closing_list_payload(state: dict[str, Any] | None) -> dict[str, Any] | None:
