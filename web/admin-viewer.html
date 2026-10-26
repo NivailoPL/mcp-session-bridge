@@ -6026,6 +6026,7 @@
           resetAnchors();
           return;
         }
+        if (sessionId !== state.selectedSessionId) state.summaryCard.delete(sessionId);
         state.selectedSessionId = sessionId;
         renderSessions();
         if (!quiet) setBusy(true);
@@ -8974,6 +8975,10 @@
           state.summaryCard.set(state.selectedSessionId, false);
           renderClosing();
           summaryDom.dock.focus();
+        });
+        summaryDom.layer.addEventListener("click", (event) => {
+          if (event.target !== summaryDom.layer && !event.target.classList.contains("summary-scrim")) return;
+          summaryDom.hide.click();
         });
         summaryDom.dock.addEventListener("click", () => {
           if (!state.selectedSessionId) return;
