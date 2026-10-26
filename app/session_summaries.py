@@ -13,8 +13,10 @@ session deletes its summary.
 
 Each close queues one summary. Codex writes it from the whole transcript, in
 Markdown, from a fixed base prompt plus the owner's own instructions. The
-length the owner sets is a target for the model, not a cut: Bridge keeps the
-whole answer, however long it comes back. Only the
+length is a target for the model, not a cut: Bridge keeps the whole answer,
+however long it comes back. The target follows the session: a fifth of the
+transcript, never above the owner's setting and never below the floor, since
+a model given a number tends to fill it. Only the
 summaries wait for the "Runs models" switch; Regenerate always works when the
 owner presses it. Token figures are estimates from text length, because Codex
 App Server does not report usage back.
@@ -45,6 +47,8 @@ DAY_SECONDS = 86_400
 CLOSE_AFTER_DAYS_CHOICES = (7, 14, 30, 60, 90)
 CARD_COLORS = ("frost", "paper")
 MIN_SUMMARY_CHARS = 300
+# The target is this share of the transcript, so a short session is not padded out to the setting.
+SUMMARY_SHARE = 0.2
 MAX_SUMMARY_CHARS = 8000
 INSTRUCTIONS_MAX_CHARS = 8000
 CODEX_MODEL_MAX_CHARS = 96
@@ -223,12 +227,18 @@ def closed_message(session_id: str, days: int) -> str:
 
 # ---------- the prompt ----------
 
+def target_chars(settings: dict[str, Any], transcript: str) -> int:
+    """A fifth of the session, between the floor and the owner's setting."""
+    share = int(len(transcript) * SUMMARY_SHARE) // 50 * 50
+    return max(MIN_SUMMARY_CHARS, min(settings["max_chars"], share))
+
+
 def compose_prompt(settings: dict[str, Any], transcript: str) -> str:
     """The base prompt and the owner's instructions as one message, then Bridge's rules and the transcript."""
     parts = [BASE_PROMPT]
     if settings["instructions"]:
         parts.append(settings["instructions"])
-    parts.append(f"{FORMAT_RULES} Aim to keep it under {settings['max_chars']} characters.")
+    parts.append(f"{FORMAT_RULES} Aim to keep it under {target_chars(settings, transcript)} characters.")
     parts.append(f"Transcript:\n<<<\n{transcript}\n>>>")
     return "\n\n".join(parts)
 

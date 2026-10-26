@@ -18,6 +18,7 @@ from app.session_summaries import (
     compose_prompt,
     default_settings,
     render_transcript,
+    target_chars,
     validate_settings,
 )
 from app.storage import Store
@@ -99,11 +100,20 @@ def test_settings_validation():
 # ---------- the prompt ----------
 
 def test_prompt_glues_base_and_instructions_then_rules_and_transcript():
-    empty = compose_prompt(default_settings(), "Turn 1")
+    long = "x" * 50_000
+    empty = compose_prompt(default_settings(), long)
     assert empty.startswith(f"{BASE_PROMPT}\n\nWrite the summary in Markdown")
-    assert "under 2000 characters" in empty and empty.endswith("<<<\nTurn 1\n>>>")
-    extra = compose_prompt({**default_settings(), "instructions": "Lead with decisions.", "max_chars": 900}, "T")
+    assert "under 2000 characters" in empty and empty.endswith(f"<<<\n{long}\n>>>")
+    extra = compose_prompt({**default_settings(), "instructions": "Lead with decisions.", "max_chars": 900}, long)
     assert extra.startswith(f"{BASE_PROMPT}\n\nLead with decisions.\n\n") and "under 900 characters" in extra
+
+
+def test_target_follows_the_session_length():
+    settings = {**default_settings(), "max_chars": 4000}
+    assert target_chars(settings, "x" * 4000) == 800          # a fifth of a short session
+    assert target_chars(settings, "x" * 100) == 300           # never below the floor
+    assert target_chars(settings, "x" * 100_000) == 4000      # never above the setting
+    assert "under 800 characters" in compose_prompt(settings, "x" * 4000)
 
 
 def test_long_transcript_keeps_its_start_and_end(tmp_path):
