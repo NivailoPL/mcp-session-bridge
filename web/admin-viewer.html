@@ -5575,7 +5575,11 @@
           no_report: ["…", "off", `${size}: no report.`, "The step was sent, but the model never reported back. The harness most likely lost or rejected the result."],
         };
         if (step.phase === "delivery" && step.outcome === "truncated") {
-          texts.truncated = ["✂", "warn", `${size}: cut off, even with file access.`, `Asked to use any file or tool the harness offers, the model still saw the result end at about ${Number(step.cut_at_chars || 0).toLocaleString()} chars. That is the most one tool call carries here.`];
+          const cutAt = Number(step.cut_at_chars || 0).toLocaleString();
+          const note = step.harness_error ? ` The model's note: “${step.harness_error}”.` : "";
+          texts.truncated = step.delivery === "file"
+            ? ["✂", "warn", `${size}: cut off, even through the file.`, `The model read the harness's file and the result still ended at about ${cutAt} chars. That is the most one tool call carries here.${note}`]
+            : ["✂", "off", `${size}: no file access in this chat.`, `Asked to read the full result through a file or tool, the model still saw only about ${cutAt} chars.${note} So how much one call can carry stays unmeasured; a chat with file or code tools turned on may get further.`];
         }
         const asked = (step.recall_blocks || []).length;
         const fromFile = step.delivery === "file" ? " The model said it read this result from a file." : "";
@@ -5622,10 +5626,11 @@
           return box;
         }
         const profileNote = suite.content_profile === "transcript_markdown" ? "" : " Transport canary results don't set the safe chunk size.";
+        const unmeasured = suite.steps.some((step) => step.phase === "delivery" && step.outcome === "truncated" && step.delivery !== "file");
         const delivered = Number(verdict.largest_delivered_chars || 0);
         const deliveryNote = delivered > Number(verdict.largest_complete_chars || 0)
           ? ` One tool call carries ${verdict.smallest_undelivered_chars ? "up to " : ""}${delivered.toLocaleString()}${verdict.smallest_undelivered_chars ? "" : "+"} chars, but only what fits in context is read reliably.`
-          : "";
+          : unmeasured ? " How much one call can carry wasn't measured: the model couldn't open the harness's file in that chat." : "";
         box.append(spanCls("", `Use chunks up to ${Number(recommended).toLocaleString()} chars here (${Number(verdict.largest_complete_chars).toLocaleString()} verified in context, minus the 25% margin).${deliveryNote}${profileNote}`));
         if (suite.content_profile === "transcript_markdown") {
           const use = document.createElement("button");
