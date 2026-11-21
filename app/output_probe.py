@@ -449,33 +449,52 @@ def context_view(steps: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def delivery_view(steps: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """All steps judged by delivery alone: a spilled result still arrived whole."""
-    return [
-        step | {"outcome": "complete"} if step["outcome"] == "spilled" else step
-        for step in steps
-    ]
+    """Steps judged by delivery alone.
+
+    A spilled result still arrived whole, so it counts as delivered. Other failures
+    count only from the delivery phase: in the context phase the model was told not
+    to reach for files, so a cut there says nothing about what a file could carry.
+    """
+    view = []
+    for step in steps:
+        if step["outcome"] == "spilled":
+            view.append(step | {"outcome": "complete"})
+        elif step["outcome"] == "complete" or step.get("phase") == "delivery":
+            view.append(step)
+    return view
+
+
+DELIVERY_AFTER = {"spilled", "truncated"}
 
 
 def plan_next_step(
     steps: list[dict[str, Any]],
     *,
     start: int = SUITE_START_CHARS,
+    ceiling: int = MAX_PROBE_TARGET_CHARS,
 ) -> tuple[int, str] | None:
     """Next (size, phase) of a suite, or None when both limits are known.
 
     Phase "context" finds how much the model really holds in context. When that
-    limit came from a spilled step (the result arrived, but not into context),
-    phase "delivery" keeps growing on canaries alone to find how much one tool
-    call can carry.
+    limit ended in a spill or a cut (a harness may show only the start and keep the
+    rest in a file the model never opened), phase "delivery" asks the model to use
+    any file or tool it has and finds how much one tool call can carry. It opens at
+    the ceiling, since a whole delivery there settles the question in one step.
     """
     context = context_view(steps)
     target = next_probe_step(context, start=start)
     if target is not None:
         return target, "context"
-    lo, _, hi_step = suite_bounds(context)
-    if hi_step is None or hi_step["outcome"] != "spilled":
+    _, _, hi_step = suite_bounds(context)
+    if hi_step is None or hi_step["outcome"] not in DELIVERY_AFTER:
         return None
-    target = next_probe_step(delivery_view(steps), max_steps=SUITE_MAX_STEPS + SUITE_DELIVERY_EXTRA_STEPS)
+    if len(steps) >= SUITE_MAX_STEPS + SUITE_DELIVERY_EXTRA_STEPS:
+        return None
+    delivery = delivery_view(steps)
+    if not any(step.get("phase") == "delivery" for step in steps):
+        lo, _, _ = suite_bounds(delivery)
+        return None if lo is not None and lo >= ceiling else (ceiling, "delivery")
+    target = next_probe_step(delivery, max_steps=SUITE_MAX_STEPS + SUITE_DELIVERY_EXTRA_STEPS)
     return (target, "delivery") if target is not None else None
 
 
@@ -547,6 +566,8 @@ def harness_test_prompt(suite_id: str) -> str:
         "with the same suite_id, every CHECKPOINT canary you can actually see, and the index and canary "
         "of the last block with a complete END marker, and delivery: \"context\" if the payload is directly "
         "in your context, \"file\" if you read it through a file or another tool, \"unsure\" otherwise. "
+        "Steps marked phase=delivery are different: if the harness saved the full result to a file or "
+        "offers a tool to read it, use that and report canaries from the full result. "
         "When report_harness_probe asks for a memory check, answer it with answer_recall_check from your "
         "context alone: no tools, no files, empty strings for blocks you cannot see. "
         "If next_harness_probe failed or returned an error "

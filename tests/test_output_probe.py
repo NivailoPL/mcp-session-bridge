@@ -281,11 +281,16 @@ def test_plan_next_step_switches_to_delivery_after_a_spill() -> None:
 
     context_done = [step(32_000, "complete"), step(64_000, "spilled"), step(48_000, "complete"),
                     step(56_000, "spilled"), step(52_000, "complete")]
-    assert plan_next_step(context_done) == (128_000, "delivery")
+    assert plan_next_step(context_done) == (250_000, "delivery")
     assert plan_next_step(context_done + [step(128_000, "rejected", "delivery")]) == (96_000, "delivery")
     truncated_context = [step(32_000, "complete"), step(64_000, "truncated")]
     truncated_context[1]["cut_at_chars"] = 40_000
     assert plan_next_step(truncated_context) == (38_000, "context")
+    cut_and_confirmed = truncated_context + [step(38_000, "complete")]
+    assert plan_next_step(cut_and_confirmed) == (250_000, "delivery")
+    rejected = [step(32_000, "complete"), step(64_000, "rejected"), step(48_000, "complete"),
+                step(56_000, "rejected"), step(52_000, "complete")]
+    assert plan_next_step(rejected) is None
     assert plan_next_step([step(32_000, "complete"), step(64_000, "complete"), step(128_000, "complete"),
                            step(250_000, "complete")]) is None
 

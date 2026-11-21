@@ -25,6 +25,7 @@ def _model_report(
     *,
     truncates: bool,
     context_limit: int | None = None,
+    file_limit: int | None = None,
 ) -> dict[str, Any]:
     """Act like a model in a harness that delivers at most `limit` payload chars.
 
@@ -32,6 +33,8 @@ def _model_report(
     bigger ones go to a file, so the model cannot answer the memory check.
     """
     blocks = main.store.get_output_probe_run(step["run_id"])["blocks"]
+    if step.get("phase") == "delivery" and file_limit is not None:
+        limit = file_limit  # told to use the harness's file, the model reads further
     if step["payload_char_count"] > limit and not truncates:
         return main.report_harness_probe(step["suite_id"], [], 0, "", harness_error="Tool result too large")
     visible = [block for block in blocks if block["offset"] + block["char_count"] <= limit]
@@ -69,14 +72,16 @@ def test_suite_finds_a_silent_cut_through_the_mcp_tools(load_main) -> None:
 
     sizes, done = _run(main, suite_id, lambda step: _model_report(main, step, 98_400, truncates=True))
 
-    assert sizes == [32_000, 64_000, 128_000, 92_000]
+    # The cut also gets one delivery check at the ceiling, which is cut at the same place.
+    assert sizes == [32_000, 64_000, 128_000, 92_000, 250_000]
     assert done["verdict"] == "truncates"
     assert done["largest_complete_chars"] == 92_000
     assert 97_000 <= done["smallest_failing_chars"] <= 98_400
     suite = main.store.get_harness_probe_suite(suite_id)
     assert suite["status"] == "done"
-    assert [run["outcome"] for run in suite["steps"]] == ["complete", "complete", "truncated", "complete"]
-    assert [run["cumulative_chars"] for run in suite["steps"]] == [32_000, 96_000, 224_000, 316_000]
+    assert [run["outcome"] for run in suite["steps"]] == ["complete", "complete", "truncated", "complete", "truncated"]
+    assert [run["cumulative_chars"] for run in suite["steps"]] == [32_000, 96_000, 224_000, 316_000, 566_000]
+    assert done["largest_delivered_chars"] == 92_000
 
 
 def test_suite_walks_down_on_rejections_and_keeps_the_error_text(load_main) -> None:
@@ -360,3 +365,31 @@ def test_public_suite_exposes_recall_fields(load_main, admin_client) -> None:
     assert first["phase"] == "context" and first["recall_score"] == 3 and first["delivery"] == "context"
     assert suite["verdict"]["largest_delivered_chars"] == 250_000
     assert "canary" not in str(first["recall_blocks"]).lower()
+
+
+def test_cut_preview_gets_a_delivery_check_that_reads_the_file(load_main) -> None:
+    main = load_main()
+    suite_id = _start_suite(main, "grok.com")
+
+    sizes, done = _run(
+        main, suite_id,
+        lambda step: _model_report(main, step, 20_000, truncates=True, file_limit=10_000_000),
+    )
+
+    assert sizes[0] == 32_000 and sizes[-1] == 250_000
+    assert done["verdict"] == "truncates"
+    assert done["largest_complete_chars"] < 20_000
+    assert done["largest_delivered_chars"] == 250_000
+    last = main.store.get_harness_probe_suite(suite_id)["steps"][-1]
+    assert (last["phase"], last["outcome"]) == ("delivery", "complete")
+
+
+def test_delivery_step_tells_the_model_to_use_the_file(load_main) -> None:
+    main = load_main()
+    suite_id = _start_suite(main)
+    _model_report(main, main.next_harness_probe(suite_id), 20_000, truncates=True)
+    while (step := main.next_harness_probe(suite_id)).get("phase") == "context":
+        _model_report(main, step, 20_000, truncates=True)
+
+    assert step["phase"] == "delivery"
+    assert "use that now" in step["report_instructions"]

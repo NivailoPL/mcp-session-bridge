@@ -5574,6 +5574,9 @@
           verification_failed: ["?", "warn", `${size}: misread.`, "The model reported markers that don't match the payload. This counts as a failure at this size, though the harness itself may be fine."],
           no_report: ["…", "off", `${size}: no report.`, "The step was sent, but the model never reported back. The harness most likely lost or rejected the result."],
         };
+        if (step.phase === "delivery" && step.outcome === "truncated") {
+          texts.truncated = ["✂", "warn", `${size}: cut off, even with file access.`, `Asked to use any file or tool the harness offers, the model still saw the result end at about ${Number(step.cut_at_chars || 0).toLocaleString()} chars. That is the most one tool call carries here.`];
+        }
         const asked = (step.recall_blocks || []).length;
         const fromFile = step.delivery === "file" ? " The model said it read this result from a file." : "";
         texts.spilled = step.recall_score === null || step.recall_score === undefined

@@ -1126,6 +1126,12 @@ def _issue_output_probe(
                 "Immediately call report_harness_probe with this suite_id. Pass every CHECKPOINT canary "
                 "you can actually see, plus the index and canary from the last block with a complete END "
                 "marker. Do not infer missing values. Then call next_harness_probe again."
+                if phase == "context"
+                else "Delivery check: this step measures how much one tool call can carry, not what fits "
+                "in your context. If the harness saved the full result to a file or offers a tool to read "
+                "it, use that now and report the CHECKPOINT canaries and the last complete END block of "
+                "the full result. Otherwise report what you see. Never guess a canary. Pass delivery "
+                "\"file\" if you read it through a file or tool. Then call next_harness_probe again."
             ),
         }
     result["probe_payload"] = probe["payload"]
