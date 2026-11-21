@@ -1052,6 +1052,15 @@ def run_output_probe(
         return {"ok": False, "error": "harness_label must not be empty"}
     if len(label) > 80:
         return {"ok": False, "error": "harness_label must be 80 characters or fewer"}
+    if store.get_harness_probe_suite(label) is not None:
+        # A model without the suite tools sometimes improvises with this one.
+        return {
+            "ok": False,
+            "error": (
+                f"{label} is a harness test suite_id. Call next_harness_probe with it instead. "
+                "If that tool is missing, ask the user to refresh this connector's tool list."
+            ),
+        }
     if isinstance(target_chars, bool) or not isinstance(target_chars, int):
         return {"ok": False, "error": "target_chars must be an integer"}
     if not MIN_PROBE_TARGET_CHARS <= target_chars <= MAX_PROBE_TARGET_CHARS:

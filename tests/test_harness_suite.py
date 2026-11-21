@@ -213,7 +213,7 @@ def test_cleanup_keeps_latest_per_harness_or_clears_everything(load_main, admin_
     _start_suite(main, "claude.ai", suite_id="suite-claude")
     main.run_output_probe("manual", 8_000, "transcript_markdown")
     assert client.get(BASE).json()["harness_tests"]["cleanup"] == {
-        "older_suites": 2, "standalone_runs": 1, "suites": 4,
+        "older_suites": 2, "standalone_runs": 1, "standalone_labels": ["manual"], "suites": 4,
     }
 
     kept = client.post(f"{BASE}/cleanup", json={"mode": "keep_latest"}, headers=headers).json()
@@ -248,3 +248,23 @@ def test_safe_chunk_ignores_transport_canary_results(load_main, admin_client) ->
     assert len(transcript["recommendations"]) == 2
     assert transcript["safe_chunk"]["content_profile"] == "transcript_markdown"
     assert transcript["safe_chunk"]["recommended_chunk_chars"] == 30_000
+
+
+def test_run_output_probe_refuses_a_suite_id_as_harness_label(load_main) -> None:
+    main = load_main()
+    suite_id = _start_suite(main)
+
+    refused = main.run_output_probe(suite_id, 10_000, "transcript_markdown")
+
+    assert refused["ok"] is False
+    assert "next_harness_probe" in refused["error"]
+    assert main.store.list_output_probe_runs() == []
+
+
+def test_prompt_tells_a_model_without_the_tools_to_stop() -> None:
+    from app.output_probe import harness_test_prompt
+
+    prompt = harness_test_prompt("suite-x")
+
+    assert "refresh this connector's tools" in prompt
+    assert "do not use run_output_probe" in prompt

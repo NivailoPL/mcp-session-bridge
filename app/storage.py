@@ -1387,7 +1387,19 @@ class Store(AnchorStoreMixin, TopicStoreMixin):
             standalone = conn.execute(
                 "SELECT COUNT(*) FROM output_probe_runs WHERE suite_id IS NULL"
             ).fetchone()[0]
-        return {"older_suites": suites - harnesses, "standalone_runs": standalone, "suites": suites}
+            labels = [
+                row[0]
+                for row in conn.execute(
+                    "SELECT DISTINCT harness_label FROM output_probe_runs WHERE suite_id IS NULL "
+                    "ORDER BY harness_label LIMIT 6"
+                )
+            ]
+        return {
+            "older_suites": suites - harnesses,
+            "standalone_runs": standalone,
+            "standalone_labels": labels,
+            "suites": suites,
+        }
 
     def delete_harness_probe_data(
         self,

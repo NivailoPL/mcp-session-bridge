@@ -2033,6 +2033,7 @@
     .harness-test-active-actions { display: flex; gap: 6px; justify-content: flex-end; }
     .harness-test-list { display: grid; }
     .harness-test-empty { padding: 12px 16px; color: var(--muted); font-size: var(--t-meta); }
+    .harness-test-note { padding: 5px 0; color: var(--muted); font-size: var(--t-ctrl); }
     .harness-test { border-bottom: 1px solid var(--stroke-soft); }
     .harness-test > summary { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: 10px; min-height: 40px; padding: 8px 16px; list-style: none; cursor: pointer; }
     .harness-test > summary::-webkit-details-marker { display: none; }
@@ -5618,7 +5619,7 @@
             settingsPill(pillText, pillTone),
           );
           const body = div("harness-test-body");
-          if (!suite.steps.length) body.append(div("harness-test-step", "No step yet. Paste the prompt into the harness."));
+          if (!suite.steps.length) body.append(div("harness-test-note", "No step yet. Paste the prompt into the harness."));
           for (const step of suite.steps) {
             const text = harnessStepText(step);
             const line = div("harness-test-step");
@@ -5761,6 +5762,20 @@
         }
       }
 
+      // Says exactly what "Keep latest per harness" removes and what stays.
+      function harnessCleanupDetail(cleanup, suites) {
+        const parts = [];
+        const suitesOlder = Number(cleanup.older_suites || 0);
+        const manual = Number(cleanup.standalone_runs || 0);
+        if (suitesOlder) parts.push(`${suitesOlder} older test${suitesOlder === 1 ? "" : "s"}`);
+        if (manual) {
+          const labels = (cleanup.standalone_labels || []).join(", ");
+          parts.push(`${manual} manual probe${manual === 1 ? "" : "s"}${labels ? ` (${labels})` : ""}`);
+        }
+        const kept = suites.map((suite) => suite.harness_label).join(", ");
+        return `Removes ${parts.join(" and ") || "nothing"}.${kept ? ` The latest test of ${kept} stays.` : ""}`;
+      }
+
       async function cleanupHarnessTests(mode) {
         const cleanup = state.settings?.harness_tests?.cleanup || {};
         const older = Number(cleanup.older_suites || 0) + Number(cleanup.standalone_runs || 0);
@@ -5772,8 +5787,8 @@
           tone: "danger",
         } : {
           title: "Delete older harness tests?",
-          message: `Delete ${older} older result${older === 1 ? "" : "s"} and keep the latest test of each harness?`,
-          detail: "Manual probes from Advanced are deleted too.",
+          message: `Delete ${older} older result${older === 1 ? "" : "s"}?`,
+          detail: harnessCleanupDetail(cleanup, state.settings?.harness_tests?.suites || []),
           confirmLabel: "Delete older",
           tone: "danger",
         });

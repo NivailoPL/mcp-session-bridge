@@ -450,6 +450,8 @@ def harness_test_prompt(suite_id: str) -> str:
     return (
         "Use MCP Session Bridge to measure how large a tool result this harness can receive. "
         "Do this in a fresh chat if you can. "
+        "If next_harness_probe is not in your tool list, stop and tell me to refresh this connector's tools; "
+        "do not use run_output_probe or any other tool instead. "
         f'Call next_harness_probe with suite_id="{suite_id}". '
         "If it returns done=true, stop and tell me only the verdict and recommended_chunk_chars. "
         "Otherwise read probe_payload without summarizing it, then immediately call report_harness_probe "
