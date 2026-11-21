@@ -18,15 +18,35 @@ def _start_suite(main: ModuleType, label: str = "chatgpt.com", **extra: Any) -> 
     return suite_id
 
 
-def _model_report(main: ModuleType, step: dict[str, Any], limit: int, *, truncates: bool) -> dict[str, Any]:
-    """Act like a model in a harness that delivers at most `limit` payload chars."""
+def _model_report(
+    main: ModuleType,
+    step: dict[str, Any],
+    limit: int,
+    *,
+    truncates: bool,
+    context_limit: int | None = None,
+) -> dict[str, Any]:
+    """Act like a model in a harness that delivers at most `limit` payload chars.
+
+    Results up to `context_limit` (default: everything delivered) stay in context;
+    bigger ones go to a file, so the model cannot answer the memory check.
+    """
     blocks = main.store.get_output_probe_run(step["run_id"])["blocks"]
     if step["payload_char_count"] > limit and not truncates:
         return main.report_harness_probe(step["suite_id"], [], 0, "", harness_error="Tool result too large")
     visible = [block for block in blocks if block["offset"] + block["char_count"] <= limit]
     checkpoints = [block["canary"] for block in visible if block["checkpoint_labels"]]
     last = visible[-1]
-    return main.report_harness_probe(step["suite_id"], checkpoints, last["index"], last["canary"])
+    in_context = context_limit is None or step["payload_char_count"] <= context_limit
+    reported = main.report_harness_probe(
+        step["suite_id"], checkpoints, last["index"], last["canary"],
+        delivery="context" if in_context else "file",
+    )
+    if "recall_check" not in reported:
+        return reported
+    canaries = {block["index"]: block["canary"] for block in blocks}
+    answers = [canaries[index] if in_context else "" for index in reported["recall_check"]["blocks"]]
+    return main.answer_recall_check(step["suite_id"], answers)
 
 
 def _run(main: ModuleType, suite_id: str, report: Callable[[dict[str, Any]], dict[str, Any]]) -> tuple[list[int], dict[str, Any]]:
@@ -268,3 +288,74 @@ def test_prompt_tells_a_model_without_the_tools_to_stop() -> None:
 
     assert "refresh this connector's tools" in prompt
     assert "do not use run_output_probe" in prompt
+
+
+def test_suite_finds_the_context_limit_and_then_the_delivery_limit(load_main) -> None:
+    main = load_main()
+    suite_id = _start_suite(main, "grok.com")
+
+    sizes, done = _run(
+        main, suite_id,
+        lambda step: _model_report(main, step, 10_000_000, truncates=True, context_limit=70_000),
+    )
+
+    assert sizes == [32_000, 64_000, 128_000, 96_000, 80_000, 72_000, 68_000, 250_000]
+    assert done["verdict"] == "leaves_context"
+    assert (done["largest_complete_chars"], done["smallest_failing_chars"]) == (68_000, 72_000)
+    assert done["recommended_chunk_chars"] == 51_000
+    assert done["largest_delivered_chars"] == 250_000
+    steps = main.store.get_harness_probe_suite(suite_id)["steps"]
+    assert [run["phase"] for run in steps] == ["context"] * 7 + ["delivery"]
+    assert [run["outcome"] for run in steps[:3]] == ["complete", "complete", "spilled"]
+    assert steps[2]["delivery"] == "file" and steps[2]["recall_score"] == 0
+    assert steps[0]["recall_score"] == 3 and len(steps[0]["recall_blocks"]) == 3
+    assert steps[-1]["recall_blocks"] == []
+
+
+def test_skipped_memory_check_counts_as_spilled(load_main) -> None:
+    main = load_main()
+    suite_id = _start_suite(main)
+    step = main.next_harness_probe(suite_id)
+    blocks = main.store.get_output_probe_run(step["run_id"])["blocks"]
+    reported = main.report_harness_probe(
+        suite_id, [b["canary"] for b in blocks if b["checkpoint_labels"]], blocks[-1]["index"], blocks[-1]["canary"]
+    )
+    assert reported["outcome"] == "delivered_whole"
+
+    following = main.next_harness_probe(suite_id)
+
+    first = main.store.get_harness_probe_suite(suite_id)["steps"][0]
+    assert (first["outcome"], first["recall_score"], first["delivery"]) == ("spilled", None, "unsure")
+    assert following["target_chars"] == 16_000
+
+
+def test_partial_recall_is_spilled_with_its_score(load_main) -> None:
+    main = load_main()
+    suite_id = _start_suite(main)
+    step = main.next_harness_probe(suite_id)
+    blocks = main.store.get_output_probe_run(step["run_id"])["blocks"]
+    asked = main.report_harness_probe(
+        suite_id, [b["canary"] for b in blocks if b["checkpoint_labels"]], blocks[-1]["index"], blocks[-1]["canary"],
+        delivery="context",
+    )["recall_check"]["blocks"]
+    canaries = {b["index"]: b["canary"] for b in blocks}
+
+    answered = main.answer_recall_check(suite_id, [f"BLOCK={asked[0]:06d}|CANARY={canaries[asked[0]]}", "", "WRONG"])
+
+    assert answered["outcome"] == "spilled"
+    assert answered["recalled"] == "1/3"
+    assert main.answer_recall_check(suite_id, [])["ok"] is False
+
+
+def test_public_suite_exposes_recall_fields(load_main, admin_client) -> None:
+    main = load_main()
+    client, _ = admin_client(main)
+    suite_id = _start_suite(main)
+    _run(main, suite_id, lambda step: _model_report(main, step, 10_000_000, truncates=True, context_limit=40_000))
+
+    suite = client.get(f"{BASE}/{suite_id}").json()["suite"]
+
+    first = suite["steps"][0]
+    assert first["phase"] == "context" and first["recall_score"] == 3 and first["delivery"] == "context"
+    assert suite["verdict"]["largest_delivered_chars"] == 250_000
+    assert "canary" not in str(first["recall_blocks"]).lower()

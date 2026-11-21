@@ -23,7 +23,8 @@ sys.path.insert(0, str(ROOT))
 from app.security import password_hash  # noqa: E402
 from app.output_probe import (  # noqa: E402
     build_output_probe,
-    next_probe_step,
+    pick_recall_blocks,
+    plan_next_step,
     suite_steps,
     suite_verdict,
 )
@@ -443,18 +444,19 @@ def build_database() -> tuple[int, int]:
     return len(SESSIONS), exchange_count
 
 
-# (label, delivered chars, how a bigger result fails, steps to leave unreported, hours ago)
+# (label, delivered chars, how a bigger result fails, chars kept in context, leave last step open, hours ago)
 HARNESS_TESTS = [
-    ("chatgpt.com", 98_400, "truncated", 0, 3),
-    ("claude.ai", 10_000_000, "truncated", 0, 30),
-    ("gemini.google.com", 12_999, "rejected", 0, 80),
-    ("codex-cli", 200_000, "rejected", 1, 0),
+    ("chatgpt.com", 98_400, "truncated", None, 0, 3),
+    ("claude.ai", 10_000_000, "truncated", None, 0, 30),
+    ("gemini.google.com", 12_999, "rejected", None, 0, 80),
+    ("grok.com", 10_000_000, "truncated", 70_000, 0, 6),
+    ("codex-cli", 200_000, "rejected", None, 1, 0),
 ]
 
 
 def seed_harness_tests(store: Store, clock: dict[str, float], real_now: float) -> None:
     """Simulated adaptive harness tests, so Settings > Harness limits has something to show."""
-    for label, limit, failure, leave_open, hours_ago in HARNESS_TESTS:
+    for label, limit, failure, context_limit, leave_open, hours_ago in HARNESS_TESTS:
         clock["now"] = real_now - hours_ago * 3600
         suite_id = f"suite-demo-{label.replace('.', '-')}"
         suite = store.create_harness_probe_suite(
@@ -467,7 +469,8 @@ def seed_harness_tests(store: Store, clock: dict[str, float], real_now: float) -
             }
         )
         cumulative = 0
-        while (target := next_probe_step(suite_steps(suite["steps"]))) is not None:
+        while (planned := plan_next_step(suite_steps(suite["steps"]))) is not None:
+            target, phase = planned
             clock["now"] += 40
             run_id = f"probe-demo-{label}-{len(suite['steps']) + 1}"
             probe = build_output_probe(run_id, target, "transcript_markdown")
@@ -488,11 +491,14 @@ def seed_harness_tests(store: Store, clock: dict[str, float], real_now: float) -
                     "suite_id": suite_id,
                     "step_index": len(suite["steps"]) + 1,
                     "cumulative_chars": cumulative,
+                    "phase": phase,
                 }
             )
             if leave_open and target > limit:
                 break
             outcome = "complete" if target <= limit else failure
+            recall = pick_recall_blocks(probe["blocks"]) if outcome == "complete" and phase == "context" else []
+            in_context = context_limit is None or target <= context_limit
             visible = [b for b in probe["blocks"] if b["offset"] + b["char_count"] <= limit]
             cut = visible[-1]["offset"] + visible[-1]["char_count"] if outcome == "truncated" else None
             store.report_output_probe_run(
@@ -504,10 +510,19 @@ def seed_harness_tests(store: Store, clock: dict[str, float], real_now: float) -
                 last_complete_canary="",
                 noticed_truncation=outcome == "truncated",
                 notes="",
-                outcome=outcome,
+                outcome=None if recall else outcome,
                 cut_at_chars=cut,
                 harness_error="Tool result is too large to display" if outcome == "rejected" else "",
+                status="recall" if recall else "reported",
+                recall_blocks=recall,
+                delivery="context" if in_context else "file",
             )
+            if recall:
+                store.finish_output_probe_recall(
+                    run_id,
+                    outcome="complete" if in_context else "spilled",
+                    recall_score=len(recall) if in_context else 0,
+                )
             suite = store.get_harness_probe_suite(suite_id)
         else:
             store.finish_harness_probe_suite(suite_id, suite_verdict(suite_steps(suite["steps"])))

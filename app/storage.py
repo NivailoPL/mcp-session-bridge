@@ -683,6 +683,11 @@ class Store(AnchorStoreMixin, TopicStoreMixin):
                 ("cut_at_chars", "INTEGER"),
                 ("harness_error", "TEXT NOT NULL DEFAULT ''"),
                 ("cumulative_chars", "INTEGER"),
+                # Context phase vs delivery phase, and the memory check of a context step.
+                ("phase", "TEXT"),
+                ("recall_blocks_json", "TEXT NOT NULL DEFAULT '[]'"),
+                ("recall_score", "INTEGER"),
+                ("delivery", "TEXT NOT NULL DEFAULT ''"),
             ):
                 self._ensure_column(conn, "output_probe_runs", column, declaration)
             conn.execute(
@@ -1171,8 +1176,8 @@ class Store(AnchorStoreMixin, TopicStoreMixin):
                     run_id, harness_label, content_profile, target_chars,
                     payload_char_count, server_result_json_chars, block_count,
                     block_size, tool_output_mode, blocks_json, status, created_by, created_at,
-                    suite_id, step_index, cumulative_chars
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?)
+                    suite_id, step_index, cumulative_chars, phase
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     run["run_id"],
@@ -1190,6 +1195,7 @@ class Store(AnchorStoreMixin, TopicStoreMixin):
                     run.get("suite_id"),
                     run.get("step_index"),
                     run.get("cumulative_chars"),
+                    run.get("phase"),
                 ),
             )
             if run.get("suite_id"):
@@ -1233,7 +1239,8 @@ class Store(AnchorStoreMixin, TopicStoreMixin):
                     '[]' AS observed_canaries_json, matched_checkpoints_json,
                     last_complete_block_index, NULL AS last_complete_canary,
                     noticed_truncation, notes, created_by, created_at, reported_at,
-                    suite_id, step_index, outcome, cut_at_chars, harness_error, cumulative_chars
+                    suite_id, step_index, outcome, cut_at_chars, harness_error, cumulative_chars,
+                    phase, recall_blocks_json, recall_score, delivery
                 FROM output_probe_runs
                 ORDER BY created_at DESC, run_id DESC
                 LIMIT ?
@@ -1257,6 +1264,8 @@ class Store(AnchorStoreMixin, TopicStoreMixin):
         cut_at_chars: int | None = None,
         harness_error: str = "",
         status: str = "reported",
+        recall_blocks: list[int] | None = None,
+        delivery: str = "",
     ) -> dict[str, Any] | None:
         reported_at = int(time.time())
         with self._lock, self._connect() as conn:
@@ -1266,7 +1275,8 @@ class Store(AnchorStoreMixin, TopicStoreMixin):
                 SET status = ?, result_class = ?, observed_canaries_json = ?,
                     matched_checkpoints_json = ?, last_complete_block_index = ?,
                     last_complete_canary = ?, noticed_truncation = ?, notes = ?, reported_at = ?,
-                    outcome = ?, cut_at_chars = ?, harness_error = ?
+                    outcome = ?, cut_at_chars = ?, harness_error = ?,
+                    recall_blocks_json = ?, delivery = ?
                 WHERE run_id = ? AND status = 'pending'
                 """,
                 (
@@ -1282,8 +1292,26 @@ class Store(AnchorStoreMixin, TopicStoreMixin):
                     outcome,
                     cut_at_chars,
                     harness_error,
+                    json.dumps(recall_blocks or [], separators=(",", ":")),
+                    delivery,
                     run_id,
                 ),
+            )
+        if cursor.rowcount == 0:
+            return None
+        return self.get_output_probe_run(run_id)
+
+    def finish_output_probe_recall(
+        self, run_id: str, *, outcome: str, recall_score: int | None
+    ) -> dict[str, Any] | None:
+        """Close the memory check of a step that is waiting for it."""
+        with self._lock, self._connect() as conn:
+            cursor = conn.execute(
+                """
+                UPDATE output_probe_runs SET status = 'reported', outcome = ?, recall_score = ?
+                WHERE run_id = ? AND status = 'recall'
+                """,
+                (outcome, recall_score, run_id),
             )
         if cursor.rowcount == 0:
             return None
@@ -3762,6 +3790,10 @@ def _output_probe_row(row: sqlite3.Row) -> dict[str, Any]:
         "cut_at_chars": row["cut_at_chars"],
         "harness_error": row["harness_error"],
         "cumulative_chars": row["cumulative_chars"],
+        "phase": row["phase"],
+        "recall_blocks": json.loads(row["recall_blocks_json"] or "[]"),
+        "recall_score": row["recall_score"],
+        "delivery": row["delivery"],
     }
 
 

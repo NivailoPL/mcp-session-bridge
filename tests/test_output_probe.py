@@ -271,3 +271,20 @@ def test_suite_verdict_names_the_limit_after_how_it_failed() -> None:
     assert suite_verdict(steps_failing_with("rejected"))["verdict"] == "rejects"
     assert suite_verdict(steps_failing_with("no_report"))["verdict"] == "fails_above"
     assert suite_verdict(steps_failing_with("verification_failed"))["verdict"] == "fails_above"
+
+
+def test_plan_next_step_switches_to_delivery_after_a_spill() -> None:
+    from app.output_probe import plan_next_step
+
+    def step(target: int, outcome: str, phase: str = "context") -> dict[str, Any]:
+        return {"target_chars": target, "outcome": outcome, "cut_at_chars": None, "phase": phase}
+
+    context_done = [step(32_000, "complete"), step(64_000, "spilled"), step(48_000, "complete"),
+                    step(56_000, "spilled"), step(52_000, "complete")]
+    assert plan_next_step(context_done) == (128_000, "delivery")
+    assert plan_next_step(context_done + [step(128_000, "rejected", "delivery")]) == (96_000, "delivery")
+    truncated_context = [step(32_000, "complete"), step(64_000, "truncated")]
+    truncated_context[1]["cut_at_chars"] = 40_000
+    assert plan_next_step(truncated_context) == (38_000, "context")
+    assert plan_next_step([step(32_000, "complete"), step(64_000, "complete"), step(128_000, "complete"),
+                           step(250_000, "complete")]) is None

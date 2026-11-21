@@ -304,7 +304,11 @@ SUITE_MAX_STEPS = 7
 SUITE_CONFIRM_RATIO = 0.95
 SUITE_MIN_GAP_CHARS = 4_000
 SUITE_MIN_GAP_RATIO = 0.10
-STEP_OUTCOMES = {"complete", "truncated", "altered", "rejected", "no_report", "verification_failed"}
+STEP_OUTCOMES = {
+    "complete", "truncated", "altered", "rejected", "no_report", "verification_failed", "spilled",
+}
+SUITE_DELIVERY_EXTRA_STEPS = 4
+RECALL_BLOCK_COUNT = 3
 
 
 def step_outcome(result_class: str | None, *, harness_error: str = "", reported: bool = True) -> str:
@@ -395,8 +399,8 @@ def next_probe_step(
     return middle if middle > lo else None
 
 
-def suite_verdict(steps: list[dict[str, Any]], *, ceiling: int = MAX_PROBE_TARGET_CHARS) -> dict[str, Any]:
-    """Summarize finished steps as a verdict enum plus the numbers the report needs."""
+def limit_verdict(steps: list[dict[str, Any]], *, ceiling: int = MAX_PROBE_TARGET_CHARS) -> dict[str, Any]:
+    """Summarize steps of one limit search as a verdict enum plus the numbers the report needs."""
     lo, hi, hi_step = suite_bounds(steps)
     if not steps:
         verdict = "no_steps"
@@ -412,6 +416,7 @@ def suite_verdict(steps: list[dict[str, Any]], *, ceiling: int = MAX_PROBE_TARGE
             "truncated": "truncates",
             "altered": "drops_middle",
             "rejected": "rejects",
+            "spilled": "leaves_context",
         }.get(hi_step["outcome"] if hi_step else "", "fails_above")
     return {
         "verdict": verdict,
@@ -425,16 +430,87 @@ def suite_verdict(steps: list[dict[str, Any]], *, ceiling: int = MAX_PROBE_TARGE
 
 
 def suite_steps(runs: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Finished suite runs as the step dicts next_probe_step reads; pending runs are skipped."""
+    """Finished suite runs as the step dicts the planner reads; unfinished runs are skipped."""
     return [
         {
             "target_chars": int(run["target_chars"]),
             "outcome": run["outcome"],
             "cut_at_chars": run.get("cut_at_chars"),
+            "phase": run.get("phase") or "context",
         }
         for run in runs
         if run.get("outcome") in STEP_OUTCOMES
     ]
+
+
+def context_view(steps: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Steps of the context search: whole delivery that the model can also recall from memory."""
+    return [step for step in steps if step.get("phase", "context") == "context"]
+
+
+def delivery_view(steps: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """All steps judged by delivery alone: a spilled result still arrived whole."""
+    return [
+        step | {"outcome": "complete"} if step["outcome"] == "spilled" else step
+        for step in steps
+    ]
+
+
+def plan_next_step(
+    steps: list[dict[str, Any]],
+    *,
+    start: int = SUITE_START_CHARS,
+) -> tuple[int, str] | None:
+    """Next (size, phase) of a suite, or None when both limits are known.
+
+    Phase "context" finds how much the model really holds in context. When that
+    limit came from a spilled step (the result arrived, but not into context),
+    phase "delivery" keeps growing on canaries alone to find how much one tool
+    call can carry.
+    """
+    context = context_view(steps)
+    target = next_probe_step(context, start=start)
+    if target is not None:
+        return target, "context"
+    lo, _, hi_step = suite_bounds(context)
+    if hi_step is None or hi_step["outcome"] != "spilled":
+        return None
+    target = next_probe_step(delivery_view(steps), max_steps=SUITE_MAX_STEPS + SUITE_DELIVERY_EXTRA_STEPS)
+    return (target, "delivery") if target is not None else None
+
+
+def suite_verdict(steps: list[dict[str, Any]], *, ceiling: int = MAX_PROBE_TARGET_CHARS) -> dict[str, Any]:
+    """Context verdict at the top level, plus what one tool call can deliver."""
+    verdict = limit_verdict(context_view(steps), ceiling=ceiling)
+    delivered = limit_verdict(delivery_view(steps), ceiling=ceiling)
+    return verdict | {
+        "step_count": len(steps),
+        "cumulative_chars": sum(int(step["target_chars"]) for step in steps),
+        "largest_delivered_chars": delivered["largest_complete_chars"],
+        "smallest_undelivered_chars": delivered["smallest_failing_chars"],
+        "delivery_verdict": delivered["verdict"],
+    }
+
+
+def pick_recall_blocks(blocks: list[dict[str, Any]], count: int = RECALL_BLOCK_COUNT) -> list[int]:
+    """Random non-checkpoint blocks, one per slice of the payload, chosen after delivery."""
+    candidates = [int(block["index"]) for block in blocks if not block["checkpoint_labels"]]
+    if len(candidates) < count:
+        return []
+    rng = secrets.SystemRandom()
+    size = len(candidates) / count
+    return [rng.choice(candidates[int(i * size):int((i + 1) * size)]) for i in range(count)]
+
+
+def score_recall(blocks: list[dict[str, Any]], asked: list[int], answers: list[str]) -> int:
+    """How many asked blocks the model named correctly, in order."""
+    by_index = {int(block["index"]): str(block["canary"]).upper() for block in blocks}
+    score = 0
+    for position, index in enumerate(asked):
+        answer = _normalize_canary(answers[position]) if position < len(answers) else ""
+        if answer and secrets.compare_digest(answer, by_index.get(index, "")):
+            score += 1
+    return score
 
 
 SUITE_CONTEXT_SUSPECT_CHARS = 150_000
@@ -443,6 +519,7 @@ _PUBLIC_STEP_FIELDS = (
     "run_id", "step_index", "target_chars", "payload_char_count", "status", "outcome",
     "result_class", "matched_checkpoints", "cut_at_chars", "harness_error",
     "cumulative_chars", "tool_output_mode", "created_at", "reported_at",
+    "phase", "recall_blocks", "recall_score", "delivery",
 )
 
 
@@ -456,7 +533,11 @@ def harness_test_prompt(suite_id: str) -> str:
         "If it returns done=true, stop and tell me only the verdict and recommended_chunk_chars. "
         "Otherwise read probe_payload without summarizing it, then immediately call report_harness_probe "
         "with the same suite_id, every CHECKPOINT canary you can actually see, and the index and canary "
-        "of the last block with a complete END marker. If next_harness_probe failed or returned an error "
+        "of the last block with a complete END marker, and delivery: \"context\" if the payload is directly "
+        "in your context, \"file\" if you read it through a file or another tool, \"unsure\" otherwise. "
+        "When report_harness_probe asks for a memory check, answer it with answer_recall_check from your "
+        "context alone: no tools, no files, empty strings for blocks you cannot see. "
+        "If next_harness_probe failed or returned an error "
         "instead of a payload, call report_harness_probe with the error text as harness_error and an empty "
         "canary list. Never guess or reconstruct a canary. Repeat until a tool answers done=true."
     )
@@ -465,12 +546,17 @@ def harness_test_prompt(suite_id: str) -> str:
 def public_harness_suite(suite: dict[str, Any], *, now: int) -> dict[str, Any]:
     """A suite for the admin UI: no canaries or block manifests, plus derived report fields."""
     steps = []
+    in_chat = 0  # chars that stayed in the conversation; spilled results sit in a file
     for run in suite["steps"]:
         step = {key: run.get(key) for key in _PUBLIC_STEP_FIELDS}
-        before = int(run.get("cumulative_chars") or 0) - int(run["target_chars"])
         step["context_suspect"] = (
-            run.get("outcome") not in (None, "complete") and before > SUITE_CONTEXT_SUSPECT_CHARS
+            run.get("outcome") not in (None, "complete") and in_chat > SUITE_CONTEXT_SUSPECT_CHARS
         )
+        step["chars_in_chat_before"] = in_chat
+        if run.get("outcome") == "truncated":
+            in_chat += int(run.get("cut_at_chars") or 0)
+        elif run.get("outcome") in ("complete", "altered") and (run.get("phase") or "context") == "context":
+            in_chat += int(run["target_chars"])
         steps.append(step)
     # Recomputed on read, so suites stored before a verdict was renamed show the current name.
     verdict = suite_verdict(suite_steps(suite["steps"]))
