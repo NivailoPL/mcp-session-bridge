@@ -5583,6 +5583,7 @@
           case "rejects": return [`Rejects above ~${hi}`, "warn"];
           case "drops_middle": return [`Drops the middle above ~${hi}`, "warn"];
           case "leaves_context": return [`Leaves context above ~${hi}`, "warn"];
+          case "context_then_file": return [`~${hi} in context, rest via file`, "warn"];
           case "fails_above": return [`Fails above ~${hi}`, "warn"];
           case "fails_small": return ["Fails even at 4k", "fail"];
           case "passes_up_to": return [`Unfinished · ${harnessK(verdict.largest_complete_chars, suite.content_profile)} passed`, "off"];
@@ -5607,7 +5608,7 @@
         return ["◐", "warn", `${size}: arrived, partly in context.`, `Without tools the model recalled ${step.recall_score} of ${asked} blocks: parts of the result fell out of its context.${fromFile}`];
       }
 
-      function harnessStepText(step, profile) {
+      function harnessStepText(step, profile, suiteVerdict = "") {
         const size = harnessAmount(step.target_chars, profile);
         const amount = (chars) => harnessAmount(chars, profile);
         const checkpoints = (step.matched_checkpoints || []).join(", ") || "none";
@@ -5621,6 +5622,9 @@
           verification_failed: ["?", "warn", `${size}: misread.`, "The model reported markers that don't match the payload. This counts as a failure at this size, though the harness itself may be fine."],
           no_report: ["…", "off", `${size}: no report.`, "The step was sent, but the model never reported back. The harness most likely lost or rejected the result."],
         };
+        if (step.phase !== "delivery" && step.outcome === "truncated" && suiteVerdict === "context_then_file") {
+          texts.truncated = ["◐", "warn", `${size}: only the start in context.`, `The model saw about ${amount(step.cut_at_chars)} directly; the rest stayed in the harness's file, which the delivery check read later. Nothing was lost, but a model has to open that file to see it.`];
+        }
         if (step.phase === "delivery" && step.outcome === "truncated") {
           const cutAt = amount(step.cut_at_chars);
           const note = step.harness_error ? ` The model's note: “${step.harness_error}”.` : "";
@@ -5682,7 +5686,7 @@
         const delivered = Number(verdict.largest_delivered_chars || 0);
         const profile = suite.content_profile;
         const deliveryNote = delivered > Number(verdict.largest_complete_chars || 0)
-          ? ` One tool call carries ${verdict.smallest_undelivered_chars ? "up to " : ""}${harnessAmount(delivered, profile)}${verdict.smallest_undelivered_chars ? "" : "+"}, but only what fits in context is read reliably.`
+          ? ` Through the harness's file, one tool call carries ${verdict.smallest_undelivered_chars ? "up to " : ""}${harnessAmount(delivered, profile)}${verdict.smallest_undelivered_chars ? "" : "+"}, but only what lands in context is read reliably.`
           : hardCut ? ` One tool call carries about ${harnessAmount(deliveryCut.cut_at_chars, profile)} here; the harness keeps no file.`
           : unmeasured ? " How much one call can carry wasn't measured: the model couldn't open the harness's file in that chat." : "";
         box.append(spanCls("", `Use chunks up to ${harnessBoth(recommended, profile)} here (${harnessAmount(verdict.largest_complete_chars, profile)} verified in context, minus the 25% margin).${deliveryNote}${profileNote}`));
@@ -5729,7 +5733,7 @@
           // Smallest size first reads as a ladder; the test order stays in each line's tooltip.
           const bySize = [...suite.steps].sort((a, b) => (a.target_chars - b.target_chars) || (a.step_index - b.step_index));
           for (const step of bySize) {
-            const text = harnessStepText(step, suite.content_profile);
+            const text = harnessStepText(step, suite.content_profile, suite.verdict?.verdict);
             const line = div("harness-test-step");
             line.title = `Step ${step.step_index} of the test${step.phase === "delivery" ? " (delivery check)" : ""}`;
             const icon = spanCls("harness-test-step-icon", text.icon);

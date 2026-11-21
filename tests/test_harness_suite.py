@@ -305,7 +305,7 @@ def test_suite_finds_the_context_limit_and_then_the_delivery_limit(load_main) ->
     )
 
     assert sizes == [32_000, 64_000, 128_000, 96_000, 80_000, 72_000, 68_000, 250_000]
-    assert done["verdict"] == "leaves_context"
+    assert done["verdict"] == "context_then_file"
     assert (done["largest_complete_chars"], done["smallest_failing_chars"]) == (68_000, 72_000)
     assert done["recommended_chunk_chars"] == 51_000
     assert done["largest_delivered_chars"] == 250_000
@@ -377,7 +377,7 @@ def test_cut_preview_gets_a_delivery_check_that_reads_the_file(load_main) -> Non
     )
 
     assert sizes[0] == 32_000 and sizes[-1] == 250_000
-    assert done["verdict"] == "truncates"
+    assert done["verdict"] == "context_then_file"
     assert done["largest_complete_chars"] < 20_000
     assert done["largest_delivered_chars"] == 250_000
     last = main.store.get_harness_probe_suite(suite_id)["steps"][-1]

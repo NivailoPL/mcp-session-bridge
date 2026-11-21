@@ -506,6 +506,15 @@ def suite_verdict(steps: list[dict[str, Any]], *, ceiling: int = MAX_PROBE_TARGE
     """Context verdict at the top level, plus what one tool call can deliver."""
     verdict = limit_verdict(context_view(steps), ceiling=ceiling)
     delivered = limit_verdict(delivery_view(steps), ceiling=ceiling)
+    cut_in_context = verdict["smallest_failing_chars"]
+    if (
+        verdict["verdict"] in ("truncates", "leaves_context")
+        and cut_in_context is not None
+        and (delivered["largest_complete_chars"] or 0) > cut_in_context
+    ):
+        # The tail was missing from context, yet a delivery check got past it: the harness
+        # shows the start in context and keeps the rest in a file.
+        verdict = verdict | {"verdict": "context_then_file"}
     return verdict | {
         "step_count": len(steps),
         "cumulative_chars": sum(int(step["target_chars"]) for step in steps),
