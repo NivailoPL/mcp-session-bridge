@@ -248,7 +248,7 @@ def test_cut_point_is_the_end_of_the_last_complete_block() -> None:
     assert cut_point_from_observation(blocks, "tail_truncated", 3, True) == blocks[3]["offset"]
     assert cut_point_from_observation(blocks, "tail_truncated", 3, False) is None
     assert cut_point_from_observation(blocks, "head_removed", 3, True) is None
-    assert cut_point_from_observation(blocks, "tail_truncated", 0, True) is None
+    assert cut_point_from_observation(blocks, "tail_truncated", 0, True) == blocks[0]["offset"]
 
 
 def test_step_outcome_maps_observations_and_harness_errors() -> None:
@@ -311,3 +311,26 @@ def test_recall_check_always_includes_the_last_plain_block() -> None:
     canaries = {block["index"]: block["canary"] for block in blocks}
     asked = pick_recall_blocks(blocks)
     assert recall_hits(blocks, asked, [canaries[asked[0]], canaries[asked[1]], ""]) == [True, True, False]
+
+
+def test_first_canary_without_a_closed_block_is_a_header_only_cut() -> None:
+    probe = build_output_probe("probe-test-header", 12_000, "transcript_markdown", canary_factory=_canary_factory())
+    blocks = probe["blocks"]
+
+    observation = classify_probe_observation(blocks, [blocks[0]["canary"]], 0, "")
+
+    assert observation["result_class"] == "tail_truncated"
+    assert observation["last_complete_valid"] is True
+    assert classify_probe_observation(blocks, [blocks[0]["canary"]], 0, "WRONG")["result_class"] == "verification_failed"
+
+
+def test_a_cut_below_a_whole_size_bounds_at_the_failing_size() -> None:
+    from app.output_probe import suite_bounds
+
+    steps = [
+        {"target_chars": 32_000, "outcome": "complete", "cut_at_chars": None},
+        {"target_chars": 64_000, "outcome": "truncated", "cut_at_chars": 399},
+    ]
+
+    assert suite_bounds(steps)[:2] == (32_000, 64_000)
+    assert next_probe_step(steps) == 48_000

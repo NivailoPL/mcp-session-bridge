@@ -123,7 +123,11 @@ def classify_probe_observation(
     unknown_canaries = sorted(submitted - all_canaries)
 
     last_valid = False
-    if 1 <= last_complete_block_index <= len(blocks):
+    if last_complete_block_index == 0 and not last_complete_canary.strip():
+        # "No block closed" is a valid answer: a harness may show only the header and the
+        # start of block 1 in context, keeping the rest in a file.
+        last_valid = True
+    elif 1 <= last_complete_block_index <= len(blocks):
         expected = str(blocks[last_complete_block_index - 1]["canary"]).upper()
         last_valid = secrets.compare_digest(expected, _normalize_canary(last_complete_canary))
 
@@ -337,6 +341,8 @@ def cut_point_from_observation(
     """Payload chars that reached the model before the harness cut the tail, or None."""
     if result_class != "tail_truncated" or not last_complete_valid:
         return None
+    if last_complete_block_index == 0 and blocks:
+        return int(blocks[0]["offset"])  # only the header got through
     if not 1 <= last_complete_block_index <= len(blocks):
         return None
     block = blocks[last_complete_block_index - 1]
@@ -345,15 +351,18 @@ def cut_point_from_observation(
 
 def suite_bounds(steps: list[dict[str, Any]]) -> tuple[int | None, int | None, dict[str, Any] | None]:
     """Return (lo, hi, step that set hi): the largest whole pass and the smallest failing bound."""
-    lo: int | None = None
+    completes = [int(step["target_chars"]) for step in steps if step["outcome"] == "complete"]
+    lo = max(completes) if completes else None
     hi: int | None = None
     hi_step: dict[str, Any] | None = None
     for step in steps:
-        target = int(step["target_chars"])
         if step["outcome"] == "complete":
-            lo = target if lo is None else max(lo, target)
             continue
-        bound = int(step["cut_at_chars"]) if step.get("cut_at_chars") else target
+        target = int(step["target_chars"])
+        cut = int(step["cut_at_chars"]) if step.get("cut_at_chars") else None
+        # A cut below a size that arrived whole is a switch of mode (whole result vs a short
+        # preview plus a file), not a length limit: the failing size is the bound then.
+        bound = cut if cut is not None and (lo is None or cut > lo) else target
         if hi is None or bound < hi:
             hi, hi_step = bound, step
     return lo, hi, hi_step
@@ -391,7 +400,8 @@ def next_probe_step(
         return None
     if lo is not None and hi is not None and gap_is_tight(lo, hi):
         return None
-    if last["outcome"] == "truncated" and hi is not None:
+    # Confirm just below a cut only when that cut is the bound (not a short preview below lo).
+    if last["outcome"] == "truncated" and hi is not None and last.get("cut_at_chars") == hi:
         confirm = max(floor, round_down_thousand(hi * SUITE_CONFIRM_RATIO))
         if lo is None or confirm > lo:
             return confirm
@@ -433,6 +443,23 @@ def limit_verdict(steps: list[dict[str, Any]], *, ceiling: int = MAX_PROBE_TARGE
     }
 
 
+def _header_only_report(run: dict[str, Any]) -> bool:
+    """An older report of "FIRST seen, no block closed", once classified as a misread."""
+    return (
+        run.get("outcome") == "verification_failed"
+        and not run.get("last_complete_block_index")
+        and not (run.get("last_complete_canary") or "").strip()
+        and run.get("matched_checkpoints") == ["FIRST"]
+        and bool(run.get("blocks"))
+    )
+
+
+def effective_cut(run: dict[str, Any]) -> int | None:
+    if _header_only_report(run):
+        return int(run["blocks"][0]["offset"])
+    return run.get("cut_at_chars")
+
+
 def effective_outcome(run: dict[str, Any]) -> str | None:
     """The outcome under current rules.
 
@@ -440,6 +467,8 @@ def effective_outcome(run: dict[str, Any]) -> str | None:
     not prove what the harness puts in context, so it now reads as spilled everywhere.
     """
     outcome = run.get("outcome")
+    if _header_only_report(run):
+        return "truncated"
     if (
         outcome == "complete"
         and (run.get("phase") or "context") == "context"
@@ -456,7 +485,7 @@ def suite_steps(runs: list[dict[str, Any]]) -> list[dict[str, Any]]:
         {
             "target_chars": int(run["target_chars"]),
             "outcome": effective_outcome(run),
-            "cut_at_chars": run.get("cut_at_chars"),
+            "cut_at_chars": effective_cut(run),
             "phase": run.get("phase") or "context",
         }
         for run in runs
@@ -615,6 +644,7 @@ def public_harness_suite(suite: dict[str, Any], *, now: int) -> dict[str, Any]:
     for run in suite["steps"]:
         step = {key: run.get(key) for key in _PUBLIC_STEP_FIELDS}
         step["outcome"] = effective_outcome(run)
+        step["cut_at_chars"] = effective_cut(run)
         # Only the context search can be skewed by a full chat; delivery steps measure the harness.
         step["context_suspect"] = (
             (run.get("phase") or "context") == "context"
@@ -622,8 +652,8 @@ def public_harness_suite(suite: dict[str, Any], *, now: int) -> dict[str, Any]:
             and in_chat > SUITE_CONTEXT_SUSPECT_CHARS
         )
         step["chars_in_chat_before"] = in_chat
-        if run.get("outcome") == "truncated":
-            in_chat += int(run.get("cut_at_chars") or 0)
+        if effective_outcome(run) == "truncated":
+            in_chat += int(effective_cut(run) or 0)
         elif effective_outcome(run) in ("complete", "altered") and (run.get("phase") or "context") == "context":
             in_chat += int(run["target_chars"])
         steps.append(step)

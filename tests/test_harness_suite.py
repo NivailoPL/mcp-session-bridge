@@ -460,3 +460,40 @@ def test_old_file_read_recalls_read_as_spilled(load_main, admin_client) -> None:
 
     assert asked and suite["steps"][0]["outcome"] == "spilled"
     assert main.next_harness_probe(suite_id)["target_chars"] == 16_000
+
+
+def test_harness_that_switches_to_a_file_above_a_threshold(load_main) -> None:
+    main = load_main()
+    suite_id = _start_suite(main, "Claude App")
+
+    def report(step: dict[str, Any]) -> dict[str, Any]:
+        if step["payload_char_count"] <= 50_000 or step["phase"] == "delivery":
+            return _model_report(main, step, 10_000_000, truncates=True)
+        blocks = main.store.get_output_probe_run(step["run_id"])["blocks"]
+        # Above the threshold only the header and the start of block 1 are shown.
+        return main.report_harness_probe(suite_id, [blocks[0]["canary"]], 0, "", delivery="context")
+
+    sizes, done = _run(main, suite_id, report)
+
+    assert sizes == [32_000, 64_000, 48_000, 56_000, 52_000, 250_000]
+    assert done["verdict"] == "context_then_file"
+    assert done["largest_complete_chars"] == 48_000
+    assert done["largest_delivered_chars"] == 250_000
+
+
+def test_old_header_only_misreads_are_read_as_cuts(load_main, admin_client) -> None:
+    main = load_main()
+    client, _ = admin_client(main)
+    suite_id = _start_suite(main, "Claude App")
+    step = main.next_harness_probe(suite_id)
+    blocks = main.store.get_output_probe_run(step["run_id"])["blocks"]
+    # Stored the way the earlier release did: header-only report as a misread.
+    main.store.report_output_probe_run(
+        step["run_id"], result_class="verification_failed", observed_canaries=[blocks[0]["canary"]],
+        matched_checkpoints=["FIRST"], last_complete_block_index=0, last_complete_canary="",
+        noticed_truncation=False, notes="", outcome="verification_failed",
+    )
+
+    first = client.get(f"{BASE}/{suite_id}").json()["suite"]["steps"][0]
+
+    assert (first["outcome"], first["cut_at_chars"]) == ("truncated", blocks[0]["offset"])
