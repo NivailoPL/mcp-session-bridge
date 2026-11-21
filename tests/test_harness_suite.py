@@ -441,3 +441,22 @@ def test_full_recall_after_reading_a_file_does_not_prove_context(load_main) -> N
 
     assert (answered["outcome"], answered["recalled"]) == ("spilled", "3/3")
     assert main.next_harness_probe(suite_id)["target_chars"] == 16_000
+
+
+def test_old_file_read_recalls_read_as_spilled(load_main, admin_client) -> None:
+    main = load_main()
+    client, _ = admin_client(main)
+    suite_id = _start_suite(main, "claude-app")
+    step = main.next_harness_probe(suite_id)
+    blocks = main.store.get_output_probe_run(step["run_id"])["blocks"]
+    asked = main.report_harness_probe(
+        suite_id, [b["canary"] for b in blocks if b["checkpoint_labels"]], blocks[-1]["index"], blocks[-1]["canary"],
+        delivery="file",
+    )["recall_check"]["blocks"]
+    # Stored the way the earlier release did: complete despite the file read.
+    main.store.finish_output_probe_recall(step["run_id"], outcome="complete", recall_score=3, recall_hits=[True] * 3)
+
+    suite = client.get(f"{BASE}/{suite_id}").json()["suite"]
+
+    assert asked and suite["steps"][0]["outcome"] == "spilled"
+    assert main.next_harness_probe(suite_id)["target_chars"] == 16_000

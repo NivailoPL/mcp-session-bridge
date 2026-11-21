@@ -433,12 +433,29 @@ def limit_verdict(steps: list[dict[str, Any]], *, ceiling: int = MAX_PROBE_TARGE
     }
 
 
+def effective_outcome(run: dict[str, Any]) -> str | None:
+    """The outcome under current rules.
+
+    A full recall after reading the result from a file was once stored as complete; it does
+    not prove what the harness puts in context, so it now reads as spilled everywhere.
+    """
+    outcome = run.get("outcome")
+    if (
+        outcome == "complete"
+        and (run.get("phase") or "context") == "context"
+        and run.get("recall_blocks")
+        and run.get("delivery") == "file"
+    ):
+        return "spilled"
+    return outcome
+
+
 def suite_steps(runs: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Finished suite runs as the step dicts the planner reads; unfinished runs are skipped."""
     return [
         {
             "target_chars": int(run["target_chars"]),
-            "outcome": run["outcome"],
+            "outcome": effective_outcome(run),
             "cut_at_chars": run.get("cut_at_chars"),
             "phase": run.get("phase") or "context",
         }
@@ -597,6 +614,7 @@ def public_harness_suite(suite: dict[str, Any], *, now: int) -> dict[str, Any]:
     in_chat = 0  # chars that stayed in the conversation; spilled results sit in a file
     for run in suite["steps"]:
         step = {key: run.get(key) for key in _PUBLIC_STEP_FIELDS}
+        step["outcome"] = effective_outcome(run)
         # Only the context search can be skewed by a full chat; delivery steps measure the harness.
         step["context_suspect"] = (
             (run.get("phase") or "context") == "context"
@@ -606,7 +624,7 @@ def public_harness_suite(suite: dict[str, Any], *, now: int) -> dict[str, Any]:
         step["chars_in_chat_before"] = in_chat
         if run.get("outcome") == "truncated":
             in_chat += int(run.get("cut_at_chars") or 0)
-        elif run.get("outcome") in ("complete", "altered") and (run.get("phase") or "context") == "context":
+        elif effective_outcome(run) in ("complete", "altered") and (run.get("phase") or "context") == "context":
             in_chat += int(run["target_chars"])
         steps.append(step)
     # Recomputed on read, so suites stored before a verdict was renamed show the current name.

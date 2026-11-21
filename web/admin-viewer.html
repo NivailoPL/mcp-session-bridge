@@ -2871,7 +2871,7 @@
           <section class="settings-group">
             <div class="settings-group-head">
               <h5>Harness limits</h5>
-              <span class="context-help"><button type="button" class="context-help-trigger" aria-label="About Harness limits" aria-describedby="settingsHelpCapacity">?</button><span id="settingsHelpCapacity" class="context-help-box" role="tooltip">Measures how large a single tool result each harness really accepts. Type the harness name, paste the prompt into that harness (a fresh chat is best) and Bridge picks every size itself: it grows from 32k characters, walks down when that is already too much, and reads the exact cut point when a harness truncates. After every whole delivery the model must recall three random blocks without tools, which shows whether the result is really in its context or was moved to a file or compacted. When it leaves context, the test keeps growing to find how much one tool call can still carry. A test that dies with its chat continues when you paste the same prompt into a new one. Every recommendation keeps a 25% safety margin; when all clients share one chunk size, stay at or below the weakest harness.</span></span>
+              <span class="context-help"><button type="button" class="context-help-trigger" aria-label="About Harness limits" aria-describedby="settingsHelpCapacity">?</button><span id="settingsHelpCapacity" class="context-help-box" role="tooltip">Measures how large a single tool result each harness really accepts. Type the harness name, paste the prompt into that harness (a fresh chat is best) and Bridge picks every size itself: it grows from 32k characters, walks down when that is already too much, and reads the exact cut point when a harness truncates. After every whole delivery the model must recall three random blocks without tools, which shows whether the result is really in its context or was moved to a file or compacted. When it leaves context, the test keeps growing to find how much one tool call can still carry. Marks: green check, in context; amber check, all of it arrived but the model read it from a file; half circle, only part of it reached context; dashed check, delivery check only. A test that dies with its chat continues when you paste the same prompt into a new one. Every recommendation keeps a 25% safety margin; when all clients share one chunk size, stay at or below the weakest harness.</span></span>
               <span id="probeVerifiedCount" class="settings-pill"></span>
               <div class="settings-seg harness-unit-seg" role="radiogroup" aria-label="Show sizes in" data-settings-instant>
                 <label><input id="harnessUnitChars" type="radio" name="harnessUnit" value="chars" checked><span>chars</span></label>
@@ -5583,7 +5583,8 @@
           case "rejects": return [`Rejects above ~${hi}`, "warn"];
           case "drops_middle": return [`Drops the middle above ~${hi}`, "warn"];
           case "leaves_context": return [`Leaves context above ~${hi}`, "warn"];
-          case "context_then_file": return [`~${hi} in context, rest via file`, "warn"];
+          // Name the size proven in context, not the first one that failed.
+          case "context_then_file": return [`${harnessK(verdict.largest_complete_chars, suite.content_profile)} in context, rest via file`, "warn"];
           case "fails_above": return [`Fails above ~${hi}`, "warn"];
           case "fails_small": return ["Fails even at 4k", "fail"];
           case "passes_up_to": return [`Unfinished · ${harnessK(verdict.largest_complete_chars, suite.content_profile)} passed`, "off"];
@@ -5596,7 +5597,7 @@
       function harnessPartialRecallText(step, size, asked, fromFile) {
         const hits = step.recall_hits || [];
         if (hits.length && hits.every(Boolean) && step.delivery === "file") {
-          return ["✓", "warn", `${size}: recalled, but read from a file.`, `It recalled all ${asked} blocks, the last one included, yet said it read the result from a file. It may have pulled the file into its context itself, so this size doesn't prove what the harness puts in context; the test looked lower for a clean pass.`, "context-file"];
+          return ["✓", "warn", `${size}: all of it, but read from a file.`, `It recalled all ${asked} blocks, the last one included, yet said it read the result from a file. It may have pulled the file into its context itself, so this size doesn't prove what the harness puts in context; the test looked lower for a clean pass.`, "context-file"];
         }
         const lastMissed = hits.length && hits[hits.length - 1] === false;
         if (lastMissed && hits.slice(0, -1).some(Boolean)) {
@@ -5646,9 +5647,6 @@
         if (step.outcome === "complete" && step.phase === "delivery") {
           kind = "delivered";
           texts.complete = ["✓", "ok", `${size}: delivered whole.`, "Delivery check only: the result reached the model (through a file or a tool), with no memory test."];
-        } else if (step.outcome === "complete" && asked && step.delivery === "file") {
-          kind = "context-file";
-          texts.complete = ["✓", "warn", `${size}: in context, but the model said it read a file.`, `It recalled all ${asked} blocks, the last one included, yet reported reading the result from a file. The harness may show the whole result and keep a file copy too; treat this size with some care.`];
         } else if (step.outcome === "complete" && asked) {
           kind = "context";
           texts.complete = ["✓", "ok", `${size}: in context.`, `Every checkpoint matched, and without tools the model recalled all ${asked} blocks, the last one included.`];
