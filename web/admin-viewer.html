@@ -2048,6 +2048,9 @@
     .harness-test-step-icon[data-tone="warn"] { color: var(--warn); }
     .harness-test-step-icon[data-tone="fail"] { color: var(--danger); }
     .harness-test-step-icon[data-tone="off"] { color: var(--muted); }
+    .harness-test-step-icon[data-kind] { display: inline-grid; place-items: center; width: 1.15rem; height: 1.15rem; margin-top: .1rem; border-radius: var(--r-pill); font-size: 11px; line-height: 1; }
+    .harness-test-step-icon[data-kind="context"] { color: #06281c; background: var(--ok); }
+    .harness-test-step-icon[data-kind="delivered"] { color: var(--muted); border: 1px dashed var(--faint-ink); }
     .harness-test-step strong { color: var(--text); font-weight: 600; }
     .harness-test-step span { color: var(--muted); }
     .harness-test-verdict { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 6px; padding: 8px 10px; border-radius: var(--r-ctrl); background: var(--accent-soft); color: var(--text); font-size: var(--t-ctrl); }
@@ -5564,9 +5567,13 @@
           : step.recall_score === 0
             ? ["◐", "warn", `${size}: arrived, but not in context.`, `Every checkpoint came through, yet without tools the model recalled none of ${asked} random blocks. The harness most likely moved the result to a file or compacted it.${fromFile}`]
             : ["◐", "warn", `${size}: arrived, partly in context.`, `Without tools the model recalled ${step.recall_score} of ${asked} random blocks: parts of the result fell out of its context.${fromFile}`];
+        // Three kinds of success: proven in context, delivered only, or an older run without the memory test.
+        let kind = "";
         if (step.outcome === "complete" && step.phase === "delivery") {
+          kind = "delivered";
           texts.complete = ["✓", "ok", `${size}: delivered whole.`, "Delivery check only: the result reached the model (through a file or a tool), with no memory test."];
         } else if (step.outcome === "complete" && asked) {
+          kind = "context";
           texts.complete = ["✓", "ok", `${size}: in context.`, `Every checkpoint matched, and without tools the model recalled all ${asked} random blocks.`];
         }
         const waiting = step.status === "recall"
@@ -5576,7 +5583,7 @@
         const context = step.context_suspect
           ? ` About ${Number(step.chars_in_chat_before || 0).toLocaleString()} chars were already in this chat, so the context window may be the real limit. Test again in a new chat to be sure.`
           : "";
-        return { icon, tone, title, detail: detail + context };
+        return { icon, tone, title, detail: detail + context, kind };
       }
 
       function harnessVerdictBox(suite) {
@@ -5645,6 +5652,10 @@
             const line = div("harness-test-step");
             const icon = spanCls("harness-test-step-icon", text.icon);
             icon.dataset.tone = text.tone;
+            if (text.kind) {
+              icon.dataset.kind = text.kind;
+              icon.title = text.kind === "context" ? "In context: recalled from memory" : "Delivered through a file or a tool";
+            }
             icon.setAttribute("aria-hidden", "true");
             const copy = document.createElement("div");
             const title = document.createElement("strong");
