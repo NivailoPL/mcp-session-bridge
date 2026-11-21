@@ -444,12 +444,13 @@ def build_database() -> tuple[int, int]:
     return len(SESSIONS), exchange_count
 
 
-# (label, delivered chars, how a bigger result fails, chars kept in context, leave last step open, hours ago)
+# (label, delivered chars, how a bigger result fails, chars shown in context before the rest goes
+#  to a file, leave last step open, hours ago)
 HARNESS_TESTS = [
     ("chatgpt.com", 98_400, "truncated", None, 0, 3),
     ("claude.ai", 10_000_000, "truncated", None, 0, 30),
     ("gemini.google.com", 12_999, "rejected", None, 0, 80),
-    ("grok.com", 10_000_000, "truncated", 70_000, 0, 6),
+    ("grok.com", 10_000_000, "truncated", 20_000, 0, 6),
     ("codex-cli", 200_000, "rejected", None, 1, 0),
 ]
 
@@ -499,6 +500,11 @@ def seed_harness_tests(store: Store, clock: dict[str, float], real_now: float) -
             outcome = "complete" if target <= limit else failure
             recall = pick_recall_blocks(probe["blocks"]) if outcome == "complete" and phase == "context" else []
             in_context = context_limit is None or target <= context_limit
+            by_index = {b["index"]: b for b in probe["blocks"]}
+            hits = [
+                context_limit is None or by_index[i]["offset"] + by_index[i]["char_count"] <= context_limit
+                for i in recall
+            ]
             visible = [b for b in probe["blocks"] if b["offset"] + b["char_count"] <= limit]
             cut = visible[-1]["offset"] + visible[-1]["char_count"] if outcome == "truncated" else None
             store.report_output_probe_run(
@@ -520,8 +526,9 @@ def seed_harness_tests(store: Store, clock: dict[str, float], real_now: float) -
             if recall:
                 store.finish_output_probe_recall(
                     run_id,
-                    outcome="complete" if in_context else "spilled",
-                    recall_score=len(recall) if in_context else 0,
+                    outcome="complete" if all(hits) else "spilled",
+                    recall_score=sum(hits),
+                    recall_hits=hits,
                 )
             suite = store.get_harness_probe_suite(suite_id)
         else:

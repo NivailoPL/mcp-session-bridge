@@ -687,6 +687,7 @@ class Store(AnchorStoreMixin, TopicStoreMixin):
                 ("phase", "TEXT"),
                 ("recall_blocks_json", "TEXT NOT NULL DEFAULT '[]'"),
                 ("recall_score", "INTEGER"),
+                ("recall_hits_json", "TEXT NOT NULL DEFAULT '[]'"),
                 ("delivery", "TEXT NOT NULL DEFAULT ''"),
             ):
                 self._ensure_column(conn, "output_probe_runs", column, declaration)
@@ -1240,7 +1241,7 @@ class Store(AnchorStoreMixin, TopicStoreMixin):
                     last_complete_block_index, NULL AS last_complete_canary,
                     noticed_truncation, notes, created_by, created_at, reported_at,
                     suite_id, step_index, outcome, cut_at_chars, harness_error, cumulative_chars,
-                    phase, recall_blocks_json, recall_score, delivery
+                    phase, recall_blocks_json, recall_score, recall_hits_json, delivery
                 FROM output_probe_runs
                 ORDER BY created_at DESC, run_id DESC
                 LIMIT ?
@@ -1302,16 +1303,22 @@ class Store(AnchorStoreMixin, TopicStoreMixin):
         return self.get_output_probe_run(run_id)
 
     def finish_output_probe_recall(
-        self, run_id: str, *, outcome: str, recall_score: int | None
+        self,
+        run_id: str,
+        *,
+        outcome: str,
+        recall_score: int | None,
+        recall_hits: list[bool] | None = None,
     ) -> dict[str, Any] | None:
         """Close the memory check of a step that is waiting for it."""
         with self._lock, self._connect() as conn:
             cursor = conn.execute(
                 """
-                UPDATE output_probe_runs SET status = 'reported', outcome = ?, recall_score = ?
+                UPDATE output_probe_runs
+                SET status = 'reported', outcome = ?, recall_score = ?, recall_hits_json = ?
                 WHERE run_id = ? AND status = 'recall'
                 """,
-                (outcome, recall_score, run_id),
+                (outcome, recall_score, json.dumps(recall_hits or []), run_id),
             )
         if cursor.rowcount == 0:
             return None
@@ -3793,6 +3800,7 @@ def _output_probe_row(row: sqlite3.Row) -> dict[str, Any]:
         "phase": row["phase"],
         "recall_blocks": json.loads(row["recall_blocks_json"] or "[]"),
         "recall_score": row["recall_score"],
+        "recall_hits": json.loads(row["recall_hits_json"] or "[]"),
         "delivery": row["delivery"],
     }
 

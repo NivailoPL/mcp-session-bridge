@@ -493,24 +493,36 @@ def suite_verdict(steps: list[dict[str, Any]], *, ceiling: int = MAX_PROBE_TARGE
 
 
 def pick_recall_blocks(blocks: list[dict[str, Any]], count: int = RECALL_BLOCK_COUNT) -> list[int]:
-    """Random non-checkpoint blocks, one per slice of the payload, chosen after delivery."""
+    """Blocks for the memory check, chosen after delivery, in payload order.
+
+    The last one is always the final non-checkpoint block: a harness that shows
+    only the start of a large result in context (and keeps the rest in a file)
+    loses the end first. The others are random, one per earlier slice.
+    """
     candidates = [int(block["index"]) for block in blocks if not block["checkpoint_labels"]]
     if len(candidates) < count:
         return []
+    tail = candidates[-1]
+    earlier = candidates[:-1]
     rng = secrets.SystemRandom()
-    size = len(candidates) / count
-    return [rng.choice(candidates[int(i * size):int((i + 1) * size)]) for i in range(count)]
+    size = len(earlier) / (count - 1)
+    picks = [rng.choice(earlier[int(i * size):int((i + 1) * size)]) for i in range(count - 1)]
+    return picks + [tail]
+
+
+def recall_hits(blocks: list[dict[str, Any]], asked: list[int], answers: list[str]) -> list[bool]:
+    """For each asked block, in order, whether the model named its canary correctly."""
+    by_index = {int(block["index"]): str(block["canary"]).upper() for block in blocks}
+    hits = []
+    for position, index in enumerate(asked):
+        answer = _normalize_canary(answers[position]) if position < len(answers) else ""
+        hits.append(bool(answer) and secrets.compare_digest(answer, by_index.get(index, "")))
+    return hits
 
 
 def score_recall(blocks: list[dict[str, Any]], asked: list[int], answers: list[str]) -> int:
     """How many asked blocks the model named correctly, in order."""
-    by_index = {int(block["index"]): str(block["canary"]).upper() for block in blocks}
-    score = 0
-    for position, index in enumerate(asked):
-        answer = _normalize_canary(answers[position]) if position < len(answers) else ""
-        if answer and secrets.compare_digest(answer, by_index.get(index, "")):
-            score += 1
-    return score
+    return sum(recall_hits(blocks, asked, answers))
 
 
 SUITE_CONTEXT_SUSPECT_CHARS = 150_000
@@ -519,7 +531,7 @@ _PUBLIC_STEP_FIELDS = (
     "run_id", "step_index", "target_chars", "payload_char_count", "status", "outcome",
     "result_class", "matched_checkpoints", "cut_at_chars", "harness_error",
     "cumulative_chars", "tool_output_mode", "created_at", "reported_at",
-    "phase", "recall_blocks", "recall_score", "delivery",
+    "phase", "recall_blocks", "recall_score", "recall_hits", "delivery",
 )
 
 

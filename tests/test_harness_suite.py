@@ -344,6 +344,7 @@ def test_partial_recall_is_spilled_with_its_score(load_main) -> None:
 
     assert answered["outcome"] == "spilled"
     assert answered["recalled"] == "1/3"
+    assert main.store.get_harness_probe_suite(suite_id)["steps"][0]["recall_hits"] == [True, False, False]
     assert main.answer_recall_check(suite_id, [])["ok"] is False
 
 

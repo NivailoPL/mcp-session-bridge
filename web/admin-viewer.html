@@ -2051,6 +2051,7 @@
     .harness-test-step-icon[data-kind] { display: inline-grid; place-items: center; width: 1.15rem; height: 1.15rem; margin-top: .1rem; border-radius: var(--r-pill); font-size: 11px; line-height: 1; }
     .harness-test-step-icon[data-kind="context"] { color: #06281c; background: var(--ok); }
     .harness-test-step-icon[data-kind="delivered"] { color: var(--muted); border: 1px dashed var(--faint-ink); }
+    .harness-test-step-icon[data-kind="context-file"] { color: var(--warn); border: 1px solid var(--warn); }
     .harness-test-step strong { color: var(--text); font-weight: 600; }
     .harness-test-step span { color: var(--muted); }
     .harness-test-verdict { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 6px; padding: 8px 10px; border-radius: var(--r-ctrl); background: var(--accent-soft); color: var(--text); font-size: var(--t-ctrl); }
@@ -5547,6 +5548,19 @@
       }
 
       // One sentence per step: what was sent, what arrived, what it means.
+      // Which blocks the model still knew tells how the harness lost the rest.
+      function harnessPartialRecallText(step, size, asked, fromFile) {
+        const hits = step.recall_hits || [];
+        const lastMissed = hits.length && hits[hits.length - 1] === false;
+        if (lastMissed && hits.slice(0, -1).some(Boolean)) {
+          return ["◐", "warn", `${size}: only the start in context.`, `Without tools the model recalled the blocks near the start but not the one at the very end. This harness shows only the beginning of a large result in context and keeps the rest in a file.${fromFile}`];
+        }
+        if (hits.length && !lastMissed) {
+          return ["◐", "warn", `${size}: middle missing from context.`, `Without tools the model recalled the end of the result but not every block before it: part of the middle fell out of its context.${fromFile}`];
+        }
+        return ["◐", "warn", `${size}: arrived, partly in context.`, `Without tools the model recalled ${step.recall_score} of ${asked} blocks: parts of the result fell out of its context.${fromFile}`];
+      }
+
       function harnessStepText(step) {
         const size = `${Number(step.target_chars).toLocaleString()} chars`;
         const checkpoints = (step.matched_checkpoints || []).join(", ") || "none";
@@ -5566,15 +5580,18 @@
           ? ["◐", "warn", `${size}: arrived, memory check skipped.`, `Every checkpoint came through, but the model didn't answer the memory check, so it isn't proven to be in context.${fromFile}`]
           : step.recall_score === 0
             ? ["◐", "warn", `${size}: arrived, but not in context.`, `Every checkpoint came through, yet without tools the model recalled none of ${asked} random blocks. The harness most likely moved the result to a file or compacted it.${fromFile}`]
-            : ["◐", "warn", `${size}: arrived, partly in context.`, `Without tools the model recalled ${step.recall_score} of ${asked} random blocks: parts of the result fell out of its context.${fromFile}`];
+            : harnessPartialRecallText(step, size, asked, fromFile);
         // Three kinds of success: proven in context, delivered only, or an older run without the memory test.
         let kind = "";
         if (step.outcome === "complete" && step.phase === "delivery") {
           kind = "delivered";
           texts.complete = ["✓", "ok", `${size}: delivered whole.`, "Delivery check only: the result reached the model (through a file or a tool), with no memory test."];
+        } else if (step.outcome === "complete" && asked && step.delivery === "file") {
+          kind = "context-file";
+          texts.complete = ["✓", "warn", `${size}: in context, but the model said it read a file.`, `It recalled all ${asked} blocks, the last one included, yet reported reading the result from a file. The harness may show the whole result and keep a file copy too; treat this size with some care.`];
         } else if (step.outcome === "complete" && asked) {
           kind = "context";
-          texts.complete = ["✓", "ok", `${size}: in context.`, `Every checkpoint matched, and without tools the model recalled all ${asked} random blocks.`];
+          texts.complete = ["✓", "ok", `${size}: in context.`, `Every checkpoint matched, and without tools the model recalled all ${asked} blocks, the last one included.`];
         }
         const waiting = step.status === "recall"
           ? ["○", "off", `${size}: arrived whole, memory check running…`, ""]
@@ -5654,7 +5671,11 @@
             icon.dataset.tone = text.tone;
             if (text.kind) {
               icon.dataset.kind = text.kind;
-              icon.title = text.kind === "context" ? "In context: recalled from memory" : "Delivered through a file or a tool";
+              icon.title = {
+                context: "In context: recalled from memory",
+                "context-file": "Recalled from memory, but the model reported a file",
+                delivered: "Delivered through a file or a tool",
+              }[text.kind];
             }
             icon.setAttribute("aria-hidden", "true");
             const copy = document.createElement("div");

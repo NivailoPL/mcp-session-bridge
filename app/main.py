@@ -50,7 +50,7 @@ from app.output_probe import (
     pick_recall_blocks,
     plan_next_step,
     recommended_chunk_chars,
-    score_recall,
+    recall_hits,
     step_outcome,
     suite_steps,
     suite_verdict,
@@ -1317,9 +1317,10 @@ def answer_recall_check(suite_id: str, canaries: list[str]) -> dict[str, Any]:
         return {"ok": False, "error": "canaries must be a list of strings"}
     run = store.get_output_probe_run(waiting[-1]["run_id"])
     assert run is not None
-    score = score_recall(run["blocks"], run["recall_blocks"], canaries[: len(run["recall_blocks"])])
-    outcome = "complete" if score == len(run["recall_blocks"]) else "spilled"
-    store.finish_output_probe_recall(run["run_id"], outcome=outcome, recall_score=score)
+    hits = recall_hits(run["blocks"], run["recall_blocks"], canaries[: len(run["recall_blocks"])])
+    score = sum(hits)
+    outcome = "complete" if all(hits) else "spilled"
+    store.finish_output_probe_recall(run["run_id"], outcome=outcome, recall_score=score, recall_hits=hits)
     return _continue_harness_suite(
         suite["suite_id"],
         {"step": run["step_index"], "outcome": outcome, "recalled": f"{score}/{len(run['recall_blocks'])}"},

@@ -288,3 +288,21 @@ def test_plan_next_step_switches_to_delivery_after_a_spill() -> None:
     assert plan_next_step(truncated_context) == (38_000, "context")
     assert plan_next_step([step(32_000, "complete"), step(64_000, "complete"), step(128_000, "complete"),
                            step(250_000, "complete")]) is None
+
+
+def test_recall_check_always_includes_the_last_plain_block() -> None:
+    from app.output_probe import pick_recall_blocks, recall_hits
+
+    probe = build_output_probe("probe-test-recall", 26_000, "transcript_markdown", canary_factory=_canary_factory())
+    blocks = probe["blocks"]
+    plain = [block["index"] for block in blocks if not block["checkpoint_labels"]]
+
+    for _ in range(20):
+        asked = pick_recall_blocks(blocks)
+        assert len(asked) == 3 and asked == sorted(asked)
+        assert asked[-1] == plain[-1]
+        assert set(asked) <= set(plain)
+
+    canaries = {block["index"]: block["canary"] for block in blocks}
+    asked = pick_recall_blocks(blocks)
+    assert recall_hits(blocks, asked, [canaries[asked[0]], canaries[asked[1]], ""]) == [True, True, False]
