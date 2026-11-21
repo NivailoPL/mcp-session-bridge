@@ -5722,9 +5722,12 @@
           );
           const body = div("harness-test-body");
           if (!suite.steps.length) body.append(div("harness-test-note", "No step yet. Paste the prompt into the harness."));
-          for (const step of suite.steps) {
+          // Smallest size first reads as a ladder; the test order stays in each line's tooltip.
+          const bySize = [...suite.steps].sort((a, b) => (a.target_chars - b.target_chars) || (a.step_index - b.step_index));
+          for (const step of bySize) {
             const text = harnessStepText(step, suite.content_profile);
             const line = div("harness-test-step");
+            line.title = `Step ${step.step_index} of the test${step.phase === "delivery" ? " (delivery check)" : ""}`;
             const icon = spanCls("harness-test-step-icon", text.icon);
             icon.dataset.tone = text.tone;
             if (text.kind) {
