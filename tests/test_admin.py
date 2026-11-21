@@ -2033,7 +2033,7 @@ def test_admin_search_settings_keys_and_basic_search_api(load_main) -> None:
     settings = client.get("/admin/api/settings")
     assert settings.status_code == 200
     assert set(settings.json()["settings"]) == {
-        "general", "search", "api", "groups", "index", "transcript", "tool_output", "titles",
+        "general", "search", "api", "groups", "index", "transcript", "tool_output", "titles", "harness_tests",
         "summaries", "search_schedule",
     }
     assert settings.json()["settings"]["search"]["enabled"] is False
@@ -2531,6 +2531,7 @@ FEATURE_CONTROLS = {
     "transcript settings": ["transcriptChunkMaxChars", "transcriptChunkMaxLines"],
     "tool output compatibility": ["toolOutputMaximumCompatibility", "toolOutputOptimized", "toolOutputRestart", "toolOutputRestartMessage", "toolOutputRestartRequired"],
     "output probe": ["probeHarnessLabel", "probeTargetChars", "probeContentProfile", "probePromptCopy", "probeResults"],
+    "harness limit tests": ["harnessTestForm", "harnessTestLabel", "harnessTestStart", "harnessTestActive", "harnessTestPrompt", "harnessTestList", "harnessTestKeepLatest", "harnessTestDeleteAll", "harnessTestProfile", "harnessTestStartChars"],
     "search": ["searchOpenButton", "searchDialog", "localSearchResults"],
     "rag settings": ["ragEnabled", "cohereEnabled", "ragGroupList"],
     "search index": ["indexRebuild", "indexReadyCheck", "indexBuiltAt", "indexCancel", "indexDelete", "indexEstimate", "indexEstimateDocuments", "indexEstimateTokens", "indexEstimateCost"],

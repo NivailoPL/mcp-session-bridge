@@ -2018,6 +2018,44 @@
     .probe-result-meta { color: var(--muted); font-size: var(--t-meta); text-align: right; font-variant-numeric: tabular-nums; }
     .probe-result-class { justify-self: end; }
     .probe-result-empty { color: var(--muted); font-size: var(--t-meta); }
+    .harness-test-start { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--stroke-soft); }
+    .harness-test-start input { flex: 1 1 14rem; min-width: 0; }
+    .harness-test-error { flex-basis: 100%; color: var(--danger); font-size: var(--t-meta); }
+    .harness-test-error:empty { display: none; }
+    .harness-test-active { display: grid; gap: 8px; margin: 12px 16px; padding: 10px 12px; border: 1px solid var(--stroke-soft); border-radius: var(--r-ctrl); background: rgba(0,0,0,.14); }
+    .harness-test-active[hidden], .harness-test-cleanup[hidden] { display: none; }
+    .harness-test-active-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+    .harness-test-active-text { color: var(--muted); font-size: var(--t-ctrl); }
+    .harness-test-progress { height: 4px; border-radius: var(--r-pill); background: var(--stroke-soft); overflow: hidden; }
+    .harness-test-progress span { display: block; height: 100%; width: 0; background: var(--accent-ink); transition: width .3s ease; }
+    .harness-test-prompt > summary { cursor: pointer; color: var(--muted); font-size: var(--t-meta); }
+    .harness-test-prompt[open] > summary { margin-bottom: 6px; }
+    .harness-test-active-actions { display: flex; gap: 6px; justify-content: flex-end; }
+    .harness-test-list { display: grid; }
+    .harness-test-empty { padding: 12px 16px; color: var(--muted); font-size: var(--t-meta); }
+    .harness-test { border-bottom: 1px solid var(--stroke-soft); }
+    .harness-test > summary { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: 10px; min-height: 40px; padding: 8px 16px; list-style: none; cursor: pointer; }
+    .harness-test > summary::-webkit-details-marker { display: none; }
+    .harness-test > summary::before { content: ""; width: 6px; height: 6px; border-right: 1.6px solid var(--faint-ink); border-bottom: 1.6px solid var(--faint-ink); transform: rotate(-45deg); transition: transform .15s ease; }
+    .harness-test[open] > summary::before { transform: rotate(45deg); }
+    .harness-test-name { overflow: hidden; color: var(--text); font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+    .harness-test-meta { color: var(--muted); font-size: var(--t-meta); white-space: nowrap; }
+    .harness-test-body { display: grid; gap: 4px; padding: 0 16px 12px 34px; }
+    .harness-test-step { display: grid; grid-template-columns: 1.1rem minmax(0, 1fr); gap: 8px; padding: 5px 0; font-size: var(--t-ctrl); line-height: 1.5; }
+    .harness-test-step-icon { font-weight: 700; text-align: center; }
+    .harness-test-step-icon[data-tone="ok"] { color: var(--ok); }
+    .harness-test-step-icon[data-tone="warn"] { color: var(--warn); }
+    .harness-test-step-icon[data-tone="fail"] { color: var(--danger); }
+    .harness-test-step-icon[data-tone="off"] { color: var(--muted); }
+    .harness-test-step strong { color: var(--text); font-weight: 600; }
+    .harness-test-step span { color: var(--muted); }
+    .harness-test-verdict { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 6px; padding: 8px 10px; border-radius: var(--r-ctrl); background: var(--accent-soft); color: var(--text); font-size: var(--t-ctrl); }
+    .harness-test-verdict > span { flex: 1 1 14rem; }
+    .harness-test-verdict[data-tone="warn"] { background: var(--warn-soft); }
+    .harness-test-row-actions { display: flex; gap: 6px; justify-content: flex-end; margin-top: 4px; }
+    .harness-test-cleanup { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 6px; padding: 10px 16px; border-bottom: 1px solid var(--stroke-soft); }
+    .harness-test-cleanup-meta { margin-right: auto; color: var(--muted); font-size: var(--t-meta); }
+    .harness-test-subhead { display: flex; align-items: center; gap: .5rem; margin: .4rem 0 0; color: var(--text); font-size: 13px; font-weight: 600; }
 
     /* Search */
     .rag-group-list { display: grid; grid-template-columns: repeat(auto-fill,minmax(12rem,1fr)); gap: .5rem; width: 100%; }
@@ -2182,6 +2220,9 @@
       .settings-item, .settings-group-head, .settings-panel-head { position: relative; }
       .settings-dialog .context-help-box { left: 12px; right: 12px; width: auto; }
       .probe-result { grid-template-columns: minmax(0, 1fr) auto auto; }
+      .harness-test > summary { grid-template-columns: auto minmax(0, 1fr) auto; }
+      .harness-test > summary > .harness-test-meta { display: none; }
+      .harness-test-body { padding-left: 16px; }
       .probe-result > :nth-child(4) { display: none; }
       .status-command-list { grid-template-columns: 1fr; }
       .search-command { flex-wrap: wrap; }
@@ -2822,36 +2863,60 @@
           </section>
           <section class="settings-group">
             <div class="settings-group-head">
-              <h5>Harness capacity</h5>
-              <span class="context-help"><button type="button" class="context-help-trigger" aria-label="About Harness capacity" aria-describedby="settingsHelpCapacity">?</button><span id="settingsHelpCapacity" class="context-help-box" role="tooltip">Measures how large a single tool result each harness really accepts. Every recommendation keeps a 25% safety margin; when all clients share one chunk size, stay at or below the weakest verified harness.</span></span>
+              <h5>Harness limits</h5>
+              <span class="context-help"><button type="button" class="context-help-trigger" aria-label="About Harness limits" aria-describedby="settingsHelpCapacity">?</button><span id="settingsHelpCapacity" class="context-help-box" role="tooltip">Measures how large a single tool result each harness really accepts. Type the harness name, paste the prompt into that harness (a fresh chat is best) and Bridge picks every size itself: it grows from 32k characters, walks down when that is already too much, and reads the exact cut point when a harness truncates. A test that dies with its chat continues when you paste the same prompt into a new one. Every recommendation keeps a 25% safety margin; when all clients share one chunk size, stay at or below the weakest harness.</span></span>
               <span id="probeVerifiedCount" class="settings-pill"></span>
             </div>
             <div class="settings-item">
               <div class="settings-item-label"><span class="settings-item-title">Safe chunk size</span><span id="probeSafeSource" class="settings-item-sub"></span></div>
               <div class="settings-item-control"><span id="probeSafeValue" class="settings-value settings-value-mono"></span><button type="button" class="ghost settings-compact" id="probeSafeApply" hidden>Use</button></div>
             </div>
-            <details class="settings-disclosure">
-              <summary><span class="settings-disclosure-title">Per-harness recommendations</span><span id="probeRecommendationsMeta" class="settings-disclosure-meta"></span></summary>
-              <div id="probeRecommendations" class="settings-disclosure-body probe-recommendation-list"></div>
-            </details>
-            <details class="settings-disclosure">
-              <summary><span class="settings-disclosure-title">Recent results</span><span id="probeResultsMeta" class="settings-disclosure-meta"></span></summary>
-              <div class="settings-disclosure-body">
-                <div id="probeResults" class="probe-result-list"></div>
-                <p class="settings-footnote">Pending means the call reached the server but the model never reported back; often a rejected or unusable result.</p>
+            <form id="harnessTestForm" class="harness-test-start" novalidate data-settings-instant>
+              <label class="sr-only" for="harnessTestLabel">Harness name</label>
+              <input id="harnessTestLabel" type="text" maxlength="80" placeholder="chatgpt.com" autocomplete="off">
+              <button type="submit" class="primary settings-compact" id="harnessTestStart">Get test prompt</button>
+              <span id="harnessTestError" class="harness-test-error" role="alert"></span>
+            </form>
+            <div id="harnessTestActive" class="harness-test-active" hidden data-settings-instant>
+              <div class="harness-test-active-head">
+                <span id="harnessTestActiveText" class="harness-test-active-text"></span>
+                <span id="harnessTestActivePill" class="settings-pill"></span>
               </div>
-            </details>
+              <div class="harness-test-progress" aria-hidden="true"><span id="harnessTestProgressBar"></span></div>
+              <details class="harness-test-prompt">
+                <summary>Show prompt</summary>
+                <pre id="harnessTestPrompt" class="probe-prompt"></pre>
+              </details>
+              <div class="harness-test-active-actions">
+                <button type="button" class="ghost settings-compact" id="harnessTestCopy">Copy again</button>
+                <button type="button" class="ghost settings-compact" id="harnessTestDismiss">Hide</button>
+              </div>
+            </div>
+            <div id="harnessTestList" class="harness-test-list"></div>
+            <div id="harnessTestCleanup" class="harness-test-cleanup" hidden>
+              <span id="harnessTestCleanupMeta" class="harness-test-cleanup-meta"></span>
+              <button type="button" class="ghost settings-compact" id="harnessTestKeepLatest">Keep latest per harness</button>
+              <button type="button" class="ghost settings-compact danger" id="harnessTestDeleteAll">Delete all</button>
+            </div>
             <details class="settings-disclosure" data-settings-instant>
-              <summary><span class="settings-disclosure-title">Run a harness test</span><span class="settings-disclosure-meta">copy an instruction into the harness</span></summary>
+              <summary><span class="settings-disclosure-title">Advanced</span><span class="settings-disclosure-meta">profile, start size, manual probe</span></summary>
               <div class="settings-disclosure-body probe-config">
-                <p class="settings-footnote">Paste this into the harness being measured. Running it from this browser would bypass the harness and give a false result.</p>
+                <div class="probe-config-grid">
+                  <label class="field">Content profile<select id="harnessTestProfile"><option value="transcript_markdown">Transcript Markdown</option><option value="transport_canary">Transport canary</option></select></label>
+                  <label class="field">Start size (chars)<input id="harnessTestStartChars" type="number" min="4096" max="250000" step="1000" value="32000"></label>
+                </div>
+                <p class="settings-footnote">Get test prompt uses these when they differ from the defaults. Only Transcript Markdown sets the safe chunk size; Transport canary is random data that costs about 2–3× more tokens per character, so comparing both shows whether a harness limits by characters or by tokens.</p>
+                <h6 class="harness-test-subhead">Manual probe</h6>
+                <p class="settings-footnote">One fixed size, reported with the older tools. Paste it into the harness being measured: running it from this browser would bypass the harness.</p>
                 <div class="probe-config-grid">
                   <label class="field">Harness label<input id="probeHarnessLabel" type="text" maxlength="80" placeholder="chatgpt-web"></label>
                   <label class="field">Payload characters<input id="probeTargetChars" type="number" min="4096" max="250000" step="1000" value="100000"></label>
                   <label class="field">Content profile<select id="probeContentProfile"><option value="transcript_markdown">Transcript Markdown</option><option value="transport_canary">Transport canary</option></select></label>
                 </div>
                 <pre id="probePromptPreview" class="probe-prompt"></pre>
-                <div><button type="button" class="primary settings-compact" id="probePromptCopy">Copy test instruction</button></div>
+                <div><button type="button" class="ghost settings-compact" id="probePromptCopy">Copy manual instruction</button></div>
+                <h6 class="harness-test-subhead">Manual results <span id="probeResultsMeta" class="settings-disclosure-meta"></span></h6>
+                <div id="probeResults" class="probe-result-list"></div>
               </div>
             </details>
           </section>
@@ -3559,6 +3624,7 @@
       const ALLOWED_FILE_EXTENSIONS = new Set([...TEXT_FILE_EXTENSIONS, ".pdf", ...IMAGE_FILE_EXTENSIONS]);
 
       const state = {
+        harnessTest: { active: null, timer: null },
         csrfToken: "",
         sessions: [],
         groups: [],
@@ -3931,7 +3997,7 @@
         "contextSearchStatus", "searchResults", "localSearchResults", "searchDetail", "searchEngine",
         "searchScheduleMode", "searchScheduleTime", "searchScheduleNext",
         "transcriptChunkMaxChars", "transcriptChunkMaxLines", "probeHarnessLabel", "probeTargetChars",
-        "probeContentProfile", "probePromptPreview", "probePromptCopy", "probeRecommendations", "probeResults",
+        "probeContentProfile", "probePromptPreview", "probePromptCopy", "probeResults",
         "databaseExportButton", "databaseExportResult",
         "statusUpdateDot", "bridgeStatusOverall", "bridgeStatusVersion", "bridgeStatusUpdate",
         "bridgeStatusChecked", "bridgeStatusChecks", "bridgeStatusUrl", "bridgeStatusSchema",
@@ -3940,7 +4006,11 @@
         "transcriptVerdict", "searchVerdict", "apiVerdict", "aiModelKeyState", "ragKeyState", "cohereKeyState", "cohereAddKey",
         "ragGroupSummary", "indexStatePill", "openaiKeyPreview", "cohereKeyPreview",
         "aiRenameMaxWords", "aiRenameMaxWordsValue",
-        "probeVerifiedCount", "probeSafeSource", "probeSafeValue", "probeSafeApply", "probeRecommendationsMeta", "probeResultsMeta"
+        "probeVerifiedCount", "probeSafeSource", "probeSafeValue", "probeSafeApply", "probeResultsMeta",
+        "harnessTestForm", "harnessTestLabel", "harnessTestStart", "harnessTestError", "harnessTestActive",
+        "harnessTestActiveText", "harnessTestActivePill", "harnessTestProgressBar", "harnessTestPrompt",
+        "harnessTestCopy", "harnessTestDismiss", "harnessTestList", "harnessTestCleanup", "harnessTestCleanupMeta",
+        "harnessTestKeepLatest", "harnessTestDeleteAll", "harnessTestProfile", "harnessTestStartChars"
       ].map((id) => [id, document.getElementById(id)]));
 
       dom.addGroupButton.addEventListener("click", () => openGroupDialog());
@@ -4574,6 +4644,13 @@
         connectorsDom.windowOpen.addEventListener("click", openConnectionWindow);
         connectorsDom.windowClose.addEventListener("click", closeConnectionWindow);
         settingsDom.probePromptCopy.addEventListener("click", () => copyOutputProbePrompt());
+        settingsDom.harnessTestForm.addEventListener("submit", (event) => { event.preventDefault(); startHarnessTest(); });
+        settingsDom.harnessTestLabel.addEventListener("input", () => { settingsDom.harnessTestError.textContent = ""; });
+        settingsDom.harnessTestCopy.addEventListener("click", () => copyHarnessTestPrompt());
+        settingsDom.harnessTestDismiss.addEventListener("click", () => { state.harnessTest.active = null; renderHarnessTests(); });
+        settingsDom.harnessTestKeepLatest.addEventListener("click", () => cleanupHarnessTests("keep_latest"));
+        settingsDom.harnessTestDeleteAll.addEventListener("click", () => cleanupHarnessTests("all"));
+        dom.aiSettingsDialog.addEventListener("close", () => stopHarnessTestPolling());
         settingsDom.probeSafeApply.addEventListener("click", () => {
           selectTranscriptChunkRecommendation(Number(settingsDom.probeSafeApply.dataset.value));
         });
@@ -4790,6 +4867,7 @@
         renderSearchSchedule();
         renderOutputProbePrompt();
         renderOutputProbeResults();
+        renderHarnessTests();
         renderSettingsStatus();
         renderSettingsDirty();
       }
@@ -5393,53 +5471,31 @@
         const runs = transcript.runs || [];
         const chars = (value) => Number(value || 0).toLocaleString();
 
-        setSettingsPill(settingsDom.probeVerifiedCount, `${recommendations.length} verified`, recommendations.length ? "ok" : "off");
-        settingsDom.probeRecommendations.replaceChildren();
-        if (!recommendations.length) {
-          settingsDom.probeSafeValue.textContent = "No verified harness yet";
+        const weakest = transcript.safe_chunk;
+        if (!weakest) {
+          settingsDom.probeSafeValue.textContent = recommendations.length ? "No Transcript Markdown result yet" : "No tested harness yet";
           settingsDom.probeSafeValue.className = "settings-value-muted";
           settingsDom.probeSafeSource.textContent = "";
           settingsDom.probeSafeApply.hidden = true;
-          settingsDom.probeRecommendationsMeta.textContent = "none yet";
-          settingsDom.probeRecommendations.append(spanCls("probe-result-empty", "Run a harness test to get a recommendation."));
         } else {
-          const weakest = recommendations.reduce((low, item) => (
-            item.recommended_chunk_chars < low.recommended_chunk_chars ? item : low
-          ));
           settingsDom.probeSafeValue.textContent = `${chars(weakest.recommended_chunk_chars)} chars`;
           settingsDom.probeSafeValue.className = "settings-value settings-value-mono";
           settingsDom.probeSafeSource.textContent = `limited by ${weakest.harness_label}`;
           const current = Number.parseInt(settingsDom.transcriptChunkMaxChars.value, 10);
           settingsDom.probeSafeApply.hidden = current === weakest.recommended_chunk_chars;
           settingsDom.probeSafeApply.dataset.value = String(weakest.recommended_chunk_chars);
-          settingsDom.probeRecommendationsMeta.textContent = `${recommendations.length} harness${recommendations.length === 1 ? "" : "es"}`;
-          for (const item of recommendations) {
-            const row = div("probe-recommendation");
-            row.title = `${toolOutputModeLabel(item.tool_output_mode)} · verified ${chars(item.largest_verified_payload_chars)} payload characters`;
-            row.append(
-              spanCls("probe-result-name", `${item.harness_label} · ${item.content_profile}`),
-              spanCls("probe-result-meta", `${chars(item.recommended_chunk_chars)} chars`),
-            );
-            const fill = document.createElement("button");
-            fill.type = "button";
-            fill.className = "ghost settings-compact";
-            fill.textContent = "Use";
-            fill.setAttribute("aria-label", `Use ${chars(item.recommended_chunk_chars)} characters from ${item.harness_label}`);
-            fill.addEventListener("click", () => selectTranscriptChunkRecommendation(item.recommended_chunk_chars));
-            row.append(fill);
-            settingsDom.probeRecommendations.append(row);
-          }
         }
 
         settingsDom.probeResults.replaceChildren();
         const pending = runs.filter((run) => (run.result_class || "pending") === "pending").length;
-        settingsDom.probeResultsMeta.textContent = runs.length
-          ? `${runs.length} run${runs.length === 1 ? "" : "s"}${pending ? ` · ${pending} pending` : ""}` : "none yet";
-        if (!runs.length) {
-          settingsDom.probeResults.append(spanCls("probe-result-empty", "No harness tests recorded yet."));
+        const manualRuns = runs.filter((run) => !run.suite_id);
+        settingsDom.probeResultsMeta.textContent = manualRuns.length
+          ? `${manualRuns.length} run${manualRuns.length === 1 ? "" : "s"}${pending ? ` · ${pending} pending` : ""}` : "none yet";
+        if (!manualRuns.length) {
+          settingsDom.probeResults.append(spanCls("probe-result-empty", "No manual probes recorded."));
           return;
         }
-        for (const run of runs) {
+        for (const run of manualRuns) {
           const row = div("probe-result");
           const resultClass = run.result_class || "pending";
           const checkpoints = (run.matched_checkpoints || []).join(", ") || "none reported";
@@ -5456,6 +5512,303 @@
           );
           settingsDom.probeResults.append(row);
         }
+      }
+
+      const HARNESS_TESTS_API = "/admin/api/settings/harness-tests";
+      const HARNESS_TEST_MAX_STEPS = 7;
+
+      function harnessK(value) {
+        const number = Number(value || 0);
+        return number >= 10000 ? `${Math.round(number / 1000)}k` : number.toLocaleString();
+      }
+
+      // The pill on a harness row: what this harness can take, in a few words.
+      function harnessVerdictPill(suite) {
+        const verdict = suite.verdict || {};
+        if (suite.status === "running") {
+          return suite.steps.length ? [`Running · step ${suite.steps.length}`, "accent"] : ["Waiting for the harness", "accent"];
+        }
+        const hi = harnessK(verdict.smallest_failing_chars);
+        switch (verdict.verdict) {
+          case "no_limit": return ["No limit up to 250k", "ok"];
+          case "truncates": return [`Truncates above ~${hi}`, "warn"];
+          case "rejects": return [`Rejects above ~${hi}`, "warn"];
+          case "fails_small": return ["Fails even at 4k", "fail"];
+          case "passes_up_to": return [`Unfinished · ${harnessK(verdict.largest_complete_chars)} passed`, "off"];
+          default: return [suite.status === "unfinished" ? "Not started" : "Waiting", "off"];
+        }
+      }
+
+      // One sentence per step: what was sent, what arrived, what it means.
+      function harnessStepText(step) {
+        const size = `${Number(step.target_chars).toLocaleString()} chars`;
+        const checkpoints = (step.matched_checkpoints || []).join(", ") || "none";
+        const texts = {
+          complete: ["✓", "ok", `${size}: arrived whole.`, "Every checkpoint and the final block matched."],
+          truncated: ["✂", "warn", `${size}: cut off.`, `The model saw the start, but the result ended at about ${Number(step.cut_at_chars || 0).toLocaleString()} chars. This harness truncates silently: no error, the tail just isn't there.`],
+          rejected: ["✕", "fail", `${size}: rejected.`, step.harness_error ? `The harness refused the result: “${step.harness_error}”.` : "The harness refused the result."],
+          altered: ["!", "warn", `${size}: arrived damaged.`, `Parts were missing (checkpoints seen: ${checkpoints}). The harness dropped the start or the middle, not only the tail.`],
+          verification_failed: ["?", "warn", `${size}: misread.`, "The model reported markers that don't match the payload. This counts as a failure at this size, though the harness itself may be fine."],
+          no_report: ["…", "off", `${size}: no report.`, "The step was sent, but the model never reported back. The harness most likely lost or rejected the result."],
+        };
+        const [icon, tone, title, detail] = texts[step.outcome] || ["○", "off", `${size}: waiting for the model…`, ""];
+        const context = step.context_suspect
+          ? ` About ${Number(step.cumulative_chars - step.target_chars).toLocaleString()} chars were already in this chat, so the context window may be the real limit. Test again in a new chat to be sure.`
+          : "";
+        return { icon, tone, title, detail: detail + context };
+      }
+
+      function harnessVerdictBox(suite) {
+        const verdict = suite.verdict || {};
+        if (suite.status === "running") return null;
+        const box = div("harness-test-verdict");
+        if (verdict.verdict === "fails_small") {
+          box.dataset.tone = "warn";
+          box.append(spanCls("", "Even the smallest probe didn't arrive, so size isn't the problem. Check that this harness shows tool results to the model."));
+          return box;
+        }
+        const recommended = verdict.recommended_chunk_chars;
+        if (!recommended) {
+          box.dataset.tone = "warn";
+          box.append(spanCls("", "This test stopped before it had an answer. Test again to finish it."));
+          return box;
+        }
+        const profileNote = suite.content_profile === "transcript_markdown" ? "" : " Transport canary results don't set the safe chunk size.";
+        box.append(spanCls("", `Use chunks up to ${Number(recommended).toLocaleString()} chars here (${Number(verdict.largest_complete_chars).toLocaleString()} verified, minus the 25% margin).${profileNote}`));
+        if (suite.content_profile === "transcript_markdown") {
+          const use = document.createElement("button");
+          use.type = "button";
+          use.className = "ghost settings-compact";
+          use.textContent = "Use";
+          use.setAttribute("aria-label", `Use ${recommended} characters from ${suite.harness_label}`);
+          use.addEventListener("click", () => selectTranscriptChunkRecommendation(recommended));
+          box.append(use);
+        }
+        return box;
+      }
+
+      function renderHarnessTests() {
+        const tests = state.settings?.harness_tests || { suites: [], cleanup: { older_suites: 0, standalone_runs: 0, suites: 0 } };
+        const suites = tests.suites || [];
+        const finished = suites.filter((suite) => suite.status === "done").length;
+        setSettingsPill(settingsDom.probeVerifiedCount, suites.length ? `${finished} tested` : "", finished ? "ok" : "off");
+
+        const openLabels = new Set([...settingsDom.harnessTestList.querySelectorAll("details[open]")].map((node) => node.dataset.harness));
+        settingsDom.harnessTestList.replaceChildren();
+        if (!suites.length) {
+          settingsDom.harnessTestList.append(div("harness-test-empty", "No harness tested yet. Type its name above to get a prompt."));
+        }
+        const active = state.harnessTest.active;
+        for (const suite of suites) {
+          const row = document.createElement("details");
+          row.className = "harness-test";
+          row.dataset.harness = suite.harness_label;
+          row.open = openLabels.has(suite.harness_label) || active?.suite_id === suite.suite_id;
+          const summary = document.createElement("summary");
+          const [pillText, pillTone] = harnessVerdictPill(suite);
+          const date = suite.created_at ? formatDate(new Date(suite.created_at * 1000).toISOString()) : "";
+          const steps = suite.steps.length;
+          summary.append(
+            spanCls("harness-test-name", suite.harness_label),
+            spanCls("harness-test-meta", `${date} · ${steps} step${steps === 1 ? "" : "s"}${suite.content_profile === "transport_canary" ? " · canary" : ""}`),
+            settingsPill(pillText, pillTone),
+          );
+          const body = div("harness-test-body");
+          if (!suite.steps.length) body.append(div("harness-test-step", "No step yet. Paste the prompt into the harness."));
+          for (const step of suite.steps) {
+            const text = harnessStepText(step);
+            const line = div("harness-test-step");
+            const icon = spanCls("harness-test-step-icon", text.icon);
+            icon.dataset.tone = text.tone;
+            icon.setAttribute("aria-hidden", "true");
+            const copy = document.createElement("div");
+            const title = document.createElement("strong");
+            title.textContent = text.title;
+            copy.append(title);
+            if (text.detail) copy.append(" ", spanCls("", text.detail));
+            line.append(icon, copy);
+            body.append(line);
+          }
+          const verdictBox = harnessVerdictBox(suite);
+          if (verdictBox) body.append(verdictBox);
+          const actions = div("harness-test-row-actions");
+          const again = document.createElement("button");
+          again.type = "button";
+          again.className = "ghost settings-compact";
+          again.textContent = "Test again";
+          again.addEventListener("click", () => { settingsDom.harnessTestLabel.value = suite.harness_label; startHarnessTest(); });
+          const remove = document.createElement("button");
+          remove.type = "button";
+          remove.className = "ghost settings-compact";
+          remove.textContent = "Delete";
+          remove.addEventListener("click", () => deleteHarnessTests(suite.harness_label));
+          actions.append(again, remove);
+          body.append(actions);
+          row.append(summary, body);
+          settingsDom.harnessTestList.append(row);
+        }
+
+        const cleanup = tests.cleanup || {};
+        const older = Number(cleanup.older_suites || 0) + Number(cleanup.standalone_runs || 0);
+        settingsDom.harnessTestCleanup.hidden = !suites.length && !older;
+        settingsDom.harnessTestCleanupMeta.textContent = older ? `${older} older result${older === 1 ? "" : "s"}` : "Only the latest test per harness is kept";
+        settingsDom.harnessTestKeepLatest.hidden = !older;
+        renderHarnessTestActive(suites);
+        if (suites.some((suite) => suite.status === "running") && dom.aiSettingsDialog.open) startHarnessTestPolling();
+        else stopHarnessTestPolling();
+      }
+
+      function renderHarnessTestActive(suites) {
+        const active = state.harnessTest.active;
+        settingsDom.harnessTestActive.hidden = !active;
+        if (!active) return;
+        const suite = suites.find((item) => item.suite_id === active.suite_id);
+        settingsDom.harnessTestPrompt.textContent = active.prompt;
+        const reported = suite ? suite.steps.filter((step) => step.outcome).length : 0;
+        if (suite && suite.status === "done") {
+          const [pillText] = harnessVerdictPill(suite);
+          settingsDom.harnessTestActiveText.textContent = `Done. ${active.harness_label}: ${pillText.toLowerCase()}. Details below.`;
+          setSettingsPill(settingsDom.harnessTestActivePill, "Finished", "ok");
+          settingsDom.harnessTestProgressBar.style.width = "100%";
+          settingsDom.harnessTestActive.querySelector("details").open = false;
+          settingsDom.harnessTestCopy.hidden = true;
+          return;
+        }
+        settingsDom.harnessTestCopy.hidden = false;
+        settingsDom.harnessTestActiveText.textContent = active.copied
+          ? `Prompt copied. Paste it into ${active.harness_label}, ideally in a new chat.`
+          : `Copy the prompt below and paste it into ${active.harness_label}, ideally in a new chat.`;
+        setSettingsPill(
+          settingsDom.harnessTestActivePill,
+          suite && suite.steps.length ? `Step ${suite.steps.length} of up to ${HARNESS_TEST_MAX_STEPS}` : "Waiting for the harness",
+          "accent",
+        );
+        settingsDom.harnessTestProgressBar.style.width = `${Math.min(90, Math.round((reported / 5) * 100))}%`;
+      }
+
+      async function startHarnessTest() {
+        const label = settingsDom.harnessTestLabel.value.trim();
+        if (!label) {
+          settingsDom.harnessTestError.textContent = "Enter the harness name first, for example chatgpt.com.";
+          settingsDom.harnessTestLabel.focus();
+          return;
+        }
+        const profile = settingsDom.harnessTestProfile.value;
+        const startChars = Number.parseInt(settingsDom.harnessTestStartChars.value, 10);
+        const advanced = profile !== "transcript_markdown" || startChars !== (state.settings?.harness_tests?.start_chars || 32000);
+        const body = advanced
+          ? { harness_label: label, mode: "advanced", content_profile: profile, start_chars: startChars }
+          : { harness_label: label };
+        settingsDom.harnessTestStart.disabled = true;
+        try {
+          const result = await api(HARNESS_TESTS_API, { method: "POST", body: JSON.stringify(body) });
+          state.settings.harness_tests = result.harness_tests;
+          state.harnessTest.active = { suite_id: result.suite.suite_id, prompt: result.prompt, harness_label: label, copied: false };
+          state.harnessTest.active.copied = await writeClipboard(result.prompt);
+          settingsDom.harnessTestLabel.value = "";
+          renderHarnessTests();
+          if (!state.harnessTest.active.copied) settingsDom.harnessTestActive.querySelector("details").open = true;
+        } catch (error) {
+          settingsDom.harnessTestError.textContent = error.message;
+        } finally {
+          settingsDom.harnessTestStart.disabled = false;
+        }
+      }
+
+      async function writeClipboard(text) {
+        try { await navigator.clipboard.writeText(text); return true; } catch (_) { return false; }
+      }
+
+      async function copyHarnessTestPrompt() {
+        const active = state.harnessTest.active;
+        if (!active) return;
+        active.copied = await writeClipboard(active.prompt);
+        renderSettingsStatus(active.copied ? "Prompt copied." : "Couldn't copy. Select the prompt and copy it by hand.", active.copied ? "ok" : "error");
+        if (!active.copied) settingsDom.harnessTestActive.querySelector("details").open = true;
+      }
+
+      function startHarnessTestPolling() {
+        if (state.harnessTest.timer) return;
+        state.harnessTest.timer = window.setInterval(pollHarnessTests, 3000);
+      }
+
+      function stopHarnessTestPolling() {
+        if (!state.harnessTest.timer) return;
+        window.clearInterval(state.harnessTest.timer);
+        state.harnessTest.timer = null;
+      }
+
+      async function pollHarnessTests() {
+        if (document.visibilityState !== "visible") return;
+        try {
+          const before = (state.settings.harness_tests?.suites || []).filter((suite) => suite.status === "running").length;
+          const result = await api(HARNESS_TESTS_API);
+          state.settings.harness_tests = result.harness_tests;
+          const after = result.harness_tests.suites.filter((suite) => suite.status === "running").length;
+          if (after < before) {
+            // A test just finished: the safe chunk size may have changed.
+            const fresh = await api("/admin/api/settings");
+            state.settings.transcript = fresh.settings.transcript;
+            renderOutputProbeResults();
+          }
+          renderHarnessTests();
+        } catch (_) {
+          stopHarnessTestPolling();
+        }
+      }
+
+      async function cleanupHarnessTests(mode) {
+        const cleanup = state.settings?.harness_tests?.cleanup || {};
+        const older = Number(cleanup.older_suites || 0) + Number(cleanup.standalone_runs || 0);
+        const confirmed = await window.adminConfirmation.confirm(mode === "all" ? {
+          title: "Delete all harness tests?",
+          message: `Delete every harness test (${Number(cleanup.suites || 0) + Number(cleanup.standalone_runs || 0)} in all)?`,
+          detail: "The safe chunk size goes back to “No tested harness yet”. Your current chunk size setting stays as it is.",
+          confirmLabel: "Delete all",
+          tone: "danger",
+        } : {
+          title: "Delete older harness tests?",
+          message: `Delete ${older} older result${older === 1 ? "" : "s"} and keep the latest test of each harness?`,
+          detail: "Manual probes from Advanced are deleted too.",
+          confirmLabel: "Delete older",
+          tone: "danger",
+        });
+        if (!confirmed) return;
+        try {
+          const result = await api(`${HARNESS_TESTS_API}/cleanup`, { method: "POST", body: JSON.stringify({ mode }) });
+          await afterHarnessTestDelete(result);
+          renderSettingsStatus("Harness tests cleaned up.", "ok");
+        } catch (error) {
+          renderSettingsStatus(error.message, "error");
+        }
+      }
+
+      async function deleteHarnessTests(label) {
+        const confirmed = await window.adminConfirmation.confirm({
+          title: "Delete this harness?",
+          message: `Delete every test of ${label}?`,
+          detail: "Its recommendation disappears with it.",
+          confirmLabel: "Delete",
+          tone: "danger",
+        });
+        if (!confirmed) return;
+        try {
+          const result = await api(`${HARNESS_TESTS_API}?harness=${encodeURIComponent(label)}`, { method: "DELETE" });
+          await afterHarnessTestDelete(result);
+          renderSettingsStatus(`${label} deleted.`, "ok");
+        } catch (error) {
+          renderSettingsStatus(error.message, "error");
+        }
+      }
+
+      async function afterHarnessTestDelete(result) {
+        state.settings.harness_tests = result.harness_tests;
+        const active = state.harnessTest.active;
+        if (active && !result.harness_tests.suites.some((suite) => suite.suite_id === active.suite_id)) state.harnessTest.active = null;
+        const fresh = await api("/admin/api/settings");
+        state.settings.transcript = fresh.settings.transcript;
+        renderOutputProbeResults();
+        renderHarnessTests();
       }
 
       function selectTranscriptChunkRecommendation(value) {

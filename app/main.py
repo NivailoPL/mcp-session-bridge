@@ -44,9 +44,15 @@ from app.pdf_files import (
 from app.output_probe import (
     MAX_PROBE_TARGET_CHARS,
     MIN_PROBE_TARGET_CHARS,
+    SUITE_MAX_STEPS,
     build_output_probe,
     classify_probe_observation,
+    cut_point_from_observation,
+    next_probe_step,
     recommended_chunk_chars,
+    step_outcome,
+    suite_steps,
+    suite_verdict,
     transcript_chunk_limits as resolve_transcript_chunk_limits,
 )
 from app.request_limits import RequestBodyLimitMiddleware
@@ -458,6 +464,31 @@ async def admin_api_update_title_settings(request: Request) -> Response:
 @mcp.custom_route("/admin/api/settings/transcript", methods=["PUT"])
 async def admin_api_update_transcript_settings(request: Request) -> Response:
     return await admin.api_update_transcript_settings(request)
+
+
+@mcp.custom_route("/admin/api/settings/harness-tests", methods=["GET"])
+async def admin_api_harness_tests(request: Request) -> Response:
+    return await admin.api_harness_tests(request)
+
+
+@mcp.custom_route("/admin/api/settings/harness-tests", methods=["POST"])
+async def admin_api_start_harness_test(request: Request) -> Response:
+    return await admin.api_start_harness_test(request)
+
+
+@mcp.custom_route("/admin/api/settings/harness-tests", methods=["DELETE"])
+async def admin_api_delete_harness_tests(request: Request) -> Response:
+    return await admin.api_delete_harness_tests(request)
+
+
+@mcp.custom_route("/admin/api/settings/harness-tests/cleanup", methods=["POST"])
+async def admin_api_cleanup_harness_tests(request: Request) -> Response:
+    return await admin.api_cleanup_harness_tests(request)
+
+
+@mcp.custom_route("/admin/api/settings/harness-tests/{suite_id}", methods=["GET"])
+async def admin_api_harness_test(request: Request) -> Response:
+    return await admin.api_harness_test(request)
 
 
 @mcp.custom_route("/admin/api/settings/tool-output", methods=["PUT"])
@@ -1032,13 +1063,24 @@ def run_output_probe(
             ),
         }
 
+    return _issue_output_probe(label, target_chars, content_profile)
+
+
+def _issue_output_probe(
+    label: str,
+    target_chars: int,
+    content_profile: str,
+    *,
+    suite: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Build one probe payload, store its manifest, and return the tool result."""
     run_id = f"probe-{int(time.time())}-{secrets.token_hex(6)}"
     try:
         probe = build_output_probe(run_id, target_chars, content_profile)
     except ValueError as exc:
         return {"ok": False, "error": str(exc)}
     token = get_access_token()
-    result = {
+    result: dict[str, Any] = {
         "ok": True,
         "run_id": run_id,
         "harness_label": label,
@@ -1049,13 +1091,32 @@ def run_output_probe(
         "block_size": probe["block_size"],
         "tool_output_mode": ACTIVE_TOOL_OUTPUT_MODE,
         "server_result_json_chars": 0,
-        "report_instructions": (
+    }
+    suite_fields: dict[str, Any] = {}
+    if suite is None:
+        result["report_instructions"] = (
             "Immediately call submit_output_probe_observation. Pass every CHECKPOINT canary you can "
             "actually see, plus the index and canary from the last block with a complete END marker. "
             "Do not infer missing values."
-        ),
-        "probe_payload": probe["payload"],
-    }
+        )
+    else:
+        previous = suite["steps"]
+        suite_fields = {
+            "suite_id": suite["suite_id"],
+            "step_index": len(previous) + 1,
+            "cumulative_chars": sum(int(run["target_chars"]) for run in previous) + target_chars,
+        }
+        result |= {
+            "suite_id": suite["suite_id"],
+            "step": suite_fields["step_index"],
+            "max_steps": SUITE_MAX_STEPS,
+            "report_instructions": (
+                "Immediately call report_harness_probe with this suite_id. Pass every CHECKPOINT canary "
+                "you can actually see, plus the index and canary from the last block with a complete END "
+                "marker. Do not infer missing values. Then call next_harness_probe again."
+            ),
+        }
+    result["probe_payload"] = probe["payload"]
     for _ in range(4):
         serialized_chars = len(json.dumps(result, ensure_ascii=False, separators=(",", ":")))
         if serialized_chars == result["server_result_json_chars"]:
@@ -1064,11 +1125,135 @@ def run_output_probe(
     store.create_output_probe_run(
         {
             **result,
+            **suite_fields,
             "blocks": probe["blocks"],
             "created_by": token.client_id if token else "unknown",
         }
     )
     return result
+
+
+def _finish_harness_suite(suite_id: str) -> dict[str, Any]:
+    suite = store.get_harness_probe_suite(suite_id)
+    assert suite is not None
+    verdict = suite_verdict(suite_steps(suite["steps"]))
+    if suite["status"] != "done":
+        store.finish_harness_probe_suite(suite_id, verdict)
+    return {
+        "ok": True,
+        "done": True,
+        "suite_id": suite_id,
+        "harness_label": suite["harness_label"],
+        **verdict,
+        "message": "The harness test is finished. Tell the user only the verdict and recommended_chunk_chars.",
+    }
+
+
+@mcp.tool(structured_output=LARGE_TOOL_STRUCTURED_OUTPUT)
+def next_harness_probe(suite_id: str) -> dict[str, Any]:
+    """Return the next step of an adaptive harness limit test, or done=true when it is finished. After each step, immediately call report_harness_probe; never guess missing canaries."""
+    suite = store.get_harness_probe_suite(suite_id.strip())
+    if suite is None:
+        return {"ok": False, "error": f"Unknown harness test suite_id: {suite_id}"}
+    if suite["status"] == "done":
+        return _finish_harness_suite(suite["suite_id"])
+    for run in suite["steps"]:
+        if run["status"] == "pending":
+            # The previous step was never reported: the harness most likely lost or rejected it.
+            store.report_output_probe_run(
+                run["run_id"],
+                result_class=None,
+                observed_canaries=[],
+                matched_checkpoints=[],
+                last_complete_block_index=0,
+                last_complete_canary="",
+                noticed_truncation=False,
+                notes="",
+                outcome="no_report",
+                status="no_report",
+            )
+    suite = store.get_harness_probe_suite(suite["suite_id"])
+    assert suite is not None
+    target = next_probe_step(suite_steps(suite["steps"]), start=suite["start_chars"])
+    if target is None:
+        return _finish_harness_suite(suite["suite_id"])
+    return _issue_output_probe(
+        suite["harness_label"], target, suite["content_profile"], suite=suite
+    )
+
+
+@mcp.tool()
+def report_harness_probe(
+    suite_id: str,
+    observed_checkpoint_canaries: list[str],
+    last_complete_block_index: int,
+    last_complete_canary: str,
+    harness_error: str = "",
+) -> dict[str, Any]:
+    """Report what reached you from the last next_harness_probe step. If that call failed, pass the error text as harness_error and leave the canaries empty."""
+    suite = store.get_harness_probe_suite(suite_id.strip())
+    if suite is None:
+        return {"ok": False, "error": f"Unknown harness test suite_id: {suite_id}"}
+    pending = [run for run in suite["steps"] if run["status"] == "pending"]
+    if not pending:
+        return {
+            "ok": False,
+            "error": "No step is waiting for a report. Call next_harness_probe to continue.",
+        }
+    if not isinstance(observed_checkpoint_canaries, list) or not all(
+        isinstance(value, str) for value in observed_checkpoint_canaries
+    ):
+        return {"ok": False, "error": "observed_checkpoint_canaries must be a list of strings"}
+    error_text = harness_error.strip()[:500]
+    run = store.get_output_probe_run(pending[-1]["run_id"])
+    assert run is not None
+    result_class: str | None = None
+    matched: list[str] = []
+    cut_at: int | None = None
+    if not error_text or observed_checkpoint_canaries:
+        try:
+            observation = classify_probe_observation(
+                run["blocks"],
+                observed_checkpoint_canaries,
+                last_complete_block_index,
+                last_complete_canary,
+            )
+        except ValueError as exc:
+            return {"ok": False, "error": str(exc)}
+        result_class = observation["result_class"]
+        matched = observation["matched_checkpoints"]
+        cut_at = cut_point_from_observation(
+            run["blocks"], result_class, last_complete_block_index, observation["last_complete_valid"]
+        )
+    outcome = step_outcome(result_class, harness_error=error_text if not observed_checkpoint_canaries else "")
+    store.report_output_probe_run(
+        run["run_id"],
+        result_class=result_class,
+        observed_canaries=observed_checkpoint_canaries,
+        matched_checkpoints=matched,
+        last_complete_block_index=last_complete_block_index,
+        last_complete_canary=last_complete_canary,
+        noticed_truncation=outcome == "truncated",
+        notes="",
+        outcome=outcome,
+        cut_at_chars=cut_at,
+        harness_error=error_text,
+    )
+    refreshed = store.get_harness_probe_suite(suite["suite_id"])
+    assert refreshed is not None
+    if next_probe_step(suite_steps(refreshed["steps"]), start=refreshed["start_chars"]) is None:
+        return {"step": run["step_index"], "outcome": outcome, "cut_at_chars": cut_at} | _finish_harness_suite(
+            suite["suite_id"]
+        )
+    return {
+        "ok": True,
+        "done": False,
+        "suite_id": suite["suite_id"],
+        "step": run["step_index"],
+        "outcome": outcome,
+        "cut_at_chars": cut_at,
+        "next": "Call next_harness_probe with the same suite_id.",
+    }
 
 
 @mcp.tool()

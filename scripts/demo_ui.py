@@ -21,6 +21,12 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from app.security import password_hash  # noqa: E402
+from app.output_probe import (  # noqa: E402
+    build_output_probe,
+    next_probe_step,
+    suite_steps,
+    suite_verdict,
+)
 from app.storage import Store  # noqa: E402
 
 DB_PATH = ROOT / "examples" / "output" / "demo.sqlite3"
@@ -432,7 +438,79 @@ def build_database() -> tuple[int, int]:
                 store.save_exchange(session["session_id"], model_name, user_message, assistant_response)
                 exchange_count += 1
 
+        seed_harness_tests(store, clock, real_now)
+
     return len(SESSIONS), exchange_count
+
+
+# (label, delivered chars, how a bigger result fails, steps to leave unreported, hours ago)
+HARNESS_TESTS = [
+    ("chatgpt.com", 98_400, "truncated", 0, 3),
+    ("claude.ai", 10_000_000, "truncated", 0, 30),
+    ("gemini.google.com", 12_999, "rejected", 0, 80),
+    ("codex-cli", 200_000, "rejected", 1, 0),
+]
+
+
+def seed_harness_tests(store: Store, clock: dict[str, float], real_now: float) -> None:
+    """Simulated adaptive harness tests, so Settings > Harness limits has something to show."""
+    for label, limit, failure, leave_open, hours_ago in HARNESS_TESTS:
+        clock["now"] = real_now - hours_ago * 3600
+        suite_id = f"suite-demo-{label.replace('.', '-')}"
+        suite = store.create_harness_probe_suite(
+            {
+                "suite_id": suite_id,
+                "harness_label": label,
+                "content_profile": "transcript_markdown",
+                "start_chars": 32_000,
+                "created_by": "demo",
+            }
+        )
+        cumulative = 0
+        while (target := next_probe_step(suite_steps(suite["steps"]))) is not None:
+            clock["now"] += 40
+            run_id = f"probe-demo-{label}-{len(suite['steps']) + 1}"
+            probe = build_output_probe(run_id, target, "transcript_markdown")
+            cumulative += target
+            store.create_output_probe_run(
+                {
+                    "run_id": run_id,
+                    "harness_label": label,
+                    "content_profile": "transcript_markdown",
+                    "target_chars": target,
+                    "payload_char_count": target,
+                    "server_result_json_chars": target + 600,
+                    "block_count": probe["block_count"],
+                    "block_size": probe["block_size"],
+                    "tool_output_mode": "optimized",
+                    "blocks": probe["blocks"],
+                    "created_by": "demo",
+                    "suite_id": suite_id,
+                    "step_index": len(suite["steps"]) + 1,
+                    "cumulative_chars": cumulative,
+                }
+            )
+            if leave_open and target > limit:
+                break
+            outcome = "complete" if target <= limit else failure
+            visible = [b for b in probe["blocks"] if b["offset"] + b["char_count"] <= limit]
+            cut = visible[-1]["offset"] + visible[-1]["char_count"] if outcome == "truncated" else None
+            store.report_output_probe_run(
+                run_id,
+                result_class={"complete": "complete", "truncated": "tail_truncated"}.get(outcome),
+                observed_canaries=[],
+                matched_checkpoints=["FIRST", "Q1", "MID", "Q3", "FINAL"] if outcome == "complete" else [],
+                last_complete_block_index=visible[-1]["index"] if visible else 0,
+                last_complete_canary="",
+                noticed_truncation=outcome == "truncated",
+                notes="",
+                outcome=outcome,
+                cut_at_chars=cut,
+                harness_error="Tool result is too large to display" if outcome == "rejected" else "",
+            )
+            suite = store.get_harness_probe_suite(suite_id)
+        else:
+            store.finish_harness_probe_suite(suite_id, suite_verdict(suite_steps(suite["steps"])))
 
 
 def serve(port: int) -> None:

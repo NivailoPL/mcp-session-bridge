@@ -75,11 +75,16 @@ from app.output_probe import (
     MIN_PROBE_TARGET_CHARS,
     MIN_TRANSCRIPT_CHUNK_CHARS,
     MIN_TRANSCRIPT_CHUNK_LINES,
+    PROBE_PROFILES,
     PROBE_SAFETY_MARGIN,
+    SUITE_START_CHARS,
     TRANSCRIPT_CHUNK_MAX_CHARS_SETTING,
     TRANSCRIPT_CHUNK_MAX_LINES_SETTING,
+    harness_test_prompt,
     probe_recommendations,
+    public_harness_suite,
     public_probe_run,
+    safe_chunk_recommendation,
     transcript_chunk_limits,
     validate_transcript_chunk_limits,
 )
@@ -514,6 +519,106 @@ class AdminHandlers:
             {"ok": True, "settings": await asyncio.to_thread(self._settings_payload)},
             headers=self._no_store_headers(),
         )
+
+    async def api_harness_tests(self, request: Request) -> Response:
+        _, error = self._require_admin(request)
+        if error:
+            return error
+        return JSONResponse(
+            {"ok": True, "harness_tests": await asyncio.to_thread(self._harness_tests_payload)},
+            headers=self._no_store_headers(),
+        )
+
+    async def api_harness_test(self, request: Request) -> Response:
+        _, error = self._require_admin(request)
+        if error:
+            return error
+        suite = await asyncio.to_thread(
+            self.store.get_harness_probe_suite, str(request.path_params.get("suite_id", ""))
+        )
+        if suite is None:
+            return self._json_error("Harness test not found.", status_code=404)
+        return JSONResponse(
+            {"ok": True, "suite": public_harness_suite(suite, now=int(time.time()))},
+            headers=self._no_store_headers(),
+        )
+
+    async def api_start_harness_test(self, request: Request) -> Response:
+        session, error = self._require_admin_mutation(request)
+        if error:
+            return error
+        payload, parse_error = await _json_body(request)
+        if parse_error:
+            return parse_error
+        try:
+            suite_spec = _harness_suite_spec(payload)
+        except ValueError as exc:
+            return self._json_error(str(exc), status_code=400)
+        suite_id = f"suite-{int(time.time())}-{token_urlsafe(6).replace('-', 'x').replace('_', 'y').lower()}"
+        suite = await asyncio.to_thread(
+            self.store.create_harness_probe_suite,
+            {**suite_spec, "suite_id": suite_id, "created_by": str(session.get("username") or "owner")},
+        )
+        return JSONResponse(
+            {
+                "ok": True,
+                "suite": public_harness_suite(suite, now=int(time.time())),
+                "prompt": harness_test_prompt(suite_id),
+                "harness_tests": await asyncio.to_thread(self._harness_tests_payload),
+            },
+            headers=self._no_store_headers(),
+        )
+
+    async def api_cleanup_harness_tests(self, request: Request) -> Response:
+        _, error = self._require_admin_mutation(request)
+        if error:
+            return error
+        payload, parse_error = await _json_body(request)
+        if parse_error:
+            return parse_error
+        mode = payload.get("mode")
+        if mode not in ("keep_latest", "all"):
+            return self._json_error('mode must be "keep_latest" or "all"', status_code=400)
+        deleted = await asyncio.to_thread(
+            self.store.delete_harness_probe_data, keep_latest=mode == "keep_latest"
+        )
+        return JSONResponse(
+            {
+                "ok": True,
+                "deleted": deleted,
+                "harness_tests": await asyncio.to_thread(self._harness_tests_payload),
+            },
+            headers=self._no_store_headers(),
+        )
+
+    async def api_delete_harness_tests(self, request: Request) -> Response:
+        _, error = self._require_admin_mutation(request)
+        if error:
+            return error
+        label = _normalize_harness_label(request.query_params.get("harness", ""))
+        if not label:
+            return self._json_error("harness is required", status_code=400)
+        deleted = await asyncio.to_thread(self.store.delete_harness_probe_data, harness_label=label)
+        return JSONResponse(
+            {
+                "ok": True,
+                "deleted": deleted,
+                "harness_tests": await asyncio.to_thread(self._harness_tests_payload),
+            },
+            headers=self._no_store_headers(),
+        )
+
+    def _harness_tests_payload(self) -> dict[str, Any]:
+        now = int(time.time())
+        return {
+            "suites": [
+                public_harness_suite(suite, now=now)
+                for suite in self.store.list_latest_harness_probe_suites()
+            ],
+            "cleanup": self.store.count_harness_probe_cleanup(),
+            "start_chars": SUITE_START_CHARS,
+            "content_profiles": sorted(PROBE_PROFILES),
+        }
 
     async def api_update_tool_output_settings(self, request: Request) -> Response:
         _, error = self._require_admin_mutation(request)
@@ -1876,6 +1981,10 @@ class AdminHandlers:
             self.settings.transcript_chunk_max_lines,
         )
         output_probe_runs = self.store.list_output_probe_runs(limit=50)
+        recommendations = probe_recommendations(
+            output_probe_runs,
+            tool_output_mode=self.active_tool_output_mode,
+        )
         tool_output = self._tool_output_settings_payload()
         return {
             "general": {
@@ -1907,11 +2016,10 @@ class AdminHandlers:
                 "max_probe_target_chars": MAX_PROBE_TARGET_CHARS,
                 "safety_margin_percent": round(PROBE_SAFETY_MARGIN * 100),
                 "runs": [public_probe_run(run) for run in output_probe_runs],
-                "recommendations": probe_recommendations(
-                    output_probe_runs,
-                    tool_output_mode=self.active_tool_output_mode,
-                ),
+                "recommendations": recommendations,
+                "safe_chunk": safe_chunk_recommendation(recommendations),
             },
+            "harness_tests": self._harness_tests_payload(),
         }
 
     def _tool_output_settings_payload(self) -> dict[str, Any]:
@@ -2236,6 +2344,39 @@ async def _bounded_json_body(
     if not isinstance(payload, dict):
         return {}, AdminHandlers._json_error("Request body must be a JSON object.", status_code=400)
     return payload, None
+
+
+def _normalize_harness_label(value: Any) -> str:
+    return " ".join(str(value or "").strip().split()) if isinstance(value, str) else ""
+
+
+def _harness_suite_spec(payload: dict[str, Any]) -> dict[str, Any]:
+    label = _normalize_harness_label(payload.get("harness_label"))
+    if not label:
+        raise ValueError("Enter the harness name, for example chatgpt.com")
+    if len(label) > 80:
+        raise ValueError("harness_label must be 80 characters or fewer")
+    mode = payload.get("mode", "simple")
+    if mode not in ("simple", "advanced"):
+        raise ValueError('mode must be "simple" or "advanced"')
+    if mode == "simple":
+        return {
+            "harness_label": label,
+            "mode": mode,
+            "content_profile": "transcript_markdown",
+            "start_chars": SUITE_START_CHARS,
+        }
+    profile = payload.get("content_profile", "transcript_markdown")
+    if profile not in PROBE_PROFILES:
+        raise ValueError(f"content_profile must be one of: {', '.join(sorted(PROBE_PROFILES))}")
+    start = payload.get("start_chars", SUITE_START_CHARS)
+    if isinstance(start, bool) or not isinstance(start, int) or not (
+        MIN_PROBE_TARGET_CHARS <= start <= MAX_PROBE_TARGET_CHARS
+    ):
+        raise ValueError(
+            f"start_chars must be an integer between {MIN_PROBE_TARGET_CHARS} and {MAX_PROBE_TARGET_CHARS}"
+        )
+    return {"harness_label": label, "mode": mode, "content_profile": profile, "start_chars": start}
 
 
 async def _json_body(request: Request, allow_empty: bool = False) -> tuple[dict[str, Any], JSONResponse | None]:

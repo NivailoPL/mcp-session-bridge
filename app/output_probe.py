@@ -297,3 +297,196 @@ def _stored_int(raw: str | None, fallback: int, minimum: int, maximum: int) -> i
     except (TypeError, ValueError):
         return fallback
     return value if minimum <= value <= maximum else fallback
+
+
+SUITE_START_CHARS = 32_000
+SUITE_MAX_STEPS = 7
+SUITE_CONFIRM_RATIO = 0.95
+SUITE_MIN_GAP_CHARS = 4_000
+SUITE_MIN_GAP_RATIO = 0.10
+STEP_OUTCOMES = {"complete", "truncated", "altered", "rejected", "no_report", "verification_failed"}
+
+
+def step_outcome(result_class: str | None, *, harness_error: str = "", reported: bool = True) -> str:
+    """Map one probe observation to the outcome the suite algorithm works with."""
+    if not reported:
+        return "no_report"
+    if harness_error.strip():
+        return "rejected"
+    return {
+        "complete": "complete",
+        "tail_truncated": "truncated",
+        "verification_failed": "verification_failed",
+    }.get(str(result_class), "altered")
+
+
+def cut_point_from_observation(
+    blocks: list[dict[str, Any]],
+    result_class: str,
+    last_complete_block_index: int,
+    last_complete_valid: bool,
+) -> int | None:
+    """Payload chars that reached the model before the harness cut the tail, or None."""
+    if result_class != "tail_truncated" or not last_complete_valid:
+        return None
+    if not 1 <= last_complete_block_index <= len(blocks):
+        return None
+    block = blocks[last_complete_block_index - 1]
+    return int(block["offset"]) + int(block["char_count"])
+
+
+def suite_bounds(steps: list[dict[str, Any]]) -> tuple[int | None, int | None, dict[str, Any] | None]:
+    """Return (lo, hi, step that set hi): the largest whole pass and the smallest failing bound."""
+    lo: int | None = None
+    hi: int | None = None
+    hi_step: dict[str, Any] | None = None
+    for step in steps:
+        target = int(step["target_chars"])
+        if step["outcome"] == "complete":
+            lo = target if lo is None else max(lo, target)
+            continue
+        bound = int(step["cut_at_chars"]) if step.get("cut_at_chars") else target
+        if hi is None or bound < hi:
+            hi, hi_step = bound, step
+    return lo, hi, hi_step
+
+
+def gap_is_tight(lo: int, hi: int) -> bool:
+    return hi - lo < max(SUITE_MIN_GAP_CHARS, lo * SUITE_MIN_GAP_RATIO)
+
+
+def round_down_thousand(value: float) -> int:
+    return int(value // 1_000) * 1_000
+
+
+def next_probe_step(
+    steps: list[dict[str, Any]],
+    *,
+    start: int = SUITE_START_CHARS,
+    floor: int = MIN_PROBE_TARGET_CHARS,
+    ceiling: int = MAX_PROBE_TARGET_CHARS,
+    max_steps: int = SUITE_MAX_STEPS,
+) -> int | None:
+    """Pick the next probe size for a suite, or None when the suite has its answer.
+
+    `steps` are the finished steps in order, each {"target_chars", "outcome", "cut_at_chars"}.
+    """
+    if not steps:
+        return start
+    lo, hi, _ = suite_bounds(steps)
+    last = steps[-1]
+    if len(steps) >= max_steps:
+        return None
+    if lo is not None and lo >= ceiling:
+        return None
+    if lo is None and hi is not None and hi <= floor:
+        return None
+    if lo is not None and hi is not None and gap_is_tight(lo, hi):
+        return None
+    if last["outcome"] == "truncated" and hi is not None:
+        confirm = max(floor, round_down_thousand(hi * SUITE_CONFIRM_RATIO))
+        if lo is None or confirm > lo:
+            return confirm
+    if lo is None:
+        return max(floor, round_down_thousand(hi / 2))
+    if hi is None:
+        return min(ceiling, lo * 2)
+    middle = round_down_thousand((lo + hi) / 2)
+    return middle if middle > lo else None
+
+
+def suite_verdict(steps: list[dict[str, Any]], *, ceiling: int = MAX_PROBE_TARGET_CHARS) -> dict[str, Any]:
+    """Summarize finished steps as a verdict enum plus the numbers the report needs."""
+    lo, hi, hi_step = suite_bounds(steps)
+    if not steps:
+        verdict = "no_steps"
+    elif lo is not None and lo >= ceiling:
+        verdict = "no_limit"
+    elif lo is None:
+        verdict = "fails_small"
+    elif hi is None:
+        verdict = "passes_up_to"
+    elif hi_step is not None and hi_step["outcome"] == "truncated":
+        verdict = "truncates"
+    else:
+        verdict = "rejects"
+    return {
+        "verdict": verdict,
+        "largest_complete_chars": lo,
+        "smallest_failing_chars": hi,
+        "failure_outcome": hi_step["outcome"] if hi_step else None,
+        "recommended_chunk_chars": recommended_chunk_chars(lo) if lo is not None else None,
+        "cumulative_chars": sum(int(step["target_chars"]) for step in steps),
+        "step_count": len(steps),
+    }
+
+
+def suite_steps(runs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Finished suite runs as the step dicts next_probe_step reads; pending runs are skipped."""
+    return [
+        {
+            "target_chars": int(run["target_chars"]),
+            "outcome": run["outcome"],
+            "cut_at_chars": run.get("cut_at_chars"),
+        }
+        for run in runs
+        if run.get("outcome") in STEP_OUTCOMES
+    ]
+
+
+SUITE_CONTEXT_SUSPECT_CHARS = 150_000
+SUITE_STALE_SECONDS = 24 * 60 * 60
+_PUBLIC_STEP_FIELDS = (
+    "run_id", "step_index", "target_chars", "payload_char_count", "status", "outcome",
+    "result_class", "matched_checkpoints", "cut_at_chars", "harness_error",
+    "cumulative_chars", "tool_output_mode", "created_at", "reported_at",
+)
+
+
+def harness_test_prompt(suite_id: str) -> str:
+    return (
+        "Use MCP Session Bridge to measure how large a tool result this harness can receive. "
+        "Do this in a fresh chat if you can. "
+        f'Call next_harness_probe with suite_id="{suite_id}". '
+        "If it returns done=true, stop and tell me only the verdict and recommended_chunk_chars. "
+        "Otherwise read probe_payload without summarizing it, then immediately call report_harness_probe "
+        "with the same suite_id, every CHECKPOINT canary you can actually see, and the index and canary "
+        "of the last block with a complete END marker. If next_harness_probe failed or returned an error "
+        "instead of a payload, call report_harness_probe with the error text as harness_error and an empty "
+        "canary list. Never guess or reconstruct a canary. Repeat until a tool answers done=true."
+    )
+
+
+def public_harness_suite(suite: dict[str, Any], *, now: int) -> dict[str, Any]:
+    """A suite for the admin UI: no canaries or block manifests, plus derived report fields."""
+    steps = []
+    for run in suite["steps"]:
+        step = {key: run.get(key) for key in _PUBLIC_STEP_FIELDS}
+        before = int(run.get("cumulative_chars") or 0) - int(run["target_chars"])
+        step["context_suspect"] = (
+            run.get("outcome") not in (None, "complete") and before > SUITE_CONTEXT_SUSPECT_CHARS
+        )
+        steps.append(step)
+    verdict = (
+        suite["verdict_detail"]
+        if suite["status"] == "done" and suite["verdict_detail"]
+        else suite_verdict(suite_steps(suite["steps"]))
+    )
+    status = suite["status"]
+    if status == "running" and now - int(suite["updated_at"]) > SUITE_STALE_SECONDS:
+        status = "unfinished"
+    return {
+        key: suite[key]
+        for key in (
+            "suite_id", "harness_label", "content_profile", "mode", "start_chars",
+            "created_at", "updated_at",
+        )
+    } | {"status": status, "verdict": verdict, "steps": steps}
+
+
+def safe_chunk_recommendation(recommendations: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """The weakest harness decides the chunk size, counting only transcript-like probes."""
+    relevant = [item for item in recommendations if item["content_profile"] == "transcript_markdown"]
+    if not relevant:
+        return None
+    return min(relevant, key=lambda item: item["recommended_chunk_chars"])

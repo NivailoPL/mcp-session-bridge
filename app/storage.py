@@ -454,6 +454,24 @@ class Store(AnchorStoreMixin, TopicStoreMixin):
                 CREATE INDEX IF NOT EXISTS idx_output_probe_runs_created
                     ON output_probe_runs(created_at DESC, run_id DESC);
 
+                -- Adaptive harness limit tests; additive, no schema bump.
+                CREATE TABLE IF NOT EXISTS harness_probe_suites (
+                    suite_id TEXT PRIMARY KEY,
+                    harness_label TEXT NOT NULL,
+                    content_profile TEXT NOT NULL,
+                    mode TEXT NOT NULL DEFAULT 'simple',
+                    start_chars INTEGER NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'running',
+                    verdict TEXT,
+                    verdict_json TEXT NOT NULL DEFAULT '{{}}',
+                    created_by TEXT NOT NULL,
+                    created_at INTEGER NOT NULL,
+                    updated_at INTEGER NOT NULL
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_harness_probe_suites_label
+                    ON harness_probe_suites(harness_label, created_at DESC);
+
                 CREATE TABLE IF NOT EXISTS session_groups (
                     group_id TEXT PRIMARY KEY,
                     name TEXT NOT NULL,
@@ -656,6 +674,20 @@ class Store(AnchorStoreMixin, TopicStoreMixin):
                 "output_probe_runs",
                 "tool_output_mode",
                 f"TEXT NOT NULL DEFAULT '{TOOL_OUTPUT_MODE_MAXIMUM_COMPATIBILITY}'",
+            )
+            # Suite steps of the adaptive harness test; NULL on standalone probe runs.
+            for column, declaration in (
+                ("suite_id", "TEXT"),
+                ("step_index", "INTEGER"),
+                ("outcome", "TEXT"),
+                ("cut_at_chars", "INTEGER"),
+                ("harness_error", "TEXT NOT NULL DEFAULT ''"),
+                ("cumulative_chars", "INTEGER"),
+            ):
+                self._ensure_column(conn, "output_probe_runs", column, declaration)
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_output_probe_runs_suite "
+                "ON output_probe_runs(suite_id, step_index)"
             )
             self._ensure_column(conn, "session_files", "binary_content", "BLOB")
             self._ensure_column(conn, "session_files", "content_kind", "TEXT NOT NULL DEFAULT 'text'")
@@ -1138,8 +1170,9 @@ class Store(AnchorStoreMixin, TopicStoreMixin):
                 INSERT INTO output_probe_runs (
                     run_id, harness_label, content_profile, target_chars,
                     payload_char_count, server_result_json_chars, block_count,
-                    block_size, tool_output_mode, blocks_json, status, created_by, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
+                    block_size, tool_output_mode, blocks_json, status, created_by, created_at,
+                    suite_id, step_index, cumulative_chars
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?)
                 """,
                 (
                     run["run_id"],
@@ -1154,13 +1187,23 @@ class Store(AnchorStoreMixin, TopicStoreMixin):
                     json.dumps(run["blocks"], separators=(",", ":")),
                     run["created_by"],
                     created_at,
+                    run.get("suite_id"),
+                    run.get("step_index"),
+                    run.get("cumulative_chars"),
                 ),
             )
+            if run.get("suite_id"):
+                conn.execute(
+                    "UPDATE harness_probe_suites SET updated_at = ? WHERE suite_id = ?",
+                    (created_at, run["suite_id"]),
+                )
+            # Suite steps are kept with their suite (see create_harness_probe_suite).
             conn.execute(
                 """
                 DELETE FROM output_probe_runs
-                WHERE run_id NOT IN (
+                WHERE suite_id IS NULL AND run_id NOT IN (
                     SELECT run_id FROM output_probe_runs
+                    WHERE suite_id IS NULL
                     ORDER BY created_at DESC, run_id DESC
                     LIMIT 500
                 )
@@ -1189,7 +1232,8 @@ class Store(AnchorStoreMixin, TopicStoreMixin):
                     block_size, tool_output_mode, '[]' AS blocks_json, status, result_class,
                     '[]' AS observed_canaries_json, matched_checkpoints_json,
                     last_complete_block_index, NULL AS last_complete_canary,
-                    noticed_truncation, notes, created_by, created_at, reported_at
+                    noticed_truncation, notes, created_by, created_at, reported_at,
+                    suite_id, step_index, outcome, cut_at_chars, harness_error, cumulative_chars
                 FROM output_probe_runs
                 ORDER BY created_at DESC, run_id DESC
                 LIMIT ?
@@ -1209,18 +1253,24 @@ class Store(AnchorStoreMixin, TopicStoreMixin):
         last_complete_canary: str,
         noticed_truncation: bool,
         notes: str,
+        outcome: str | None = None,
+        cut_at_chars: int | None = None,
+        harness_error: str = "",
+        status: str = "reported",
     ) -> dict[str, Any] | None:
         reported_at = int(time.time())
         with self._lock, self._connect() as conn:
             cursor = conn.execute(
                 """
                 UPDATE output_probe_runs
-                SET status = 'reported', result_class = ?, observed_canaries_json = ?,
+                SET status = ?, result_class = ?, observed_canaries_json = ?,
                     matched_checkpoints_json = ?, last_complete_block_index = ?,
-                    last_complete_canary = ?, noticed_truncation = ?, notes = ?, reported_at = ?
+                    last_complete_canary = ?, noticed_truncation = ?, notes = ?, reported_at = ?,
+                    outcome = ?, cut_at_chars = ?, harness_error = ?
                 WHERE run_id = ? AND status = 'pending'
                 """,
                 (
+                    status,
                     result_class,
                     json.dumps(observed_canaries, separators=(",", ":")),
                     json.dumps(matched_checkpoints, separators=(",", ":")),
@@ -1229,12 +1279,155 @@ class Store(AnchorStoreMixin, TopicStoreMixin):
                     int(noticed_truncation),
                     notes,
                     reported_at,
+                    outcome,
+                    cut_at_chars,
+                    harness_error,
                     run_id,
                 ),
             )
         if cursor.rowcount == 0:
             return None
         return self.get_output_probe_run(run_id)
+
+    def create_harness_probe_suite(self, suite: dict[str, Any], *, keep_per_harness: int = 5) -> dict[str, Any]:
+        now = int(time.time())
+        with self._lock, self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO harness_probe_suites (
+                    suite_id, harness_label, content_profile, mode, start_chars,
+                    status, created_by, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, 'running', ?, ?, ?)
+                """,
+                (
+                    suite["suite_id"],
+                    suite["harness_label"],
+                    suite["content_profile"],
+                    suite.get("mode", "simple"),
+                    suite["start_chars"],
+                    suite["created_by"],
+                    now,
+                    now,
+                ),
+            )
+            stale = [
+                row["suite_id"]
+                for row in conn.execute(
+                    """
+                    SELECT suite_id FROM harness_probe_suites
+                    WHERE harness_label = ?
+                    ORDER BY created_at DESC, suite_id DESC
+                    LIMIT -1 OFFSET ?
+                    """,
+                    (suite["harness_label"], keep_per_harness),
+                )
+            ]
+            self._delete_harness_probe_suites(conn, stale)
+        saved = self.get_harness_probe_suite(suite["suite_id"])
+        if saved is None:
+            raise RuntimeError("harness probe suite was not persisted")
+        return saved
+
+    def get_harness_probe_suite(self, suite_id: str) -> dict[str, Any] | None:
+        with self._lock, self._connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM harness_probe_suites WHERE suite_id = ?", (suite_id,)
+            ).fetchone()
+            if row is None:
+                return None
+            steps = conn.execute(
+                "SELECT * FROM output_probe_runs WHERE suite_id = ? ORDER BY step_index, created_at",
+                (suite_id,),
+            ).fetchall()
+        return _harness_probe_suite_row(row) | {"steps": [_output_probe_row(step) for step in steps]}
+
+    def finish_harness_probe_suite(self, suite_id: str, verdict: dict[str, Any]) -> None:
+        with self._lock, self._connect() as conn:
+            conn.execute(
+                """
+                UPDATE harness_probe_suites
+                SET status = 'done', verdict = ?, verdict_json = ?, updated_at = ?
+                WHERE suite_id = ?
+                """,
+                (
+                    verdict["verdict"],
+                    json.dumps(verdict, separators=(",", ":")),
+                    int(time.time()),
+                    suite_id,
+                ),
+            )
+
+    def list_latest_harness_probe_suites(self) -> list[dict[str, Any]]:
+        """The newest suite of every harness, newest harness first, with its steps."""
+        with self._lock, self._connect() as conn:
+            ids = [
+                row["suite_id"]
+                for row in conn.execute(
+                    """
+                    SELECT suite_id FROM harness_probe_suites AS suite
+                    WHERE suite_id = (
+                        SELECT latest.suite_id FROM harness_probe_suites AS latest
+                        WHERE latest.harness_label = suite.harness_label
+                        ORDER BY latest.created_at DESC, latest.suite_id DESC
+                        LIMIT 1
+                    )
+                    ORDER BY created_at DESC, suite_id DESC
+                    """
+                )
+            ]
+        return [suite for suite in (self.get_harness_probe_suite(suite_id) for suite_id in ids) if suite]
+
+    def count_harness_probe_cleanup(self) -> dict[str, int]:
+        """What the cleanup buttons would delete: older suites and standalone probe runs."""
+        with self._lock, self._connect() as conn:
+            suites = conn.execute("SELECT COUNT(*) FROM harness_probe_suites").fetchone()[0]
+            harnesses = conn.execute(
+                "SELECT COUNT(DISTINCT harness_label) FROM harness_probe_suites"
+            ).fetchone()[0]
+            standalone = conn.execute(
+                "SELECT COUNT(*) FROM output_probe_runs WHERE suite_id IS NULL"
+            ).fetchone()[0]
+        return {"older_suites": suites - harnesses, "standalone_runs": standalone, "suites": suites}
+
+    def delete_harness_probe_data(
+        self,
+        *,
+        harness_label: str | None = None,
+        keep_latest: bool = False,
+    ) -> dict[str, int]:
+        """Delete suites (one harness or all), optionally keeping each harness's newest.
+
+        Without a label it also drops standalone probe runs (manual runs outside any suite).
+        """
+        with self._lock, self._connect() as conn:
+            where, params = ("WHERE harness_label = ?", [harness_label]) if harness_label else ("", [])
+            rows = conn.execute(
+                f"SELECT suite_id, harness_label FROM harness_probe_suites {where} "
+                "ORDER BY created_at DESC, suite_id DESC",
+                params,
+            ).fetchall()
+            seen: set[str] = set()
+            doomed: list[str] = []
+            for row in rows:
+                if keep_latest and row["harness_label"] not in seen:
+                    seen.add(row["harness_label"])
+                    continue
+                doomed.append(row["suite_id"])
+            suites = self._delete_harness_probe_suites(conn, doomed)
+            standalone = 0
+            if harness_label is None:
+                cursor = conn.execute("DELETE FROM output_probe_runs WHERE suite_id IS NULL")
+                standalone = cursor.rowcount
+        return {"suites": suites, "standalone_runs": standalone}
+
+    @staticmethod
+    def _delete_harness_probe_suites(conn: sqlite3.Connection, suite_ids: list[str]) -> int:
+        if not suite_ids:
+            return 0
+        marks = ",".join("?" for _ in suite_ids)
+        conn.execute(f"DELETE FROM output_probe_runs WHERE suite_id IN ({marks})", suite_ids)
+        cursor = conn.execute(f"DELETE FROM harness_probe_suites WHERE suite_id IN ({marks})", suite_ids)
+        return cursor.rowcount
 
     def list_session_groups(self, include_deleted: bool = False) -> list[dict[str, Any]]:
         deleted_clause = "" if include_deleted else "WHERE deleted_at IS NULL"
@@ -3551,6 +3744,28 @@ def _output_probe_row(row: sqlite3.Row) -> dict[str, Any]:
         "created_by": row["created_by"],
         "created_at": row["created_at"],
         "reported_at": row["reported_at"],
+        "suite_id": row["suite_id"],
+        "step_index": row["step_index"],
+        "outcome": row["outcome"],
+        "cut_at_chars": row["cut_at_chars"],
+        "harness_error": row["harness_error"],
+        "cumulative_chars": row["cumulative_chars"],
+    }
+
+
+def _harness_probe_suite_row(row: sqlite3.Row) -> dict[str, Any]:
+    return {
+        "suite_id": row["suite_id"],
+        "harness_label": row["harness_label"],
+        "content_profile": row["content_profile"],
+        "mode": row["mode"],
+        "start_chars": row["start_chars"],
+        "status": row["status"],
+        "verdict": row["verdict"],
+        "verdict_detail": json.loads(row["verdict_json"]),
+        "created_by": row["created_by"],
+        "created_at": row["created_at"],
+        "updated_at": row["updated_at"],
     }
 
 
