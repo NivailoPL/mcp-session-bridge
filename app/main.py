@@ -1328,7 +1328,9 @@ def answer_recall_check(suite_id: str, canaries: list[str]) -> dict[str, Any]:
     assert run is not None
     hits = recall_hits(run["blocks"], run["recall_blocks"], canaries[: len(run["recall_blocks"])])
     score = sum(hits)
-    outcome = "complete" if all(hits) else "spilled"
+    # A model that read the result through a file can recall it from that read, not because the
+    # harness put it in context; only a clean "context" report with full recall proves the size.
+    outcome = "complete" if all(hits) and run.get("delivery") != "file" else "spilled"
     store.finish_output_probe_recall(run["run_id"], outcome=outcome, recall_score=score, recall_hits=hits)
     return _continue_harness_suite(
         suite["suite_id"],

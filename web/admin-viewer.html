@@ -5594,6 +5594,9 @@
       // Which blocks the model still knew tells how the harness lost the rest.
       function harnessPartialRecallText(step, size, asked, fromFile) {
         const hits = step.recall_hits || [];
+        if (hits.length && hits.every(Boolean) && step.delivery === "file") {
+          return ["✓", "warn", `${size}: recalled, but read from a file.`, `It recalled all ${asked} blocks, the last one included, yet said it read the result from a file. It may have pulled the file into its context itself, so this size doesn't prove what the harness puts in context; the test looked lower for a clean pass.`, "context-file"];
+        }
         const lastMissed = hits.length && hits[hits.length - 1] === false;
         if (lastMissed && hits.slice(0, -1).some(Boolean)) {
           return ["◐", "warn", `${size}: only the start in context.`, `Without tools the model recalled the blocks near the start but not the one at the very end. This harness shows only the beginning of a large result in context and keeps the rest in a file.${fromFile}`];
@@ -5649,7 +5652,8 @@
         const waiting = step.status === "recall"
           ? ["○", "off", `${size}: arrived whole, memory check running…`, ""]
           : ["○", "off", `${size}: waiting for the model…`, ""];
-        const [icon, tone, title, detail] = texts[step.outcome] || waiting;
+        const [icon, tone, title, detail, presetKind] = texts[step.outcome] || waiting;
+        if (presetKind) kind = presetKind;
         const context = step.context_suspect
           ? ` About ${amount(step.chars_in_chat_before)} were already in this chat, so the context window may be the real limit. Test again in a new chat to be sure.`
           : "";

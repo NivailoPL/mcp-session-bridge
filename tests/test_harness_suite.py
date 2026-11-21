@@ -424,3 +424,20 @@ def test_context_warning_skips_delivery_steps(load_main, admin_client) -> None:
     assert steps[-1]["phase"] == "delivery"
     assert steps[-1]["chars_in_chat_before"] > 150_000
     assert steps[-1]["context_suspect"] is False
+
+
+def test_full_recall_after_reading_a_file_does_not_prove_context(load_main) -> None:
+    main = load_main()
+    suite_id = _start_suite(main, "grok.com")
+    step = main.next_harness_probe(suite_id)
+    blocks = main.store.get_output_probe_run(step["run_id"])["blocks"]
+    asked = main.report_harness_probe(
+        suite_id, [b["canary"] for b in blocks if b["checkpoint_labels"]], blocks[-1]["index"], blocks[-1]["canary"],
+        delivery="file",
+    )["recall_check"]["blocks"]
+    canaries = {b["index"]: b["canary"] for b in blocks}
+
+    answered = main.answer_recall_check(suite_id, [canaries[index] for index in asked])
+
+    assert (answered["outcome"], answered["recalled"]) == ("spilled", "3/3")
+    assert main.next_harness_probe(suite_id)["target_chars"] == 16_000
