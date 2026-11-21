@@ -406,10 +406,13 @@ def suite_verdict(steps: list[dict[str, Any]], *, ceiling: int = MAX_PROBE_TARGE
         verdict = "fails_small"
     elif hi is None:
         verdict = "passes_up_to"
-    elif hi_step is not None and hi_step["outcome"] == "truncated":
-        verdict = "truncates"
     else:
-        verdict = "rejects"
+        # Name the limit after how the first failing size failed.
+        verdict = {
+            "truncated": "truncates",
+            "altered": "drops_middle",
+            "rejected": "rejects",
+        }.get(hi_step["outcome"] if hi_step else "", "fails_above")
     return {
         "verdict": verdict,
         "largest_complete_chars": lo,
@@ -467,11 +470,8 @@ def public_harness_suite(suite: dict[str, Any], *, now: int) -> dict[str, Any]:
             run.get("outcome") not in (None, "complete") and before > SUITE_CONTEXT_SUSPECT_CHARS
         )
         steps.append(step)
-    verdict = (
-        suite["verdict_detail"]
-        if suite["status"] == "done" and suite["verdict_detail"]
-        else suite_verdict(suite_steps(suite["steps"]))
-    )
+    # Recomputed on read, so suites stored before a verdict was renamed show the current name.
+    verdict = suite_verdict(suite_steps(suite["steps"]))
     status = suite["status"]
     if status == "running" and now - int(suite["updated_at"]) > SUITE_STALE_SECONDS:
         status = "unfinished"

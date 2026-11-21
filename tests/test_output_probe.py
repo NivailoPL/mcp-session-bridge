@@ -258,3 +258,16 @@ def test_step_outcome_maps_observations_and_harness_errors() -> None:
     assert step_outcome("verification_failed") == "verification_failed"
     assert step_outcome(None, harness_error="Tool result too large") == "rejected"
     assert step_outcome(None, reported=False) == "no_report"
+
+
+def test_suite_verdict_names_the_limit_after_how_it_failed() -> None:
+    def steps_failing_with(outcome: str) -> list[dict[str, Any]]:
+        return [
+            {"target_chars": 32_000, "outcome": "complete", "cut_at_chars": None},
+            {"target_chars": 64_000, "outcome": outcome, "cut_at_chars": None},
+        ]
+
+    assert suite_verdict(steps_failing_with("altered"))["verdict"] == "drops_middle"
+    assert suite_verdict(steps_failing_with("rejected"))["verdict"] == "rejects"
+    assert suite_verdict(steps_failing_with("no_report"))["verdict"] == "fails_above"
+    assert suite_verdict(steps_failing_with("verification_failed"))["verdict"] == "fails_above"

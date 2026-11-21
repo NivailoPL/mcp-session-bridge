@@ -5533,6 +5533,8 @@
           case "no_limit": return ["No limit up to 250k", "ok"];
           case "truncates": return [`Truncates above ~${hi}`, "warn"];
           case "rejects": return [`Rejects above ~${hi}`, "warn"];
+          case "drops_middle": return [`Drops the middle above ~${hi}`, "warn"];
+          case "fails_above": return [`Fails above ~${hi}`, "warn"];
           case "fails_small": return ["Fails even at 4k", "fail"];
           case "passes_up_to": return [`Unfinished · ${harnessK(verdict.largest_complete_chars)} passed`, "off"];
           default: return [suite.status === "unfinished" ? "Not started" : "Waiting", "off"];
@@ -5547,7 +5549,9 @@
           complete: ["✓", "ok", `${size}: arrived whole.`, "Every checkpoint and the final block matched."],
           truncated: ["✂", "warn", `${size}: cut off.`, `The model saw the start, but the result ended at about ${Number(step.cut_at_chars || 0).toLocaleString()} chars. This harness truncates silently: no error, the tail just isn't there.`],
           rejected: ["✕", "fail", `${size}: rejected.`, step.harness_error ? `The harness refused the result: “${step.harness_error}”.` : "The harness refused the result."],
-          altered: ["!", "warn", `${size}: arrived damaged.`, `Parts were missing (checkpoints seen: ${checkpoints}). The harness dropped the start or the middle, not only the tail.`],
+          altered: (step.matched_checkpoints || []).includes("FIRST")
+            ? ["!", "warn", `${size}: middle missing.`, `The model got the start and the end, but part of the payload was gone (checkpoints seen: ${checkpoints}). The harness cut it out silently, so a model would not know anything is missing.`]
+            : ["!", "warn", `${size}: start missing.`, `The beginning of the payload never reached the model (checkpoints seen: ${checkpoints}). The harness dropped it silently.`],
           verification_failed: ["?", "warn", `${size}: misread.`, "The model reported markers that don't match the payload. This counts as a failure at this size, though the harness itself may be fine."],
           no_report: ["…", "off", `${size}: no report.`, "The step was sent, but the model never reported back. The harness most likely lost or rejected the result."],
         };
