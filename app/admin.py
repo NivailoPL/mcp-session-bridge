@@ -75,6 +75,7 @@ from app.output_probe import (
     MIN_PROBE_TARGET_CHARS,
     MIN_TRANSCRIPT_CHUNK_CHARS,
     MIN_TRANSCRIPT_CHUNK_LINES,
+    CHARS_PER_TOKEN,
     PROBE_PROFILES,
     PROBE_SAFETY_MARGIN,
     SUITE_START_CHARS,
@@ -618,6 +619,7 @@ class AdminHandlers:
             "cleanup": self.store.count_harness_probe_cleanup(),
             "start_chars": SUITE_START_CHARS,
             "content_profiles": sorted(PROBE_PROFILES),
+            "chars_per_token": CHARS_PER_TOKEN,
         }
 
     async def api_update_tool_output_settings(self, request: Request) -> Response:

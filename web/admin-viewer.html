@@ -2018,6 +2018,8 @@
     .probe-result-meta { color: var(--muted); font-size: var(--t-meta); text-align: right; font-variant-numeric: tabular-nums; }
     .probe-result-class { justify-self: end; }
     .probe-result-empty { color: var(--muted); font-size: var(--t-meta); }
+    .harness-unit-seg { margin-left: 8px; }
+    .harness-unit-seg span { padding: 2px 9px; font-size: var(--t-meta); }
     .harness-test-start { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--stroke-soft); }
     .harness-test-start input { flex: 1 1 14rem; min-width: 0; }
     .harness-test-error { flex-basis: 100%; color: var(--danger); font-size: var(--t-meta); }
@@ -2871,6 +2873,10 @@
               <h5>Harness limits</h5>
               <span class="context-help"><button type="button" class="context-help-trigger" aria-label="About Harness limits" aria-describedby="settingsHelpCapacity">?</button><span id="settingsHelpCapacity" class="context-help-box" role="tooltip">Measures how large a single tool result each harness really accepts. Type the harness name, paste the prompt into that harness (a fresh chat is best) and Bridge picks every size itself: it grows from 32k characters, walks down when that is already too much, and reads the exact cut point when a harness truncates. After every whole delivery the model must recall three random blocks without tools, which shows whether the result is really in its context or was moved to a file or compacted. When it leaves context, the test keeps growing to find how much one tool call can still carry. A test that dies with its chat continues when you paste the same prompt into a new one. Every recommendation keeps a 25% safety margin; when all clients share one chunk size, stay at or below the weakest harness.</span></span>
               <span id="probeVerifiedCount" class="settings-pill"></span>
+              <div class="settings-seg harness-unit-seg" role="radiogroup" aria-label="Show sizes in" data-settings-instant>
+                <label><input id="harnessUnitChars" type="radio" name="harnessUnit" value="chars" checked><span>chars</span></label>
+                <label><input id="harnessUnitTokens" type="radio" name="harnessUnit" value="tokens"><span>tokens</span></label>
+              </div>
             </div>
             <div class="settings-item">
               <div class="settings-item-label"><span class="settings-item-title">Safe chunk size</span><span id="probeSafeSource" class="settings-item-sub"></span></div>
@@ -3629,7 +3635,7 @@
       const ALLOWED_FILE_EXTENSIONS = new Set([...TEXT_FILE_EXTENSIONS, ".pdf", ...IMAGE_FILE_EXTENSIONS]);
 
       const state = {
-        harnessTest: { active: null, timer: null },
+        harnessTest: { active: null, timer: null, unit: null },
         csrfToken: "",
         sessions: [],
         groups: [],
@@ -4015,7 +4021,8 @@
         "harnessTestForm", "harnessTestLabel", "harnessTestStart", "harnessTestError", "harnessTestActive",
         "harnessTestActiveText", "harnessTestActivePill", "harnessTestProgressBar", "harnessTestPrompt",
         "harnessTestCopy", "harnessTestDismiss", "harnessTestList", "harnessTestCleanup", "harnessTestCleanupMeta",
-        "harnessTestKeepLatest", "harnessTestDeleteAll", "harnessTestProfile", "harnessTestStartChars"
+        "harnessTestKeepLatest", "harnessTestDeleteAll", "harnessTestProfile", "harnessTestStartChars",
+        "harnessUnitChars", "harnessUnitTokens"
       ].map((id) => [id, document.getElementById(id)]));
 
       dom.addGroupButton.addEventListener("click", () => openGroupDialog());
@@ -4655,6 +4662,15 @@
         settingsDom.harnessTestDismiss.addEventListener("click", () => { state.harnessTest.active = null; renderHarnessTests(); });
         settingsDom.harnessTestKeepLatest.addEventListener("click", () => cleanupHarnessTests("keep_latest"));
         settingsDom.harnessTestDeleteAll.addEventListener("click", () => cleanupHarnessTests("all"));
+        for (const radio of [settingsDom.harnessUnitChars, settingsDom.harnessUnitTokens]) {
+          radio.checked = radio.value === harnessUnit();
+          radio.addEventListener("change", () => {
+            try { localStorage.setItem("mcp-admin:harness-unit", radio.value); } catch (_) { /* per-viewer convenience only */ }
+            state.harnessTest.unit = radio.value;
+            renderOutputProbeResults();
+            renderHarnessTests();
+          });
+        }
         dom.aiSettingsDialog.addEventListener("close", () => stopHarnessTestPolling());
         settingsDom.probeSafeApply.addEventListener("click", () => {
           selectTranscriptChunkRecommendation(Number(settingsDom.probeSafeApply.dataset.value));
@@ -5483,7 +5499,9 @@
           settingsDom.probeSafeSource.textContent = "";
           settingsDom.probeSafeApply.hidden = true;
         } else {
-          settingsDom.probeSafeValue.textContent = `${chars(weakest.recommended_chunk_chars)} chars`;
+          settingsDom.probeSafeValue.textContent = harnessUnit() === "tokens"
+            ? `≈${harnessTokens(weakest.recommended_chunk_chars, "transcript_markdown").toLocaleString()} tokens`
+            : `${chars(weakest.recommended_chunk_chars)} chars`;
           settingsDom.probeSafeValue.className = "settings-value settings-value-mono";
           settingsDom.probeSafeSource.textContent = `limited by ${weakest.harness_label}`;
           const current = Number.parseInt(settingsDom.transcriptChunkMaxChars.value, 10);
@@ -5522,9 +5540,34 @@
       const HARNESS_TESTS_API = "/admin/api/settings/harness-tests";
       const HARNESS_TEST_MAX_STEPS = 7;
 
-      function harnessK(value) {
-        const number = Number(value || 0);
-        return number >= 10000 ? `${Math.round(number / 1000)}k` : number.toLocaleString();
+      function harnessUnit() {
+        if (state.harnessTest.unit) return state.harnessTest.unit;
+        try { return localStorage.getItem("mcp-admin:harness-unit") === "tokens" ? "tokens" : "chars"; } catch (_) { return "chars"; }
+      }
+
+      // Tokens are an estimate: tokenizers differ per model, so the ratio is a rough one per profile.
+      function harnessTokens(chars, profile) {
+        const ratios = state.settings?.harness_tests?.chars_per_token || { transcript_markdown: 4, transport_canary: 1.5 };
+        return Math.round(Number(chars || 0) / (ratios[profile || "transcript_markdown"] || 4));
+      }
+
+      function harnessK(value, profile) {
+        const tokens = harnessUnit() === "tokens";
+        const number = tokens ? harnessTokens(value, profile) : Number(value || 0);
+        const text = number >= 10000 ? `${Math.round(number / 1000)}k` : number.toLocaleString();
+        return tokens ? `${text} tokens` : text;
+      }
+
+      // A full amount in the chosen unit, e.g. "92,000 chars" or "≈23,000 tokens".
+      function harnessAmount(chars, profile) {
+        return harnessUnit() === "tokens"
+          ? `≈${harnessTokens(chars, profile).toLocaleString()} tokens`
+          : `${Number(chars || 0).toLocaleString()} chars`;
+      }
+
+      // Both units, for the number a decision is made on.
+      function harnessBoth(chars, profile) {
+        return `${Number(chars || 0).toLocaleString()} chars (≈${harnessTokens(chars, profile).toLocaleString()} tokens)`;
       }
 
       // The pill on a harness row: what this harness can take, in a few words.
@@ -5533,7 +5576,7 @@
         if (suite.status === "running") {
           return suite.steps.length ? [`Running · step ${suite.steps.length}`, "accent"] : ["Waiting for the harness", "accent"];
         }
-        const hi = harnessK(verdict.smallest_failing_chars);
+        const hi = harnessK(verdict.smallest_failing_chars, suite.content_profile);
         switch (verdict.verdict) {
           case "no_limit": return ["No limit up to 250k", "ok"];
           case "truncates": return [`Truncates above ~${hi}`, "warn"];
@@ -5542,7 +5585,7 @@
           case "leaves_context": return [`Leaves context above ~${hi}`, "warn"];
           case "fails_above": return [`Fails above ~${hi}`, "warn"];
           case "fails_small": return ["Fails even at 4k", "fail"];
-          case "passes_up_to": return [`Unfinished · ${harnessK(verdict.largest_complete_chars)} passed`, "off"];
+          case "passes_up_to": return [`Unfinished · ${harnessK(verdict.largest_complete_chars, suite.content_profile)} passed`, "off"];
           default: return [suite.status === "unfinished" ? "Not started" : "Waiting", "off"];
         }
       }
@@ -5561,12 +5604,13 @@
         return ["◐", "warn", `${size}: arrived, partly in context.`, `Without tools the model recalled ${step.recall_score} of ${asked} blocks: parts of the result fell out of its context.${fromFile}`];
       }
 
-      function harnessStepText(step) {
-        const size = `${Number(step.target_chars).toLocaleString()} chars`;
+      function harnessStepText(step, profile) {
+        const size = harnessAmount(step.target_chars, profile);
+        const amount = (chars) => harnessAmount(chars, profile);
         const checkpoints = (step.matched_checkpoints || []).join(", ") || "none";
         const texts = {
           complete: ["✓", "ok", `${size}: arrived whole.`, "Every checkpoint and the final block matched."],
-          truncated: ["✂", "warn", `${size}: cut off.`, `The model saw the start, but the result ended at about ${Number(step.cut_at_chars || 0).toLocaleString()} chars. This harness truncates silently: no error, the tail just isn't there.`],
+          truncated: ["✂", "warn", `${size}: cut off.`, `The model saw the start, but the result ended at about ${amount(step.cut_at_chars)}. This harness truncates silently: no error, the tail just isn't there.`],
           rejected: ["✕", "fail", `${size}: rejected.`, step.harness_error ? `The harness refused the result: “${step.harness_error}”.` : "The harness refused the result."],
           altered: (step.matched_checkpoints || []).includes("FIRST")
             ? ["!", "warn", `${size}: middle missing.`, `The model got the start and the end, but part of the payload was gone (checkpoints seen: ${checkpoints}). The harness cut it out silently, so a model would not know anything is missing.`]
@@ -5575,11 +5619,13 @@
           no_report: ["…", "off", `${size}: no report.`, "The step was sent, but the model never reported back. The harness most likely lost or rejected the result."],
         };
         if (step.phase === "delivery" && step.outcome === "truncated") {
-          const cutAt = Number(step.cut_at_chars || 0).toLocaleString();
+          const cutAt = amount(step.cut_at_chars);
           const note = step.harness_error ? ` The model's note: “${step.harness_error}”.` : "";
           texts.truncated = step.delivery === "file"
-            ? ["✂", "warn", `${size}: cut off, even through the file.`, `The model read the harness's file and the result still ended at about ${cutAt} chars. That is the most one tool call carries here.${note}`]
-            : ["✂", "off", `${size}: no file access in this chat.`, `Asked to read the full result through a file or tool, the model still saw only about ${cutAt} chars.${note} So how much one call can carry stays unmeasured; a chat with file or code tools turned on may get further.`];
+            ? ["✂", "warn", `${size}: cut off, even through the file.`, `The model read the harness's file and the result still ended at about ${cutAt}. That is the most one tool call carries here.${note}`]
+            : step.delivery === "no_file"
+              ? ["✂", "warn", `${size}: cut off, no file kept.`, `The harness keeps no full copy, so the result ends at about ${cutAt} for good. That is the most one tool call carries here.${note}`]
+              : ["✂", "off", `${size}: no file access in this chat.`, `Asked to read the full result through a file or tool, the model still saw only about ${cutAt}.${note} So how much one call can carry stays unmeasured; a chat with file or code tools turned on may get further.`];
         }
         const asked = (step.recall_blocks || []).length;
         const fromFile = step.delivery === "file" ? " The model said it read this result from a file." : "";
@@ -5605,7 +5651,7 @@
           : ["○", "off", `${size}: waiting for the model…`, ""];
         const [icon, tone, title, detail] = texts[step.outcome] || waiting;
         const context = step.context_suspect
-          ? ` About ${Number(step.chars_in_chat_before || 0).toLocaleString()} chars were already in this chat, so the context window may be the real limit. Test again in a new chat to be sure.`
+          ? ` About ${amount(step.chars_in_chat_before)} were already in this chat, so the context window may be the real limit. Test again in a new chat to be sure.`
           : "";
         return { icon, tone, title, detail: detail + context, kind };
       }
@@ -5626,12 +5672,16 @@
           return box;
         }
         const profileNote = suite.content_profile === "transcript_markdown" ? "" : " Transport canary results don't set the safe chunk size.";
-        const unmeasured = suite.steps.some((step) => step.phase === "delivery" && step.outcome === "truncated" && step.delivery !== "file");
+        const deliveryCut = suite.steps.find((step) => step.phase === "delivery" && step.outcome === "truncated");
+        const unmeasured = deliveryCut && !["file", "no_file"].includes(deliveryCut.delivery);
+        const hardCut = deliveryCut && deliveryCut.delivery === "no_file";
         const delivered = Number(verdict.largest_delivered_chars || 0);
+        const profile = suite.content_profile;
         const deliveryNote = delivered > Number(verdict.largest_complete_chars || 0)
-          ? ` One tool call carries ${verdict.smallest_undelivered_chars ? "up to " : ""}${delivered.toLocaleString()}${verdict.smallest_undelivered_chars ? "" : "+"} chars, but only what fits in context is read reliably.`
+          ? ` One tool call carries ${verdict.smallest_undelivered_chars ? "up to " : ""}${harnessAmount(delivered, profile)}${verdict.smallest_undelivered_chars ? "" : "+"}, but only what fits in context is read reliably.`
+          : hardCut ? ` One tool call carries about ${harnessAmount(deliveryCut.cut_at_chars, profile)} here; the harness keeps no file.`
           : unmeasured ? " How much one call can carry wasn't measured: the model couldn't open the harness's file in that chat." : "";
-        box.append(spanCls("", `Use chunks up to ${Number(recommended).toLocaleString()} chars here (${Number(verdict.largest_complete_chars).toLocaleString()} verified in context, minus the 25% margin).${deliveryNote}${profileNote}`));
+        box.append(spanCls("", `Use chunks up to ${harnessBoth(recommended, profile)} here (${harnessAmount(verdict.largest_complete_chars, profile)} verified in context, minus the 25% margin).${deliveryNote}${profileNote}`));
         if (suite.content_profile === "transcript_markdown") {
           const use = document.createElement("button");
           use.type = "button";
@@ -5673,7 +5723,7 @@
           const body = div("harness-test-body");
           if (!suite.steps.length) body.append(div("harness-test-note", "No step yet. Paste the prompt into the harness."));
           for (const step of suite.steps) {
-            const text = harnessStepText(step);
+            const text = harnessStepText(step, suite.content_profile);
             const line = div("harness-test-step");
             const icon = spanCls("harness-test-step-icon", text.icon);
             icon.dataset.tone = text.tone;

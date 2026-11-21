@@ -393,3 +393,34 @@ def test_delivery_step_tells_the_model_to_use_the_file(load_main) -> None:
 
     assert step["phase"] == "delivery"
     assert "use that now" in step["report_instructions"]
+
+
+def test_delivery_report_accepts_no_file_and_panel_gets_token_ratios(load_main, admin_client) -> None:
+    main = load_main()
+    client, _ = admin_client(main)
+    suite_id = _start_suite(main)
+    step = main.next_harness_probe(suite_id)
+    blocks = main.store.get_output_probe_run(step["run_id"])["blocks"]
+    visible = blocks[:10]
+    main.report_harness_probe(
+        suite_id, [visible[0]["canary"]], visible[-1]["index"], visible[-1]["canary"], delivery="NO_FILE"
+    )
+
+    first = main.store.get_harness_probe_suite(suite_id)["steps"][0]
+    tests = client.get(BASE).json()["harness_tests"]
+
+    assert first["delivery"] == "no_file"
+    assert tests["chars_per_token"] == {"transcript_markdown": 4.0, "transport_canary": 1.5}
+
+
+def test_context_warning_skips_delivery_steps(load_main, admin_client) -> None:
+    main = load_main()
+    client, _ = admin_client(main)
+    suite_id = _start_suite(main, "claude.ai")
+    _run(main, suite_id, lambda step: _model_report(main, step, 98_400, truncates=True))
+
+    steps = client.get(f"{BASE}/{suite_id}").json()["suite"]["steps"]
+
+    assert steps[-1]["phase"] == "delivery"
+    assert steps[-1]["chars_in_chat_before"] > 150_000
+    assert steps[-1]["context_suspect"] is False

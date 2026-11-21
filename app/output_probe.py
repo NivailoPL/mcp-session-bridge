@@ -308,6 +308,10 @@ STEP_OUTCOMES = {
     "complete", "truncated", "altered", "rejected", "no_report", "verification_failed", "spilled",
 }
 SUITE_DELIVERY_EXTRA_STEPS = 4
+DELIVERY_REPORTS = ("context", "file", "no_file", "file_unreachable", "unsure")
+# Rough chars per token, for the panel's token view only. Prose: 100,000 chars hit claude.ai's
+# 25,000-token limit (GPT tokenizers give ~5). Random canary filler: ~1.5 on GPT tokenizers.
+CHARS_PER_TOKEN = {"transcript_markdown": 4.0, "transport_canary": 1.5}
 RECALL_BLOCK_COUNT = 3
 
 
@@ -565,7 +569,9 @@ def harness_test_prompt(suite_id: str) -> str:
         "Otherwise read probe_payload without summarizing it, then immediately call report_harness_probe "
         "with the same suite_id, every CHECKPOINT canary you can actually see, and the index and canary "
         "of the last block with a complete END marker, and delivery: \"context\" if the payload is directly "
-        "in your context, \"file\" if you read it through a file or another tool, \"unsure\" otherwise. "
+        "in your context, \"file\" if you read it through a file or another tool, \"no_file\" if part was "
+        "cut and the harness kept no full copy, \"file_unreachable\" if a full copy exists but you cannot "
+        "open it, \"unsure\" otherwise. "
         "Steps marked phase=delivery are different: if the harness saved the full result to a file or "
         "offers a tool to read it, use that and report canaries from the full result. "
         "When report_harness_probe asks for a memory check, answer it with answer_recall_check from your "
@@ -582,8 +588,11 @@ def public_harness_suite(suite: dict[str, Any], *, now: int) -> dict[str, Any]:
     in_chat = 0  # chars that stayed in the conversation; spilled results sit in a file
     for run in suite["steps"]:
         step = {key: run.get(key) for key in _PUBLIC_STEP_FIELDS}
+        # Only the context search can be skewed by a full chat; delivery steps measure the harness.
         step["context_suspect"] = (
-            run.get("outcome") not in (None, "complete") and in_chat > SUITE_CONTEXT_SUSPECT_CHARS
+            (run.get("phase") or "context") == "context"
+            and run.get("outcome") not in (None, "complete")
+            and in_chat > SUITE_CONTEXT_SUSPECT_CHARS
         )
         step["chars_in_chat_before"] = in_chat
         if run.get("outcome") == "truncated":

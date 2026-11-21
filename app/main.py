@@ -47,6 +47,7 @@ from app.output_probe import (
     build_output_probe,
     classify_probe_observation,
     cut_point_from_observation,
+    DELIVERY_REPORTS,
     pick_recall_blocks,
     plan_next_step,
     recommended_chunk_chars,
@@ -1131,7 +1132,9 @@ def _issue_output_probe(
                 "in your context. If the harness saved the full result to a file or offers a tool to read "
                 "it, use that now and report the CHECKPOINT canaries and the last complete END block of "
                 "the full result. Otherwise report what you see. Never guess a canary. Pass delivery "
-                "\"file\" if you read it through a file or tool. Then call next_harness_probe again."
+                "\"file\" if you read it through a file or tool, \"no_file\" if the harness kept no full "
+                "copy, or \"file_unreachable\" if a copy exists but you cannot open it. Then call "
+                "next_harness_probe again."
             ),
         }
     result["probe_payload"] = probe["payload"]
@@ -1228,7 +1231,7 @@ def report_harness_probe(
     harness_error: str = "",
     delivery: str = "unsure",
 ) -> dict[str, Any]:
-    """Report what reached you from the last next_harness_probe step. delivery: "context" if the payload is directly in your context, "file" if you read it through a file or another tool, "unsure" otherwise. If the call failed, pass the error text as harness_error and leave the canaries empty."""
+    """Report what reached you from the last next_harness_probe step. delivery: "context" if the payload is directly in your context, "file" if you read it through a file or another tool, "no_file" if part was cut and the harness kept no full copy, "file_unreachable" if a full copy exists but you cannot open it, "unsure" otherwise. If the call failed, pass the error text as harness_error and leave the canaries empty."""
     suite = store.get_harness_probe_suite(suite_id.strip())
     if suite is None:
         return {"ok": False, "error": f"Unknown harness test suite_id: {suite_id}"}
@@ -1243,7 +1246,7 @@ def report_harness_probe(
     ):
         return {"ok": False, "error": "observed_checkpoint_canaries must be a list of strings"}
     resolved_delivery = delivery.strip().lower() if isinstance(delivery, str) else ""
-    if resolved_delivery not in ("context", "file", "unsure"):
+    if resolved_delivery not in DELIVERY_REPORTS:
         resolved_delivery = "unsure"
     error_text = harness_error.strip()[:500]
     run = store.get_output_probe_run(pending[-1]["run_id"])
