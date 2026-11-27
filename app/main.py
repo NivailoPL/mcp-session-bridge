@@ -1421,16 +1421,23 @@ def submit_output_probe_observation(
 
 @mcp.tool()
 def list_session_groups() -> dict[str, Any]:
-    """List available local session groups so a model can choose a valid group_id before creating a session."""
+    """List available local session groups so a model can choose a valid group_id before creating a session.
+
+    A group's description, when present, is the owner's own note on what the group is for.
+    """
     groups = []
     for group in store.list_session_groups():
-        groups.append({
+        item = {
             key: group[key]
             for key in (
                 "group_id", "name", "color", "icon_key", "sort_order", "is_system",
                 "created_at", "updated_at", "deleted_at",
             )
-        })
+        }
+        # Sensitive groups too: their names are listed already, and the note helps pick the right one.
+        if group["description"]:
+            item["description"] = group["description"]
+        groups.append(item)
     return {"ok": True, "groups": groups}
 
 
@@ -1871,6 +1878,7 @@ def _group_payload(group: Any) -> dict[str, Any] | None:
         "icon_key": group.icon_key,
         "sort_order": group.sort_order,
         "is_system": group.is_system,
+        **({"description": group.description} if group.description else {}),
     }
 
 

@@ -28,6 +28,8 @@ from app.tool_output import (
 
 UNCATEGORIZED_GROUP_ID = "uncategorized"
 SCHEMA_VERSION = 2
+# One sentence: it reaches every model that opens a session in the group.
+GROUP_DESCRIPTION_MAX_CHARS = 280
 
 # Written into the retired sessions.context_pack_id column, which is NOT NULL and
 # cannot be dropped without a schema bump. Nothing reads this value.
@@ -187,6 +189,7 @@ class SessionGroupRecord:
     created_at: int
     updated_at: int
     deleted_at: int | None = None
+    description: str = ""
 
 
 @dataclass(frozen=True)
@@ -480,6 +483,7 @@ class Store(AnchorStoreMixin, TopicStoreMixin):
                     sort_order INTEGER NOT NULL DEFAULT 100,
                     is_system INTEGER NOT NULL DEFAULT 0,
                     is_sensitive INTEGER NOT NULL DEFAULT 0,
+                    description TEXT NOT NULL DEFAULT '',
                     created_at INTEGER NOT NULL,
                     updated_at INTEGER NOT NULL,
                     deleted_at INTEGER
@@ -664,6 +668,8 @@ class Store(AnchorStoreMixin, TopicStoreMixin):
             # Until when the owner reopened a closed session; NULL when never reopened.
             self._ensure_column(conn, "sessions", "reopened_until", "INTEGER")
             self._ensure_column(conn, "session_groups", "is_sensitive", "INTEGER NOT NULL DEFAULT 0")
+            # The owner's one-line note on what the group is for; empty when unset.
+            self._ensure_column(conn, "session_groups", "description", "TEXT NOT NULL DEFAULT ''")
             self._ensure_column(conn, "exchanges", "assistant_created_at", "INTEGER")
             self._ensure_column(conn, "exchanges", "assistant_masked_at", "INTEGER")
             self._ensure_column(conn, "exchanges", "deleted_at", "INTEGER")
@@ -1506,8 +1512,10 @@ class Store(AnchorStoreMixin, TopicStoreMixin):
         color: str,
         icon_key: str,
         group_id: str = "",
+        description: str = "",
     ) -> SessionGroupRecord:
         resolved_name = _validate_group_name(name)
+        resolved_description = _validate_group_description(description)
         resolved_color = _validate_group_color(color)
         resolved_icon_key = _validate_group_icon_key(icon_key)
         resolved_group_id = _validate_group_id(group_id.strip() or _slugify(resolved_name))
@@ -1523,8 +1531,8 @@ class Store(AnchorStoreMixin, TopicStoreMixin):
                 """
                 INSERT INTO session_groups (
                     group_id, name, color, icon_key, sort_order, is_system,
-                    created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, 0, ?, ?)
+                    description, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?)
                 """,
                 (
                     resolved_group_id,
@@ -1532,6 +1540,7 @@ class Store(AnchorStoreMixin, TopicStoreMixin):
                     resolved_color,
                     resolved_icon_key,
                     int(max_sort) + 10,
+                    resolved_description,
                     now,
                     now,
                 ),
@@ -1547,6 +1556,7 @@ class Store(AnchorStoreMixin, TopicStoreMixin):
         color: str | None = None,
         icon_key: str | None = None,
         is_sensitive: bool | None = None,
+        description: str | None = None,
     ) -> SessionGroupRecord:
         resolved_group_id = group_id.strip()
         updates: dict[str, Any] = {}
@@ -1560,6 +1570,8 @@ class Store(AnchorStoreMixin, TopicStoreMixin):
             if not isinstance(is_sensitive, bool):
                 raise ValueError("is_sensitive must be a boolean")
             updates["is_sensitive"] = int(is_sensitive)
+        if description is not None:
+            updates["description"] = _validate_group_description(description)
         if not updates:
             raise ValueError("No editable session group fields provided")
 
@@ -3470,6 +3482,7 @@ def _session_group_from_row(row: sqlite3.Row) -> SessionGroupRecord:
         created_at=row["created_at"],
         updated_at=row["updated_at"],
         deleted_at=row["deleted_at"],
+        description=row["description"],
     )
 
 
@@ -3482,6 +3495,7 @@ def _session_group_payload(group: SessionGroupRecord) -> dict[str, Any]:
         "sort_order": group.sort_order,
         "is_system": group.is_system,
         "is_sensitive": group.is_sensitive,
+        "description": group.description,
         "created_at": group.created_at,
         "updated_at": group.updated_at,
         "deleted_at": group.deleted_at,
@@ -3661,6 +3675,15 @@ def _validate_group_name(value: str) -> str:
     if len(name) > 64:
         raise ValueError("session group name must be 64 characters or fewer")
     return name
+
+
+def _validate_group_description(value: str) -> str:
+    description = " ".join(str(value or "").split())
+    if len(description) > GROUP_DESCRIPTION_MAX_CHARS:
+        raise ValueError(
+            f"session group description must be {GROUP_DESCRIPTION_MAX_CHARS} characters or fewer"
+        )
+    return description
 
 
 def _validate_group_color(value: str) -> str:

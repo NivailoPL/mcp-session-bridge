@@ -932,6 +932,7 @@ class AdminHandlers:
                 color=str(payload.get("color", "")),
                 icon_key=str(payload.get("icon_key", "")),
                 group_id=str(payload.get("group_id", "")),
+                description=str(payload.get("description", "")),
             )
         except ValueError as exc:
             return self._value_error(exc)
@@ -948,7 +949,7 @@ class AdminHandlers:
         if parse_error:
             return parse_error
         fields: dict[str, Any] = {}
-        for key in ("name", "color", "icon_key"):
+        for key in ("name", "color", "icon_key", "description"):
             if key in payload:
                 fields[key] = str(payload[key])
         if "is_sensitive" in payload:
@@ -2194,6 +2195,7 @@ def _session_group_payload(group: SessionGroupRecord) -> dict[str, Any]:
         "sort_order": group.sort_order,
         "is_system": group.is_system,
         "is_sensitive": group.is_sensitive,
+        "description": group.description,
         "created_at": group.created_at,
         "updated_at": group.updated_at,
         "deleted_at": group.deleted_at,

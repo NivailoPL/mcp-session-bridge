@@ -1583,6 +1583,9 @@
     .exchange.is-editing .exchange-grid { display: none; }
     .field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .9rem; }
     label.field { display: grid; gap: .4rem; font-size: var(--t-meta); font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--faint-ink); }
+    label.field .field-title { display: inline-flex; align-items: center; gap: .4rem; }
+    label.field .context-help-box { right: auto; left: 0; font-weight: 400; letter-spacing: 0; text-transform: none; }
+    #groupDescriptionInput { min-height: 4.4rem; text-transform: none; letter-spacing: 0; font-weight: 400; }
     .edit-actions { display: flex; gap: .5rem; }
     .edit-actions .group-delete-action { margin-left: auto; }
 
@@ -2452,6 +2455,10 @@
         <input type="hidden" id="groupIdInput">
         <label class="field">Name
           <input id="groupNameInput" type="text" maxlength="48" required>
+        </label>
+        <label class="field">
+          <span class="field-title">Purpose<span class="context-help"><button type="button" class="context-help-trigger" aria-label="About Purpose" aria-describedby="groupDescriptionNote">?</button><span id="groupDescriptionNote" class="context-help-box" role="tooltip">One sentence on what this group is for. Models that open a session here read it first, so it points them at what matters. Leave it empty to send nothing.</span></span></span>
+          <textarea id="groupDescriptionInput" rows="2" maxlength="280" placeholder="What this group is for"></textarea>
         </label>
         <div id="groupSensitiveControl" class="sensitive-control" hidden>
           <button id="groupSensitiveButton" type="button" class="sensitive-toggle" aria-pressed="false">
@@ -3951,6 +3958,7 @@
         groupIdInput: document.getElementById("groupIdInput"),
         groupList: document.getElementById("groupList"),
         groupNameInput: document.getElementById("groupNameInput"),
+        groupDescriptionInput: document.getElementById("groupDescriptionInput"),
         groupSensitiveControl: document.getElementById("groupSensitiveControl"),
         groupSensitiveButton: document.getElementById("groupSensitiveButton"),
         iconGrid: document.getElementById("iconGrid"),
@@ -9186,6 +9194,7 @@
         dom.groupIdInput.value = group ? group.group_id : "";
         dom.groupDialogTitle.textContent = group ? "Edit group" : "New group";
         dom.groupNameInput.value = group ? group.name : "";
+        dom.groupDescriptionInput.value = group?.description || "";
         dom.groupColorInput.value = group ? group.color : "#22c55e";
         dom.groupIconInput.value = group ? group.icon_key : "ideas";
         dom.groupDeleteButton.hidden = !group;
@@ -9217,6 +9226,7 @@
         const groupId = dom.groupIdInput.value;
         const payload = {
           name: dom.groupNameInput.value,
+          description: dom.groupDescriptionInput.value,
           color: dom.groupColorInput.value,
           icon_key: dom.groupIconInput.value,
         };

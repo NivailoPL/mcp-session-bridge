@@ -1318,6 +1318,38 @@ def test_admin_can_manage_session_groups_and_move_sessions(load_main) -> None:
     assert bad_move.status_code == 404
 
 
+def test_group_description_reaches_models_that_open_its_sessions(load_main) -> None:
+    main = load_main()
+    client = TestClient(main.app, base_url="http://127.0.0.1:8787")
+    client.post(
+        "/admin/login",
+        data={"username": "owner", "password": "secret-admin-password", "next": "/admin/sessions"},
+        follow_redirects=False,
+    )
+    headers = {"x-csrf-token": client.get("/admin/api/me").json()["csrf_token"]}
+
+    created = client.post(
+        "/admin/api/session-groups",
+        json={"name": "Bridge", "color": "#22c55e", "icon_key": "car",
+              "description": "  UI and architecture\n decisions,   not deploys. "},
+        headers=headers,
+    )
+    assert created.status_code == 200
+    assert created.json()["group"]["description"] == "UI and architecture decisions, not deploys."
+    main.store.create_session("s1", "Header layout", group_id="bridge")
+    assert main.get_session_overview("s1")["group"]["description"] == "UI and architecture decisions, not deploys."
+    listed = {group["group_id"]: group for group in main.list_session_groups()["groups"]}
+    assert listed["bridge"]["description"] == "UI and architecture decisions, not deploys."
+    assert "description" not in listed["uncategorized"]
+
+    too_long = client.patch("/admin/api/session-groups/bridge", json={"description": "x" * 281}, headers=headers)
+    assert too_long.status_code == 400
+
+    cleared = client.patch("/admin/api/session-groups/bridge", json={"description": "   "}, headers=headers)
+    assert cleared.json()["group"]["description"] == ""
+    assert "description" not in main.get_session_overview("s1")["group"]
+
+
 def test_admin_sensitive_group_prunes_and_blocks_external_rag_scope(load_main, monkeypatch) -> None:
     main = load_main()
     main.store.create_session_group("Private", "#ef4444", "lock", group_id="private")
